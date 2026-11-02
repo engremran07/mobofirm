@@ -1,0 +1,11 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "type": "command",
+        "command": "python .github/hooks/workspace_context.py",
+        "timeout": 10
+      }
+    ]
+  }
+}

@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mobofirm"
+version = "0.1.0"
+description = "Mobofirm Django project"
+requires-python = ">=3.12"
+dependencies = [
+    "Django>=5.2,<5.3",
+    "bleach>=6.2,<7",
+    "celery[redis]>=5.4,<6",
+    "cryptography>=44",
+    "django-solo>=2.4,<3",
+    "djangorestframework>=3.16,<4",
+    "Markdown>=3.7,<4",
+    "Pillow>=11",
+    "psycopg[binary]>=3.2,<4",
+    "python-dotenv>=1.0,<2",
+    "requests>=2.32,<3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3,<9",
+    "pytest-django>=4.9,<5",
+]
+
+[tool.setuptools.packages.find]
+include = ["app*", "apps*"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "app.settings.test"
+python_files = ["test_*.py", "*_tests.py", "tests.py"]
