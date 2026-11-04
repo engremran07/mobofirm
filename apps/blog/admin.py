@@ -4,6 +4,7 @@ from solo.admin import SingletonModelAdmin
 
 from apps.governance.services import GovernanceError, submit_for_review
 
+from .services.history import PostHistoryService
 from .models import (
     AutoTopic,
     BlogSettings,
@@ -48,8 +49,32 @@ class PostAdmin(admin.ModelAdmin):
     autocomplete_fields = ("author", "category", "tags")
     raw_id_fields = ("author",)
     date_hierarchy = "published_at"
-    readonly_fields = ("status", "is_published", "published_at")
+    readonly_fields = ("status", "is_published", "published_at", "version")
     actions = ("submit_selected_for_review",)
+
+    def save_model(self, request, obj, form, change):
+        if not change:
+            super().save_model(request, obj, form, change)
+            return
+        values = {
+            name: value for name, value in form.cleaned_data.items() if name != "tags"
+        }
+        PostHistoryService.update_post(
+            obj,
+            user=request.user,
+            change_summary="Edited in Django admin",
+            tags=form.cleaned_data["tags"],
+            **values,
+        )
+
+    def save_related(self, request, form, formsets, change):
+        super().save_related(request, form, formsets, change)
+        if not change:
+            PostHistoryService.record_current_version(
+                form.instance,
+                user=request.user,
+                change_summary="Initial version",
+            )
 
     @admin.action(description="Submit selected posts for governed review")
     def submit_selected_for_review(self, request, queryset):

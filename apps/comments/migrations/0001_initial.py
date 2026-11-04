@@ -7,47 +7,101 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
-        ('contenttypes', '0002_remove_content_type_name'),
+        ("contenttypes", "0002_remove_content_type_name"),
     ]
 
     operations = [
         migrations.CreateModel(
-            name='CommentSettings',
+            name="CommentSettings",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('enable_comments', models.BooleanField(default=True)),
-                ('allow_anonymous', models.BooleanField(default=False)),
-                ('enable_ai_moderation', models.BooleanField(default=True)),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("enable_comments", models.BooleanField(default=True)),
+                ("allow_anonymous", models.BooleanField(default=False)),
+                ("enable_ai_moderation", models.BooleanField(default=True)),
             ],
             options={
-                'verbose_name': 'Comment Settings',
+                "verbose_name": "Comment Settings",
             },
         ),
         migrations.CreateModel(
-            name='Comment',
+            name="Comment",
             fields=[
-                ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('updated_at', models.DateTimeField(auto_now=True)),
-                ('is_deleted', models.BooleanField(db_index=True, default=False)),
-                ('deleted_at', models.DateTimeField(blank=True, null=True)),
-                ('object_id', models.PositiveIntegerField(blank=True, db_index=True, null=True)),
-                ('body', models.TextField(help_text='Plain text or sanitized HTML from editor; capped to 5k chars.', validators=[django.core.validators.MinLengthValidator(3), django.core.validators.MaxLengthValidator(5000)])),
-                ('status', models.CharField(choices=[('pending', 'Pending'), ('approved', 'Approved'), ('rejected', 'Rejected'), ('spam', 'Spam')], db_index=True, default='pending', max_length=20)),
-                ('is_approved', models.BooleanField(default=False, help_text='Auto-set when moderation marks approved.')),
-                ('score', models.IntegerField(default=0)),
-                ('metadata', models.JSONField(blank=True, default=dict)),
-                ('moderation_flags', models.JSONField(blank=True, default=dict)),
-                ('toxicity_score', models.FloatField(default=0.0)),
-                ('edited_at', models.DateTimeField(blank=True, null=True)),
-                ('created_at', models.DateTimeField(default=django.utils.timezone.now)),
-                ('content_type', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, to='contenttypes.contenttype')),
+                (
+                    "id",
+                    models.BigAutoField(
+                        auto_created=True,
+                        primary_key=True,
+                        serialize=False,
+                        verbose_name="ID",
+                    ),
+                ),
+                ("updated_at", models.DateTimeField(auto_now=True)),
+                ("is_deleted", models.BooleanField(db_index=True, default=False)),
+                ("deleted_at", models.DateTimeField(blank=True, null=True)),
+                (
+                    "object_id",
+                    models.PositiveIntegerField(blank=True, db_index=True, null=True),
+                ),
+                (
+                    "body",
+                    models.TextField(
+                        help_text="Plain text or sanitized HTML from editor; capped to 5k chars.",
+                        validators=[
+                            django.core.validators.MinLengthValidator(3),
+                            django.core.validators.MaxLengthValidator(5000),
+                        ],
+                    ),
+                ),
+                (
+                    "status",
+                    models.CharField(
+                        choices=[
+                            ("pending", "Pending"),
+                            ("approved", "Approved"),
+                            ("rejected", "Rejected"),
+                            ("spam", "Spam"),
+                        ],
+                        db_index=True,
+                        default="pending",
+                        max_length=20,
+                    ),
+                ),
+                (
+                    "is_approved",
+                    models.BooleanField(
+                        default=False,
+                        help_text="Auto-set when moderation marks approved.",
+                    ),
+                ),
+                ("score", models.IntegerField(default=0)),
+                ("metadata", models.JSONField(blank=True, default=dict)),
+                ("moderation_flags", models.JSONField(blank=True, default=dict)),
+                ("toxicity_score", models.FloatField(default=0.0)),
+                ("edited_at", models.DateTimeField(blank=True, null=True)),
+                ("created_at", models.DateTimeField(default=django.utils.timezone.now)),
+                (
+                    "content_type",
+                    models.ForeignKey(
+                        blank=True,
+                        null=True,
+                        on_delete=django.db.models.deletion.CASCADE,
+                        to="contenttypes.contenttype",
+                    ),
+                ),
             ],
             options={
-                'ordering': ['-created_at'],
+                "ordering": ["-created_at"],
             },
         ),
     ]

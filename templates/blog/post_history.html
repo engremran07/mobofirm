@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Version history: {{ post.title }} | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block content %}
+<div class="site-container py-5">
+  <p class="section-eyebrow">Editorial workspace</p>
+  <h1 class="h2">Version history</h1>
+  <p class="text-secondary">{{ post.title }} · Current version {{ post.version }}</p>
+  {% if not revisions %}
+    <div class="surface-card p-4" role="status">No saved versions yet.</div>
+  {% else %}
+    <ol class="list-unstyled d-grid gap-3">
+      {% for revision in revisions %}
+        <li class="surface-card p-3 p-md-4">
+          <div class="d-flex flex-column flex-md-row justify-content-between gap-2">
+            <div>
+              <h2 class="h5 mb-1">{{ revision.snapshot.title|default:post.title }}</h2>
+              <p class="small text-secondary mb-2">
+                Version {{ revision.snapshot.version|default:"Historical" }}
+                · {{ revision.created_at|date:"M j, Y H:i" }}
+                {% if revision.user %}· {{ revision.user }}{% endif %}
+              </p>
+              {% if revision.snapshot.change_summary %}
+                <p class="mb-0">{{ revision.snapshot.change_summary }}</p>
+              {% endif %}
+            </div>
+            {% if can_restore %}
+              <form method="post" action="{% url 'blog:restore_post_revision' slug=post.slug revision_id=revision.pk %}">
+                {% csrf_token %}
+                <button class="btn btn-outline-primary" type="submit">Restore this draft version</button>
+              </form>
+            {% endif %}
+          </div>
+        </li>
+      {% endfor %}
+    </ol>
+  {% endif %}
+  {% if not can_restore %}
+    <p class="alert alert-info" role="status">
+      Posts awaiting review, published, scheduled, and archived posts cannot be restored here. Restoring is limited to drafts and does not change publication state.
+    </p>
+  {% endif %}
+  <a class="btn btn-outline-secondary" href="{% url 'blog:post_create' %}?edit={{ post.slug }}">Back to editor</a>
+</div>
+{% endblock %}

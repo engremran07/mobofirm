@@ -1,0 +1,21 @@
+{
+  "name": "mobofirm-frontend",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "build": "vite build",
+    "check": "vite build"
+  },
+  "dependencies": {
+    "@alpinejs/csp": "3.17.5",
+    "bootstrap": "5.3.8",
+    "htmx.org": "2.0.11",
+    "lucide": "1.66.0"
+  },
+  "devDependencies": {
+    "vite": "8.3.5"
+  }
+}

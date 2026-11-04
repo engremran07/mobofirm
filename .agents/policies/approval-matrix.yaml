@@ -1,0 +1,48 @@
+schema_version: 1
+approvals:
+  backend_bug_fix:
+    owner: engineering_owner
+    agent_action: implement_and_test
+    requires_user_approval: false
+    constraints:
+      - bounded_to_existing_app_boundary
+      - no_new_undocumented_app_coupling
+      - root_tests_required
+      - rollback_behavior_defined_when_applicable
+  product_scope_or_business_rule:
+    owner: product_owner
+    agent_action: analyze_and_propose
+    requires_user_approval: true
+  frontend_design_or_stack:
+    owner: product_owner_and_design_owner
+    agent_action: implement_approved_direction_and_document_open_visual_decisions
+    requires_user_approval: true
+    constraints:
+      - one_hybrid_central_design_system_for_user_and_admin_experiences
+      - shared_static_assets_have_one_canonical_source
+      - app_specific_assets_are_namespaced_extensions_not_duplicates
+      - file_size_and_line_budgets_are_enforced
+      - final_visual_identity_remains_reviewable
+  dependency_addition:
+    owner: engineering_owner
+    agent_action: justify_and_propose
+    requires_user_approval: true
+  schema_migration:
+    owner: engineering_owner
+    agent_action: generate_reviewable_migration
+    requires_user_approval: true_for_non_test_database
+  production_data_or_cleanup:
+    owner: data_owner
+    agent_action: inspect_and_propose
+    requires_user_approval: true
+  security_exception:
+    owner: security_owner
+    agent_action: document_risk_and_mitigation
+    requires_user_approval: true
+  commit_push_release:
+    owner: repository_owner
+    agent_action: only_after_explicit_authorization
+    requires_user_approval: true
+    blocking_conditions:
+      - unresolved_problems_panel_diagnostics
+      - failed_required_quality_gate

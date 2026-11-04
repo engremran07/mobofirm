@@ -7,119 +7,188 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
-        ('blog', '0001_initial'),
-        ('tags', '0001_initial'),
+        ("blog", "0001_initial"),
+        ("tags", "0001_initial"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='autotopic',
-            name='created_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to=settings.AUTH_USER_MODEL),
+            model_name="autotopic",
+            name="created_by",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                to=settings.AUTH_USER_MODEL,
+            ),
         ),
         migrations.AddField(
-            model_name='category',
-            name='parent',
-            field=models.ForeignKey(blank=True, help_text='Optional parent to build nested categories (e.g., AI > Safety).', null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='children', to='blog.category'),
+            model_name="category",
+            name="parent",
+            field=models.ForeignKey(
+                blank=True,
+                help_text="Optional parent to build nested categories (e.g., AI > Safety).",
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="children",
+                to="blog.category",
+            ),
         ),
         migrations.AddField(
-            model_name='categorytranslation',
-            name='category',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='translations', to='blog.category'),
+            model_name="categorytranslation",
+            name="category",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="translations",
+                to="blog.category",
+            ),
         ),
         migrations.AddField(
-            model_name='post',
-            name='author',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='posts', to=settings.AUTH_USER_MODEL),
+            model_name="post",
+            name="author",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="posts",
+                to=settings.AUTH_USER_MODEL,
+            ),
         ),
         migrations.AddField(
-            model_name='post',
-            name='category',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='posts', to='blog.category'),
+            model_name="post",
+            name="category",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="posts",
+                to="blog.category",
+            ),
         ),
         migrations.AddField(
-            model_name='post',
-            name='tags',
-            field=models.ManyToManyField(blank=True, related_name='posts', to='tags.tag'),
+            model_name="post",
+            name="tags",
+            field=models.ManyToManyField(
+                blank=True, related_name="posts", to="tags.tag"
+            ),
         ),
         migrations.AddField(
-            model_name='autotopic',
-            name='post',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to='blog.post'),
+            model_name="autotopic",
+            name="post",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                to="blog.post",
+            ),
         ),
         migrations.AddField(
-            model_name='postdraft',
-            name='post',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='drafts', to='blog.post'),
+            model_name="postdraft",
+            name="post",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="drafts",
+                to="blog.post",
+            ),
         ),
         migrations.AddField(
-            model_name='postdraft',
-            name='user',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='post_drafts', to=settings.AUTH_USER_MODEL),
+            model_name="postdraft",
+            name="user",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="post_drafts",
+                to=settings.AUTH_USER_MODEL,
+            ),
         ),
         migrations.AddField(
-            model_name='postrevision',
-            name='post',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='revisions', to='blog.post'),
+            model_name="postrevision",
+            name="post",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="revisions",
+                to="blog.post",
+            ),
         ),
         migrations.AddField(
-            model_name='postrevision',
-            name='user',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='post_revisions', to=settings.AUTH_USER_MODEL),
+            model_name="postrevision",
+            name="user",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="post_revisions",
+                to=settings.AUTH_USER_MODEL,
+            ),
         ),
         migrations.AddField(
-            model_name='posttranslation',
-            name='post',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='translations', to='blog.post'),
+            model_name="posttranslation",
+            name="post",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="translations",
+                to="blog.post",
+            ),
         ),
         migrations.AddField(
-            model_name='tagtranslation',
-            name='tag',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='translations', to='tags.tag'),
+            model_name="tagtranslation",
+            name="tag",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="translations",
+                to="tags.tag",
+            ),
         ),
         migrations.AddIndex(
-            model_name='categorytranslation',
-            index=models.Index(fields=['language'], name='category_translation_lang_idx'),
+            model_name="categorytranslation",
+            index=models.Index(
+                fields=["language"], name="category_translation_lang_idx"
+            ),
         ),
         migrations.AlterUniqueTogether(
-            name='categorytranslation',
-            unique_together={('category', 'language')},
+            name="categorytranslation",
+            unique_together={("category", "language")},
         ),
         migrations.AddIndex(
-            model_name='post',
-            index=models.Index(fields=['status', 'publish_at'], name='blog_post_status_pub_idx'),
+            model_name="post",
+            index=models.Index(
+                fields=["status", "publish_at"], name="blog_post_status_pub_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='post',
-            index=models.Index(fields=['author', 'status'], name='blog_post_author_status_idx'),
+            model_name="post",
+            index=models.Index(
+                fields=["author", "status"], name="blog_post_author_status_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='post',
-            index=models.Index(django.db.models.functions.text.Lower('slug'), name='blog_post_slug_ci_idx'),
+            model_name="post",
+            index=models.Index(
+                django.db.models.functions.text.Lower("slug"),
+                name="blog_post_slug_ci_idx",
+            ),
         ),
         migrations.AddIndex(
-            model_name='autotopic',
-            index=models.Index(fields=['status'], name='blog_autotopic_status_idx'),
+            model_name="autotopic",
+            index=models.Index(fields=["status"], name="blog_autotopic_status_idx"),
         ),
         migrations.AddIndex(
-            model_name='posttranslation',
-            index=models.Index(fields=['language'], name='post_translation_lang_idx'),
+            model_name="posttranslation",
+            index=models.Index(fields=["language"], name="post_translation_lang_idx"),
         ),
         migrations.AlterUniqueTogether(
-            name='posttranslation',
-            unique_together={('post', 'language')},
+            name="posttranslation",
+            unique_together={("post", "language")},
         ),
         migrations.AddIndex(
-            model_name='tagtranslation',
-            index=models.Index(fields=['language'], name='tag_translation_lang_idx'),
+            model_name="tagtranslation",
+            index=models.Index(fields=["language"], name="tag_translation_lang_idx"),
         ),
         migrations.AlterUniqueTogether(
-            name='tagtranslation',
-            unique_together={('tag', 'language')},
+            name="tagtranslation",
+            unique_together={("tag", "language")},
         ),
     ]

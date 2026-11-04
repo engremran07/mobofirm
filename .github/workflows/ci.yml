@@ -1,0 +1,79 @@
+name: Django CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7.0.1
+      - name: Set up Python
+        uses: actions/setup-python@v7.1.0
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Set up Node
+        uses: actions/setup-node@v4.4.0
+        with:
+          node-version: "22.12"
+          cache: npm
+      - name: Create project virtual environment
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install --upgrade pip
+      - name: Install project and test dependencies
+        run: .venv/bin/python -m pip install -e ".[dev]"
+      - name: Check Python formatting
+        run: .venv/bin/ruff format --check .
+      - name: Validate release metadata
+        run: .venv/bin/python scripts/release.py check
+      - name: Generate application implementation map
+        run: .venv/bin/python scripts/application_map.py --output "$RUNNER_TEMP/application-map.json"
+      - name: Upload application implementation map
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: application-map
+          path: ${{ runner.temp }}/application-map.json
+          retention-days: 7
+      - name: Install frontend dependencies
+        run: npm ci
+      - name: Build frontend assets
+        run: npm run build
+      - name: Install Chromium for browser checks
+        run: .venv/bin/python -m playwright install --with-deps chromium
+      - name: Run test suite
+        run: .venv/bin/python -m pytest -q
+      - name: Run Django system checks
+        run: .venv/bin/python manage.py check --settings=app.settings.test
+      - name: Check migration consistency
+        run: .venv/bin/python manage.py makemigrations --check --dry-run --settings=app.settings.test
+      - name: Check installed dependencies
+        run: .venv/bin/python -m pip check
+
+  publish-release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v7.0.1
+      - name: Set up Python
+        uses: actions/setup-python@v7.1.0
+        with:
+          python-version: "3.12"
+      - name: Validate release tag
+        run: python scripts/release.py validate-tag "${GITHUB_REF_NAME}"
+      - name: Prepare release notes
+        run: python scripts/release.py notes "${GITHUB_REF_NAME}" > "$RUNNER_TEMP/release-notes.md"
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" --verify-tag --title "${GITHUB_REF_NAME}" --notes-file "$RUNNER_TEMP/release-notes.md"

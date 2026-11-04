@@ -21,8 +21,35 @@ from django.http import HttpRequest
 from django.utils.module_loading import import_string
 from django.utils.translation import gettext_lazy as _
 
+from apps.users.services.country_detection import COUNTRY_PHONE_CODES
+
 logger = logging.getLogger(__name__)
 User = get_user_model()
+
+
+def country_form_choices() -> list[tuple[str, str]]:
+    from django_countries import countries
+
+    return [("", str(_("Select a country")))] + [
+        (code, f"{name} ({code})") for code, name in countries
+    ]
+
+
+def phone_code_form_choices() -> list[tuple[str, str]]:
+    from django_countries import countries
+
+    country_names = dict(countries)
+    countries_by_phone_code: dict[str, list[str]] = {}
+    for country_code, phone_code in COUNTRY_PHONE_CODES.items():
+        country_name = country_names.get(country_code, country_code)
+        countries_by_phone_code.setdefault(phone_code, []).append(
+            f"{country_name} ({country_code})"
+        )
+
+    return [("", str(_("Select a calling code")))] + [
+        (phone_code, f"{', '.join(country_names)} {phone_code}")
+        for phone_code, country_names in sorted(countries_by_phone_code.items())
+    ]
 
 
 class CustomSignupForm(forms.Form):
@@ -82,24 +109,22 @@ class CustomSignupForm(forms.Form):
         ),
     )
 
-    country = forms.CharField(
-        max_length=2,
+    country = forms.ChoiceField(
         required=False,
         label=_("Country"),
         widget=forms.Select(
             attrs={
-                "class": "auth-input country-input",
+                "class": "form-select country-input",
             }
         ),
     )
 
-    phone_country_code = forms.CharField(
-        max_length=5,
+    phone_country_code = forms.ChoiceField(
         required=False,
         label=_("Country Code"),
         widget=forms.Select(
             attrs={
-                "class": "phone-code-select",
+                "class": "form-select phone-code-select",
             }
         ),
     )
@@ -120,22 +145,11 @@ class CustomSignupForm(forms.Form):
         ),
     )
 
-    referral_code = forms.CharField(
-        max_length=20,
-        required=False,
-        label=_("Referral Code"),
-        widget=forms.TextInput(
-            attrs={
-                "placeholder": _("Enter referral code (optional)"),
-                "class": "form-control",
-                "autocomplete": "off",
-            }
-        ),
-    )
-
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         self.request = kwargs.pop("request", None)
         super().__init__(*args, **kwargs)
+        self.fields["country"].choices = country_form_choices()
+        self.fields["phone_country_code"].choices = phone_code_form_choices()
 
     @property
     def base_form_class(self) -> type:
@@ -195,17 +209,6 @@ class CustomSignupForm(forms.Form):
 
         return phone_digits
 
-    def clean_referral_code(self) -> str:
-        """Validate referral code exists and is active."""
-        code = (self.cleaned_data.get("referral_code") or "").strip()
-        if not code:
-            return ""
-        from apps.referral.services import validate_referral_code
-
-        if not validate_referral_code(code):
-            raise ValidationError(_("Invalid or expired referral code."))
-        return code
-
     def clean(self) -> dict[str, Any]:
         cleaned = super().clean() or {}
         pwd1, pwd2 = cleaned.get("password1"), cleaned.get("password2")
@@ -233,15 +236,6 @@ class CustomSignupForm(forms.Form):
         if phone_country_code and hasattr(user, "phone_country_code"):
             user.phone_country_code = phone_country_code
 
-        if hasattr(user, "generate_verification_code"):
-            try:
-                user.verification_code = user.generate_verification_code()
-                logger.debug("Generated verification code for %s", user.email)
-            except Exception as exc:
-                logger.warning(
-                    "Verification code generation failed for %s: %s", user.email, exc
-                )
-
         password = self.cleaned_data.get("password1")
         user.set_password(password)
 
@@ -255,18 +249,6 @@ class CustomSignupForm(forms.Form):
 
         user.save()
         logger.info("New user created via signup: %s", user.email)
-
-        # Process referral code (from form field or session)
-        ref_code = self.cleaned_data.get("referral_code", "").strip()
-        if not ref_code and request:
-            ref_code = request.session.pop("referral_code", "")
-        if ref_code:
-            try:
-                from apps.referral.services import process_referral_signup
-
-                process_referral_signup(user, ref_code)
-            except Exception:
-                logger.exception("Referral processing failed for %s", user.email)
 
         return user
 
@@ -314,24 +296,22 @@ class TellUsAboutYouForm(forms.Form):
     )
 
     # --- Location & Contact ---
-    country = forms.CharField(
-        max_length=2,
+    country = forms.ChoiceField(
         required=True,
         label=_("Country"),
         widget=forms.Select(
             attrs={
-                "class": "auth-input",
+                "class": "form-select country-input",
             }
         ),
     )
 
-    phone_country_code = forms.CharField(
-        max_length=5,
+    phone_country_code = forms.ChoiceField(
         required=False,
         label=_("Country Code"),
         widget=forms.Select(
             attrs={
-                "class": "phone-code-select",
+                "class": "form-select phone-code-select",
             }
         ),
     )
@@ -443,6 +423,8 @@ class TellUsAboutYouForm(forms.Form):
         self.user = user
         self.request = request
         super().__init__(*args, **kwargs)
+        self.fields["country"].choices = country_form_choices()
+        self.fields["phone_country_code"].choices = phone_code_form_choices()
 
         # Require password only if user has no usable password (typical for social)
         self.require_password = bool(user and not user.has_usable_password())

@@ -1,0 +1,4 @@
+<ul class="list-inline" aria-label="Trending tags">
+  {% for tag in tags %}<li class="list-inline-item mb-2"><a class="badge rounded-pill text-bg-secondary text-decoration-none" href="{% url 'tags:detail' slug=tag.slug %}">#{{ tag.name }}</a></li>
+  {% empty %}<li class="muted">No tags yet.</li>{% endfor %}
+</ul>

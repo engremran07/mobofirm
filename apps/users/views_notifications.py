@@ -7,7 +7,7 @@ from django.contrib.auth.decorators import login_required
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
-from django.views.decorators.http import require_GET, require_POST
+from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from .models import Notification
 
@@ -35,7 +35,7 @@ def _serialize_notification(n: Notification) -> dict[str, Any]:
 # HTML Detail Page
 # ============================================================================
 @login_required
-@require_GET
+@require_http_methods(["GET", "POST"])
 def notification_detail(request: HttpRequest, pk: int) -> HttpResponse:
     """
     HTML detail page for a single notification.
@@ -43,16 +43,22 @@ def notification_detail(request: HttpRequest, pk: int) -> HttpResponse:
     """
     notif = get_object_or_404(Notification, pk=pk, recipient=request.user)
 
-    # Auto-mark as read
-    if not notif.is_read:
-        notif.is_read = True
-        notif.read_at = timezone.now()
-        notif.save(update_fields=["is_read", "read_at"])
+    if request.method == "POST":
+        _mark_notification_read(notif)
+        return redirect("users:notification_detail", pk=notif.pk)
 
     return render(
         request,
         "users/notifications/details.html",
         {"notification": notif},
+    )
+
+
+def _mark_notification_read(notif: Notification) -> bool:
+    return bool(
+        Notification.objects.filter(
+            pk=notif.pk, recipient=notif.recipient, is_read=False
+        ).update(is_read=True, read_at=timezone.now())
     )
 
 
@@ -87,11 +93,7 @@ def notification_unread_count(request: HttpRequest) -> JsonResponse:
 @require_POST
 def notification_mark_read(request: HttpRequest, pk: int) -> JsonResponse:
     notif = get_object_or_404(Notification, pk=pk, recipient=request.user)
-
-    if not notif.is_read:
-        notif.is_read = True
-        notif.read_at = timezone.now()
-        notif.save(update_fields=["is_read", "read_at"])
+    _mark_notification_read(notif)
 
     if "application/json" in (
         request.headers.get("Accept") or ""

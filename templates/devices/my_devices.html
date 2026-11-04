@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}My device sessions | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block content %}
+<div class="site-container py-5"><p class="section-eyebrow">Account security</p><h1 class="h2">Device sessions</h1><p class="muted">{{ device_count }} of {{ max_devices }} sessions · {{ quota_remaining }} remaining · Reset window {{ quota_window }}</p>
+  {% for device in devices %}<article class="surface-card p-3 mb-3"><h2 class="h5">{{ device.display_name|default:"Device session" }}</h2><p class="small muted">{{ device.os_fingerprint }} · Last seen {{ device.last_seen_at }}</p></article>{% empty %}<p class="empty-state p-4">No device sessions are registered.</p>{% endfor %}
+</div>
+{% endblock %}

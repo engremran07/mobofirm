@@ -4,48 +4,47 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('firmwares', '0012_flashingtoolcategory_flashingtool_and_more'),
+        ("firmwares", "0012_flashingtoolcategory_flashingtool_and_more"),
     ]
 
     operations = [
         migrations.RemoveField(
-            model_name='oemsource',
-            name='brand',
+            model_name="oemsource",
+            name="brand",
         ),
         migrations.RemoveField(
-            model_name='scraperconfig',
-            name='source',
+            model_name="scraperconfig",
+            name="source",
         ),
         migrations.RemoveField(
-            model_name='scraperrun',
-            name='config',
+            model_name="scraperrun",
+            name="config",
         ),
         migrations.RemoveField(
-            model_name='syncconflict',
-            name='gsmarena_device',
+            model_name="syncconflict",
+            name="gsmarena_device",
         ),
         migrations.RemoveField(
-            model_name='syncconflict',
-            name='run',
+            model_name="syncconflict",
+            name="run",
         ),
         migrations.DeleteModel(
-            name='IngestionJob',
+            name="IngestionJob",
         ),
         migrations.DeleteModel(
-            name='OEMSource',
+            name="OEMSource",
         ),
         migrations.DeleteModel(
-            name='ScraperConfig',
+            name="ScraperConfig",
         ),
         migrations.DeleteModel(
-            name='ScraperRun',
+            name="ScraperRun",
         ),
         migrations.DeleteModel(
-            name='SyncConflict',
+            name="SyncConflict",
         ),
         migrations.DeleteModel(
-            name='SyncRun',
+            name="SyncRun",
         ),
     ]

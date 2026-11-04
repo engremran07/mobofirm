@@ -58,6 +58,7 @@ from .models import (  # noqa: E402
     SecurityQuestion,
     UsersSettings,
 )
+from .profile_models import ActivityFeed, Following, Profile, Reputation  # noqa: E402
 
 # ==========================================================================
 # FIXED BASE ADMIN CLASS
@@ -68,11 +69,46 @@ from .models import (  # noqa: E402
 #   class BaseAdminClass(admin.ModelAdmin)
 # This guarantees that @admin.register(...) always receives a ModelAdmin subclass.
 
-_ExportBase: type = ExportMixin if (_HAS_IMPORT_EXPORT and ExportMixin) else object
+if _HAS_IMPORT_EXPORT and ExportMixin:
+
+    class BaseAdminClass(ExportMixin, admin.ModelAdmin):  # type: ignore[misc]
+        """Admin base with export support."""
+
+else:
+
+    class BaseAdminClass(admin.ModelAdmin):
+        """Admin base without the optional export integration."""
 
 
-class BaseAdminClass(_ExportBase, admin.ModelAdmin):  # type: ignore[misc]
-    """Safe hybrid admin class — uses ExportMixin when import_export is installed."""
+# ==========================================================================
+# Profile and activity admin
+# ==========================================================================
+@admin.register(Profile)
+class ProfileAdmin(BaseAdminClass):
+    list_display = ("user", "is_public", "updated_at")
+    list_filter = ("is_public",)
+    search_fields = ("user__email", "user__username")
+
+
+@admin.register(Reputation)
+class ReputationAdmin(BaseAdminClass):
+    list_display = ("user", "total_score", "fw_contributions", "downloads_helped")
+    ordering = ("-total_score",)
+    search_fields = ("user__email", "user__username")
+
+
+@admin.register(Following)
+class FollowingAdmin(BaseAdminClass):
+    list_display = ("follower", "following", "created_at")
+    search_fields = ("follower__email", "following__email")
+    readonly_fields = ("created_at",)
+
+
+@admin.register(ActivityFeed)
+class ActivityFeedAdmin(BaseAdminClass):
+    list_display = ("user", "action_type", "created_at")
+    list_filter = ("action_type",)
+    readonly_fields = ("created_at",)
 
 
 # ==========================================================================
@@ -143,7 +179,6 @@ class CustomUserAdmin(BaseAdminClass):  # type: ignore[misc]
                     "signup_method",
                     "last_unlock",
                     "email_verified_at",
-                    "verification_code",
                     "date_joined",
                 )
             },
@@ -192,7 +227,7 @@ class CustomUserAdmin(BaseAdminClass):  # type: ignore[misc]
         self, request: HttpRequest, queryset: QuerySet[CustomUser]
     ) -> None:
         """Remove email verification status from selected users."""
-        count = queryset.update(email_verified_at=None, verification_code="")
+        count = queryset.update(email_verified_at=None)
         try:
             from allauth.account.models import EmailAddress
 
@@ -295,7 +330,7 @@ class AnnouncementAdmin(BaseAdminClass):
     )
 
     search_fields = ("title", "message")
-    list_filter = ("audience", "is_global", "expires_at")
+    list_filter = ("audience", "is_active", "is_global", "expires_at")
     readonly_fields = ("created_by",)
     ordering = ("-start_at",)
     save_on_top = True
@@ -316,10 +351,7 @@ class AnnouncementAdmin(BaseAdminClass):
 
     @admin.display(description=_("Active?"))
     def is_active_display(self, obj: Announcement):
-        try:
-            return "✅" if getattr(obj, "is_active", False) else "❌"
-        except (AttributeError, TypeError):
-            return "—"
+        return "✅" if obj.is_active else "❌"
 
     def publish_selected(self, request, queryset):
         try:
@@ -1008,7 +1040,7 @@ class EnhancedSocialAppAdmin(BaseSocialAppAdmin):
 
 
 @admin.register(SecurityQuestion)
-class SecurityQuestionAdmin(admin.ModelAdmin[SecurityQuestion]):  # type: ignore[type-arg]
+class SecurityQuestionAdmin(admin.ModelAdmin):
     list_display = ["user", "question_key", "created_at"]
     list_filter = ["question_key", "created_at"]
     search_fields = ["user__email", "user__username"]
@@ -1016,7 +1048,7 @@ class SecurityQuestionAdmin(admin.ModelAdmin[SecurityQuestion]):  # type: ignore
 
 
 @admin.register(MFADevice)
-class MFADeviceAdmin(admin.ModelAdmin[MFADevice]):  # type: ignore[type-arg]
+class MFADeviceAdmin(admin.ModelAdmin):
     list_display = ["user", "device_type", "name", "is_active", "created_at"]
     list_filter = ["device_type", "is_active"]
     search_fields = ["user__email", "user__username", "name"]

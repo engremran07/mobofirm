@@ -1,0 +1,78 @@
+:root,
+:root[data-bs-theme="light"] {
+  color-scheme: light;
+  --mf-page: #f5f2eb;
+  --mf-surface: #fffdf9;
+  --mf-surface-raised: #ffffff;
+  --mf-surface-soft: #ece7de;
+  --mf-border: #d9d2c7;
+  --mf-text: #19272c;
+  --mf-text-muted: #52636a;
+  --mf-accent: #0b7376;
+  --mf-accent-strong: #07595d;
+  --mf-accent-ink: #ffffff;
+  --mf-accent-warm: #b86143;
+  --mf-accent-cool: #686bb2;
+  --mf-success: #28664d;
+  --mf-warning: #80530c;
+  --mf-danger: #a43838;
+  --mf-focus: #07595d;
+  --mf-shadow: 0 1.25rem 3.5rem rgb(49 54 46 / 12%);
+  --mf-card-shadow: 0 0.25rem 1rem rgb(49 54 46 / 5%);
+  --mf-content-width: 76rem;
+  --mf-reading-width: 48rem;
+  --mf-radius-sm: 0.5rem;
+  --mf-radius-md: 0.85rem;
+  --mf-radius-lg: 1.25rem;
+  --mf-transition: 160ms ease;
+  --bs-body-bg: var(--mf-page);
+  --bs-body-color: var(--mf-text);
+  --bs-secondary-color: var(--mf-text-muted);
+  --bs-tertiary-bg: var(--mf-surface);
+  --bs-border-color: var(--mf-border);
+  --bs-primary: var(--mf-accent-strong);
+  --bs-primary-rgb: 7, 89, 93;
+  --bs-link-color: var(--mf-accent);
+  --bs-link-hover-color: #06484b;
+  --bs-border-radius: var(--mf-radius-sm);
+  --bs-border-radius-lg: var(--mf-radius-md);
+}
+
+:root[data-bs-theme="dark"] {
+  color-scheme: dark;
+  --mf-page: #151c24;
+  --mf-surface: #1d2730;
+  --mf-surface-raised: #24313a;
+  --mf-surface-soft: #293740;
+  --mf-border: #3a4a52;
+  --mf-text: #edf4f1;
+  --mf-text-muted: #adbbb8;
+  --mf-accent: #72d9ce;
+  --mf-accent-strong: #4fc4b7;
+  --mf-accent-ink: #10201f;
+  --mf-accent-warm: #ed9a76;
+  --mf-accent-cool: #a8a9eb;
+  --mf-success: #81d6a3;
+  --mf-warning: #f1c476;
+  --mf-danger: #ff9292;
+  --mf-focus: #a8eee5;
+  --mf-shadow: 0 1.25rem 3.5rem rgb(0 0 0 / 28%);
+  --mf-card-shadow: 0 0.25rem 1rem rgb(0 0 0 / 15%);
+  --mf-content-width: 76rem;
+  --mf-reading-width: 48rem;
+  --mf-radius-sm: 0.5rem;
+  --mf-radius-md: 0.85rem;
+  --mf-radius-lg: 1.25rem;
+  --mf-transition: 160ms ease;
+  --bs-body-bg: var(--mf-page);
+  --bs-body-color: var(--mf-text);
+  --bs-secondary-color: var(--mf-text-muted);
+  --bs-tertiary-bg: var(--mf-surface);
+  --bs-border-color: var(--mf-border);
+  --bs-primary: var(--mf-accent-strong);
+  --bs-primary-rgb: 79, 196, 183;
+  --bs-link-color: var(--mf-accent);
+  --bs-link-hover-color: #b3f2eb;
+  --bs-border-radius: var(--mf-radius-sm);
+  --bs-border-radius-lg: var(--mf-radius-md);
+}

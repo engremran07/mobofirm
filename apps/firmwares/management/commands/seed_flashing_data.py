@@ -15,7 +15,7 @@ Usage:
 import random
 from datetime import date, timedelta
 
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -770,30 +770,12 @@ class Command(BaseCommand):
         )
 
     def handle(self, *args, **options):
-        clear = options["clear"]
-
-        if clear:
-            self.stdout.write(self.style.WARNING("Clearing existing flashing data..."))
-            GeneratedFlashingGuide.objects.all().delete()
-            FlashingGuideTemplate.objects.all().delete()
-            FlashingTool.objects.all().delete()
-            FlashingToolCategory.objects.all().delete()
-            self.stdout.write(self.style.SUCCESS("  ✓ Cleared"))
-
-        cats = self._create_categories()
-        tools = self._create_tools(cats)
-        self._assign_brands(tools)
-        templates = self._create_guide_templates(tools)
-        guides = self._create_generated_guides(templates)
-
-        # Summary
-        self.stdout.write("\n" + "=" * 50)
-        self.stdout.write(self.style.SUCCESS("✓ Flashing seed complete!"))
-        self.stdout.write(f"  Categories:  {FlashingToolCategory.objects.count()}")
-        self.stdout.write(f"  Tools:       {FlashingTool.objects.count()}")
-        self.stdout.write(f"  Templates:   {FlashingGuideTemplate.objects.count()}")
-        self.stdout.write(f"  Guides:      {GeneratedFlashingGuide.objects.count()}")
-        self.stdout.write(f"  Blog posts:  {guides}")
+        raise CommandError(
+            "This legacy seed is disabled because its sample data is not suitable "
+            "for public use and it creates posts outside the governed review flow. "
+            "Use `python manage.py seed_curated_catalog` for the curated local "
+            "catalog; generated posts must be reviewed before publication."
+        )
 
     # ── Categories ───────────────────────────────────────────────────
 
@@ -898,7 +880,7 @@ class Command(BaseCommand):
                     "body_template": data["body_template"],
                     "summary_template": data["summary_template"],
                     "auto_generate": i % 3 == 0,
-                    "auto_publish": False,
+                    "submit_for_review": False,
                     "is_active": True,
                 },
             )

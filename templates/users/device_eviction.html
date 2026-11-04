@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Manage device sessions | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block content %}
+<div class="site-container py-5"><p class="section-eyebrow">Account security</p><h1 class="h2">Choose a device to remove</h1>
+  {% if message %}<p class="alert alert-success" role="status">{{ message }}</p>{% endif %}{% if error %}<p class="alert alert-danger" role="alert">{{ error }}</p>{% endif %}
+  {% for device in devices %}<article class="surface-card p-3 mb-3">
+    <h2 class="h5">{{ device.display_name|default:"Device session" }}</h2><p class="small muted">Last seen {{ device.last_seen_at|default:"unknown" }}</p>
+    <form method="post">{% csrf_token %}<input type="hidden" name="device_id" value="{{ device.id }}"><button class="btn btn-outline-danger" type="submit">Remove this device</button></form>
+  </article>{% empty %}<p class="empty-state p-4">There are no device sessions to remove.</p>{% endfor %}
+</div>
+{% endblock %}

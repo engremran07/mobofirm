@@ -1,0 +1,16 @@
+{% extends "admin/base.html" %}
+{% load static %}
+
+{% block title %}{{ title }} | Mobofirm operations{% endblock %}
+{% block branding %}
+  <h1 id="site-name"><a href="{% url 'admin:index' %}">Mobofirm operations</a> <span class="small">v{{ release_version }}</span></h1>
+{% endblock %}
+{% block extrastyle %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'build/tokens.css' %}">
+  <link rel="stylesheet" href="{% static 'build/admin.css' %}">
+{% endblock %}
+{% block extrahead %}
+  {{ block.super }}
+  <script type="module" src="{% static 'build/admin.js' %}"></script>
+{% endblock %}

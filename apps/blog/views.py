@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 import datetime
-import hashlib
 import logging
 
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.contrib.contenttypes.models import ContentType
 from django.contrib.postgres.search import SearchQuery, SearchRank, SearchVector
 from django.core.paginator import Paginator
 from django.db import models, transaction
@@ -24,10 +22,8 @@ from apps.blog.services import ai_editor, workflow
 from apps.blog.services.post_service import search_posts
 from apps.core import ai_client
 from apps.core.app_service import AppService
-from apps.core.utils import feature_flags
 from apps.core.utils.logging import log_event
 from apps.core.views import _get_site_settings_snapshot
-from apps.seo.models import Metadata, SEOModel
 from apps.tags import services as tag_services
 from apps.tags.models import Tag
 from apps.users.models import CustomUser
@@ -35,6 +31,7 @@ from apps.governance.services import GovernanceError
 
 from .forms import CategoryForm, PostForm, SearchForm
 from .models import Category, Post, PostDraft, PostRevision, PostStatus
+from .services.history import PostHistoryService
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +90,12 @@ def _apply_translations_to_posts(
     for p in posts:
         try:
             # Use list() to cache prefetched tags
-            post_tags = list(p.tags.all())
+            post_tags = [
+                tag
+                for tag in p.tags.all()
+                if tag.is_curated and tag.is_active and not tag.is_deleted
+            ]
+            p.curated_tags = post_tags  # type: ignore[attr-defined]
             post_tags_map[p.id] = post_tags
             for t in post_tags:
                 tag_ids.add(t.id)
@@ -131,76 +133,6 @@ def _apply_translations_to_posts(
             if tt:
                 t.name = tt.name or t.name
     return posts
-
-
-def _ensure_post_seo(post: Post, request: HttpRequest | None = None):
-    """
-    Ensure SEO metadata/linkable entry for a post when SEO is enabled.
-    """
-    try:
-        seo_api = AppService.get("seo")
-        seo_settings = (
-            seo_api.get_settings()
-            if seo_api and hasattr(seo_api, "get_settings")
-            else {}
-        )
-        if not seo_settings.get("seo_enabled", True):
-            return
-    except Exception:
-        if not feature_flags.seo_enabled():
-            return
-    try:
-        ct = ContentType.objects.get_for_model(Post)
-        seo_obj, _ = SEOModel.objects.get_or_create(content_type=ct, object_id=post.pk)
-        if seo_obj.locked:
-            return
-
-        meta, _ = Metadata.objects.get_or_create(seo=seo_obj)
-        settings_snapshot = _get_site_settings_snapshot()
-        try:
-            seo_api = AppService.get("seo")
-            seo_settings = (
-                seo_api.get_settings()
-                if seo_api and hasattr(seo_api, "get_settings")
-                else {}
-            )
-        except Exception:
-            seo_settings = {}
-        auto_meta = seo_settings.get(
-            "auto_meta_enabled", settings_snapshot.get("auto_meta_enabled", False)
-        )
-
-        content_hash = hashlib.sha256(
-            f"{post.title}|{post.summary}|{post.body}".encode()
-        ).hexdigest()
-        has_changes = meta.content_hash != content_hash
-
-        if auto_meta or not meta.meta_title:
-            meta.meta_title = (post.seo_title or post.title)[:255]
-        if auto_meta or not meta.meta_description:
-            meta.meta_description = (post.seo_description or post.summary[:320])[:320]
-        if not meta.canonical_url and request:
-            meta.canonical_url = request.build_absolute_uri()
-        if hasattr(post, "noindex"):
-            meta.noindex = bool(post.noindex)
-
-        if has_changes and auto_meta:
-            meta.content_hash = content_hash
-            meta.generated_at = timezone.now()
-
-        meta.save()
-        # Register linkable entity for internal linking
-        from apps.seo.services.internal_linking.engine import refresh_linkable_entity
-
-        refresh_linkable_entity(
-            post,
-            title=post.title,
-            url=post.get_absolute_url(),
-            keywords=",".join(post.tags.values_list("name", flat=True)),
-        )
-    except Exception:
-        # Defensive: SEO failures should not block blog rendering
-        return
 
 
 @require_GET
@@ -321,18 +253,11 @@ def post_list(request: HttpRequest) -> HttpResponse:
     for p in page_obj:
         published = p.published_at.strftime("%b %d, %Y") if p.published_at else "Draft"
         p.meta_text = f"By {p.author} · {published}"  # type: ignore[attr-defined]
-        try:
-            from apps.seo.services.og_image import resolve_post_list_image
+        p.card_image_url = ""  # type: ignore[attr-defined]
 
-            p.card_image_url = resolve_post_list_image(  # type: ignore[attr-defined]
-                p,
-                settings_snapshot,
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.debug("Post card image resolution failed for %s: %s", p.pk, exc)
-            p.card_image_url = ""  # type: ignore[attr-defined]
-
-    trending_tags = Tag.objects.order_by("-usage_count")[:10]
+    trending_tags = Tag.objects.filter(
+        is_active=True, is_curated=True, is_deleted=False
+    ).order_by("-usage_count")[:10]
     for t in trending_tags:
         t.live_post_count = t.posts.filter(  # type: ignore[attr-defined]
             status=PostStatus.PUBLISHED, publish_at__lte=now_ts
@@ -383,7 +308,9 @@ def post_list(request: HttpRequest) -> HttpResponse:
     )
 
     # Get popular tags for sidebar
-    popular_tags = Tag.objects.filter(is_active=True).order_by("-usage_count")[:15]
+    popular_tags = Tag.objects.filter(
+        is_active=True, is_curated=True, is_deleted=False
+    ).order_by("-usage_count")[:15]
 
     context = {
         "posts": page_obj,  # Pass page_obj directly for pagination
@@ -477,7 +404,10 @@ def post_detail(request: HttpRequest, slug: str) -> HttpResponse:
         if not post.is_live:
             raise Http404("Post not published.")
     # Fix N+1: Use tag PKs instead of evaluating queryset
-    tag_ids = list(post.tags.values_list("id", flat=True))
+    post.curated_tags = list(  # type: ignore[attr-defined]
+        post.tags.filter(is_curated=True, is_active=True, is_deleted=False)
+    )
+    tag_ids = [tag.pk for tag in post.curated_tags]  # type: ignore[attr-defined]
     related = (
         Post.objects.filter(
             tags__id__in=tag_ids,
@@ -491,7 +421,9 @@ def post_detail(request: HttpRequest, slug: str) -> HttpResponse:
     related_widget_html = render_to_string(
         "blog/partials/related_widget.html", {"posts": related}
     )
-    trending_tags = Tag.objects.order_by("-usage_count")[:10]
+    trending_tags = Tag.objects.filter(
+        is_active=True, is_curated=True, is_deleted=False
+    ).order_by("-usage_count")[:10]
     trending_posts = list(
         Post.objects.filter(status=PostStatus.PUBLISHED, publish_at__lte=timezone.now())
         .select_related("author")
@@ -507,11 +439,11 @@ def post_detail(request: HttpRequest, slug: str) -> HttpResponse:
             .prefetch_related("tags")
             .order_by("-published_at")[:5]
         )
-    _ensure_post_seo(post, request)
-
     # Tag cloud weights for sidebar (simple 3-tier scaling)
     tag_cloud_raw = list(
-        Tag.objects.filter(is_active=True).order_by("-usage_count")[:30]
+        Tag.objects.filter(is_active=True, is_curated=True, is_deleted=False).order_by(
+            "-usage_count"
+        )[:30]
     )
     if tag_cloud_raw:
         max_usage = max([t.usage_count or 1 for t in tag_cloud_raw]) or 1
@@ -556,14 +488,14 @@ def post_detail(request: HttpRequest, slug: str) -> HttpResponse:
         # tags
         try:
             translated_tags = {}
-            for tag in post.tags.all():
+            for tag in post.curated_tags:  # type: ignore[attr-defined]
                 tt = TagTranslation.objects.filter(
                     tag=tag, language=current_locale
                 ).first()
                 if tt:
                     translated_tags[tag.id] = tt.name
             if translated_tags:
-                for tag in post.tags.all():
+                for tag in post.curated_tags:  # type: ignore[attr-defined]
                     if tag.id in translated_tags:
                         tag.name = translated_tags[tag.id]
         except Exception:  # noqa: S110
@@ -586,12 +518,14 @@ def post_detail(request: HttpRequest, slug: str) -> HttpResponse:
     tag_categories = Tag.CATEGORY_CHOICES if hasattr(Tag, "CATEGORY_CHOICES") else []  # type: ignore[attr-defined]
 
     # Get popular tags for sidebar
-    popular_tags = Tag.objects.filter(is_active=True).order_by("-usage_count")[:10]
+    popular_tags = Tag.objects.filter(
+        is_active=True, is_curated=True, is_deleted=False
+    ).order_by("-usage_count")[:10]
 
     # Get related posts based on tags
     related_posts = (
         Post.objects.filter(
-            tags__in=post.tags.all(),
+            tags__in=post.curated_tags,  # type: ignore[attr-defined]
             status=PostStatus.PUBLISHED,
             publish_at__lte=timezone.now(),
         )
@@ -604,12 +538,9 @@ def post_detail(request: HttpRequest, slug: str) -> HttpResponse:
     firmware_table_data = None
     flashing_tools = None
     if post.firmware_model_id:  # type: ignore[attr-defined]
-        try:
-            from apps.firmwares.public_views import get_all_firmwares_for_model
+        from apps.firmwares.public_views import get_all_firmwares_for_model
 
-            firmware_table_data = get_all_firmwares_for_model(post.firmware_model)
-        except Exception:  # noqa: S110
-            pass
+        firmware_table_data = get_all_firmwares_for_model(post.firmware_model)
         # Fetch recommended flashing tools for this brand/chipset
         try:
             from apps.firmwares.models import FlashingTool
@@ -664,18 +595,6 @@ def post_detail(request: HttpRequest, slug: str) -> HttpResponse:
             ad_gate_config = post.ad_gate_config
 
     post_body_html = post.body or ""
-    try:
-        from apps.seo.services.internal_linking.engine import (
-            render_body_with_internal_links,
-        )
-
-        post_body_html = render_body_with_internal_links(
-            body_html=post_body_html,
-            source_obj=post,
-            max_links=8,
-        )
-    except Exception:  # noqa: S110
-        pass
 
     return render(
         request,
@@ -830,7 +749,11 @@ def posts_api_public(request: HttpRequest) -> JsonResponse:
                 "summary": p.summary,
                 "url": request.build_absolute_uri(p.get_absolute_url()),
                 "category": p.category.name if p.category else None,
-                "tags": [t.name for t in p.tags.all()],
+                "tags": list(
+                    p.tags.filter(
+                        is_curated=True, is_active=True, is_deleted=False
+                    ).values_list("name", flat=True)
+                ),
                 "published_at": p.published_at.isoformat() if p.published_at else None,
             }
         )
@@ -890,6 +813,49 @@ def manage_posts(request: HttpRequest) -> HttpResponse:
             "allow_user_posts": allow_user_posts,
         },
     )
+
+
+def _can_manage_post(user, post: Post) -> bool:
+    return bool(
+        getattr(user, "is_staff", False)
+        or getattr(user, "is_superuser", False)
+        or post.author_id == user.pk
+        or getattr(user, "has_role", lambda *roles: False)(CustomUser.Roles.EDITOR)
+    )
+
+
+@login_required
+def post_history(request: HttpRequest, slug: str) -> HttpResponse:
+    post = get_object_or_404(Post, slug__iexact=slug)
+    if not _can_manage_post(request.user, post):
+        raise Http404
+    return render(
+        request,
+        "blog/post_history.html",
+        {
+            "post": post,
+            "revisions": post.revisions.all().order_by("-created_at", "-pk"),
+            "can_restore": post.status == PostStatus.DRAFT,
+        },
+    )
+
+
+@login_required
+@require_POST
+def restore_post_revision(
+    request: HttpRequest, slug: str, revision_id: int
+) -> HttpResponse:
+    post = get_object_or_404(Post, slug__iexact=slug)
+    if not _can_manage_post(request.user, post):
+        raise Http404
+    revision = get_object_or_404(PostRevision, pk=revision_id, post=post)
+    try:
+        PostHistoryService.restore_revision(post, revision, user=request.user)
+    except ValidationError as error:
+        messages.error(request, "; ".join(error.messages))
+    else:
+        messages.success(request, "Draft restored from the selected version.")
+    return redirect("blog:post_history", slug=post.slug)
 
 
 @login_required
@@ -978,38 +944,43 @@ def post_create(request: HttpRequest) -> HttpResponse:
     instance = None
     if edit_slug:
         instance = get_object_or_404(Post, slug__iexact=edit_slug)
-        if not (
-            getattr(request.user, "is_staff", False)
-            or getattr(request.user, "is_superuser", False)
-            or instance.author == request.user
-        ):
+        if not _can_manage_post(request.user, instance):
             raise Http404
 
     if request.method == "POST":
         form = PostForm(request.POST, instance=instance)
         if form.is_valid():
-            post = form.save(commit=False)
-            if not instance:
-                post.author = request.user
+            values = dict(form.cleaned_data)
+            tags = values.pop("tags")
             with transaction.atomic():
-                post.save()
-                form.save_m2m()
+                if instance:
+                    post = PostHistoryService.update_post(
+                        instance,
+                        user=request.user,
+                        change_summary="Edited in the editorial workspace",
+                        tags=tags,
+                        **values,
+                    )
+                else:
+                    post = form.save(commit=False)
+                    post.author = request.user
+                    post.status = PostStatus.DRAFT
+                    post.publish_at = None
+                    post.published_at = None
+                    post.is_published = False
+                    post.featured = False
+                    post.save()
+                    form.save_m2m()
                 # If no tags supplied, auto-suggest from content
                 if not post.tags.exists():
                     tag_services.auto_tag_post(post, allow_create=True, max_tags=5)  # type: ignore[attr-defined]
                 _sync_tag_usage(post.tags.all())
-                _ensure_post_seo(post, request)
-                PostRevision.objects.create(
-                    post=post,
-                    user=request.user,
-                    snapshot={
-                        "title": post.title,
-                        "summary": post.summary,
-                        "body": post.body,
-                        "tags": list(post.tags.values_list("slug", flat=True)),
-                        "status": post.status,
-                    },
-                )
+                if not instance:
+                    PostHistoryService.record_current_version(
+                        post,
+                        user=request.user,
+                        change_summary="Initial version",
+                    )
             messages.success(request, "Post updated." if instance else "Post saved.")
             return redirect("blog:post_detail", slug=post.slug)
     else:
@@ -1103,7 +1074,9 @@ def api_related(request: HttpRequest, slug: str) -> JsonResponse:
     )
     related = (
         Post.objects.filter(
-            tags__in=post.tags.all(),
+            tags__in=post.tags.filter(
+                is_curated=True, is_active=True, is_deleted=False
+            ),
             status=PostStatus.PUBLISHED,
             publish_at__lte=timezone.now(),
         )
@@ -1158,7 +1131,9 @@ def post_preview(request: HttpRequest) -> JsonResponse:
 
 
 def widget_trending_tags(request: HttpRequest) -> JsonResponse:
-    tags = Tag.objects.order_by("-usage_count", "name")[:10]
+    tags = Tag.objects.filter(
+        is_active=True, is_curated=True, is_deleted=False
+    ).order_by("-usage_count", "name")[:10]
     items = [
         {"name": t.name, "slug": t.slug, "usage_count": t.usage_count} for t in tags
     ]
@@ -1211,10 +1186,6 @@ def api_ai_assist(request: HttpRequest) -> JsonResponse:
     context = request.POST.get("context") or ""
     if not action:
         return JsonResponse({"ok": False, "error": "missing_action"}, status=400)
-
-    # Respect feature flags
-    if not feature_flags.seo_enabled() and action == "suggest_seo":
-        return JsonResponse({"ok": False, "error": "seo_disabled"}, status=403)
 
     try:
         if action == "generate_title":

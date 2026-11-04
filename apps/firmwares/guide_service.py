@@ -182,7 +182,7 @@ def _try_ai_enrich(
 ) -> tuple[str, str]:
     """Optionally enrich guide content with AI. Returns (title, body)."""
     try:
-        from apps.ai.services import test_completion
+        from apps.core import ai_client
 
         prompt = f"""You are a firmware expert. Improve this flashing guide article.
 Make it more engaging, add technical tips, warnings, and troubleshooting advice.
@@ -197,8 +197,7 @@ Current Body:
 
 Return the improved body text only (Markdown format). Keep it under 2000 words."""
 
-        resp = test_completion(prompt)
-        enriched = resp.get("text", "")
+        enriched = ai_client.generate_answer(question=prompt, user=None)
         if enriched and len(enriched) > 200:
             return title, enriched
     except Exception as e:
@@ -218,9 +217,9 @@ def generate_guide_for_brand_model(
     Generate a single blog post from a guide template for a brand/model.
     Returns the GeneratedFlashingGuide record, or None if already exists.
     """
-    from apps.blog.models import Post
+    from apps.blog.models import Post, PostStatus
 
-    # Check if already generated
+    template = FlashingGuideTemplate.objects.select_for_update().get(pk=template.pk)
     existing = GeneratedFlashingGuide.objects.filter(
         template=template,
         brand=brand,
@@ -228,6 +227,17 @@ def generate_guide_for_brand_model(
     ).first()
     if existing:
         return None
+
+    from django.contrib.auth import get_user_model
+
+    author = (
+        get_user_model()
+        .objects.filter(is_staff=True, is_active=True)
+        .order_by("pk")
+        .first()
+    )
+    if author is None:
+        raise ValueError("A staff author is required to generate a governed guide.")
 
     brand_name = brand.name
     model_name = model_obj.name if model_obj else ""
@@ -276,23 +286,20 @@ def generate_guide_for_brand_model(
         slug = f"{slug_base[:190]}-{counter}"
         counter += 1
 
-    # Determine status
-    from apps.blog.models import PostStatus
-
-    status = PostStatus.PUBLISHED if template.auto_publish else PostStatus.DRAFT
-
     # Create blog post
     post = Post.objects.create(
-        title=title[:300],
+        title=title[:200],
         slug=slug,
         summary=summary[:500],
         body=body,
-        status=status,
+        author=author,
+        status=PostStatus.DRAFT,
         firmware_brand=brand,
         firmware_model=model_obj,
         is_ai_generated=use_ai,
-        publish_at=timezone.now() if status == PostStatus.PUBLISHED else None,
-        published_at=timezone.now() if status == PostStatus.PUBLISHED else None,
+        publish_at=None,
+        published_at=None,
+        is_published=False,
     )
 
     # Create tracking record
@@ -307,6 +314,17 @@ def generate_guide_for_brand_model(
     # Update template counter
     FlashingGuideTemplate.objects.filter(pk=template.pk).update(
         generated_count=template.generated_count + 1
+    )
+
+    if template.submit_for_review:
+        from apps.blog.services.workflow import request_review
+
+        request_review(post, user=author)
+
+    from apps.blog.services.history import PostHistoryService
+
+    PostHistoryService.record_current_version(
+        post, user=author, change_summary="Generated flashing guide"
     )
 
     logger.info(

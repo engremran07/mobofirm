@@ -1,0 +1,11 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<div class="container-fluid">
+  <h1>Notification operations</h1>
+  <h2>Users</h2><p>{{ user_stats.total }} active users · {{ user_stats.with_preferences }} preferences · {{ user_stats.with_push }} active push users</p>
+  <h2>Notifications</h2><p>{{ notification_stats.total }} total · {{ notification_stats.unread }} unread · {{ notification_stats.read_rate }}% read rate</p>
+  <div class="row"><div class="col">24 hours: {{ notification_stats.last_24h }}</div><div class="col">7 days: {{ notification_stats.last_7d }}</div><div class="col">30 days: {{ notification_stats.last_30d }}</div></div>
+  <h2 class="mt-4">Subscription activity</h2><p>{{ push_stats.active }} active subscriptions of {{ push_stats.total }}</p>
+  {% if type_distribution %}<h2>Notification types</h2><ul>{% for item in type_distribution %}<li>{{ item.action_type }}: {{ item.count }}</li>{% endfor %}</ul>{% endif %}
+</div>
+{% endblock %}

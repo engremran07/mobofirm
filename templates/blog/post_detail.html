@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% load ad_tags %}
+{% block title %}{{ post.seo_title|default:post.title }} | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block meta_description %}{{ post.seo_description|default:post.summary }}{% endblock %}
+{% block extra_head %}{% if canonical_url %}<link rel="canonical" href="{{ canonical_url }}">{% endif %}{% endblock %}
+{% block content %}
+<article class="site-container py-4 py-lg-5">
+  <nav aria-label="Breadcrumb" class="small muted mb-3"><a href="{% url 'blog:post_list' %}">Journal</a>{% if post.category %} / <span>{{ post.category.name }}</span>{% endif %}</nav>
+  <header class="mb-4">
+    {% if post.category %}<p class="section-eyebrow mb-2">{{ post.category.name }}</p>{% endif %}
+    <h1 class="display-5 fw-bold">{{ post.title }}</h1>
+    <p class="muted">By {{ post.author }}{% if post.published_at %} · {{ post.published_at|date:"F j, Y" }}{% endif %}{% if post.reading_time %} · {{ post.reading_time }} min read{% endif %}</p>
+    {% if post.summary %}<p class="lead muted">{{ post.summary }}</p>{% endif %}
+    {% if user.is_authenticated and user == post.author or user.is_staff %}<a class="btn btn-outline-secondary btn-sm" href="{% url 'blog:post_create' %}?edit={{ post.slug }}">Edit article</a>{% endif %}
+  </header>
+  {% render_ad_slot "in-article-top" %}
+  {% if ad_gate_required %}
+    {% include "blog/fragments/ad_gate.html" %}
+  {% else %}
+    <div class="article-body">{{ post_body_html|safe }}</div>
+    {% if post.curated_tags %}<ul class="list-inline mt-4" aria-label="Article tags">{% for tag in post.curated_tags %}<li class="list-inline-item"><a href="{% url 'tags:detail' slug=tag.slug %}">#{{ tag.name }}</a></li>{% endfor %}</ul>{% endif %}
+    {% render_ad_slot "in-article-mid" %}
+    {% if firmware_table_data %}
+      <section class="mt-5" aria-labelledby="related-firmware-title"><h2 id="related-firmware-title" class="h3">Related firmware</h2>
+        <div class="catalog-table-wrap"><table class="table catalog-table"><thead><tr><th scope="col">File</th><th scope="col">Classification</th><th scope="col">Package format</th><th scope="col">Build</th><th scope="col">Version</th><th scope="col">Review</th></tr></thead><tbody>
+          {% for item in firmware_table_data %}<tr><td>{{ item.original_file_name }}</td><td>{{ item.firmware_type_display }}</td><td>{{ item.get_package_format_display }}</td><td>{{ item.build_number|default:"—" }}</td><td>{{ item.android_version|default:"—" }}</td><td>{% if item.is_verified %}Verified{% else %}Governance reviewed{% endif %}</td></tr>{% empty %}<tr><td colspan="6">No public firmware records are available.</td></tr>{% endfor %}
+        </tbody></table></div>
+      </section>
+    {% endif %}
+    {% if related_posts %}
+      <section class="mt-5" aria-labelledby="related-articles-title"><h2 id="related-articles-title" class="h3">Related articles</h2>{% include "blog/partials/related_widget.html" %}</section>
+    {% endif %}
+    {% if post.allow_comments %}
+      <section class="mt-5" aria-labelledby="comments-title"><h2 id="comments-title" class="h3">Discussion</h2>
+        {% for comment in comments %}{% if comment.is_approved or comment.status == "approved" %}<article class="surface-card p-3 mb-3"><p class="small muted">{{ comment.user }} · {{ comment.created_at|date:"M j, Y" }}</p><p class="mb-0">{{ comment.body|linebreaksbr }}</p></article>{% endif %}{% empty %}<p class="muted">No approved comments yet.</p>{% endfor %}
+        {% include "comments/form.html" %}
+      </section>
+    {% endif %}
+  {% endif %}
+</article>
+{% endblock %}

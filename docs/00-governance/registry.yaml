@@ -1,0 +1,31 @@
+schema_version: 1
+project: mobofirm
+status: active_engineering_baseline
+product_status: draft_unapproved
+frontend_status: design_not_approved_implementation_prohibited
+owners:
+  product: product_owner
+  engineering: engineering_owner
+  security: security_owner
+canonical_documents:
+  agent_instructions: AGENTS.md
+  source_of_truth: .agents/policies/source-of-truth.yaml
+  approval_matrix: .agents/policies/approval-matrix.yaml
+  quality_gates: docs/00-governance/policies/quality-gates.yaml
+  agent_autonomy: docs/00-governance/policies/agent-autonomy.yaml
+  definition_of_done: docs/00-governance/definition-of-done.md
+installed_apps:
+  - users
+  - core
+  - ads
+  - devices
+  - governance
+  - blog
+  - comments
+  - firmwares
+  - tags
+release_blockers:
+  - unresolved_required_test_or_migration_check
+  - unresolved_problems_panel_diagnostics
+  - unapproved_product_or_frontend_decision
+  - unresolved_critical_or_high_security_finding

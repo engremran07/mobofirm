@@ -22,7 +22,7 @@ from .models import (
 )
 
 # ---------------------------------------------------------------------------
-# Download links (merged from apps.download_links)
+# Download links
 # ---------------------------------------------------------------------------
 
 
@@ -101,7 +101,7 @@ class HotlinkBlockViewSet(viewsets.ModelViewSet):
 
 
 # ---------------------------------------------------------------------------
-# FW Verification (merged from apps.fw_verification)
+# Firmware verification API
 # ---------------------------------------------------------------------------
 
 
@@ -161,7 +161,7 @@ class TrustedTesterViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 # ---------------------------------------------------------------------------
-# GSMArena Sync (merged from apps.gsmarena_sync)
+# GSMArena device synchronization
 # ---------------------------------------------------------------------------
 
 
@@ -179,7 +179,7 @@ class GSMArenaDeviceViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 # ---------------------------------------------------------------------------
-# Changelog — absorbed from apps.changelog
+# Changelog API
 # ---------------------------------------------------------------------------
 
 

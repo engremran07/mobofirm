@@ -4,7 +4,7 @@ apps.users.services.recaptcha
 Enterprise-Grade Google reCAPTCHA Verification Service
 
 ✅ Supports v2 + v3 with hostname verification
-✅ Configurable thresholds via SiteSettings
+✅ Configurable thresholds via Django settings
 ✅ Token-level atomic caching (short-lived, cryptographic digest)
 ✅ Graceful degradation when disabled or unreachable
 ✅ Hardened against malformed tokens & network errors
@@ -26,8 +26,6 @@ from django.core.cache import cache
 from requests import Response
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from requests.exceptions import RequestException, Timeout
-
-from apps.site_settings.models import SiteSettings
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +65,7 @@ def verify_recaptcha(
     action: str = "login",
 ) -> dict[str, Any]:
     """
-    Verify a Google reCAPTCHA token using configuration from SiteSettings.
+    Verify a token using configuration from Django settings.
 
     Returns:
         {
@@ -78,17 +76,9 @@ def verify_recaptcha(
         }
     """
     # ----------------------------------------------------------
-    # Step 1. Load configuration
-    # ----------------------------------------------------------
-    try:
-        settings_obj = SiteSettings.get_solo()
-    except Exception as exc:
-        logger.warning("reCAPTCHA: unable to load SiteSettings → %s", exc)
-        return {"ok": False, "error": "settings_unavailable", "errors": []}
-
-    recaptcha_enabled: bool = bool(getattr(settings_obj, "recaptcha_enabled", False))
-    recaptcha_mode: str = str(getattr(settings_obj, "recaptcha_mode", "off")).lower()
-    private_key: str | None = getattr(settings_obj, "recaptcha_private_key", None)
+    recaptcha_enabled = bool(getattr(django_settings, "RECAPTCHA_ENABLED", False))
+    recaptcha_mode = str(getattr(django_settings, "RECAPTCHA_MODE", "off")).lower()
+    private_key = getattr(django_settings, "RECAPTCHA_PRIVATE_KEY", "")
 
     # ----------------------------------------------------------
     # Step 2. Skip if disabled
@@ -105,7 +95,7 @@ def verify_recaptcha(
         return {"ok": False, "error": "invalid_token_format", "errors": []}
 
     if not private_key:
-        logger.error("reCAPTCHA: missing private key in SiteSettings")
+        logger.error("reCAPTCHA: missing private key")
         return {"ok": False, "error": "missing_credentials", "errors": []}
 
     # ----------------------------------------------------------
@@ -128,7 +118,7 @@ def verify_recaptcha(
         payload["remoteip"] = remote_ip
 
     timeout_s: float = max(
-        float(getattr(settings_obj, "recaptcha_timeout_ms", 3000)) / 1000.0, 1.0
+        float(getattr(django_settings, "RECAPTCHA_TIMEOUT_MS", 3000)) / 1000.0, 1.0
     )
 
     # ----------------------------------------------------------
@@ -177,7 +167,7 @@ def verify_recaptcha(
     if recaptcha_mode == "v3":
         score = _safe_decimal(data.get("score", 0))
         threshold = _safe_decimal(
-            getattr(settings_obj, "recaptcha_score_threshold", 0.5)
+            getattr(django_settings, "RECAPTCHA_SCORE_THRESHOLD", 0.5)
         )
         valid = success and score >= threshold
 

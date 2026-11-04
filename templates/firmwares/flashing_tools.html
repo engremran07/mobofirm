@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Flashing tools | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block content %}
+<div class="site-container py-5"><header class="hero-panel p-4 mb-4"><p class="hero-eyebrow">Device maintenance</p><h1 class="hero-title">Flashing tools</h1><p class="hero-copy">{{ total_tools }} active tools in the catalogue. Review compatibility and vendor guidance before use.</p>
+  <form method="get" class="d-flex gap-2"><label class="visually-hidden" for="platform-filter">Platform</label><select class="form-select" id="platform-filter" name="platform"><option value="">All platforms</option>{% for value,label in platform_choices %}<option value="{{ value }}"{% if current_platform == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select><button class="btn btn-primary">Filter</button></form>
+</header>
+  {% if featured_tools %}<section class="mb-5"><h2 class="h3">Featured tools</h2><div class="row g-3">{% for tool in featured_tools %}<div class="col-12 col-md-6 col-xl-4"><article class="surface-card p-3"><p class="section-eyebrow">{{ tool.get_platform_display }}</p><h3 class="h5"><a href="{% url 'firmwares:flashing_tool_detail' slug=tool.slug %}">{{ tool.name }}</a></h3><p class="muted">{{ tool.description|truncatewords:30 }}</p></article></div>{% endfor %}</div></section>{% endif %}
+  {% for category in categories %}{% if category.active_tools %}<section class="mb-5"><h2 class="h3">{{ category.name }}</h2><div class="row g-3">{% for tool in category.active_tools %}<div class="col-12 col-md-6 col-xl-4"><article class="surface-card p-3"><h3 class="h5"><a href="{% url 'firmwares:flashing_tool_detail' slug=tool.slug %}">{{ tool.name }}</a></h3><p class="small muted">{{ tool.get_platform_display }}</p><p class="mb-0">{{ tool.description|truncatewords:25 }}</p></article></div>{% endfor %}</div></section>{% endif %}{% empty %}<p class="empty-state p-4">No tool categories are configured.</p>{% endfor %}
+</div>
+{% endblock %}

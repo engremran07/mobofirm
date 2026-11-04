@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% load ad_tags %}
+{% block title %}Journal | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block content %}
+<div class="site-container py-4 py-lg-5">
+  <header class="hero-panel p-4 p-md-5 mb-4">
+    <p class="hero-eyebrow mb-2">Field notes and guides</p>
+    <h1 class="hero-title mb-3">The Mobofirm journal</h1>
+    <p class="hero-copy mb-4">Editorial guides, device research, and firmware explainers from the catalogue.</p>
+    <form class="row g-2" method="get" action="{% url 'blog:blog_search' %}"
+          hx-get="{% url 'blog:blog_search' %}" hx-trigger="input changed delay:350ms from:input, submit"
+          hx-target="#journal-search-results" hx-swap="innerHTML">
+      <div class="col"><label class="visually-hidden" for="journal-query">Search articles</label>
+        <input id="journal-query" class="form-control" type="search" name="q" value="{{ q }}" minlength="2" placeholder="Search guides and articles">
+      </div>
+      <div class="col-auto"><button class="btn btn-primary" type="submit">Search</button></div>
+    </form>
+    <div id="journal-search-results" class="mt-3" aria-live="polite"></div>
+  </header>
+  {% render_ad_slot "content-top" %}
+  {% if featured_post %}
+    <article class="surface-card p-4 p-md-5 mb-4">
+      <p class="section-eyebrow mb-2">Featured article</p>
+      <h2 class="h3"><a href="{{ featured_post.get_absolute_url }}">{{ featured_post.title }}</a></h2>
+      <p class="muted">{{ featured_post.summary }}</p>
+      <a class="btn btn-outline-secondary" href="{{ featured_post.get_absolute_url }}">Read the article</a>
+    </article>
+  {% endif %}
+  <form class="row g-2 align-items-end mb-4" method="get" action="{% url 'blog:post_list' %}"
+        hx-get="{% url 'blog:post_list' %}" hx-trigger="change, submit" hx-target="#journal-posts" hx-swap="innerHTML">
+    <div class="col-12 col-sm-6 col-lg-3"><label class="form-label" for="journal-category">Category</label>
+      <select class="form-select" id="journal-category" name="category">
+        <option value="">All categories</option>
+        {% for category in categories %}<option value="{{ category.slug }}"{% if active_category == category.slug %} selected{% endif %}>{{ category.name }} ({{ category.post_count }})</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-12 col-sm-6 col-lg-3"><label class="form-label" for="journal-sort">Sort by</label>
+      <select class="form-select" id="journal-sort" name="sort">
+        {% for value,label in sort_options %}<option value="{{ value }}"{% if sort == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+    </div>
+    {% if user.is_authenticated and allow_user_posts %}
+      <div class="col-auto"><a class="btn btn-outline-secondary" href="{% url 'blog:manage_posts' %}">Manage my posts</a></div>
+    {% endif %}
+    <div class="col-auto"><button class="btn btn-primary" type="submit">Apply filters</button></div>
+  </form>
+  <div id="journal-posts" aria-live="polite">{% include "blog/partials/post_list_items.html" %}</div>
+</div>
+{% endblock %}

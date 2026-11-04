@@ -12,7 +12,7 @@ class FirmwaresConfig(AppConfig):
     verbose_name = "Firmwares"
 
     def ready(self) -> None:
-        """Register signal handlers and sitemaps when app is ready."""
+        """Register firmware signal handlers when the app is ready."""
         try:
             from . import signal_handlers  # noqa: F401
         except Exception as e:
@@ -21,19 +21,3 @@ class FirmwaresConfig(AppConfig):
             logging.getLogger(__name__).warning(
                 f"Failed to register firmwares signal handlers: {e}"
             )
-
-        # Register firmware sitemaps for auto-categorized sitemap index
-        try:
-            from apps.pages.sitemap_registry import register_sitemap
-
-            from .sitemaps import (
-                FirmwareBrandsSitemap,
-                FirmwareFileSitemap,
-                FirmwareModelsSitemap,
-            )
-
-            register_sitemap("brands", FirmwareBrandsSitemap)
-            register_sitemap("models", FirmwareModelsSitemap)
-            register_sitemap("firmware-files", FirmwareFileSitemap)
-        except Exception:  # noqa: S110
-            pass

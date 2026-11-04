@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}{{ brand.name }} devices | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block meta_description %}Browse {{ brand.name }} device models and publicly available firmware records.{% endblock %}
+{% block content %}
+<div class="site-container py-5">
+  <nav aria-label="Breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="{% url 'firmwares:brand_list' %}">Brands</a></li><li class="breadcrumb-item active" aria-current="page">{{ brand.name }}</li></ol></nav>
+  <header class="hero-panel p-4 p-md-5 mb-5">
+    <p class="section-eyebrow">Manufacturer directory</p>
+    <h1 class="display-6 fw-bold">{{ brand.name }}</h1>
+    {% if brand.description %}<p class="hero-copy mb-3">{{ brand.description }}</p>{% endif %}
+    <p class="muted mb-0">{{ models|length }} active models · {{ total_firmwares }} public firmware records</p>
+  </header>
+  <section aria-labelledby="models-title">
+    <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
+      <h2 id="models-title" class="h3 mb-0">Device models</h2>
+      {% if brand.website_url %}<a href="{{ brand.website_url }}" rel="noopener noreferrer" target="_blank">Manufacturer website <i data-lucide="external-link" aria-hidden="true"></i></a>{% endif %}
+    </div>
+    {% if models %}
+      <div class="row g-3">
+      {% for model in models %}
+        <div class="col-12 col-md-6 col-xl-4">
+          <article class="surface-card p-4">
+            <p class="small section-eyebrow mb-2">{{ brand.name }}</p>
+            <h3 class="h5"><a href="{% url 'firmwares:model_detail' brand_slug=brand.slug model_slug=model.slug %}">{{ model.display_name }}</a></h3>
+            <p class="muted mb-3">{% if model.model_code %}<span class="model-code">{{ model.model_code }}</span>{% endif %}{% if model.codename %} · {{ model.codename }}{% endif %}</p>
+            <div class="d-flex justify-content-between small muted"><span>{{ model.firmware_count }} firmware records</span><span>{{ model.status|title }}</span></div>
+          </article>
+        </div>
+      {% endfor %}
+      </div>
+    {% else %}
+      <p class="empty-state p-4">No active device models are listed for this brand.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

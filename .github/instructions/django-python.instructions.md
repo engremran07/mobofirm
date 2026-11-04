@@ -1,5 +1,5 @@
 ---
-description: "Use when changing Python or Django code in blog, comments, firmwares, or tags. Covers app boundaries, data integrity, migrations, and regression coverage."
+description: "Use when changing Python or Django code in any installed Mobofirm application. Covers app boundaries, data integrity, migrations, and regression coverage."
 applyTo: "**/*.py"
 ---
 # Django and Python
@@ -9,4 +9,13 @@ applyTo: "**/*.py"
 - Validate inputs at boundaries, use ORM parameters, and use transactions for related writes. Use `transaction.on_commit()` when side effects must follow a committed write.
 - Test the regression and relevant permissions, invalid input, failure, and duplicate/retry paths. Use Django `TestCase` and existing fixtures/patterns where available.
 - Review generated migrations for accidental data loss, lock-heavy operations, and missing reversibility. Run migration checks only when a real project settings module is available.
-- Do not add a dependency, settings module, or project scaffold to compensate for files missing from this checkout.
+- Use Ruff as the canonical Python formatter. Check formatting with `.venv\Scripts\ruff.exe format --check .` on Windows or `.venv/bin/ruff format --check .` on Linux/macOS.
+- Run all Python/Django commands through the repository virtual environment (`.venv\Scripts\python.exe` on Windows, `.venv/bin/python` on Linux/macOS); do not fall back to a global interpreter.
+- Project configuration belongs in `app/`; domain applications belong in `apps/`. Verify installed apps in `app/settings/base.py`.
+- Keep profile, following, and activity behavior in `apps.users`; do not recreate a separate profile app.
+- Keep `CsrfViewMiddleware` as the global CSRF authority. Do not exempt browser/session-authenticated writes; check verified email before login side effects or protected workflows; redirect after successful browser POSTs.
+- For Django REST Framework, preserve `SessionAuthentication` CSRF checks and keep token-authenticated API behavior explicit. Test unsafe requests with CSRF enforcement enabled.
+- In the firmware catalog, keep firmware classification/provenance separate from package format and file extension. Preserve manufacturer model codes at the variant level; do not create downloadable firmware records without a real staged file and the existing governance review.
+- Catalog seed commands must be deterministic, additive, local-target guarded, and safe to rerun. Never seed placeholder firmware binaries or directly publish generated editorial content.
+- Do not add references to apps that are not installed, dependencies, frontend assets, or settings modules without explicit approval.
+- Do not apply migrations or cleanup commands to a non-test database without explicit authorization.

@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Search the journal | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block content %}
+<div class="site-container py-5">
+  <h1 class="h2 mb-4">Search the journal</h1>
+  <form method="get" action="{% url 'blog:blog_search' %}" class="d-flex gap-2 mb-4">
+    {{ form.q }}
+    <button class="btn btn-primary" type="submit">Search</button>
+  </form>
+  <div id="search-results">{% include "blog/fragments/search_results.html" %}</div>
+</div>
+{% endblock %}

@@ -1,0 +1,17 @@
+<footer class="site-footer mt-5 py-4">
+  <div class="site-container d-flex flex-column flex-md-row justify-content-between gap-3">
+    <div>
+      <a class="site-brand" href="{% url 'home' %}">{{ site_name|default:"Mobofirm" }}</a>
+      <p class="mb-0 mt-2 small">Firmware discovery with clear model and review information.</p>
+      <p class="mb-0 mt-1 small text-secondary">Version {{ release_version }}</p>
+    </div>
+    <nav class="d-flex flex-wrap gap-3 align-items-start" aria-label="Footer navigation">
+      <a href="{% url 'firmwares:browse' %}">Firmware catalogue</a>
+      <a href="{% url 'firmwares:brand_list' %}">Brands</a>
+      <a href="{% url 'firmwares:flashing_tools' %}">Tools</a>
+      <a href="{% url 'blog:post_list' %}">Journal</a>
+      <a href="{% url 'tags:list' %}">Topics</a>
+      <a href="{% url 'health-live' %}">Service status</a>
+    </nav>
+  </div>
+</footer>

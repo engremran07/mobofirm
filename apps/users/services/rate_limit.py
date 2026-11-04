@@ -130,7 +130,9 @@ def reset_rate_limit(key: str) -> None:
         logger.warning("Failed to reset rate limit for %s: %s", key, exc)
 
 
-def get_attempt_count(key: str, window_seconds: int = 300) -> int:
+def get_attempt_count(
+    key: str, window_seconds: int = 300, fail_open: bool = True
+) -> int:
     """
     Returns the current number of attempts within the window for a key.
     Safe against corrupted cache values.
@@ -143,4 +145,6 @@ def get_attempt_count(key: str, window_seconds: int = 300) -> int:
         return len([t for t in bucket if now - t <= window_seconds])
     except Exception as exc:
         logger.warning("Failed to read attempt count for %s: %s", key, exc)
+        if not fail_open:
+            raise
         return 0

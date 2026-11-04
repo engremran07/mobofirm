@@ -6,51 +6,88 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('firmwares', '0006_ingestionjob_reviewed_at_ingestionjob_reviewed_by_and_more'),
+        (
+            "firmwares",
+            "0006_ingestionjob_reviewed_at_ingestionjob_reviewed_by_and_more",
+        ),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='gsmarenadevice',
-            name='chipset',
-            field=models.CharField(blank=True, default='', max_length=300),
+            model_name="gsmarenadevice",
+            name="chipset",
+            field=models.CharField(blank=True, default="", max_length=300),
         ),
         migrations.AddField(
-            model_name='gsmarenadevice',
-            name='marketed_as',
-            field=models.CharField(blank=True, default='', help_text='Marketed/alternate names', max_length=500),
+            model_name="gsmarenadevice",
+            name="marketed_as",
+            field=models.CharField(
+                blank=True,
+                default="",
+                help_text="Marketed/alternate names",
+                max_length=500,
+            ),
         ),
         migrations.AddField(
-            model_name='gsmarenadevice',
-            name='model_codes',
-            field=models.CharField(blank=True, default='', help_text='Variant model codes (comma-separated)', max_length=500),
+            model_name="gsmarenadevice",
+            name="model_codes",
+            field=models.CharField(
+                blank=True,
+                default="",
+                help_text="Variant model codes (comma-separated)",
+                max_length=500,
+            ),
         ),
         migrations.AddField(
-            model_name='gsmarenadevice',
-            name='os_upgradeable_to',
-            field=models.CharField(blank=True, default='', help_text='Latest upgradeable OS version', max_length=200),
+            model_name="gsmarenadevice",
+            name="os_upgradeable_to",
+            field=models.CharField(
+                blank=True,
+                default="",
+                help_text="Latest upgradeable OS version",
+                max_length=200,
+            ),
         ),
         migrations.AddField(
-            model_name='gsmarenadevice',
-            name='os_version',
-            field=models.CharField(blank=True, default='', help_text='Android version at launch', max_length=200),
+            model_name="gsmarenadevice",
+            name="os_version",
+            field=models.CharField(
+                blank=True,
+                default="",
+                help_text="Android version at launch",
+                max_length=200,
+            ),
         ),
         migrations.AddField(
-            model_name='gsmarenadevice',
-            name='review_status',
-            field=models.CharField(choices=[('pending', 'Pending Review'), ('approved', 'Approved'), ('rejected', 'Rejected')], db_index=True, default='pending', max_length=10),
+            model_name="gsmarenadevice",
+            name="review_status",
+            field=models.CharField(
+                choices=[
+                    ("pending", "Pending Review"),
+                    ("approved", "Approved"),
+                    ("rejected", "Rejected"),
+                ],
+                db_index=True,
+                default="pending",
+                max_length=10,
+            ),
         ),
         migrations.AddField(
-            model_name='gsmarenadevice',
-            name='reviewed_at',
+            model_name="gsmarenadevice",
+            name="reviewed_at",
             field=models.DateTimeField(blank=True, null=True),
         ),
         migrations.AddField(
-            model_name='gsmarenadevice',
-            name='reviewed_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='reviewed_gsmarena_devices', to=settings.AUTH_USER_MODEL),
+            model_name="gsmarenadevice",
+            name="reviewed_by",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="reviewed_gsmarena_devices",
+                to=settings.AUTH_USER_MODEL,
+            ),
         ),
     ]

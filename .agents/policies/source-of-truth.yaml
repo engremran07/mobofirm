@@ -1,0 +1,41 @@
+schema_version: 1
+sources:
+  implemented_runtime:
+    precedence: 1
+    canonical:
+      - app/settings/
+      - app/urls.py
+      - apps/*/apps.py
+      - apps/*/models.py
+      - apps/*/migrations/
+      - apps/*/services/
+  approved_product_requirements:
+    precedence: 2
+    canonical:
+      - docs/01-product/prd.md
+      - docs/01-product/acceptance-criteria.md
+      - docs/01-product/feature-catalog.md
+    approval_rule: These documents are proposals until explicitly approved by the product owner.
+  architecture_and_boundaries:
+    precedence: 3
+    canonical:
+      - docs/03-architecture/architecture-overview.md
+      - docs/04-backend/django-app-boundaries.md
+  engineering_governance:
+    precedence: 4
+    canonical:
+      - AGENTS.md
+      - .agents/policies/
+      - docs/00-governance/policies/
+      - docs/00-governance/definition-of-done.md
+  verification_evidence:
+    precedence: 5
+    canonical:
+      - tests/backend/
+      - tests/frontend/
+      - .github/workflows/ci.yml
+      - docs/06-quality/requirements-traceability.md
+conflict_rule:
+  - Do not silently rewrite approved product intent based on implementation.
+  - Treat source, settings, and migrations as evidence of implemented state, not product approval.
+  - Record conflicts and request the relevant owner decision before changing behavior.

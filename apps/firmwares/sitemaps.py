@@ -1,9 +1,8 @@
 from __future__ import annotations
 
+from django.conf import settings
 from django.contrib.sitemaps import Sitemap
 from django.urls import reverse
-
-from apps.site_settings.models import SiteSettings
 
 from .models import (
     Brand,
@@ -24,12 +23,7 @@ class FirmwareBrandsSitemap(Sitemap):
 
     def __init__(self) -> None:
         super().__init__()
-        try:
-            ss = SiteSettings.get_solo()
-        except Exception:
-            ss = None
-        force_https = bool(getattr(ss, "force_https", False))
-        self.protocol = "https" if force_https else "http"
+        self.protocol = "https" if settings.FORCE_HTTPS else "http"
 
     def items(self):
         return Brand.objects.order_by("name")
@@ -49,12 +43,7 @@ class FirmwareModelsSitemap(Sitemap):
 
     def __init__(self) -> None:
         super().__init__()
-        try:
-            ss = SiteSettings.get_solo()
-        except Exception:
-            ss = None
-        force_https = bool(getattr(ss, "force_https", False))
-        self.protocol = "https" if force_https else "http"
+        self.protocol = "https" if settings.FORCE_HTTPS else "http"
 
     def items(self):
         return (
@@ -92,12 +81,7 @@ class FirmwareFileSitemap(Sitemap):
 
     def __init__(self) -> None:
         super().__init__()
-        try:
-            ss = SiteSettings.get_solo()
-        except Exception:
-            ss = None
-        force_https = bool(getattr(ss, "force_https", False))
-        self.protocol = "https" if force_https else "http"
+        self.protocol = "https" if settings.FORCE_HTTPS else "http"
 
     def items(self) -> list:
         """Return all active firmware files across all types."""

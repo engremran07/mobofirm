@@ -82,15 +82,13 @@ class Comment(TimestampedModel, SoftDeleteModel):
         ... )
         >>> comment.save()  # save() syncs generic target from post
 
-        >>> # Comment on any model using generic FK (new style)
+        >>> # Comment on any installed content model using the generic relation
         >>> from django.contrib.contenttypes.models import ContentType
-        >>> from apps.products.models import Product
-        >>> product = Product.objects.get(pk=42)
         >>> comment = Comment.objects.create(
-        ...     content_type=ContentType.objects.get_for_model(Product),
-        ...     object_id=product.pk,
+        ...     content_type=ContentType.objects.get_for_model(post),
+        ...     object_id=post.pk,
         ...     user=user,
-        ...     body="Does this come in blue?"
+        ...     body="This post raises an interesting point."
         ... )
 
         >>> # Threaded comment (reply to another comment)

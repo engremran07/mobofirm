@@ -12,13 +12,3 @@ class TagsConfig(AppConfig):
             from . import signal_handlers  # noqa: F401
         except Exception:  # noqa: S110
             pass
-
-        # Register tag sitemap with the shared sitemap registry (soft-fail to avoid startup errors)
-        try:
-            from apps.pages.sitemap_registry import register_sitemap
-
-            from .sitemaps import PublishedTagsSitemap
-
-            register_sitemap("tags", PublishedTagsSitemap)
-        except Exception:
-            return

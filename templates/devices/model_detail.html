@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}{{ model.display_name|default:model.name }} | {{ brand.name }}{% endblock %}
+{% block content %}
+<div class="site-container py-5"><nav aria-label="Breadcrumb"><a href="{% url 'firmwares:brand_list' %}">Brands</a> / <a href="{% url 'firmwares:brand_detail' slug=brand.slug %}">{{ brand.name }}</a></nav>
+  <header class="my-4"><p class="section-eyebrow">{{ brand.name }}</p><h1 class="display-6 fw-bold">{{ model.display_name|default:model.name }}</h1>{% if device_names %}<dl class="row">{% for item in device_names %}<dt class="col-sm-3">{{ item.label }}</dt><dd class="col-sm-9">{{ item.value }}</dd>{% endfor %}</dl>{% endif %}</header>
+  <section class="surface-card p-4 mb-4"><h2 class="h4">Device specifications</h2><dl class="row mb-0">{% if chipset %}<dt class="col-sm-3">Chipset</dt><dd class="col-sm-9">{{ chipset }}</dd>{% endif %}{% if os_version %}<dt class="col-sm-3">Operating system</dt><dd class="col-sm-9">{{ os_version }}</dd>{% endif %}{% for key,value in specs.items %}<dt class="col-sm-3">{{ key|title }}</dt><dd class="col-sm-9">{{ value }}</dd>{% empty %}{% if not chipset and not os_version %}<dd class="muted">No approved specification record is available.</dd>{% endif %}{% endfor %}</dl></section>
+  <section><h2 class="h3">Firmware records</h2><div class="catalog-table-wrap"><table class="table catalog-table"><thead><tr><th>File</th><th>Type</th><th>Region</th><th>Version</th><th>Verification</th></tr></thead><tbody>
+    {% for firmware in firmwares %}<tr><td>{{ firmware.file_name }}</td><td>{{ firmware.type }}</td><td>{{ firmware.variant_region }}</td><td>{{ firmware.android_version|default:"—" }}</td><td>{% if firmware.is_verified %}Verified{% else %}Not verified{% endif %}</td></tr>{% empty %}<tr><td colspan="5">No active firmware files are listed for this device.</td></tr>{% endfor %}
+  </tbody></table></div></section>
+  {% if variants %}<section class="mt-4"><h2 class="h4">Variants</h2><ul>{% for variant in variants %}<li>{{ variant.name }}{% if variant.region %} · {{ variant.region }}{% endif %}</li>{% endfor %}</ul></section>{% endif %}
+</div>
+{% endblock %}

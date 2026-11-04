@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% load socialaccount %}
+{% block title %}Create account | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block content %}
+{% get_providers as social_providers %}
+<div class="site-container py-5">
+  <section class="surface-card auth-card p-4 mx-auto" aria-labelledby="signup-title">
+    <p class="section-eyebrow">Join Mobofirm</p>
+    <h1 id="signup-title" class="h2 mb-4">Create your account</h1>
+    <form method="post" action="">
+      {% csrf_token %}
+      {% if form.non_field_errors %}<div class="alert alert-danger" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+      {% for field in form %}
+        <div class="mb-3"><label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}
+          {% for error in field.errors %}<p class="text-danger small mb-0" role="alert">{{ error }}</p>{% endfor %}
+          {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+        </div>
+      {% endfor %}
+      <button class="btn btn-primary w-100" type="submit">Create account</button>
+    </form>
+    {% for provider in social_providers %}
+      {% if provider.id == "google" %}
+        <a class="btn btn-outline-secondary w-100 mt-3" href="{% provider_login_url provider.id process='login' %}">Continue with Google</a>
+      {% endif %}
+    {% endfor %}
+    <p class="mt-4 mb-0">Already registered? <a href="{% url 'users:account_login' %}">Sign in</a></p>
+  </section>
+</div>
+{% endblock %}

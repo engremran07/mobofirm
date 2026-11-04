@@ -67,6 +67,7 @@ class FirmwareUploadView(views.APIView):
                 is_password_protected=data["is_password_protected"],
                 password=data.get("password"),
                 extra_info=data.get("extra_info"),
+                package_format=data["package_format"],
             )
         except ValueError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
@@ -123,6 +124,9 @@ class ModerationView(views.APIView):
                     "model_id": request.data.get("model_id"),
                     "variant_id": request.data.get("variant_id"),
                     "unclassified_reason": request.data.get("unclassified_reason", ""),
+                    "package_format": request.data.get(
+                        "package_format", pf.package_format
+                    ),
                 }
                 if decision == "approved"
                 else None,
@@ -130,7 +134,9 @@ class ModerationView(views.APIView):
         except PermissionDenied as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_403_FORBIDDEN)
         except ValidationError as exc:
-            return Response({"detail": exc.messages}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"detail": exc.messages}, status=status.HTTP_400_BAD_REQUEST
+            )
         except GovernanceError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_409_CONFLICT)
         return Response({"case_id": case.pk, "status": case.status})

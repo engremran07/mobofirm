@@ -15,7 +15,6 @@ from __future__ import annotations
 import logging
 import re
 import secrets
-import string
 from typing import TYPE_CHECKING, Any
 
 from django.conf import settings
@@ -250,8 +249,6 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     unlock_count = models.PositiveIntegerField(default=0)
     last_unlock = models.DateTimeField(null=True, blank=True)
     email_verified_at = models.DateTimeField(null=True, blank=True)
-    verification_code = models.CharField(max_length=24, blank=True)
-    verification_code_sent_at = models.DateTimeField(null=True, blank=True)
 
     # Signup metadata
     signup_method = models.CharField(
@@ -373,53 +370,6 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
                 self.save(update_fields=["email_verified_at"])
             except Exception as exc:
                 logger.exception("Email verification update failed: %s", exc)
-
-    def generate_verification_code(
-        self, length: int | None = None, code_type: str | None = None
-    ) -> str:
-        """
-        Generate and persist an email verification code.
-
-        Defaults to a 6-character hexadecimal code (0-9, A-F).
-        Falls back to SiteSettings for length/type when available.
-        """
-        if length is None or length <= 0:
-            try:
-                from apps.site_settings.models import SiteSettings
-
-                ss = SiteSettings.get_solo()
-                length = int(getattr(ss, "email_verification_code_length", 6) or 6)
-            except Exception:
-                length = 6
-        if code_type is None:
-            try:
-                from apps.site_settings.models import SiteSettings
-
-                ss = SiteSettings.get_solo()
-                code_type = getattr(ss, "email_verification_code_type", "hex")
-            except Exception:
-                code_type = "hex"
-
-        length = max(1, min(int(length), 24))
-
-        ctype = str(code_type).lower()
-        if ctype == "numeric":
-            alphabet = string.digits
-        elif ctype in {"hex", "hexadecimal"}:
-            alphabet = string.digits + "ABCDEF"
-        else:
-            alphabet = string.ascii_uppercase + string.digits
-
-        code = "".join(secrets.choice(alphabet) for _ in range(length))
-        self.verification_code = code
-        self.verification_code_sent_at = timezone.now()
-        try:
-            self.save(update_fields=["verification_code", "verification_code_sent_at"])
-        except Exception as exc:
-            logger.exception(
-                "Verification code save failed for %s : %s", self.email, exc
-            )
-        return code
 
     def increment_unlock(self) -> None:
         try:
@@ -565,6 +515,7 @@ class Announcement(models.Model):
     title = models.CharField(max_length=255)
     message = models.TextField()
     audience = models.CharField(max_length=20, choices=AUDIENCE_CHOICES, default="all")
+    is_active = models.BooleanField(default=False)
     is_global = models.BooleanField(default=False)
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -591,17 +542,19 @@ class Announcement(models.Model):
 
     def active_now(self) -> bool:
         now = timezone.now()
+        if not self.is_active:
+            return False
         if self.start_at and self.start_at > now:
             return False
         if self.expires_at and self.expires_at <= now:
             return False
-        return bool(self.is_global or self.audience)
+        return True
 
     def deactivate_if_expired(self) -> None:
-        if self.expires_at and self.expires_at < timezone.now() and self.is_global:
-            self.is_global = False
+        if self.expires_at and self.expires_at <= timezone.now() and self.is_active:
+            self.is_active = False
             try:
-                self.save(update_fields=["is_global"])
+                self.save(update_fields=["is_active"])
             except Exception as exc:
                 logger.exception("Failed to deactivate expired announcement: %s", exc)
 
@@ -611,6 +564,7 @@ class Announcement(models.Model):
             "title": self.title,
             "message": self.message,
             "audience": self.audience,
+            "is_active": self.is_active,
             "is_global": bool(self.is_global),
             "start_at": self.start_at.isoformat() if self.start_at else None,
             "expires_at": self.expires_at.isoformat() if self.expires_at else None,
@@ -632,7 +586,7 @@ class UsersSettings(SingletonModel):
     Per-project settings for the Users app.
 
     Kept independent so the app can be dropped into other projects
-    without relying on a monolithic SiteSettings model.
+    without relying on a project-wide database settings model.
     """
 
     enable_signup = models.BooleanField(default=True)
@@ -743,6 +697,7 @@ class MFADevice(models.Model):
 
     # Tracking
     last_used_at = models.DateTimeField(null=True, blank=True)
+    last_used_counter = models.BigIntegerField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -830,11 +785,17 @@ class MFADevice(models.Model):
         if not secret:
             return False
 
-        is_valid = TOTPService.verify(secret, code)
-        if is_valid:
-            self.last_used_at = timezone.now()
-            self.save(update_fields=["last_used_at"])
-        return is_valid
+        matched_counter = TOTPService.matching_counter(secret, code)
+        if matched_counter is None or (
+            self.last_used_counter is not None
+            and matched_counter <= self.last_used_counter
+        ):
+            return False
+
+        self.last_used_at = timezone.now()
+        self.last_used_counter = matched_counter
+        self.save(update_fields=["last_used_at", "last_used_counter"])
+        return True
 
     def generate_backup_codes(self, count: int = 10) -> list:
         """Generate and store backup codes. Returns unhashed codes for user."""
@@ -962,12 +923,11 @@ class NotificationPreferences(models.Model):
 
     def should_send_email(self, notification_type: str) -> bool:
         """Check if email should be sent for this notification type."""
-        if self.email_frequency == "never":
-            return False
-
-        # Security always sent
         if notification_type == "security":
             return True
+
+        if self.email_frequency == "never":
+            return False
 
         # Check specific type preferences
         type_map = {
@@ -1041,7 +1001,7 @@ class PushSubscription(models.Model):
 
 
 # ===========================================================================
-# Consent Models (dissolved from apps.consent)
+# Consent Models
 # ===========================================================================
 
 
@@ -1098,7 +1058,7 @@ class ConsentDecision(models.Model):  # noqa: DJ008
         verbose_name = "Consent Decision"
 
     def set_hashes(self, ip: str = "", ua: str = "") -> None:
-        from apps.consent.utils import hash_ip, hash_ua
+        from apps.users.services.consent import hash_ip, hash_ua
 
         self.ip_hash = hash_ip(ip)
         self.user_agent_hash = hash_ua(ua)
@@ -1128,7 +1088,7 @@ class ConsentEvent(models.Model):  # noqa: DJ008
         verbose_name = "Consent Event"
 
     def set_hashes(self, ip: str = "", ua: str = "") -> None:
-        from apps.consent.utils import hash_ip, hash_ua
+        from apps.users.services.consent import hash_ip, hash_ua
 
         self.ip_hash = hash_ip(ip)
         self.user_agent_hash = hash_ua(ua)
@@ -1152,14 +1112,5 @@ class ConsentLog(ConsentEvent):  # noqa: DJ008
         verbose_name_plural = "Consent Logs"
 
 
-class ConsentCategory(models.Model):  # noqa: DJ008
-    """Legacy stub — unmanaged table from consent v1."""
-
-    slug = models.SlugField(max_length=100, unique=True)
-    name = models.CharField(max_length=100)
-    index = models.IntegerField(default=0)
-
-    class Meta:
-        managed = False
-        db_table = "consent_consentcategory"
-        ordering = ["index", "slug"]
+from apps.users.models_social import SocialPostingAccount, SocialProviderConfig  # noqa: E402,F401
+from apps.users.profile_models import ActivityFeed, Following, Profile, Reputation  # noqa: E402,F401

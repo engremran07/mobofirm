@@ -4,7 +4,7 @@ Enterprise-grade user management and authentication views for the platform.
 
 ✅ Highlights
 -------------
-• Tenant-aware SiteSettings resolver (uses site_settings.views._get_settings when available)
+• Environment-backed project settings with per-app user preferences
 • Integrated rate limiting + reCAPTCHA verification
 • MFA / Email verification enforcement
 • Optimized dashboard queries (deferred, select_related)
@@ -15,11 +15,14 @@ Enterprise-grade user management and authentication views for the platform.
 from __future__ import annotations
 
 import logging
+import hashlib
 import re
+import smtplib
 from datetime import timedelta
-from typing import Any, cast
+from typing import Any
 
 from allauth.account.forms import LoginForm, SignupForm
+from allauth.account.models import EmailAddress
 from allauth.account.views import LoginView, SignupView
 from django.conf import settings
 from django.contrib import messages
@@ -27,7 +30,8 @@ from django.contrib.auth import get_user_model, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.contrib.sites.shortcuts import get_current_site
 from django.core.cache import cache
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ImproperlyConfigured, ValidationError
+from django.db import DatabaseError
 from django.db.models import Q
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
@@ -46,10 +50,25 @@ from apps.devices.services import (
     make_device_token,
     mark_device_trusted,
 )
-from apps.users.forms import TellUsAboutYouForm
+from apps.users.forms import (
+    TellUsAboutYouForm,
+    country_form_choices,
+    phone_code_form_choices,
+)
 from apps.users.models import Announcement, CustomUser, Notification
-from apps.users.services.rate_limit import allow_action
+from apps.users.mfa_views import begin_login_mfa
+from apps.users.profile_models import Profile, Reputation
+from apps.users.services.mfa import has_active_totp, verify_mfa_code
+from apps.users.services.rate_limit import (
+    allow_action,
+    get_attempt_count,
+    reset_rate_limit,
+)
 from apps.users.services.recaptcha import verify_recaptcha
+from apps.users.services.email_verification import (
+    consume_email_verification_code,
+    get_pending_email_address,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -59,69 +78,7 @@ def profile(request: HttpRequest) -> HttpResponse:
     """
     Display the authenticated user's profile.
     """
-    # Gamification data
-    gamification_data: dict[str, Any] = {}
-    uid = cast(int, request.user.pk)  # @login_required guarantees authenticated user
-    try:
-        from apps.gamification.services import get_current_level, get_total_xp
-
-        total_xp = get_total_xp(uid)
-        current_level = get_current_level(uid)
-        gamification_data["total_xp"] = total_xp
-        gamification_data["level"] = current_level
-    except Exception:  # noqa: S110
-        pass
-    try:
-        from apps.gamification.models import Badge, Streak, UserBadge
-
-        user_badges = (
-            UserBadge.objects.filter(user=request.user)
-            .select_related("badge")
-            .order_by("-earned_at")[:10]
-        )
-        gamification_data["badges"] = user_badges
-        gamification_data["badge_count"] = user_badges.count()
-        gamification_data["total_badges"] = Badge.objects.filter(is_active=True).count()
-        streak = Streak.objects.filter(user=request.user).first()
-        gamification_data["streak"] = streak
-    except Exception:  # noqa: S110
-        pass
-
-    # Referral stats
-    referral_stats: dict[str, int] = {"clicks": 0, "conversions": 0}
-    user_referral_code = ""
-    try:
-        from apps.referral.models import ReferralCode
-
-        rc = ReferralCode.objects.filter(user=request.user, is_active=True).first()
-        if rc:
-            user_referral_code = rc.code
-            referral_stats = {"clicks": rc.clicks, "conversions": rc.conversions}
-    except Exception:  # noqa: S110
-        pass
-
-    # Bounty stats
-    bounty_stats: dict[str, int] = {"created": 0, "fulfilled": 0}
-    try:
-        from apps.bounty.models import BountyRequest, BountySubmission
-
-        bounty_stats["created"] = BountyRequest.objects.filter(
-            user=request.user
-        ).count()
-        bounty_stats["fulfilled"] = BountySubmission.objects.filter(
-            user=request.user, status="accepted"
-        ).count()
-    except Exception:  # noqa: S110
-        pass
-
-    # Reputation
-    reputation_obj = None
-    try:
-        from apps.user_profile.models import Reputation
-
-        reputation_obj = Reputation.objects.filter(user=request.user).first()
-    except Exception:  # noqa: S110
-        pass
+    reputation_obj = Reputation.objects.filter(user=request.user).first()
 
     context: dict[str, Any] = {
         "user": request.user,
@@ -131,10 +88,6 @@ def profile(request: HttpRequest) -> HttpResponse:
         "announcements": Announcement.objects.filter(is_active=True).order_by(
             "-created_at"
         )[:5],
-        "gamification": gamification_data,
-        "referral_code": user_referral_code,
-        "referral_stats": referral_stats,
-        "bounty_stats": bounty_stats,
         "reputation": reputation_obj,
     }
     return render(request, "users/profile.html", context)
@@ -228,6 +181,12 @@ def devices_view(request: HttpRequest) -> HttpResponse:
                 devices.append(d)
 
         except Exception as exc:
+            if request.method == "POST":
+                logger.exception("Could not process device eviction")
+                messages.error(
+                    request, "Could not remove that device. Please try again."
+                )
+                return redirect("users:device_eviction")
             error = f"Could not load devices: {exc}"
 
         # Surface any pending device approval token so the user can complete registration/trust
@@ -293,35 +252,36 @@ def login_view(request: HttpRequest) -> HttpResponse:
 # ============================================================
 def _get_settings(request: HttpRequest | None = None) -> dict[str, object]:
     """
-    Return primitive settings snapshot (dict). Try to use the canonical resolver
-    from apps.site_settings.views (which already returns dict snapshots). If
-    unavailable, fall back to safe defaults.
+    Return primitive project and users settings without exposing model instances.
     """
     try:
-        from apps.site_settings.models import SiteSettings
         from apps.users.models import UsersSettings
 
         us = UsersSettings.get_solo()
-        ss = SiteSettings.get_solo()
+        from apps.core.views import _get_site_settings_snapshot
+
+        site = _get_site_settings_snapshot()
         return {
-            "site_name": "the platform",
+            **site,
+            "site_name": getattr(settings, "SITE_NAME", "the platform"),
             "enable_signup": bool(getattr(us, "enable_signup", True)),
             "max_login_attempts": int(getattr(us, "max_login_attempts", 5) or 5),
             "rate_limit_window_seconds": int(
                 getattr(us, "rate_limit_window_seconds", 300) or 300
             ),
-            # reCAPTCHA now comes from SiteSettings
-            "recaptcha_enabled": bool(getattr(ss, "recaptcha_enabled", False)),
-            "recaptcha_mode": getattr(ss, "recaptcha_mode", "v2"),
+            "recaptcha_enabled": bool(getattr(settings, "RECAPTCHA_ENABLED", False)),
+            "recaptcha_mode": getattr(settings, "RECAPTCHA_MODE", "off"),
             "recaptcha_score_threshold": float(
-                getattr(ss, "recaptcha_score_threshold", 0.5)
+                getattr(settings, "RECAPTCHA_SCORE_THRESHOLD", 0.5)
             ),
-            "recaptcha_timeout_ms": int(getattr(ss, "recaptcha_timeout_ms", 3000)),
-            "require_mfa": bool(getattr(us, "require_mfa", False)),
+            "recaptcha_timeout_ms": int(
+                getattr(settings, "RECAPTCHA_TIMEOUT_MS", 3000)
+            ),
+            "require_mfa": bool(
+                getattr(us, "require_mfa", getattr(settings, "REQUIRE_MFA", False))
+            ),
             "enable_payments": bool(getattr(us, "enable_payments", True)),
-            "required_profile_fields": list(
-                getattr(us, "required_profile_fields", []) or []
-            ),
+            "required_profile_fields": list(us.required_profile_fields or []),
         }
     except Exception:
         logger.debug("UsersSettings fallback defaults in use", exc_info=True)
@@ -330,8 +290,15 @@ def _get_settings(request: HttpRequest | None = None) -> dict[str, object]:
             "enable_signup": True,
             "max_login_attempts": 5,
             "rate_limit_window_seconds": 300,
-            "recaptcha_enabled": False,
-            "require_mfa": False,
+            "recaptcha_enabled": bool(getattr(settings, "RECAPTCHA_ENABLED", False)),
+            "recaptcha_mode": getattr(settings, "RECAPTCHA_MODE", "off"),
+            "recaptcha_score_threshold": float(
+                getattr(settings, "RECAPTCHA_SCORE_THRESHOLD", 0.5)
+            ),
+            "recaptcha_timeout_ms": int(
+                getattr(settings, "RECAPTCHA_TIMEOUT_MS", 3000)
+            ),
+            "require_mfa": bool(getattr(settings, "REQUIRE_MFA", False)),
             "enable_payments": True,
             "site_header": "GSM Admin",
             "site_description": "Default configuration",
@@ -379,41 +346,6 @@ def _get_platform_features() -> list[dict[str, str]]:
             "url": "/firmwares/",
         },
         {
-            "icon": "target",
-            "title": "Bounty System",
-            "description": "Create bounties for hard-to-find firmware or fulfill bounties posted by others for rewards.",
-            "app": "Bounty",
-            "url": "/api/v1/bounty/requests/",
-        },
-        {
-            "icon": "store",
-            "title": "Marketplace",
-            "description": "Buy and sell firmware, tools, and device resources in the peer-to-peer marketplace.",
-            "app": "Marketplace",
-            "url": "/api/v1/marketplace/listings/",
-        },
-        {
-            "icon": "wallet",
-            "title": "Wallet & Credits",
-            "description": "Manage your balance, earn credits through contributions, and withdraw earnings.",
-            "app": "Wallet",
-            "url": "/api/v1/wallet/wallets/",
-        },
-        {
-            "icon": "users",
-            "title": "Referral Programme",
-            "description": "Generate referral codes, share with friends, and earn commission on subscriptions.",
-            "app": "Referral",
-            "url": "/api/v1/referral/codes/",
-        },
-        {
-            "icon": "trophy",
-            "title": "Gamification & Badges",
-            "description": "Earn XP from every action, unlock achievement badges, and climb the leaderboard.",
-            "app": "Gamification",
-            "url": "/api/v1/gamification/badges/",
-        },
-        {
             "icon": "message-circle",
             "title": "Comments & Discussions",
             "description": "Comment on firmware pages, vote on helpful reviews, and engage with the community.",
@@ -428,13 +360,6 @@ def _get_platform_features() -> list[dict[str, str]]:
             "url": "/blog/",
         },
         {
-            "icon": "shopping-cart",
-            "title": "Shop & Subscriptions",
-            "description": "Subscribe for premium downloads, faster speeds, and higher daily quotas with no ads.",
-            "app": "Shop",
-            "url": "/api/v1/shop/plans/",
-        },
-        {
             "icon": "tv",
             "title": "Rewarded Ads",
             "description": "Watch short ads to unlock additional free downloads and earn bonus credits.",
@@ -445,15 +370,15 @@ def _get_platform_features() -> list[dict[str, str]]:
             "icon": "star",
             "title": "Reputation System",
             "description": "Build your reputation score through contributions, reviews, and community engagement.",
-            "app": "Profile",
-            "url": "/api/v1/profile/profiles/",
+            "app": "Users",
+            "url": "/users/profile/",
         },
         {
             "icon": "user-plus",
             "title": "Social Profile & Followers",
             "description": "Create a public profile, follow other members, and build your activity feed.",
-            "app": "Profile",
-            "url": "/api/v1/profile/profiles/",
+            "app": "Users",
+            "url": "/users/profile/",
         },
     ]
 
@@ -472,25 +397,69 @@ class EnterpriseLoginView(LoginView):
     form_class = LoginForm
     template_name = "account/login.html"
 
+    def form_invalid(self, form):
+        if form.is_bound and getattr(form, "user", None) is None:
+            settings_obj = _get_settings(self.request)
+            ip = get_client_ip(self.request) or "unknown"
+            key = f"login:{ip}"
+            max_attempts = int(str(settings_obj.get("max_login_attempts", 5)))
+            window_seconds = int(
+                str(settings_obj.get("rate_limit_window_seconds", 300))
+            )
+            try:
+                attempts = get_attempt_count(
+                    key, window_seconds=window_seconds, fail_open=False
+                )
+                if attempts >= max_attempts:
+                    form.add_error(
+                        None, "Too many login attempts. Please try again later."
+                    )
+                elif not allow_action(
+                    key, max_attempts, window_seconds, fail_open=False
+                ):
+                    form.add_error(
+                        None, "Sign-in is temporarily unavailable. Try again later."
+                    )
+            except Exception:
+                logger.exception("Login rate limiter is unavailable")
+                form.add_error(
+                    None, "Sign-in is temporarily unavailable. Try again later."
+                )
+        return super().form_invalid(form)
+
     def form_valid(self, form):
+        login_user = getattr(form, "user", None)
+
+        if (
+            login_user is not None
+            and not EmailAddress.objects.filter(
+                user=login_user,
+                email__iexact=login_user.email,
+                verified=True,
+            ).exists()
+        ):
+            return super().form_valid(form)
+
         settings_obj = _get_settings(self.request)
         ip = get_client_ip(self.request) or "unknown"
         enforcement_ctx = None
 
-        # --- Rate Limiting ---
-        # FINDING-0016: fail_open=False — login must block when Redis is unavailable.
         try:
-            if not allow_action(
+            attempts = get_attempt_count(
                 f"login:{ip}",
-                int(str(settings_obj.get("max_login_attempts", 5))),
-                int(str(settings_obj.get("rate_limit_window_seconds", 300))),
+                window_seconds=int(
+                    str(settings_obj.get("rate_limit_window_seconds", 300))
+                ),
                 fail_open=False,
-            ):
+            )
+            if attempts >= int(str(settings_obj.get("max_login_attempts", 5))):
                 form.add_error(None, "Too many login attempts. Please try again later.")
                 logger.warning("Rate limit exceeded for IP=%s", ip)
-                return self.form_invalid(form)
+                return super().form_invalid(form)
         except Exception:
-            logger.exception("Rate limiter failure (fail-open)")
+            logger.exception("Login rate limiter is unavailable")
+            form.add_error(None, "Sign-in is temporarily unavailable. Try again later.")
+            return super().form_invalid(form)
 
         # --- reCAPTCHA ---
         token = self.request.POST.get("g-recaptcha-response") or self.request.POST.get(
@@ -510,140 +479,88 @@ class EnterpriseLoginView(LoginView):
                 form.add_error(None, "reCAPTCHA service error. Try again later.")
                 return self.form_invalid(form)
 
+        if login_user is not None:
+            try:
+                devices_api = AppService.get("devices")
+                enforce_policy = getattr(
+                    devices_api, "enforce_device_policy_for_login", None
+                )
+                if not callable(enforce_policy):
+                    raise RuntimeError("Device login policy service is unavailable")
+                allowed, enforcement_ctx = enforce_policy(self.request, login_user)
+                enforcement_ctx = enforcement_ctx or {}
+                if not allowed:
+                    reason = enforcement_ctx.get("reason", "policy_denied")
+                    form.add_error(None, self._device_policy_message(reason))
+                    return super().form_invalid(form)
+            except DevicePolicyError as exc:
+                if exc.reason in {"mfa_required", "mfa_required_risk"}:
+                    try:
+                        if has_active_totp(login_user):
+                            return begin_login_mfa(self.request, login_user)
+                    except DatabaseError:
+                        logger.exception(
+                            "MFA factors could not be loaded for user %s",
+                            login_user.pk,
+                        )
+                        form.add_error(
+                            None,
+                            "Two-factor verification is temporarily unavailable.",
+                        )
+                        return super().form_invalid(form)
+                    form.add_error(
+                        None,
+                        "Set up an authenticator on a trusted device before signing in here.",
+                    )
+                    return super().form_invalid(form)
+                form.add_error(None, self._device_policy_message(exc.reason))
+                return super().form_invalid(form)
+            except Exception:
+                logger.exception(
+                    "Device policy check failed for user %s", login_user.pk
+                )
+                form.add_error(
+                    None,
+                    "Device security check could not be completed. Try again later.",
+                )
+                return super().form_invalid(form)
+
+        if login_user is not None:
+            try:
+                if has_active_totp(login_user):
+                    return begin_login_mfa(self.request, login_user)
+            except DatabaseError:
+                logger.exception(
+                    "MFA factors could not be loaded for user %s",
+                    login_user.pk,
+                )
+                form.add_error(
+                    None,
+                    "Two-factor verification is temporarily unavailable.",
+                )
+                return super().form_invalid(form)
+
         response = super().form_valid(form)
-
-        # --- Device policy enforcement (if devices app is enabled) ---
-        try:
-            devices_api = AppService.get("devices")
-            if devices_api and hasattr(devices_api, "enforce_device_policy_for_login"):
-                try:
-                    _allowed, ctx = devices_api.enforce_device_policy_for_login(
-                        self.request, self.request.user
-                    )
-                    enforcement_ctx = ctx or {}
-                    self.request.device = enforcement_ctx.get("device")  # type: ignore[attr-defined]
-                    try:
-                        attach_device_cookie(response, enforcement_ctx.get("device"))  # type: ignore[arg-type]
-                    except Exception:
-                        logger.debug("attach_device_cookie failed", exc_info=True)
-                    if enforcement_ctx.get("is_new"):
-                        remaining = enforcement_ctx.get("context", {}).get(
-                            "remaining_devices"
-                        )
-                        reset_days = enforcement_ctx.get("context", {}).get(
-                            "quota_reset_days"
-                        )
-                        suffix = ""
-                        if remaining is not None:
-                            suffix += f" Remaining device slots: {remaining}."
-                        if reset_days is not None:
-                            suffix += f" Quotas reset in ~{reset_days} days."
-                        messages.info(
-                            self.request,
-                            f"New device detected and registered.{suffix} Trust it from your devices page to avoid future prompts.",
-                        )
-                except DevicePolicyError as exc:
-                    reason = exc.reason
-                    device_obj = (exc.context or {}).get("device")
-                    approval_token = None
-                    try:
-                        if device_obj:
-                            approval_token = make_device_token(
-                                self.request.user.pk,
-                                device_obj.id,
-                                reason or "untrusted_new_device",
-                            )
-                            self.request.session["pending_device_token"] = (
-                                approval_token
-                            )
-                            self.request.session["pending_device_reason"] = reason
-                    except Exception:
-                        approval_token = None
-                    if reason == "blocked_device":
-                        msg = "This device is blocked. Contact support to unblock."
-                    elif reason == "device_key_required":
-                        msg = "Device fingerprint is required. Allow device fingerprinting and refresh to continue."
-                    elif reason == "untrusted_new_device":
-                        msg = "New device detected and not trusted. Approve it from a trusted session to continue."
-                    elif reason == "mfa_required":
-                        msg = "New device requires MFA. Complete multi-factor authentication to continue."
-                    elif reason == "mfa_required_risk":
-                        msg = "This device was flagged as high risk. Complete MFA to continue or trust it from a known device."
-                    elif reason == "monthly_device_quota":
-                        msg = "Monthly device limit reached. Remove an old device or wait until next month."
-                    elif reason == "yearly_device_quota":
-                        msg = "Yearly device limit reached. Remove an old device or wait until next year."
-                    elif reason == "user_window_quota":
-                        msg = "Device enrollment window exceeded. Remove an old device or contact support."
-                    elif reason == "device_quota_exceeded" or reason == "limit_reached":
-                        msg = "Maximum devices reached. Remove an old device before signing in from a new one."
-                    else:
-                        msg = "This device is not allowed to sign in. Contact support."
-                    if approval_token and reason in {
-                        "untrusted_new_device",
-                        "mfa_required",
-                        "mfa_required_risk",
-                    }:
-                        messages.error(self.request, msg)
-                        return redirect("users:device_approval_needed")
-                    if reason in {
-                        "device_quota_exceeded",
-                        "limit_reached",
-                        "user_window_quota",
-                        "monthly_device_quota",
-                        "yearly_device_quota",
-                    }:
-                        try:
-                            self.request.session["pending_device_reason"] = reason
-                            attempt_id = (exc.context or {}).get(
-                                "os_fingerprint"
-                            ) or getattr(device_obj, "os_fingerprint", None)
-                            if attempt_id:
-                                self.request.session["pending_device_attempt"] = (
-                                    attempt_id
-                                )
-                        except Exception:  # noqa: S110
-                            pass
-                        messages.error(self.request, msg)
-                        return redirect("users:device_eviction")
-                    if reason == "fallback_identity_blocked":
-                        messages.error(
-                            self.request,
-                            "Device identity was fallback-based and blocked. Provide a device fingerprint to continue.",
-                        )
-                        return redirect("users:devices")
-                    form.add_error(None, msg)
-                    return self.form_invalid(form)
-            else:
-                # Fallback: register device even if AppService is disabled
-                try:
-                    from apps.devices.services import resolve_or_create_device
-
-                    device, is_new, ctx = resolve_or_create_device(
-                        self.request, self.request.user, service_name="login"
-                    )
-                    enforcement_ctx = ctx or {}
-                    self.request.device = device  # type: ignore[attr-defined]
-                    try:
-                        attach_device_cookie(response, device)  # type: ignore[arg-type]
-                    except Exception:
-                        logger.debug("attach_device_cookie failed", exc_info=True)
-                    if is_new:
-                        remaining = enforcement_ctx.get("remaining_devices")
-                        reset_days = enforcement_ctx.get("quota_reset_days")
-                        suffix = ""
-                        if remaining is not None:
-                            suffix += f" Remaining device slots: {remaining}."
-                        if reset_days is not None:
-                            suffix += f" Quotas reset in ~{reset_days} days."
-                        messages.info(
-                            self.request,
-                            f"New device detected and registered.{suffix} Trust it from your account to avoid future prompts.",
-                        )
-                except Exception:
-                    logger.debug("Device registration fallback skipped", exc_info=True)
-        except Exception:
-            logger.debug("Device policy enforcement skipped", exc_info=True)
+        if getattr(form, "user", None) is not None:
+            reset_rate_limit(f"login:{ip}")
+        if enforcement_ctx:
+            device = enforcement_ctx.get("device")
+            self.request.device = device  # type: ignore[attr-defined]
+            if device:
+                attach_device_cookie(response, device)
+            if enforcement_ctx.get("is_new"):
+                context = enforcement_ctx.get("context", {})
+                remaining = context.get("remaining_devices")
+                reset_days = context.get("quota_reset_days")
+                suffix = ""
+                if remaining is not None:
+                    suffix += f" Remaining device slots: {remaining}."
+                if reset_days is not None:
+                    suffix += f" Quotas reset in ~{reset_days} days."
+                messages.info(
+                    self.request,
+                    f"New device detected and registered.{suffix} Trust it from your devices page to avoid future prompts.",
+                )
 
         # --- Session fixation protection ---
         try:
@@ -699,6 +616,25 @@ class EnterpriseLoginView(LoginView):
 
         return response
 
+    @staticmethod
+    def _device_policy_message(reason: str) -> str:
+        messages_by_reason = {
+            "blocked_device": "This device is blocked. Contact support to unblock it.",
+            "device_key_required": "Device fingerprint is required. Allow device fingerprinting and try again.",
+            "untrusted_new_device": "This new device has not been approved. Use an existing trusted session to approve it or contact support.",
+            "mfa_required": "This device requires MFA, but verification is not currently available. Contact support.",
+            "mfa_required_risk": "This device requires additional security verification, which is not currently available. Contact support.",
+            "monthly_device_quota": "The monthly device limit has been reached. Remove an existing device from a trusted session or wait until next month.",
+            "yearly_device_quota": "The yearly device limit has been reached. Remove an existing device from a trusted session or wait until next year.",
+            "user_window_quota": "The device enrollment limit has been reached. Remove an existing device from a trusted session or contact support.",
+            "device_quota_exceeded": "The maximum number of devices has been reached. Remove an existing device from a trusted session and retry.",
+            "limit_reached": "The maximum number of devices has been reached. Remove an existing device from a trusted session and retry.",
+            "fallback_identity_blocked": "Device identity could not be verified. Allow device fingerprinting and try again.",
+        }
+        return messages_by_reason.get(
+            reason, "This device is not allowed to sign in. Contact support."
+        )
+
 
 # ============================================================
 # Enterprise Signup View
@@ -708,11 +644,6 @@ class EnterpriseSignupView(SignupView):
 
     form_class = SignupForm
     template_name = "account/signup.html"
-
-    def get_form_kwargs(self):
-        kwargs = super().get_form_kwargs()
-        kwargs["request"] = self.request
-        return kwargs
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -802,68 +733,92 @@ class EnterpriseSignupView(SignupView):
 # ============================================================
 # Manual email verification (MFA / email)
 # ============================================================
-@login_required
+@require_http_methods(["GET", "POST"])
 def verify_email_view(request: HttpRequest) -> HttpResponse:
-    """Manual verification for MFA / email confirmation."""
-    user: CustomUser = request.user  # type: ignore[assignment]
-    # If already verified, skip the page and continue to dashboard
-    if getattr(user, "email_verified_at", None):
-        return redirect("users:dashboard")
-
+    """Verify an email with the one-time code sent alongside its signed link."""
     if request.method == "POST":
-        code = request.POST.get("code", "").strip()
-        if not code:
-            messages.error(request, "Verification code required.")
-            return render(request, "users/verify_email.html")
-
-        attempt_key = f"verify_email_attempts:{user.pk}"
-        attempts = cache.get(attempt_key, 0)
-        if attempts >= 5:
-            messages.error(request, "Too many attempts. Please try again later.")
-            return render(request, "users/verify_email.html")
-
-        expected = getattr(user, "verification_code", "") or ""
-        sent_at = getattr(user, "verification_code_sent_at", None)
-        ttl_hours = getattr(settings, "EMAIL_VERIFICATION_CODE_TTL_HOURS", 24)
-        expired = not sent_at or timezone.now() - sent_at > timedelta(hours=ttl_hours)
-
-        if not expected or expired:
-            messages.error(
-                request, "Your verification code has expired. Request a new code."
-            )
-            return render(request, "users/verify_email.html")
-
-        if code == expected:
-            user.email_verified_at = timezone.now()
-            user.verification_code = ""
-            user.verification_code_sent_at = None
-            user.save(
-                update_fields=[
-                    "email_verified_at",
-                    "verification_code",
-                    "verification_code_sent_at",
-                ]
-            )
-            cache.delete(attempt_key)
-            try:
-                from apps.users.services.notifications import send_notification
-
-                send_notification(
-                    recipient=user,
-                    title="Email verified",
-                    message="Your email address has been verified successfully.",
-                    level="info",
+        action = request.POST.get("action", "verify")
+        if action == "resend":
+            email_address = get_pending_email_address(request)
+            if email_address is None or email_address.verified:
+                messages.error(request, "No pending email verification was found.")
+            else:
+                resend_key = (
+                    f"users:email-verification:resend:{email_address.pk}:"
+                    f"{get_client_ip(request) or 'unknown'}"
                 )
-            except Exception:
-                logger.debug("verify_email notification skipped", exc_info=True)
-            messages.success(request, "Email verified successfully.")
+                if not allow_action(
+                    resend_key,
+                    max_attempts=3,
+                    window_seconds=900,
+                    fail_open=False,
+                ):
+                    messages.error(
+                        request,
+                        "Sending verification email is temporarily unavailable.",
+                    )
+                else:
+                    try:
+                        email_address.send_confirmation(request=request)
+                    except (ImproperlyConfigured, OSError, smtplib.SMTPException):
+                        logger.exception(
+                            "Verification email delivery failed for address_id=%s",
+                            email_address.pk,
+                        )
+                        messages.error(
+                            request,
+                            "The verification email could not be sent. Try again later.",
+                        )
+                    else:
+                        messages.success(request, "A new verification email was sent.")
+            return redirect("users:verify_email")
+
+        if action != "verify":
+            return HttpResponse(status=400)
+
+        result, email_address = consume_email_verification_code(
+            request, request.POST.get("code", "")
+        )
+        if result == "verified" and email_address is not None:
+            from allauth.account.adapter import get_adapter
+            from allauth.account.internal.flows.email_verification import (
+                login_on_verification,
+            )
+
+            confirmed = get_adapter(request).confirm_email(request, email_address)
+            if confirmed or email_address.verified:
+                request.session.pop("users_email_verification", None)
+                login_response = login_on_verification(request, email_address)
+                if login_response is not None:
+                    return login_response
+                return redirect(
+                    get_adapter(request).get_email_verification_redirect_url(
+                        email_address
+                    )
+                )
+            result = "verification_failed"
+
+        messages.error(
+            request,
+            {
+                "expired": "Your verification code expired. Request a new email.",
+                "rate_limited": "Too many incorrect codes. Request a new email.",
+                "already_verified": "This email address is already verified.",
+                "verification_failed": "Email verification could not be completed.",
+            }.get(result, "The verification code is invalid."),
+        )
+        return redirect("users:verify_email")
+
+    email_address = get_pending_email_address(request)
+    if email_address is not None and email_address.verified:
+        request.session.pop("users_email_verification", None)
+        if request.user.is_authenticated:
             return redirect("users:dashboard")
-
-        cache.set(attempt_key, attempts + 1, 900)
-        messages.error(request, "Invalid verification code.")
-        logger.warning("Invalid verification attempt for user=%s", user.pk)
-
-    return render(request, "users/verify_email.html")
+    return render(
+        request,
+        "users/verify_email.html",
+        {"pending_email": email_address.email if email_address else ""},
+    )
 
 
 @login_required
@@ -976,9 +931,13 @@ def device_eviction(request: HttpRequest) -> HttpResponse:
                     user=request.user, id=device_id
                 ).delete()[0]
                 if removed:
-                    message = "Device removed. You can now retry from your new device."
+                    messages.success(
+                        request,
+                        "Device removed. You can now retry from your new device.",
+                    )
                 else:
-                    error = "Device not found."
+                    messages.error(request, "Device not found.")
+                return redirect("users:device_eviction")
         devices = list(
             Device.objects.filter(user=request.user)
             .order_by("last_seen_at")
@@ -1005,7 +964,7 @@ def device_eviction(request: HttpRequest) -> HttpResponse:
 @require_http_methods(["GET", "POST"])
 def device_mfa_challenge(request: HttpRequest) -> HttpResponse:
     """
-    MFA challenge for device trust. Fails closed until a real MFA provider is wired.
+    Verify an authenticator before trusting a new device.
     """
     token = request.GET.get("t") or _get_pending_device_token(request)
     if not token:
@@ -1015,26 +974,47 @@ def device_mfa_challenge(request: HttpRequest) -> HttpResponse:
     if not data or str(request.user.pk) != str(data.get("u")):
         messages.error(request, "This challenge link is invalid or expired.")
         return redirect("users:dashboard")
-    attempt_key = f"device_mfa_attempts:{request.user.pk}:{token}"
-    attempts = cache.get(attempt_key, 0)
-    if attempts >= 5:
-        messages.error(request, "Too many attempts. Please try again later.")
-        return redirect("users:dashboard")
+    if not has_active_totp(request.user):
+        messages.info(request, "Set up an authenticator before verifying this device.")
+        return redirect("users:mfa_setup")
+
+    token_digest = hashlib.sha256(token.encode()).hexdigest()[:16]
+    attempt_key = f"users:mfa:device:{request.user.pk}:{token_digest}"
     if request.method == "POST":
         code = (request.POST.get("code") or "").strip()
-        if not code:
-            messages.error(request, "Enter the code to continue.")
-        else:
-            cache.set(attempt_key, attempts + 1, 900)
-            messages.error(
+        if not allow_action(
+            attempt_key,
+            max_attempts=5,
+            window_seconds=900,
+            fail_open=False,
+        ):
+            messages.error(request, "Too many attempts. Please try again later.")
+            return render(
                 request,
-                "MFA verification is not available. Contact support to complete device approval.",
+                "users/device_mfa_challenge.html",
+                status=429,
             )
-            return redirect("users:device_approval_needed")
-    return render(
-        request,
-        "users/device_mfa_challenge.html",
-    )
+        if not verify_mfa_code(request.user, code):
+            messages.error(request, "That authenticator or recovery code is not valid.")
+            return render(
+                request,
+                "users/device_mfa_challenge.html",
+                status=400,
+            )
+
+        device_id = data.get("d")
+        if not mark_device_trusted(device_id, request.user.pk):
+            messages.error(request, "This device could not be found.")
+            return redirect("users:devices")
+
+        reset_rate_limit(attempt_key)
+        request.session.pop("pending_device_token", None)
+        request.session.pop("pending_device_reason", None)
+        request.session["mfa_verified_user_id"] = str(request.user.pk)
+        messages.success(request, "Authenticator verified and device trusted.")
+        return redirect("users:devices")
+
+    return render(request, "users/device_mfa_challenge.html")
 
 
 # ============================================================
@@ -1055,10 +1035,12 @@ def dashboard_view(request: HttpRequest) -> HttpResponse:
     now = timezone.now()
 
     # Announcements: use 'message' (model uses message field)
+    audiences = ["all", "staff"] if request.user.is_staff else ["all", "user"]
     announcements = (
-        Announcement.objects.filter(start_at__lte=now)
+        Announcement.objects.filter(is_active=True, audience__in=audiences)
+        .filter(start_at__lte=now)
         .filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now))
-        .only("title", "message", "start_at", "expires_at")
+        .only("title", "message", "start_at", "expires_at", "audience", "is_active")
         .order_by("-start_at")
     )
 
@@ -1151,80 +1133,7 @@ def dashboard_view(request: HttpRequest) -> HttpResponse:
         recipient=request.user, is_read=False
     ).count()
 
-    # Wallet info
-    wallet_balance = 0
-    wallet_locked = 0
-    wallet_currency = "CREDIT"
-    try:
-        from apps.wallet.models import Wallet
-
-        wallet = Wallet.objects.filter(user=request.user).first()
-        if wallet:
-            wallet_balance = wallet.balance
-            wallet_locked = wallet.locked_balance
-            wallet_currency = wallet.currency
-    except Exception:  # noqa: S110
-        pass
-
     profile_completed = getattr(request.user, "profile_completed", False)
-
-    # Referral code for sharing
-    user_referral_code = ""
-    if profile_completed:
-        try:
-            from apps.referral.models import ReferralCode
-
-            rc = ReferralCode.objects.filter(user=request.user, is_active=True).first()
-            if rc:
-                user_referral_code = rc.code
-        except Exception:  # noqa: S110
-            pass
-
-    # Gamification data for dashboard
-    gamification_data: dict[str, Any] = {}
-    dash_uid = cast(
-        int, request.user.pk
-    )  # @login_required guarantees authenticated user
-    try:
-        from apps.gamification.services import get_current_level, get_total_xp
-
-        total_xp = get_total_xp(dash_uid)
-        current_level = get_current_level(dash_uid)
-        gamification_data["total_xp"] = total_xp
-        gamification_data["level"] = current_level
-    except Exception:  # noqa: S110
-        pass
-    try:
-        from apps.gamification.models import Streak, UserBadge
-
-        recent_badges = (
-            UserBadge.objects.filter(user=request.user)
-            .select_related("badge")
-            .order_by("-earned_at")[:5]
-        )
-        gamification_data["recent_badges"] = recent_badges
-        gamification_data["badge_count"] = UserBadge.objects.filter(
-            user=request.user
-        ).count()
-        streak = Streak.objects.filter(user=request.user).first()
-        gamification_data["streak"] = streak
-    except Exception:  # noqa: S110
-        pass
-
-    # Bounty stats for dashboard
-    bounty_stats: dict[str, int] = {"created": 0, "fulfilled": 0}
-    try:
-        from apps.bounty.models import BountyRequest, BountySubmission
-
-        bounty_stats["created"] = BountyRequest.objects.filter(
-            user=request.user
-        ).count()
-        bounty_stats["fulfilled"] = BountySubmission.objects.filter(
-            user=request.user, status="accepted"
-        ).count()
-    except Exception:  # noqa: S110
-        pass
-
     # Download stats
     download_count = 0
     try:
@@ -1245,16 +1154,9 @@ def dashboard_view(request: HttpRequest) -> HttpResponse:
         "profile_missing_fields": _missing_profile_fields(request.user),
         "profile_completed": profile_completed,
         "unlocked_features": _get_platform_features() if profile_completed else [],
-        "user_referral_code": user_referral_code,
-        "credits": getattr(request.user, "credits", 0),
-        "wallet_balance": wallet_balance,
-        "wallet_locked": wallet_locked,
-        "wallet_currency": wallet_currency,
         "can_watch_ad": bool(s.get("recaptcha_enabled", False)),
         "can_pay": bool(s.get("enable_payments", True)),
         "current_device": current_device,
-        "gamification": gamification_data,
-        "bounty_stats": bounty_stats,
         "download_count": download_count,
         "stats": {
             "posts_count": posts_count,
@@ -1272,10 +1174,8 @@ def profile_view(request: HttpRequest) -> HttpResponse:
     """Render the user profile overview page with inline updates."""
     from django_countries import countries
 
-    from apps.user_profile.models import Profile
     from apps.users.services import (
-        COUNTRY_PHONE_CODES,
-        auto_detect_user_country,
+        detect_country_from_ip,
         get_phone_code_for_country,
     )
 
@@ -1305,9 +1205,13 @@ def profile_view(request: HttpRequest) -> HttpResponse:
                 user.phone_country_code = phone_code
                 update_fields.append("phone_country_code")
             country = (request.POST.get("country") or "").strip().upper()
-            if country and country != (user.country or ""):
-                user.country = country
-                update_fields.append("country")
+            if country:
+                valid_countries = {code for code, _name in countries}
+                if country in valid_countries and country != (user.country or ""):
+                    user.country = country
+                    update_fields.append("country")
+                elif country not in valid_countries:
+                    messages.error(request, _("Choose a valid country."))
             if update_fields:
                 user.save(update_fields=update_fields)
 
@@ -1342,58 +1246,28 @@ def profile_view(request: HttpRequest) -> HttpResponse:
                 except ValidationError as e:
                     messages.error(request, e.messages[0])
 
-    # Wallet info
-    profile_wallet_balance = 0
-    profile_wallet_locked = 0
-    try:
-        from apps.wallet.models import Wallet
-
-        wallet = Wallet.objects.filter(user=user).first()
-        if wallet:
-            profile_wallet_balance = wallet.balance
-            profile_wallet_locked = wallet.locked_balance
-    except Exception:  # noqa: S110
-        pass
+        return redirect("users:profile")
 
     profile_completed = getattr(user, "profile_completed", False)
 
     # Load extended profile
     profile_obj = Profile.objects.filter(user=user).first()
 
-    # Auto-detect country from IP if not set
-    if not user.country:
-        auto_detect_user_country(user, request)
-
-    # Country / phone code detection
     detected_country = user.country or ""
-    detected_phone_code = ""
+    if not detected_country and request.method == "GET":
+        detected_country = detect_country_from_ip(get_client_ip(request)) or ""
+
+    detected_phone_code = user.phone_country_code or ""
     country_name = ""
-    if user.country:
-        detected_phone_code = get_phone_code_for_country(user.country)
-        country_name = str(dict(countries).get(user.country, user.country))
-    if user.phone_country_code:
-        detected_phone_code = user.phone_country_code
+    if detected_country:
+        country_name = str(dict(countries).get(detected_country, detected_country))
+        detected_phone_code = detected_phone_code or get_phone_code_for_country(
+            detected_country
+        )
 
     # Build country/phone choices for the edit form
-    country_choices = list(countries)
-    phone_code_choices = sorted(
-        [(code, dial) for code, dial in COUNTRY_PHONE_CODES.items()],
-        key=lambda x: x[0],
-    )
-
-    # Referral code for sharing
-    user_referral_code = ""
-    referral_stats: dict[str, int] = {"clicks": 0, "conversions": 0}
-    if profile_completed:
-        try:
-            from apps.referral.models import ReferralCode
-
-            rc = ReferralCode.objects.filter(user=user, is_active=True).first()
-            if rc:
-                user_referral_code = rc.code
-                referral_stats = {"clicks": rc.clicks, "conversions": rc.conversions}
-        except Exception:  # noqa: S110
-            pass
+    country_choices = country_form_choices()[1:]
+    phone_code_choices = phone_code_form_choices()[1:]
 
     # Firmware download history
     download_sessions: list[Any] = []
@@ -1423,67 +1297,13 @@ def profile_view(request: HttpRequest) -> HttpResponse:
     except Exception:  # noqa: S110
         pass
 
-    try:
-        from apps.shop.models import Subscription
-
-        active_subscription = (
-            Subscription.objects.filter(user=user, status__in=["active", "trialing"])
-            .select_related("plan")
-            .first()
-        )
-    except Exception:  # noqa: S110
-        pass
-
-    # Gamification data
-    gamification_data: dict[str, Any] = {
-        "total_xp": 0,
-        "level": None,
-        "badges": [],
-        "badge_count": 0,
-        "total_badges": 0,
-        "streak": 0,
-    }
-    try:
-        from apps.gamification.models import Badge, UserBadge
-        from apps.gamification.services import get_current_level, get_total_xp
-
-        gamification_data["total_xp"] = get_total_xp(user.pk)
-        gamification_data["level"] = get_current_level(user.pk)
-        user_badges = (
-            UserBadge.objects.filter(user=user)
-            .select_related("badge")
-            .order_by("-earned_at")[:6]
-        )
-        gamification_data["badges"] = list(user_badges)
-        gamification_data["badge_count"] = UserBadge.objects.filter(user=user).count()
-        gamification_data["total_badges"] = Badge.objects.filter(is_active=True).count()
-    except Exception:  # noqa: S110
-        pass
-
-    # Bounty stats
-    bounty_stats: dict[str, int] = {"created": 0, "fulfilled": 0}
-    try:
-        from apps.bounty.models import BountyRequest, BountySubmission
-
-        bounty_stats["created"] = BountyRequest.objects.filter(user=user).count()
-        bounty_stats["fulfilled"] = BountySubmission.objects.filter(
-            user=user, status="accepted"
-        ).count()
-    except Exception:  # noqa: S110
-        pass
-
     return render(
         request,
         "users/profile.html",
         {
             "user": user,
-            "credits": getattr(user, "credits", 0),
-            "wallet_balance": profile_wallet_balance,
-            "wallet_locked": profile_wallet_locked,
             "profile_completed": profile_completed,
             "unlocked_features": _get_platform_features() if profile_completed else [],
-            "user_referral_code": user_referral_code,
-            "referral_stats": referral_stats,
             "profile_obj": profile_obj,
             "country_name": country_name,
             "countries": country_choices,
@@ -1492,9 +1312,6 @@ def profile_view(request: HttpRequest) -> HttpResponse:
             "detected_phone_code": detected_phone_code,
             "download_sessions": download_sessions,
             "download_stats": download_stats,
-            "active_subscription": active_subscription,
-            "gamification": gamification_data,
-            "bounty_stats": bounty_stats,
             "site_settings": s,
         },
     )
@@ -1528,31 +1345,26 @@ def tell_us_about_you(request: HttpRequest) -> HttpResponse:
     """
     from django_countries import countries
 
-    from apps.user_profile.models import Profile
-    from apps.users.services import (
-        COUNTRY_PHONE_CODES,
-        auto_detect_user_country,
-        get_phone_code_for_country,
-    )
+    from apps.users.services import detect_country_from_ip, get_phone_code_for_country
 
     user: CustomUser = request.user  # type: ignore[assignment]
 
     # Allow re-editing even after profile completion
     editing_completed = getattr(user, "profile_completed", False)
 
-    # Auto-detect country from IP on first visit
-    detected_country = None
-    detected_phone_code = None
+    detected_country = user.country or None
+    detected_phone_code = user.phone_country_code or None
     detected_country_name = ""
 
-    if not user.country:
-        auto_detect_user_country(user, request)
+    if not detected_country and request.method == "GET":
+        detected_country = detect_country_from_ip(get_client_ip(request))
 
-    if user.country:
-        detected_country = user.country
-        detected_phone_code = get_phone_code_for_country(user.country)
+    if detected_country:
+        detected_phone_code = detected_phone_code or get_phone_code_for_country(
+            detected_country
+        )
         # Resolve country name from django-countries
-        detected_country_name = str(dict(countries).get(user.country, ""))
+        detected_country_name = str(dict(countries).get(detected_country, ""))
 
     # Determine if we need password fields
     show_password_fields = not user.has_usable_password()
@@ -1636,14 +1448,6 @@ def tell_us_about_you(request: HttpRequest) -> HttpResponse:
             )
 
             if profile_ready:
-                # Auto-generate a referral code for the user
-                try:
-                    from apps.referral.services import get_or_create_referral_code
-
-                    get_or_create_referral_code(user)
-                except Exception:
-                    logger.debug("Referral code generation skipped", exc_info=True)
-
                 messages.success(
                     request,
                     _(
@@ -1681,12 +1485,8 @@ def tell_us_about_you(request: HttpRequest) -> HttpResponse:
         form = TellUsAboutYouForm(initial=initial_data, user=user, request=request)
 
     # Build country choices list
-    country_choices = list(countries)
-
-    # Build phone code choices list
-    phone_code_choices = sorted(
-        [(code, dial) for code, dial in COUNTRY_PHONE_CODES.items()], key=lambda x: x[0]
-    )
+    country_choices = country_form_choices()[1:]
+    phone_code_choices = phone_code_form_choices()[1:]
 
     # ----- Locked features data (from all apps) -----
     locked_features = _get_platform_features()
@@ -1733,23 +1533,35 @@ def tell_us_about_you(request: HttpRequest) -> HttpResponse:
 @login_required
 @require_POST
 def resend_verification(request: HttpRequest) -> JsonResponse:
-    from allauth.account.models import EmailAddress
-    from allauth.account.utils import (
-        send_email_confirmation,  # type: ignore[attr-defined]
-    )
-
     email = getattr(request.user, "email", "")
     try:
         email_obj = EmailAddress.objects.get(user=request.user, email=email)
         if email_obj.verified:
             return JsonResponse({"ok": False, "error": "already_verified"})
-        send_email_confirmation(request, request.user, email=email)
+        resend_key = f"users:email-verification:resend:{email_obj.pk}"
+        if not allow_action(
+            resend_key,
+            max_attempts=3,
+            window_seconds=900,
+            fail_open=False,
+        ):
+            return JsonResponse(
+                {"ok": False, "error": "rate_limited"},
+                status=429,
+            )
+        email_obj.send_confirmation(request=request)
         return JsonResponse({"ok": True})
     except EmailAddress.DoesNotExist:
         return JsonResponse({"ok": False, "error": "email_not_found"})
-    except Exception as exc:
-        logger.exception("resend_verification failed: %s", exc)
-        return JsonResponse({"ok": False, "error": "server_error"}, status=500)
+    except (ImproperlyConfigured, OSError, smtplib.SMTPException):
+        logger.exception(
+            "Verification email delivery failed for user_id=%s",
+            request.user.pk,
+        )
+        return JsonResponse(
+            {"ok": False, "error": "email_unavailable"},
+            status=503,
+        )
 
 
 # ============================================================

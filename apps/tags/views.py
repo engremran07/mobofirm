@@ -39,7 +39,7 @@ def search(request):
     Tag autocomplete/search endpoint.
     """
     q = request.GET.get("q", "").strip()
-    qs = Tag.objects.filter(is_active=True, is_deleted=False)
+    qs = Tag.objects.filter(is_active=True, is_curated=True, is_deleted=False)
     if q:
         qs = qs.filter(
             Q(name__icontains=q)
@@ -63,9 +63,9 @@ def search(request):
 
 @require_GET
 def tag_list(request: HttpRequest) -> HttpResponse:
-    tags = Tag.objects.filter(is_active=True, is_deleted=False).order_by(
-        "-usage_count", "name"
-    )
+    tags = Tag.objects.filter(
+        is_active=True, is_curated=True, is_deleted=False
+    ).order_by("-usage_count", "name")
     return render(
         request,
         "tags/list.html",
@@ -75,7 +75,9 @@ def tag_list(request: HttpRequest) -> HttpResponse:
 
 @require_GET
 def tag_detail(request: HttpRequest, slug: str) -> HttpResponse:
-    tag = get_object_or_404(Tag, slug=slug, is_deleted=False)
+    tag = get_object_or_404(
+        Tag, slug=slug, is_curated=True, is_active=True, is_deleted=False
+    )
     now_ts = timezone.now()
     posts = (
         Post.objects.filter(
@@ -87,8 +89,9 @@ def tag_detail(request: HttpRequest, slug: str) -> HttpResponse:
     )
     paginator = Paginator(posts, 10)
     page_obj = paginator.get_page(request.GET.get("page") or 1)
-    trending_tags = Tag.objects.order_by("-usage_count")[:10]
-    trending_tags = trending_tags.filter(is_deleted=False)
+    trending_tags = Tag.objects.filter(
+        is_active=True, is_curated=True, is_deleted=False
+    ).order_by("-usage_count")[:10]
     latest = Post.objects.filter(
         status=PostStatus.PUBLISHED, publish_at__lte=now_ts
     ).order_by("-published_at")[:5]
@@ -167,7 +170,9 @@ def merge_tags(request: HttpRequest) -> JsonResponse:
 
 @require_GET
 def tag_analytics(request: HttpRequest) -> HttpResponse:
-    tags = Tag.objects.order_by("-usage_count", "name")[:50]
+    tags = Tag.objects.filter(
+        is_active=True, is_curated=True, is_deleted=False
+    ).order_by("-usage_count", "name")[:50]
     data = [{"name": t.name, "usage": t.usage_count} for t in tags]
     return JsonResponse({"items": data})
 
@@ -176,7 +181,7 @@ def tag_analytics(request: HttpRequest) -> HttpResponse:
 def search_duplicates(request: HttpRequest) -> JsonResponse:
     threshold = float(request.GET.get("threshold", "0.7") or "0.7")
     limit = int(request.GET.get("limit", "200") or "200")
-    tags = list(Tag.objects.filter(is_active=True, is_deleted=False))
+    tags = list(Tag.objects.filter(is_active=True, is_curated=True, is_deleted=False))
     pairs = []
     for i, t1 in enumerate(tags):
         for t2 in tags[i + 1 :]:
@@ -196,7 +201,7 @@ def search_duplicates(request: HttpRequest) -> JsonResponse:
     return JsonResponse({"items": pairs})
 
 
-@staff_member_required(login_url="admin_suite:admin_suite_login")
+@staff_member_required(login_url="admin:login")
 def duplicates_review(request: HttpRequest) -> HttpResponse:
     threshold = 0.7
     tags = list(Tag.objects.filter(is_active=True, is_deleted=False))
@@ -221,7 +226,7 @@ def duplicates_review(request: HttpRequest) -> HttpResponse:
     return render(request, "tags/admin_duplicates.html", {"pairs": pairs})
 
 
-@staff_member_required(login_url="admin_suite:admin_suite_login")
+@staff_member_required(login_url="admin:login")
 def keyword_review(request: HttpRequest) -> HttpResponse:
     suggestions = Tag.objects.none()
     from .models_keyword import KeywordSuggestion
@@ -234,7 +239,7 @@ def keyword_review(request: HttpRequest) -> HttpResponse:
     )
 
 
-@staff_member_required(login_url="admin_suite:admin_suite_login")
+@staff_member_required(login_url="admin:login")
 @require_POST
 def apply_keyword(request: HttpRequest) -> HttpResponse:
     from .models_keyword import KeywordSuggestion

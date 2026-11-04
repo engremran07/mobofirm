@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Device brands | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block content %}
+<div class="site-container py-5">
+  <p class="section-eyebrow">Device catalogue</p>
+  <h1 class="h2 mb-2">Browse by brand</h1>
+  <p class="muted mb-4">{{ total_models }} active models across {{ brands|length }} brands. Firmware totals include only records eligible for public discovery.</p>
+  {% for letter, letter_brands in grouped_brands %}
+    <section class="mb-5" aria-labelledby="brand-letter-{{ forloop.counter }}">
+      <h2 id="brand-letter-{{ forloop.counter }}" class="h4 border-bottom pb-2 mb-3">{{ letter }}</h2>
+      <div class="row g-3">
+      {% for brand in letter_brands %}
+        <div class="col-6 col-md-4 col-xl-3">
+          <a class="surface-card p-3 d-flex align-items-center gap-3 text-decoration-none" href="{% url 'firmwares:brand_detail' slug=brand.slug %}">
+            <span class="brand-mark" aria-hidden="true">{{ brand.name|slice:":1"|upper }}</span>
+            <span><strong class="d-block">{{ brand.name }}</strong><span class="small muted">{{ brand.model_count }} models · {{ brand.firmware_count }} firmware</span></span>
+          </a>
+        </div>
+      {% endfor %}
+      </div>
+    </section>
+  {% empty %}
+    <p class="empty-state p-4">No brands are available in the catalogue yet.</p>
+  {% endfor %}
+</div>
+{% endblock %}

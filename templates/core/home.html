@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}{{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block content %}
+<div class="site-container py-5"><section class="hero-panel p-4 p-md-5">
+  <p class="hero-eyebrow">Device and firmware intelligence</p><h1 class="hero-title">{{ site_settings.site_name|default:"Mobofirm" }}</h1>
+  <p class="hero-copy">{{ site_settings.site_description|default:"Discover device profiles, reviewed firmware records, and technical guides." }}</p>
+  <div class="d-flex flex-wrap gap-2"><a class="btn btn-primary" href="{% url 'firmwares:library_hub' %}">Explore catalogue</a><a class="btn btn-outline-secondary" href="{% url 'blog:post_list' %}">Read the journal</a></div>
+</section>
+<div class="row g-3 mt-4"><div class="col"><div class="surface-card p-3">Active users <strong>{{ total_users }}</strong></div></div><div class="col"><div class="surface-card p-3">Unread notifications <strong>{{ unread_notifications }}</strong></div></div></div>
+{% if announcements %}<section class="mt-5"><h2 class="h3">Announcements</h2>{% for announcement in announcements %}<article class="surface-card p-3 mb-2"><h3 class="h5">{{ announcement.title }}</h3><p>{{ announcement.message }}</p></article>{% endfor %}</section>{% endif %}
+</div>
+{% endblock %}

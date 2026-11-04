@@ -1,0 +1,12 @@
+{% if user.is_authenticated %}
+  <form method="post" action="{% url 'comments:add_comment' slug=post.slug %}" class="surface-card p-3 mt-4">
+    {% csrf_token %}
+    <label class="form-label" for="comment-body">Add a comment</label>
+    <textarea class="form-control mb-3" id="comment-body" name="body" rows="4" maxlength="10000" required></textarea>
+    <div class="visually-hidden" aria-hidden="true"><label for="comment-hp">Leave this field empty</label><input id="comment-hp" name="hp" tabindex="-1" autocomplete="off"></div>
+    <p class="small muted">Comments are reviewed before appearing publicly.</p>
+    <button class="btn btn-primary" type="submit">Submit for review</button>
+  </form>
+{% else %}
+  <p class="mt-4"><a href="{% url 'users:account_login' %}?next={{ request.path|urlencode }}">Sign in</a> to join the discussion.</p>
+{% endif %}

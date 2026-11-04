@@ -8,13 +8,16 @@ version = "0.1.0"
 description = "Mobofirm Django project"
 requires-python = ">=3.12"
 dependencies = [
-    "Django>=5.2,<5.3",
+    "Django>=6.1,<6.2",
     "bleach>=6.2,<7",
     "celery[redis]>=5.4,<6",
     "cryptography>=44",
+    "django-allauth>=65.13,<70",
+    "django-countries>=9.1,<10",
     "django-solo>=2.4,<3",
     "djangorestframework>=3.16,<4",
     "Markdown>=3.7,<4",
+    "nh3>=0.3.2,<1",
     "Pillow>=11",
     "psycopg[binary]>=3.2,<4",
     "python-dotenv>=1.0,<2",
@@ -23,8 +26,10 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.3,<9",
-    "pytest-django>=4.9,<5",
+    "pytest>=9,<10",
+    "pytest-django>=4.14,<5",
+    "playwright>=1.55,<2",
+    "ruff>=0.12,<1",
 ]
 
 [tool.setuptools.packages.find]
@@ -33,3 +38,13 @@ include = ["app*", "apps*"]
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "app.settings.test"
 python_files = ["test_*.py", "*_tests.py", "tests.py"]
+testpaths = ["tests/backend", "tests/frontend"]
+addopts = "--strict-config --strict-markers"
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

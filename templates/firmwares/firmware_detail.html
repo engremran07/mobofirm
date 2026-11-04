@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}{{ firmware.build_number|default:firmware.original_file_name }} | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block meta_description %}Review compatibility, file size, build details, and review status for this firmware record.{% endblock %}
+{% block content %}
+<div class="site-container py-5">
+  <nav aria-label="Breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="{% url 'firmwares:browse' %}">Firmware</a></li>{% if firmware.brand %}<li class="breadcrumb-item"><a href="{% url 'firmwares:brand_detail' slug=firmware.brand.slug %}">{{ firmware.brand.name }}</a></li>{% endif %}<li class="breadcrumb-item active" aria-current="page">Firmware details</li></ol></nav>
+  <div class="row g-4">
+    <div class="col-12 col-lg-8">
+      <header class="hero-panel p-4 p-md-5">
+        <p class="section-eyebrow">{{ firmware_type_display }} firmware</p>
+        <h1 class="h2 fw-bold build-code">{{ firmware.build_number|default:firmware.original_file_name }}</h1>
+        <p class="hero-copy mb-0">{{ firmware.model.display_name|default:"Device not specified" }}{% if firmware.brand %} · {{ firmware.brand.name }}{% endif %}</p>
+      </header>
+      <section class="surface-card p-4 mt-4" aria-labelledby="firmware-metadata-title">
+        <h2 id="firmware-metadata-title" class="h4 mb-3">Technical details</h2>
+        <dl class="row mb-0">
+          <dt class="col-sm-4 muted fw-normal">File</dt><dd class="col-sm-8 build-code">{{ firmware.original_file_name }}</dd>
+          <dt class="col-sm-4 muted fw-normal">Firmware classification</dt><dd class="col-sm-8">{{ firmware_type_display }}</dd>
+          <dt class="col-sm-4 muted fw-normal">Package format</dt><dd class="col-sm-8">{{ firmware.get_package_format_display }}</dd>
+          <dt class="col-sm-4 muted fw-normal">Model</dt><dd class="col-sm-8">{% if firmware.model %}<a href="{% url 'firmwares:model_detail' brand_slug=firmware.brand.slug model_slug=firmware.model.slug %}">{{ firmware.model.display_name }}</a>{% else %}Not specified{% endif %}</dd>
+          <dt class="col-sm-4 muted fw-normal">Variant / region</dt><dd class="col-sm-8">{{ firmware.variant.name|default:"Not specified" }}{% if firmware.variant.region %} · {{ firmware.variant.region }}{% endif %}{% if firmware.variant.model_code %} · {{ firmware.variant.model_code }}{% endif %}</dd>
+          <dt class="col-sm-4 muted fw-normal">Android version</dt><dd class="col-sm-8">{{ firmware.android_version|default:"Not specified" }}</dd>
+          <dt class="col-sm-4 muted fw-normal">Build number</dt><dd class="col-sm-8 build-code">{{ firmware.build_number|default:"Not specified" }}</dd>
+          <dt class="col-sm-4 muted fw-normal">File size</dt><dd class="col-sm-8">{{ file_size_display }}</dd>
+          <dt class="col-sm-4 muted fw-normal">Security patch</dt><dd class="col-sm-8">{{ firmware.security_patch|date:"F j, Y"|default:"Not specified" }}</dd>
+          <dt class="col-sm-4 muted fw-normal">Review status</dt><dd class="col-sm-8">{% if firmware.is_verified %}<span class="status-verified">Verified</span>{% else %}<span class="status-verified">Governance reviewed</span>{% endif %}</dd>
+          <dt class="col-sm-4 muted fw-normal">SHA-256</dt><dd class="col-sm-8 build-code">{% if firmware.file_hash %}{{ firmware.file_hash }}{% else %}Not provided{% endif %}</dd>
+          <dt class="col-sm-4 muted fw-normal">Added</dt><dd class="col-sm-8">{{ firmware.created_at|date:"F j, Y" }}</dd>
+        </dl>
+      </section>
+    </div>
+    <aside class="col-12 col-lg-4">
+      <section class="surface-card p-4" aria-labelledby="download-panel-title">
+        <p class="section-eyebrow mb-2">Availability</p>
+        <h2 id="download-panel-title" class="h4">Download information</h2>
+        <p class="muted">Check the exact model and variant before installing firmware. The review label describes this record's status, not a guarantee of compatibility with every device.</p>
+        <a class="btn btn-primary btn-lg w-100" href="{% url 'firmwares:firmware_download' firmware_type=firmware_type firmware_id=firmware.pk %}">
+          <i data-lucide="download" aria-hidden="true"></i><span class="ms-2">Continue to download</span>
+        </a>
+        <p class="small muted mt-3 mb-0">File size: {{ file_size_display }}</p>
+      </section>
+    </aside>
+  </div>
+</div>
+{% endblock %}

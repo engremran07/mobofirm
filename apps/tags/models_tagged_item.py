@@ -69,5 +69,5 @@ class TaggedItem(models.Model):
 
     @property
     def target_model_name(self):
-        """Human-readable name of the tagged model"""
-        return self.content_type.model_class()._meta.verbose_name
+        """Return the lower-case Django model name of the tagged object."""
+        return self.content_type.model

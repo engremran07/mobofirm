@@ -65,7 +65,6 @@ router.register(
 )
 router.register("trusted-testers", TrustedTesterViewSet, basename="trusted-testers")
 router.register("gsmarena-devices", GSMArenaDeviceViewSet, basename="gsmarena-devices")
-# Merged from apps.changelog
 router.register(
     "changelog-entries", ChangelogEntryViewSet, basename="changelog-entries"
 )

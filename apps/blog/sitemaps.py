@@ -1,10 +1,9 @@
 from __future__ import annotations
 
+from django.conf import settings
 from django.contrib.sitemaps import Sitemap
 from django.urls import reverse
 from django.utils import timezone
-
-from apps.site_settings.models import SiteSettings
 
 from .models import Post, PostStatus
 
@@ -14,17 +13,12 @@ class PublishedBlogPostsSitemap(Sitemap):
     Enterprise sitemap for published blog posts.
     - respects publish_at
     - honors per-post canonical_url when set
-    - uses SiteSettings.force_https for protocol selection
+    - uses Django's FORCE_HTTPS setting for protocol selection
     """
 
     def __init__(self):
         super().__init__()
-        try:
-            ss = SiteSettings.get_solo()
-        except Exception:
-            ss = None
-        force_https = bool(getattr(ss, "force_https", False))
-        self.protocol = "https" if force_https else "http"
+        self.protocol = "https" if settings.FORCE_HTTPS else "http"
 
     def items(self):
         now = timezone.now()

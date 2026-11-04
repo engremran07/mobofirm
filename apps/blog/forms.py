@@ -44,9 +44,6 @@ class PostForm(forms.ModelForm):
             "body",
             "category",
             "tags",
-            "status",
-            "publish_at",
-            "featured",
             "allow_comments",
             "noindex",
             "seo_title",
@@ -57,9 +54,6 @@ class PostForm(forms.ModelForm):
         widgets = {
             "body": forms.Textarea(attrs={"rows": 15, "class": "form-control"}),
             "summary": forms.Textarea(attrs={"rows": 3, "class": "form-control"}),
-            "publish_at": forms.DateTimeInput(
-                attrs={"type": "datetime-local", "class": "form-control"}
-            ),
             "seo_description": forms.Textarea(
                 attrs={"rows": 2, "class": "form-control"}
             ),

@@ -5,26 +5,38 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('ads', '0001_initial'),
-        ('blog', '0003_post_firmware_brand_post_firmware_model'),
+        ("ads", "0001_initial"),
+        ("blog", "0003_post_firmware_brand_post_firmware_model"),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='post',
-            name='ad_gate_config',
-            field=models.ForeignKey(blank=True, help_text="Rewarded ad configuration for this post's gate.", null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='gated_posts', to='ads.rewardedadconfig'),
+            model_name="post",
+            name="ad_gate_config",
+            field=models.ForeignKey(
+                blank=True,
+                help_text="Rewarded ad configuration for this post's gate.",
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="gated_posts",
+                to="ads.rewardedadconfig",
+            ),
         ),
         migrations.AddField(
-            model_name='post',
-            name='ad_gate_enabled',
-            field=models.BooleanField(default=False, help_text='Manual toggle: require ad view before reading full article.'),
+            model_name="post",
+            name="ad_gate_enabled",
+            field=models.BooleanField(
+                default=False,
+                help_text="Manual toggle: require ad view before reading full article.",
+            ),
         ),
         migrations.AddField(
-            model_name='post',
-            name='ad_gate_min_views',
-            field=models.PositiveIntegerField(default=0, help_text='Auto-enable ad gate when views_count >= this value. 0 = disabled.'),
+            model_name="post",
+            name="ad_gate_min_views",
+            field=models.PositiveIntegerField(
+                default=0,
+                help_text="Auto-enable ad gate when views_count >= this value. 0 = disabled.",
+            ),
         ),
     ]

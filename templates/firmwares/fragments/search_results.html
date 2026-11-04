@@ -1,0 +1,15 @@
+{% if query|length < 2 %}
+  <p class="small muted mb-0">Enter at least two characters to search the catalogue.</p>
+{% elif results %}
+  <div class="list-group">
+    {% for model in results %}
+      <a class="list-group-item list-group-item-action d-flex flex-wrap justify-content-between gap-2"
+         href="{% url 'firmwares:model_detail' brand_slug=model.brand.slug model_slug=model.slug %}">
+        <span><strong>{{ model.display_name }}</strong><span class="muted ms-2">{{ model.brand.name }}</span></span>
+        <span class="model-code muted">{{ model.model_code|default:model.codename|default:"Model details" }}</span>
+      </a>
+    {% endfor %}
+  </div>
+{% else %}
+  <p class="empty-state p-3 mb-0">No matching devices were found. Try a model code, codename, or manufacturer.</p>
+{% endif %}

@@ -1,0 +1,51 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<div class="container-fluid">
+  <header class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div><p class="text-uppercase small">Advertising operations</p><h1>Ad management</h1></div>
+    <a class="button" href="{% url 'admin:index' %}">Open administration</a>
+  </header>
+  <div class="row g-3 mb-4">
+    <div class="col"><div class="card p-3"><span>Impressions</span><strong>{{ impressions }}</strong></div></div>
+    <div class="col"><div class="card p-3"><span>Clicks</span><strong>{{ clicks }}</strong></div></div>
+    <div class="col"><div class="card p-3"><span>Click-through rate</span><strong>{{ ctr }}%</strong></div></div>
+  </div>
+  <section class="card p-3 mb-4" aria-labelledby="ads-controls-title">
+    <h2 id="ads-controls-title">Serving controls</h2>
+    <form method="post" action="{% url 'ads:toggle_settings' %}" class="d-flex flex-wrap align-items-end gap-3">
+      {% csrf_token %}
+      <label><input type="hidden" name="ads_enabled" value="0"><input type="checkbox" name="ads_enabled" value="1"{% if ads_enabled %} checked{% endif %}> Ads enabled</label>
+      <label><input type="hidden" name="ad_networks_enabled" value="0"><input type="checkbox" name="ad_networks_enabled" value="1"{% if ad_networks_enabled %} checked{% endif %}> Ad networks enabled</label>
+      <label><input type="hidden" name="affiliate_enabled" value="0"><input type="checkbox" name="affiliate_enabled" value="1"{% if affiliate_enabled %} checked{% endif %}> Affiliate links enabled</label>
+      <label>Intensity <select name="ad_aggressiveness_level"><option value="minimal"{% if ad_aggressiveness_level == "minimal" %} selected{% endif %}>Minimal</option><option value="balanced"{% if ad_aggressiveness_level == "balanced" %} selected{% endif %}>Balanced</option><option value="aggressive"{% if ad_aggressiveness_level == "aggressive" %} selected{% endif %}>Aggressive</option></select></label>
+      <button class="button" type="submit">Save serving settings</button>
+    </form>
+  </section>
+  <section class="card p-3 mb-4" aria-labelledby="placements-title">
+    <h2 id="placements-title">Placements</h2>
+    {% for placement in placements %}
+      <article class="border-bottom py-3">
+        <h3 class="h5">{{ placement.name }}</h3>
+        <p>{{ placement.code }} · {{ placement.context|default:placement.page_context|default:"No page context" }} · {% if placement.is_enabled %}Enabled{% else %}Disabled{% endif %}</p>
+        <form method="post" action="{% url 'ads:toggle_settings' %}" class="d-inline">
+          {% csrf_token %}<input type="hidden" name="placement" value="{{ placement.pk }}">
+          <button class="button" name="action" value="{% if placement.is_enabled %}disable_placement{% else %}enable_placement{% endif %}" type="submit">{% if placement.is_enabled %}Disable{% else %}Enable{% endif %}</button>
+          <button class="button" name="action" value="toggle_lock" type="submit">{% if placement.locked %}Unlock{% else %}Lock{% endif %} placement</button>
+        </form>
+      </article>
+    {% empty %}<p>No ad placements have been configured.</p>{% endfor %}
+  </section>
+  <section class="card p-3 mb-4" aria-labelledby="campaigns-title"><h2 id="campaigns-title">Campaigns</h2>
+    {% for campaign in campaigns %}<article class="border-bottom py-3"><h3 class="h5">{{ campaign.name }}</h3><p>{% if campaign.is_active %}Active{% else %}Inactive{% endif %}</p>
+      <form method="post" action="{% url 'ads:toggle_settings' %}">{% csrf_token %}<input type="hidden" name="campaign" value="{{ campaign.pk }}">
+        <button class="button" name="action" value="{% if campaign.is_active %}disable_campaign{% else %}enable_campaign{% endif %}" type="submit">{% if campaign.is_active %}Pause{% else %}Activate{% endif %}</button>
+        <button class="button" name="action" value="toggle_campaign_lock" type="submit">{% if campaign.locked %}Unlock{% else %}Lock{% endif %} campaign</button>
+      </form>
+    </article>{% empty %}<p>No campaigns have been configured.</p>{% endfor %}
+  </section>
+  <section class="card p-3"><h2>Creatives</h2>
+    {% for creative in creatives %}<p>{{ creative.name }} · {{ creative.get_creative_type_display|default:creative.creative_type }}{% if creative.campaign %} · {{ creative.campaign.name }}{% endif %}</p>
+    {% empty %}<p>No creatives have been configured.</p>{% endfor %}
+  </section>
+</div>
+{% endblock %}

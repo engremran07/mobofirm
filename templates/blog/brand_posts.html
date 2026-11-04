@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}{{ brand.name }} articles | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block content %}
+<div class="site-container py-5"><p class="section-eyebrow">Device journal</p><h1 class="h2">{{ brand.name }}</h1>
+  <p class="muted">Articles connected with this manufacturer.</p>
+  {% include "blog/partials/post_list_items.html" %}
+</div>
+{% endblock %}

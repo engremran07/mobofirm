@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Complete your profile | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block content %}
+<div class="site-container py-5">
+  <p class="section-eyebrow">Account setup</p><h1 class="h2">Tell us about yourself</h1>
+  <p class="muted">Profile completion: {{ completion_percent }}%</p>
+  <form method="post" class="surface-card p-4">{% csrf_token %}
+    {% if form.non_field_errors %}<div class="alert alert-danger" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+    {% for field in form %}<div class="mb-3">
+      <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+      {% if field.name == "country" %}
+        <label class="visually-hidden" for="country-search">Search countries by name or ISO code</label>
+        <input id="country-search" class="form-control mb-2" type="search" data-country-search-for="{{ field.id_for_label }}" aria-controls="{{ field.id_for_label }}" placeholder="Search country or code" autocomplete="off">
+        <p id="country-search-status" class="form-text" role="status" aria-live="polite"></p>
+        {% if detected_country_name %}<p class="form-text">Suggested from your network location: {{ detected_country_name }}. You can change this selection.</p>{% endif %}
+      {% elif field.name == "phone_country_code" %}
+        <label class="visually-hidden" for="phone-code-search">Search countries or calling codes</label>
+        <input id="phone-code-search" class="form-control mb-2" type="search" data-country-search-for="{{ field.id_for_label }}" aria-controls="{{ field.id_for_label }}" placeholder="Search country, ISO code, or calling code" autocomplete="off">
+        <p id="phone-code-search-status" class="form-text" role="status" aria-live="polite"></p>
+      {% endif %}
+      {{ field }}
+      {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+      {% for error in field.errors %}<p class="text-danger small" role="alert">{{ error }}</p>{% endfor %}
+    </div>{% endfor %}
+    <button class="btn btn-primary" type="submit">Save and continue</button>
+  </form>
+</div>
+{% endblock %}

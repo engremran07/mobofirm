@@ -254,7 +254,6 @@ def generate_ai_post(topic: str, user_id: int) -> int | None:
     from django.contrib.auth import get_user_model
     from django.utils.text import slugify
 
-    from apps.ai.services import test_completion
     from apps.blog.models import Post
 
     prompt = f"""
@@ -269,8 +268,11 @@ def generate_ai_post(topic: str, user_id: int) -> int | None:
     """
 
     try:
-        response = test_completion(prompt)
-        content_text = response.get("text", "")
+        from apps.core import ai_client
+
+        User = get_user_model()
+        user = User.objects.get(pk=user_id)
+        content_text = ai_client.generate_answer(question=prompt, user=user)
 
         # Clean up markdown code blocks if present
         if content_text.startswith("```json"):
@@ -280,30 +282,53 @@ def generate_ai_post(topic: str, user_id: int) -> int | None:
 
         data = json.loads(content_text)
 
-        User = get_user_model()
-        user = User.objects.get(pk=user_id)
-
-        post = Post.objects.create(
-            title=data.get("title", topic),
-            slug=slugify(data.get("title", topic))[:240],
-            summary=data.get("summary", ""),
-            body=data.get("body", ""),
-            seo_title=data.get("seo_title", ""),
-            seo_description=data.get("seo_description", ""),
-            author=user,
-            status="draft",  # Default to draft for review
-            is_ai_generated=True,
-        )
-
-        # Add tags
+        from django.db import transaction
         from apps.tags.models import Tag
 
-        for tag_name in data.get("tags", []):
-            tag_slug = slugify(tag_name)
-            tag, _ = Tag.objects.get_or_create(
-                slug=tag_slug, defaults={"name": tag_name}
+        with transaction.atomic():
+            post = Post.objects.create(
+                title=data.get("title", topic),
+                slug=slugify(data.get("title", topic))[:240],
+                summary=data.get("summary", ""),
+                body=data.get("body", ""),
+                seo_title=data.get("seo_title", ""),
+                seo_description=data.get("seo_description", ""),
+                author=user,
+                status="draft",
+                is_ai_generated=True,
             )
-            post.tags.add(tag)
+
+            # Only attach tags that have already passed curation.
+            approved_tags = []
+            suggested_tags = []
+            from apps.governance.services import submit_for_review
+            from apps.blog.services.history import PostHistoryService
+
+            for tag_name in data.get("tags", []):
+                if not isinstance(tag_name, str):
+                    continue
+                normalized_name = tag_name.strip()[:64]
+                tag_slug = slugify(normalized_name)
+                if not tag_slug:
+                    continue
+                tag, _created = Tag.objects.get_or_create(
+                    slug=tag_slug,
+                    defaults={
+                        "name": normalized_name,
+                        "ai_suggested": True,
+                        "is_curated": False,
+                    },
+                )
+                if tag.is_curated and tag.is_active and not tag.is_deleted:
+                    approved_tags.append(tag)
+                else:
+                    suggested_tags.append(tag)
+            post.tags.set(approved_tags)
+            for tag in suggested_tags:
+                submit_for_review(tag)
+            PostHistoryService.record_current_version(
+                post, user=user, change_summary="AI-generated initial version"
+            )
 
         return post.pk
 
@@ -315,19 +340,10 @@ def generate_ai_post(topic: str, user_id: int) -> int | None:
 @shared_task(soft_time_limit=300, time_limit=600)
 def auto_translate_post(post_id: int) -> dict:
     """
-    Automatically translate a blog post into all enabled languages.
-    Uses DeepL if configured, otherwise falls back to AI.
+    Translate a blog post into explicitly configured languages using the core AI client.
     """
-    from apps.ai.services import test_completion
+    from apps.core import ai_client
     from apps.blog.models import Post, PostTranslation
-
-    try:
-        from apps.i18n.models import Locale  # type: ignore[import-not-found]
-        from apps.i18n.translation_provider import (  # type: ignore[import-not-found]
-            DeepLTranslator,
-        )
-    except ImportError:
-        return {"error": "i18n module not available"}
 
     results = {"translated": [], "errors": []}
 
@@ -336,26 +352,14 @@ def auto_translate_post(post_id: int) -> dict:
     except Post.DoesNotExist:
         return {"error": "Post not found"}
 
-    # Get target languages
-    # 1. Try database Locales
-    target_langs = list(
-        Locale.objects.filter(enabled_global=True).values_list("code", flat=True)
-    )
-    # 2. Fallback to settings.LANGUAGES
-    if not target_langs:
-        target_langs = [code for code, _ in getattr(settings, "LANGUAGES", [])]
+    target_langs = list(dict.fromkeys(settings.BLOG_TRANSLATION_LANGUAGES))
 
-    # Remove source language (assuming 'en' or site default)
-    source_lang = getattr(settings, "LANGUAGE_CODE", "en")
+    source_lang = settings.LANGUAGE_CODE
     if source_lang in target_langs:
         target_langs.remove(source_lang)
 
     if not target_langs:
         return {"status": "No target languages found"}
-
-    # Initialize Translator
-    deepl_key = getattr(settings, "DEEPL_API_KEY", None)
-    translator = DeepLTranslator(deepl_key) if deepl_key else None
 
     for lang in target_langs:
         if PostTranslation.objects.filter(post=post, language=lang).exists():
@@ -366,22 +370,7 @@ def auto_translate_post(post_id: int) -> dict:
             summary_tr = ""
             body_tr = ""
 
-            # Strategy 1: DeepL
-            if translator:
-                try:
-                    translations = translator.translate(
-                        [post.title, post.summary, post.body],
-                        target=lang,
-                        source=source_lang,
-                    )
-                    if len(translations) == 3:
-                        title_tr, summary_tr, body_tr = translations
-                except Exception as e:
-                    logger.warning(f"DeepL failed for {lang}: {e}")
-
-            # Strategy 2: AI Fallback (if DeepL failed or not configured)
-            if not title_tr:
-                prompt = f"""
+            prompt = f"""
                 Translate the following blog post content into {lang} (ISO code).
                 Return ONLY a valid JSON object with keys: title, summary, body.
 
@@ -389,18 +378,16 @@ def auto_translate_post(post_id: int) -> dict:
                 Summary: {post.summary}
                 Body: {post.body}
                 """
-                resp = test_completion(prompt)
-                text = resp.get("text", "")
-                # Clean JSON
-                if text.startswith("```"):
-                    text = text.split("```")[1].replace("json", "").strip()
+            text = ai_client.generate_answer(question=prompt, user=post.author)
+            if text.startswith("```"):
+                text = text.split("```")[1].removeprefix("json").strip()
 
-                import json
+            import json
 
-                data = json.loads(text)
-                title_tr = data.get("title", "")
-                summary_tr = data.get("summary", "")
-                body_tr = data.get("body", "")
+            data = json.loads(text)
+            title_tr = data.get("title", "")
+            summary_tr = data.get("summary", "")
+            body_tr = data.get("body", "")
 
             if title_tr and body_tr:
                 PostTranslation.objects.create(

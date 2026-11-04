@@ -4,7 +4,6 @@ import logging
 
 from django.apps import apps
 from django.db.models.signals import post_save
-from django.dispatch import receiver
 
 # NOTE: Cross-app imports are deferred inside handlers to prevent circular dependencies
 # This module is loaded early during Django startup via AppConfig.ready()
@@ -28,25 +27,12 @@ def _sync_tag_usage(post) -> None:
         logger.debug("Tag usage sync failed for post %s: %s", post.pk, e)
 
 
-def _ensure_post_seo(post) -> None:
-    """Apply SEO settings to a post - imports deferred to prevent circular deps."""
-    from apps.core.utils import feature_flags
-
-    if not feature_flags.seo_enabled():
+def _ensure_post_tags(post, post_status) -> None:
+    if post.status != post_status.PUBLISHED or post.tags.exists():
         return
-    try:
-        from apps.seo.auto import apply_post_seo
-        from apps.seo.services.internal_linking.engine import refresh_linkable_entity
+    from apps.tags.services import auto_tag_post
 
-        apply_post_seo(post)
-        refresh_linkable_entity(
-            post,
-            title=post.title,
-            url=post.get_absolute_url(),
-            keywords=",".join(post.tags.values_list("name", flat=True)),
-        )
-    except Exception:
-        logger.debug("SEO sync failed for post %s", post.pk, exc_info=True)
+    auto_tag_post(post, allow_create=True, max_tags=5)
 
 
 def _get_post_model():
@@ -73,16 +59,16 @@ def connect_signals():
     Post = _get_post_model()
     PostStatus = _get_post_status()
 
-    @receiver(post_save, sender=Post)
     def post_after_save(sender, instance, created=False, **kwargs):
-        _sync_tag_usage(instance)
-        _ensure_post_seo(instance)
-
         is_published = instance.status == PostStatus.PUBLISHED
+        _ensure_post_tags(instance, PostStatus)
+        _sync_tag_usage(instance)
 
         notifications_enabled = False
         if apps.is_installed("apps.users"):
-            from apps.users.services.notifications import notifications_enabled as is_enabled
+            from apps.users.services.notifications import (
+                notifications_enabled as is_enabled,
+            )
 
             notifications_enabled = is_enabled()
 
@@ -120,18 +106,6 @@ def connect_signals():
                     f"Failed to queue search engine ping for post {instance.pk}: {e}"
                 )
 
-        # Auto-translate on publish (ASYNC)
-        if instance.status == PostStatus.PUBLISHED:
-            try:
-                from apps.blog.tasks import auto_translate_post
-
-                auto_translate_post.delay(instance.pk)
-                logger.info(f"Queued auto-translation task for post {instance.pk}")
-            except Exception as e:
-                logger.warning(
-                    f"Failed to queue auto-translation for post {instance.pk}: {e}"
-                )
-
         # Scan published post body for in-content ad placement (ASYNC)
         if instance.status == PostStatus.PUBLISHED:
             try:
@@ -143,7 +117,7 @@ def connect_signals():
                 logger.debug("Failed to queue ad scan for post %s: %s", instance.pk, e)
 
         # Emit blog_post_published Django signal for cross-app listeners
-        # (SEO sync, tag updates, etc.)
+        # (tag updates and other supported app integrations)
         if is_published:
             try:
                 from apps.core.signals import blog_post_published
@@ -157,3 +131,10 @@ def connect_signals():
                     instance.pk,
                     e,
                 )
+
+    post_save.connect(
+        post_after_save,
+        sender=Post,
+        weak=False,
+        dispatch_uid="blog_post_after_save",
+    )

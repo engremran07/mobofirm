@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}{{ brand.name }} devices | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block content %}
+<div class="site-container py-5"><nav aria-label="Breadcrumb"><a href="{% url 'firmwares:brand_list' %}">Brands</a> / {{ brand.name }}</nav><h1 class="h2 mt-3">{{ brand.name }} devices</h1><p class="muted">{{ total_firmwares }} active firmware records</p>
+  <form method="get" action="" hx-get="" hx-trigger="input changed delay:350ms from:input, change" hx-target="#device-model-list" hx-swap="innerHTML" class="row g-2 my-4">
+    <div class="col"><label class="visually-hidden" for="model-filter">Find a model</label><input class="form-control" id="model-filter" type="search" name="q" value="{{ search_query }}" placeholder="Model, codename, or model code"></div>
+    <div class="col-auto"><label class="visually-hidden" for="model-sort">Sort models</label><select class="form-select" id="model-sort" name="sort"><option value="newest">Newest first</option><option value="oldest"{% if sort_by == "oldest" %} selected{% endif %}>Oldest first</option><option value="name"{% if sort_by == "name" %} selected{% endif %}>Name</option></select></div>
+    <div class="col-auto"><button class="btn btn-primary">Filter</button></div>
+  </form>
+  <div id="device-model-list">{% include "devices/fragments/model_list.html" %}</div>
+</div>
+{% endblock %}

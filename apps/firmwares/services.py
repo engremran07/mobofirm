@@ -16,6 +16,7 @@ from .crypto import decrypt_password, encrypt_password
 from .models import (
     Brand,
     EngineeringFirmware,
+    FirmwarePackageFormat,
     Model,
     ModifiedFirmware,
     OfficialFirmware,
@@ -59,7 +60,11 @@ def handle_upload(
     is_password_protected,
     password,
     extra_info=None,
+    package_format: str = FirmwarePackageFormat.UNKNOWN,
 ):
+    if package_format not in FirmwarePackageFormat.values:
+        raise ValueError("Unsupported firmware package format.")
+
     # Guard against oversized uploads to prevent resource exhaustion
     size = getattr(file_obj, "size", None)
     if size is not None and size > MAX_UPLOAD_BYTES:
@@ -87,6 +92,7 @@ def handle_upload(
         uploaded_brand=uploaded_brand,
         uploaded_model=uploaded_model,
         uploaded_variant=uploaded_variant,
+        package_format=package_format,
         is_password_protected=is_password_protected,
         encrypted_password=pw_token,
         metadata={"extra_info": extra_info} if extra_info else {},
@@ -209,15 +215,14 @@ def moderate_and_route(
     variant: Variant | None = None,
     notes: str = "",
     unclassified_reason: str = "",
+    package_format: str | None = None,
     governance_case_id: int | None = None,
 ):
     if decision != "approved" or governance_case_id is None:
         raise PermissionDenied("Firmware routing requires an approved governance case.")
     from apps.governance.models import ReviewCase
 
-    content_type = ContentType.objects.get_for_model(
-        pf, for_concrete_model=False
-    )
+    content_type = ContentType.objects.get_for_model(pf, for_concrete_model=False)
     case = ReviewCase.objects.filter(
         pk=governance_case_id,
         content_type=content_type,
@@ -227,10 +232,15 @@ def moderate_and_route(
     ).first()
     if case is None:
         raise PermissionDenied("Firmware routing requires an approved governance case.")
-    if admin_user.pk in {case.requested_by_id, case.reviewer_id} or not admin_user.has_perm(
-        "governance.can_publish_content"
-    ):
+    if admin_user.pk in {
+        case.requested_by_id,
+        case.reviewer_id,
+    } or not admin_user.has_perm("governance.can_publish_content"):
         raise PermissionDenied("A separate authorized publisher is required.")
+
+    package_format = package_format or pf.package_format
+    if package_format not in FirmwarePackageFormat.values:
+        raise ValidationError("Unsupported firmware package format.")
 
     pf.admin_decision = decision
     pf.admin_notes = notes
@@ -247,6 +257,7 @@ def moderate_and_route(
         "brand": target_brand,
         "model": target_model,
         "variant": target_variant,
+        "package_format": package_format,
         "chipset": pf.chipset,
         "partitions": pf.partitions,
         "is_password_protected": pf.is_password_protected,
@@ -288,9 +299,7 @@ def moderate_and_route(
                     **base_kwargs, subtype=subtype or ""
                 )
             elif final_cat == "other":
-                rec = OtherFirmware.objects.create(
-                    **base_kwargs, subtype=subtype or ""
-                )
+                rec = OtherFirmware.objects.create(**base_kwargs, subtype=subtype or "")
             else:
                 rec = UnclassifiedFirmware.objects.create(
                     **base_kwargs, reason=unclassified_reason or "unclassified"
@@ -299,9 +308,7 @@ def moderate_and_route(
             pf.category_locked = True
             pf.admin_decision = "approved"
             pf.admin_notes = notes
-            pf.save(
-                update_fields=["category_locked", "admin_decision", "admin_notes"]
-            )
+            pf.save(update_fields=["category_locked", "admin_decision", "admin_notes"])
     except Exception:
         if moved_here and final_path.is_file() and not source_path.exists():
             shutil.move(str(final_path), str(source_path))

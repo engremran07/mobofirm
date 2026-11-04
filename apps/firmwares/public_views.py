@@ -8,9 +8,12 @@ import logging
 import os
 from pathlib import Path
 from typing import TYPE_CHECKING
+from uuid import UUID
 
+from django.apps import apps
 from django.conf import settings
 from django.contrib import messages
+from django.contrib.contenttypes.models import ContentType
 from django.core.paginator import Paginator
 from django.db import transaction as db_transaction
 from django.db.models import Count, F, Q
@@ -45,11 +48,13 @@ from .models import (
     DownloadSession,
     DownloadToken,
     EngineeringFirmware,
+    FirmwarePackageFormat,
     Model,
     ModifiedFirmware,
     OfficialFirmware,
     OtherFirmware,
     ReadbackFirmware,
+    UnclassifiedFirmware,
     Variant,
 )
 
@@ -67,6 +72,8 @@ FIRMWARE_TYPES = {
     "modifiedfirmware": ModifiedFirmware,
     "other": OtherFirmware,
     "otherfirmware": OtherFirmware,
+    "unclassified": UnclassifiedFirmware,
+    "unclassifiedfirmware": UnclassifiedFirmware,
 }
 
 FIRMWARE_TYPE_DISPLAY = {
@@ -80,7 +87,18 @@ FIRMWARE_TYPE_DISPLAY = {
     "modifiedfirmware": "Modified",
     "other": "Other",
     "otherfirmware": "Other",
+    "unclassified": "Unclassified",
+    "unclassifiedfirmware": "Unclassified",
 }
+
+PUBLIC_FIRMWARE_TYPES = (
+    ("official", OfficialFirmware),
+    ("engineering", EngineeringFirmware),
+    ("readback", ReadbackFirmware),
+    ("modified", ModifiedFirmware),
+    ("other", OtherFirmware),
+    ("unclassified", UnclassifiedFirmware),
+)
 
 
 def get_firmware_model(firmware_type: str) -> type | None:  # type: ignore[type-arg]
@@ -88,18 +106,34 @@ def get_firmware_model(firmware_type: str) -> type | None:  # type: ignore[type-
     return FIRMWARE_TYPES.get(firmware_type.lower())
 
 
+def get_public_firmware_queryset(model_class):
+    """Return active firmware that is verified or has completed governance review."""
+    queryset = model_class.objects.filter(is_active=True)
+    if not apps.is_installed("apps.governance"):
+        return queryset.filter(is_verified=True)
+
+    ReviewCase = apps.get_model("governance", "ReviewCase")
+    content_type = ContentType.objects.get_for_model(
+        model_class, for_concrete_model=False
+    )
+    routed_ids = [
+        UUID(result_id)
+        for result_id in ReviewCase.objects.filter(
+            result_content_type=content_type,
+            status=ReviewCase.Status.COMPLETED,
+            is_open=False,
+        ).values_list("result_object_id", flat=True)
+    ]
+    return queryset.filter(Q(is_verified=True) | Q(pk__in=routed_ids))
+
+
 def get_all_firmwares_for_model(model_obj: Model) -> list:  # type: ignore[type-arg]
-    """Get all firmware types for a given device model."""
+    """Get active firmware records that are verified or governance-routed."""
     firmwares = []
-    for type_key, model_class in [
-        ("official", OfficialFirmware),
-        ("engineering", EngineeringFirmware),
-        ("readback", ReadbackFirmware),
-        ("modified", ModifiedFirmware),
-        ("other", OtherFirmware),
-    ]:
+    for type_key, model_class in PUBLIC_FIRMWARE_TYPES:
         qs = (
-            model_class.objects.filter(model=model_obj, is_active=True)
+            get_public_firmware_queryset(model_class)
+            .filter(model=model_obj)
             .select_related("brand", "model", "variant")
             .order_by("-created_at")
         )
@@ -133,7 +167,12 @@ def library_hub(request: HttpRequest) -> HttpResponse:
 
     # Aggregate stats for the whole platform
     total_models = Model.objects.filter(is_active=True).count()
-    total_firmwares = OfficialFirmware.objects.filter(is_active=True).count()
+    total_firmwares = get_public_firmware_queryset(OfficialFirmware).count()
+    latest_models = (
+        Model.objects.filter(is_active=True)
+        .select_related("brand")
+        .order_by("-created_at", "brand__name", "name")[:6]
+    )
 
     from .models import GSMArenaDevice
 
@@ -147,6 +186,7 @@ def library_hub(request: HttpRequest) -> HttpResponse:
         "total_models": total_models,
         "total_firmwares": total_firmwares,
         "total_specs": total_specs,
+        "latest_models": latest_models,
     }
 
     if request.headers.get("HX-Request"):
@@ -202,33 +242,38 @@ def firmware_browse(request: HttpRequest) -> HttpResponse:
     firmware_type = request.GET.get("type", "all")
     chipset = request.GET.get("chipset")
     search = request.GET.get("q", "").strip()
+    package_format = request.GET.get("package_format", "")
+    valid_package_formats = dict(FirmwarePackageFormat.choices)
+    if package_format not in valid_package_formats:
+        package_format = ""
 
     # Build queryset based on type
     if firmware_type == "all" or not firmware_type:
         # Get from all types
         all_firmwares = []
-        for type_key, model_class in FIRMWARE_TYPES.items():
-            if type_key in ["official", "engineering", "readback", "modified", "other"]:
-                qs = model_class.objects.filter(is_active=True).select_related(
-                    "brand", "model", "variant"
+        for type_key, model_class in PUBLIC_FIRMWARE_TYPES:
+            qs = get_public_firmware_queryset(model_class).select_related(
+                "brand", "model", "variant"
+            )
+
+            if brand_slug:
+                qs = qs.filter(brand__slug=brand_slug)
+            if chipset:
+                qs = qs.filter(chipset__icontains=chipset)
+            if package_format:
+                qs = qs.filter(package_format=package_format)
+            if search:
+                qs = qs.filter(
+                    Q(original_file_name__icontains=search)
+                    | Q(model__name__icontains=search)
+                    | Q(brand__name__icontains=search)
+                    | Q(chipset__icontains=search)
                 )
 
-                if brand_slug:
-                    qs = qs.filter(brand__slug=brand_slug)
-                if chipset:
-                    qs = qs.filter(chipset__icontains=chipset)
-                if search:
-                    qs = qs.filter(
-                        Q(original_file_name__icontains=search)
-                        | Q(model__name__icontains=search)
-                        | Q(brand__name__icontains=search)
-                        | Q(chipset__icontains=search)
-                    )
-
-                for fw in qs:
-                    fw.firmware_type = type_key
-                    fw.firmware_type_display = FIRMWARE_TYPE_DISPLAY[type_key]
-                    all_firmwares.append(fw)
+            for fw in qs:
+                fw.firmware_type = type_key
+                fw.firmware_type_display = FIRMWARE_TYPE_DISPLAY[type_key]
+                all_firmwares.append(fw)
 
         # Sort by created_at
         all_firmwares.sort(key=lambda x: x.created_at, reverse=True)
@@ -238,7 +283,7 @@ def firmware_browse(request: HttpRequest) -> HttpResponse:
         if not model_class:
             raise Http404("Invalid firmware type")
 
-        qs = model_class.objects.filter(is_active=True).select_related(
+        qs = get_public_firmware_queryset(model_class).select_related(
             "brand", "model", "variant"
         )
 
@@ -246,6 +291,8 @@ def firmware_browse(request: HttpRequest) -> HttpResponse:
             qs = qs.filter(brand__slug=brand_slug)
         if chipset:
             qs = qs.filter(chipset__icontains=chipset)
+        if package_format:
+            qs = qs.filter(package_format=package_format)
         if search:
             qs = qs.filter(
                 Q(original_file_name__icontains=search)
@@ -268,15 +315,14 @@ def firmware_browse(request: HttpRequest) -> HttpResponse:
 
     # Get unique chipsets for filter
     chipsets = set()
-    for type_key, model_class in FIRMWARE_TYPES.items():
-        if type_key in ["official", "engineering", "readback", "modified", "other"]:
-            for c in (
-                model_class.objects.filter(is_active=True)
-                .values_list("chipset", flat=True)
-                .distinct()
-            ):
-                if c:
-                    chipsets.add(c)
+    for _, model_class in PUBLIC_FIRMWARE_TYPES:
+        for c in (
+            get_public_firmware_queryset(model_class)
+            .values_list("chipset", flat=True)
+            .distinct()
+        ):
+            if c:
+                chipsets.add(c)
 
     context = {
         "firmwares": firmwares,
@@ -285,16 +331,22 @@ def firmware_browse(request: HttpRequest) -> HttpResponse:
         "selected_brand": brand_slug,
         "selected_type": firmware_type,
         "selected_chipset": chipset,
+        "selected_package_format": package_format,
         "search_query": search,
         "firmware_types": [
             ("all", "All Types"),
-            ("official", "Official"),
-            ("engineering", "Engineering"),
-            ("readback", "Readback"),
-            ("modified", "Modified"),
-            ("other", "Other"),
+            *[
+                (value, FIRMWARE_TYPE_DISPLAY[value])
+                for value, _ in PUBLIC_FIRMWARE_TYPES
+            ],
+        ],
+        "package_formats": [
+            ("", "All formats"),
+            *FirmwarePackageFormat.choices,
         ],
     }
+    if request.headers.get("HX-Request"):
+        return render(request, "firmwares/fragments/firmware_table.html", context)
     return render(request, "firmwares/browse.html", context)
 
 
@@ -310,13 +362,8 @@ def brand_list(request: HttpRequest) -> HttpResponse:
 
     for brand in brands:
         brand.firmware_count = sum(  # type: ignore[attr-defined]
-            [
-                OfficialFirmware.objects.filter(brand=brand, is_active=True).count(),
-                EngineeringFirmware.objects.filter(brand=brand, is_active=True).count(),
-                ReadbackFirmware.objects.filter(brand=brand, is_active=True).count(),
-                ModifiedFirmware.objects.filter(brand=brand, is_active=True).count(),
-                OtherFirmware.objects.filter(brand=brand, is_active=True).count(),
-            ]
+            get_public_firmware_queryset(model_class).filter(brand=brand).count()
+            for _, model_class in PUBLIC_FIRMWARE_TYPES
         )
         brand.model_count = Model.objects.filter(brand=brand, is_active=True).count()  # type: ignore[attr-defined]
         total_firmwares += brand.firmware_count  # type: ignore[attr-defined]
@@ -358,13 +405,8 @@ def brand_detail(request: HttpRequest, slug: str) -> HttpResponse:
     total_firmwares = 0
     for model in models:
         model.firmware_count = sum(  # type: ignore[attr-defined]
-            [
-                OfficialFirmware.objects.filter(model=model, is_active=True).count(),
-                EngineeringFirmware.objects.filter(model=model, is_active=True).count(),
-                ReadbackFirmware.objects.filter(model=model, is_active=True).count(),
-                ModifiedFirmware.objects.filter(model=model, is_active=True).count(),
-                OtherFirmware.objects.filter(model=model, is_active=True).count(),
-            ]
+            get_public_firmware_queryset(model_class).filter(model=model).count()
+            for _, model_class in PUBLIC_FIRMWARE_TYPES
         )
         total_firmwares += model.firmware_count  # type: ignore[attr-defined]
 
@@ -433,9 +475,10 @@ def firmware_detail(
         raise Http404("Invalid firmware type")
 
     firmware = get_object_or_404(
-        model_class.objects.select_related("brand", "model", "variant", "uploader"),
+        get_public_firmware_queryset(model_class).select_related(
+            "brand", "model", "variant", "uploader"
+        ),
         id=firmware_id,
-        is_active=True,
     )
 
     # Increment view count
@@ -509,9 +552,10 @@ def firmware_download(
         raise Http404("Invalid firmware type")
 
     firmware = get_object_or_404(
-        model_class.objects.select_related("brand", "model", "variant"),
+        get_public_firmware_queryset(model_class).select_related(
+            "brand", "model", "variant"
+        ),
         id=firmware_id,
-        is_active=True,
     )
 
     # Hotlink protection
@@ -581,7 +625,9 @@ def firmware_download_start(
     if not model_class:
         raise Http404("Invalid firmware type")
 
-    firmware = get_object_or_404(model_class, id=firmware_id, is_active=True)
+    firmware = get_object_or_404(
+        get_public_firmware_queryset(model_class), id=firmware_id
+    )
 
     # FINDING-0002: Read from POST body (not GET params).
     token_str = request.POST.get("token", "")
@@ -1062,7 +1108,11 @@ def api_search_autocomplete(request: HttpRequest) -> JsonResponse:
 
                 for post in posts:
                     # Get tag names for subtitle
-                    tag_names = [t.name for t in post.tags.all()[:3]]
+                    tag_names = list(
+                        post.tags.filter(
+                            is_curated=True, is_active=True, is_deleted=False
+                        ).values_list("name", flat=True)[:3]
+                    )
                     subtitle_parts = []
                     if post.category:
                         subtitle_parts.append(post.category.name)

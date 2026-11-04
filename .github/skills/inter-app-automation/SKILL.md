@@ -14,4 +14,6 @@ Use when a workflow crosses app ownership or runs through a Django signal, task,
 6. Check logs/metrics for correlation IDs and useful outcomes without secrets, personal data, or unbounded payloads. Validate migrations and operational recovery steps.
 7. Describe consistency guarantees, idempotency key, retry policy, and remaining failure modes.
 
+For firmware and editorial integrations, firmware owns device/package records while blog history owns revisions and governance owns review/publication. Keep provenance classification distinct from package format, seed only sourced catalog metadata, never fabricate downloadable files, and create generated posts as reviewable content rather than publishing them from seed commands.
+
 Do not retrofit a generic event bus, distributed transaction, or new dependency when a small existing service boundary suffices.

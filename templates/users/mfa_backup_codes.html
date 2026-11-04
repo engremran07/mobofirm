@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Save recovery codes | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block content %}
+<div class="site-container py-5">
+  <section class="surface-card auth-card p-4" aria-labelledby="mfa-backup-title">
+    <p class="section-eyebrow">Account security</p>
+    <h1 id="mfa-backup-title" class="h2">Save your recovery codes</h1>
+    <p>Each code works once. Store them somewhere private; they will not be shown again.</p>
+    <ul class="list-unstyled d-grid gap-2" aria-label="One-time recovery codes">
+      {% for code in backup_codes %}<li><code>{{ code }}</code></li>{% endfor %}
+    </ul>
+    <a class="btn btn-primary" href="{% url 'users:dashboard' %}">Continue to account</a>
+  </section>
+</div>
+{% endblock %}

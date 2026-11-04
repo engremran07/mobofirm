@@ -68,7 +68,9 @@ def moderate_comment(self, comment_id: int):
     if result.label == "approved" and result.toxicity_score < 0.3:
         comment.status = Comment.Status.APPROVED
         comment.is_approved = True
-    elif result.label in ["rejected", "spam"] or result.toxicity_score > 0.7:
+    elif result.label == "spam":
+        comment.status = Comment.Status.SPAM
+    elif result.label == "rejected" or result.toxicity_score > 0.7:
         comment.status = Comment.Status.REJECTED
 
     comment.save()

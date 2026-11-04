@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}Tags | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block content %}
+<div class="site-container py-5"><p class="section-eyebrow">Explore topics</p><h1 class="h2">Tags</h1>
+  <form method="get" action="{% url 'tags:list' %}" class="mb-4"><label class="visually-hidden" for="tag-search">Filter tags</label><input class="form-control" id="tag-search" type="search" name="q" placeholder="Find a topic"></form>
+  {% if tags %}<div class="row g-3">{% for tag in tags %}<div class="col-12 col-sm-6 col-lg-4"><article class="surface-card p-3"><h2 class="h5"><a href="{% url 'tags:detail' slug=tag.slug %}">#{{ tag.name }}</a></h2>{% if tag_settings.show_tag_usage %}<p class="small muted mb-0">{{ tag.usage_count }} uses</p>{% endif %}</article></div>{% endfor %}</div>{% else %}<p class="empty-state p-4">No tags are available.</p>{% endif %}
+</div>
+{% endblock %}

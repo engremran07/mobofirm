@@ -1,0 +1,11 @@
+{% extends "admin/base_site.html" %}
+{% block content %}
+<div class="container-fluid"><h1>Comment moderation</h1>
+  <section><h2>Pending review</h2>
+    {% for comment in pending_comments %}<article class="card p-3 mb-3"><h3 class="h5"><a href="{{ comment.post.get_absolute_url }}">{{ comment.post.title }}</a></h3><p>{{ comment.body|linebreaksbr }}</p><p class="small">By {{ comment.user }} · {{ comment.created_at }}</p>
+      <form method="post" action="{% url 'comments:moderation_action' %}" class="d-flex gap-2">{% csrf_token %}<input type="hidden" name="comment_id" value="{{ comment.pk }}"><button class="button" name="action" value="approve" type="submit">Approve</button><button class="button" name="action" value="reject" type="submit">Reject</button></form>
+    </article>{% empty %}<p>No comments are pending review.</p>{% endfor %}
+  </section>
+  <section class="mt-4"><h2>Recently reviewed</h2>{% for comment in recent_comments %}<p>{{ comment.post.title }} · {{ comment.status }} · {{ comment.created_at }}</p>{% empty %}<p>No recent moderation actions.</p>{% endfor %}</section>
+</div>
+{% endblock %}

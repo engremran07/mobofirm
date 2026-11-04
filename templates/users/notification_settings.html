@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Notification preferences | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block content %}
+<div class="site-container py-5"><p class="section-eyebrow">Account settings</p><h1 class="h2 mb-4">Notification preferences</h1>
+  <form method="post" class="surface-card p-4">{% csrf_token %}
+    <fieldset class="mb-4"><legend class="h5">Email</legend>
+      <label class="form-check"><input class="form-check-input" type="checkbox" name="email_comments"{% if preferences.email_comments %} checked{% endif %}> Comments</label>
+      <label class="form-check"><input class="form-check-input" type="checkbox" name="email_replies"{% if preferences.email_replies %} checked{% endif %}> Replies</label>
+      <label class="form-check"><input class="form-check-input" type="checkbox" name="email_mentions"{% if preferences.email_mentions %} checked{% endif %}> Mentions</label>
+      <label class="form-check"><input class="form-check-input" type="checkbox" name="email_new_posts"{% if preferences.email_new_posts %} checked{% endif %}> New journal posts</label>
+      <label class="form-label mt-3" for="email-frequency">Email frequency</label><select class="form-select" id="email-frequency" name="email_frequency">
+        <option value="instant"{% if preferences.email_frequency == "instant" %} selected{% endif %}>Instant</option>
+        <option value="hourly"{% if preferences.email_frequency == "hourly" %} selected{% endif %}>Hourly digest</option>
+        <option value="daily"{% if preferences.email_frequency == "daily" %} selected{% endif %}>Daily digest</option>
+        <option value="weekly"{% if preferences.email_frequency == "weekly" %} selected{% endif %}>Weekly digest</option>
+        <option value="never"{% if preferences.email_frequency == "never" %} selected{% endif %}>Never</option>
+      </select>
+    </fieldset>
+    <fieldset class="mb-4"><legend class="h5">In-app</legend>
+      <label class="form-check"><input class="form-check-input" type="checkbox" name="web_comments"{% if preferences.web_comments %} checked{% endif %}> Comments</label>
+      <label class="form-check"><input class="form-check-input" type="checkbox" name="web_awards"{% if preferences.web_awards %} checked{% endif %}> Awards</label>
+      <label class="form-check"><input class="form-check-input" type="checkbox" name="web_moderation"{% if preferences.web_moderation %} checked{% endif %}> Moderation</label>
+      <label class="form-check"><input class="form-check-input" type="checkbox" name="web_system"{% if preferences.web_system %} checked{% endif %}> System updates</label>
+    </fieldset>
+    <fieldset class="mb-4"><legend class="h5">Quiet hours</legend>
+      <label class="form-check"><input class="form-check-input" type="checkbox" name="quiet_hours_enabled"{% if preferences.quiet_hours_enabled %} checked{% endif %}> Enable quiet hours</label>
+      <div class="row g-3 mt-1"><div class="col"><label class="form-label" for="quiet-start">Start</label><input class="form-control" id="quiet-start" type="time" name="quiet_hours_start" value="{{ preferences.quiet_hours_start|time:'H:i' }}"></div><div class="col"><label class="form-label" for="quiet-end">End</label><input class="form-control" id="quiet-end" type="time" name="quiet_hours_end" value="{{ preferences.quiet_hours_end|time:'H:i' }}"></div></div>
+    </fieldset>
+    <button class="btn btn-primary" type="submit">Save preferences</button>
+  </form>
+</div>
+{% endblock %}

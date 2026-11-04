@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Review duplicate tags | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block content %}
+<div class="site-container py-5"><h1 class="h2">Review similar tags</h1>
+  {% for pair in pairs %}<article class="surface-card p-3 mb-3"><h2 class="h5">{{ pair.a }} ↔ {{ pair.b }}</h2><p class="muted">Similarity score: {{ pair.score }}</p>
+    <form method="post" action="{% url 'tags:merge' %}" hx-post="{% url 'tags:merge' %}" hx-target="#pair-{{ forloop.counter }}" hx-swap="innerHTML">
+      {% csrf_token %}<input type="hidden" name="source" value="{{ pair.a_slug }}"><label class="form-label" for="target-{{ forloop.counter }}">Keep</label><select class="form-select" id="target-{{ forloop.counter }}" name="target"><option value="{{ pair.a_slug }}">{{ pair.a }}</option><option value="{{ pair.b_slug }}">{{ pair.b }}</option></select><button class="btn btn-outline-primary mt-2" type="submit">Merge pair</button>
+    </form><div id="pair-{{ forloop.counter }}" role="status" aria-live="polite"></div>
+  </article>{% empty %}<p class="empty-state p-4">No similar active tags need review.</p>{% endfor %}
+</div>
+{% endblock %}

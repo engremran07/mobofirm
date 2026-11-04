@@ -6,6 +6,8 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 *.egg-info/
+node_modules/
+static/build/
 .coverage
 htmlcov/
 *.sqlite3
@@ -13,4 +15,5 @@ storage/
 media/
 staticfiles/
 .idea/
-.vscode/
+.vscode/*
+!.vscode/settings.json

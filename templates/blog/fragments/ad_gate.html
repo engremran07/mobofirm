@@ -1,0 +1,9 @@
+<section class="surface-card p-4 my-4" aria-labelledby="ad-gate-title">
+  <p class="section-eyebrow mb-2">Optional access step</p>
+  <h2 id="ad-gate-title" class="h4">Continue to this article</h2>
+  <p class="muted">This article requires the configured rewarded-ad step before its full content is available.</p>
+  <form method="post" action="{% url 'blog:ad_gate_complete' slug=post.slug %}">
+    {% csrf_token %}
+    <button class="btn btn-primary" type="submit">Continue</button>
+  </form>
+</section>

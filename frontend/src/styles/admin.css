@@ -1,0 +1,115 @@
+html {
+  color-scheme: dark;
+}
+
+:root {
+  --primary: #087f9b;
+  --secondary: #1d242d;
+  --accent: #65e4ff;
+  --primary-fg: #07151a;
+  --body-fg: #f1f5f8;
+  --body-bg: #101318;
+  --body-quiet-color: #a7b2bd;
+  --body-loud-color: #ffffff;
+  --header-color: #f1f5f8;
+  --header-branding-color: #f1f5f8;
+  --header-bg: #171c23;
+  --header-link-color: #65e4ff;
+  --breadcrumbs-fg: #a7b2bd;
+  --breadcrumbs-link-fg: #65e4ff;
+  --breadcrumbs-bg: #1d242d;
+  --link-fg: #65e4ff;
+  --link-hover-color: #b7f5ff;
+  --link-selected-fg: #b7f5ff;
+  --hairline-color: #303944;
+  --border-color: #303944;
+  --darkened-bg: #171c23;
+  --selected-bg: #202832;
+  --selected-row: #202832;
+  --button-fg: #07151a;
+  --button-bg: #65e4ff;
+  --button-hover-bg: #38c8e8;
+  --default-button-bg: #087f9b;
+  --default-button-hover-bg: #06677e;
+  --close-button-bg: #6b3540;
+  --close-button-hover-bg: #7d3e4a;
+  --mf-focus: #a8f0ff;
+}
+
+body {
+  background: #101318;
+  color: #f1f5f8;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+#header {
+  border-bottom: 1px solid #303944;
+}
+
+#branding h1,
+#branding h1 a {
+  font-weight: 750;
+  letter-spacing: -0.035em;
+}
+
+#content {
+  max-width: 90rem;
+  margin-inline: auto;
+}
+
+.module,
+.inline-group,
+.dashboard .module table {
+  overflow: hidden;
+  border: 1px solid #303944;
+  border-radius: 0.75rem;
+  background: #171c23;
+}
+
+.module h2,
+.module caption,
+.inline-group h2 {
+  background: #202832;
+  color: #f1f5f8;
+}
+
+input,
+textarea,
+select,
+.selector select,
+.vTextField {
+  border-color: #46515d;
+  background: #171c23;
+  color: #f1f5f8;
+}
+
+input:focus,
+textarea:focus,
+select:focus,
+a:focus-visible,
+button:focus-visible {
+  outline: 0.2rem solid #a8f0ff;
+  outline-offset: 0.15rem;
+}
+
+@media (max-width: 767.98px) {
+  #content {
+    padding-inline: 1rem;
+  }
+
+  #changelist-filter {
+    position: static;
+    width: auto;
+    margin-inline: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}{% if editing %}Edit{% else %}Create{% endif %} journal post | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block content %}
+<div class="site-container py-5">
+  <p class="section-eyebrow">Editorial workspace</p>
+  <h1 class="h2 mb-4">{% if editing %}Edit post{% else %}Create a post{% endif %}</h1>
+  {% if editing_post %}
+    <p><a href="{% url 'blog:post_history' slug=editing_post.slug %}">View version history</a></p>
+  {% endif %}
+  <form method="post" class="surface-card p-3 p-md-4">
+    {% csrf_token %}
+    {% if form.non_field_errors %}<div class="alert alert-danger" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+    {% for field in form %}
+      <div class="mb-3">
+        <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+        {{ field }}
+        {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+        {% for error in field.errors %}<div class="text-danger small" role="alert">{{ error }}</div>{% endfor %}
+      </div>
+    {% endfor %}
+    <button class="btn btn-primary" type="submit">Save post</button>
+    {% if editing_post %}<a class="btn btn-outline-secondary" href="{{ editing_post.get_absolute_url }}">Cancel</a>{% endif %}
+  </form>
+</div>
+{% endblock %}

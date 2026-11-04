@@ -3,7 +3,6 @@ from __future__ import annotations
 import logging
 import uuid
 
-from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
 from django.utils import timezone
 from django.utils.text import slugify
@@ -11,9 +10,7 @@ from django.utils.text import slugify
 from apps.core import ai_client
 from apps.core.utils.sanitize import sanitize_html
 from apps.core.views import _get_site_settings_snapshot
-from apps.seo.models import Metadata, SEOModel
 from apps.tags import services as tag_services
-from apps.tags.models import Tag
 
 from .models import AutoTopic, Post, PostStatus
 
@@ -92,64 +89,9 @@ def _apply_seo(post: Post, content: str) -> None:
     if not post.summary:
         post.summary = summary[:1000]
 
-    canonical_url = post.canonical_url
-    if not canonical_url:
-        try:
-            settings_snapshot = _get_site_settings_snapshot()
-            host = (
-                settings_snapshot.get("site_url")
-                or settings_snapshot.get("site_domain")
-                or ""
-            )
-            if host:
-                canonical_url = host.rstrip("/") + post.get_absolute_url()
-        except Exception:
-            canonical_url = ""
-
-    try:
-        ct = ContentType.objects.get_for_model(Post)
-        seo_obj, _ = SEOModel.objects.get_or_create(content_type=ct, object_id=post.pk)
-        meta, _ = Metadata.objects.get_or_create(seo=seo_obj)
-        meta.meta_title = post.seo_title
-        meta.meta_description = post.seo_description
-        meta.canonical_url = (
-            canonical_url or meta.canonical_url or post.get_absolute_url()
-        )
-        meta.noindex = getattr(post, "noindex", False)
-        meta.save()
-    except Exception:
-        logger.debug("SEO metadata update skipped", exc_info=True)
-
 
 def _assign_tags(post: Post, content: str) -> None:
-    try:
-        suggested = ai_client.suggest_tags(content, post.author) or []
-    except Exception:
-        suggested = []
-    for name in suggested[:5]:
-        norm_slug = slugify(name)[:80] or "tag"
-        norm_name = (name or "").strip()[:64]
-        existing = (
-            Tag.objects.filter(slug=norm_slug).first()
-            or Tag.objects.filter(name__iexact=norm_name).first()
-        )
-        if not existing:
-            try:
-                existing = Tag.objects.create(
-                    name=norm_name,
-                    normalized_name=norm_slug[:64],
-                    slug=norm_slug,
-                    ai_suggested=True,
-                    is_curated=False,
-                )
-            except Exception:
-                existing = Tag.objects.filter(slug=norm_slug).first()
-    if suggested:
-        tags = list(Tag.objects.filter(name__in=suggested[:5]))
-        if tags:
-            post.tags.set(tags)
-    if not post.tags.exists():
-        tag_services.auto_tag_post(post, allow_create=True, max_tags=5)  # type: ignore[attr-defined]
+    tag_services.auto_tag_post(post, allow_create=True, max_tags=5)  # type: ignore[attr-defined]
     _sync_tag_usage(post.tags.all())
 
 
@@ -165,19 +107,30 @@ def _pick_author():
         return None
 
 
-def generate_post_from_topic(topic: AutoTopic, autopublish: bool = False) -> Post:
+def generate_post_from_topic(
+    topic: AutoTopic, *, submit_for_review: bool = True
+) -> Post:
     """
-    Generate a post for a queued topic.
-    - If AI succeeds and autopublish=True -> publish immediately.
-    - If AI fails or is incomplete -> leave as draft for review.
+    Generate a draft and submit successful content to governed review.
     """
-    if topic.status not in {"queued", "failed"}:
-        return topic.post
-
     now_ts = timezone.now()
     run_id = str(uuid.uuid4())
 
     with transaction.atomic():
+        topic = (
+            AutoTopic.objects.select_for_update()
+            .select_related("created_by", "post")
+            .get(pk=topic.pk)
+        )
+        if topic.status == "succeeded":
+            if topic.post is None:
+                raise ValueError("A completed topic has no associated post.")
+            return topic.post
+        if topic.status == "running":
+            raise RuntimeError("This topic is already being processed.")
+        if topic.status not in {"queued", "failed"}:
+            raise ValueError(f"Topic cannot be processed from status {topic.status}.")
+
         topic.status = "running"
         topic.retry_count = (topic.retry_count or 0) + 1
         topic.last_attempt_at = now_ts
@@ -189,20 +142,33 @@ def generate_post_from_topic(topic: AutoTopic, autopublish: bool = False) -> Pos
         if author is None:
             raise ValueError("No author available for AI blog generation.")
         title = topic.topic[:200]
-        slug = _unique_slug(title)
+        from apps.blog.services.history import PostHistoryService
 
-        post = Post.objects.create(
-            title=title,
-            slug=slug,
-            summary="",
-            body="",
-            author=author,
-            status=PostStatus.DRAFT,
-            publish_at=None,
-            is_published=False,
-            is_ai_generated=True,
-            ai_run_id=run_id,
-        )
+        post = topic.post
+        is_retry = post is not None
+        previous_snapshot = None
+        if post:
+            if post.status != PostStatus.DRAFT:
+                raise ValueError("Only a draft generated post can be retried.")
+            previous_snapshot = PostHistoryService.snapshot(post)
+            PostHistoryService.record_current_version(
+                post,
+                user=author,
+                change_summary="Before AI generation retry",
+            )
+        else:
+            post = Post.objects.create(
+                title=title,
+                slug=_unique_slug(title),
+                summary="",
+                body="",
+                author=author,
+                status=PostStatus.DRAFT,
+                publish_at=None,
+                is_published=False,
+                is_ai_generated=True,
+                ai_run_id=run_id,
+            )
 
         ai_ok = False
         ai_error = ""
@@ -236,21 +202,53 @@ def generate_post_from_topic(topic: AutoTopic, autopublish: bool = False) -> Pos
 
         post.ai_error = ai_error
         post.allow_comments = True
-        post.noindex = not (ai_ok and autopublish)
-
-        if ai_ok and autopublish:
-            post.status = PostStatus.PUBLISHED
-            post.publish_at = now_ts
-            post.published_at = now_ts
-            post.is_published = True
-        else:
-            post.status = PostStatus.DRAFT
-            post.is_published = False
+        post.noindex = True
+        post.status = PostStatus.DRAFT
+        post.publish_at = None
+        post.published_at = None
+        post.is_published = False
+        post.ai_run_id = run_id
 
         post.save()
         _assign_tags(post, body_html or topic.topic)
         _apply_seo(post, body_html or topic.topic)
         reconcile_settings_with_post(post)
+
+        if is_retry and previous_snapshot:
+            current_snapshot = PostHistoryService.snapshot(post)
+            versioned_keys = {
+                "title",
+                "slug",
+                "summary",
+                "body",
+                "seo_title",
+                "seo_description",
+                "canonical_url",
+                "hero_image",
+                "category_id",
+                "firmware_brand_id",
+                "firmware_model_id",
+                "featured",
+                "allow_comments",
+                "noindex",
+                "tags",
+            }
+            if any(
+                previous_snapshot.get(key) != current_snapshot.get(key)
+                for key in versioned_keys
+            ):
+                post.version += 1
+                post.save(update_fields=["version", "updated_at"])
+
+        if ai_ok and submit_for_review:
+            from apps.blog.services.workflow import request_review
+
+            request_review(post, user=author)
+
+        if not is_retry:
+            PostHistoryService.record_current_version(
+                post, user=author, change_summary="AI-generated initial version"
+            )
 
         topic.post = post
         topic.ai_run_id = post.ai_run_id or run_id

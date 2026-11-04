@@ -1,0 +1,35 @@
+schema_version: 1
+default_mode: least_privilege
+allowed_without_approval:
+  - inspect_repository
+  - edit_bounded_backend_bug_fixes
+  - add_regression_and_contract_tests
+  - move_tests_to_project_root_test_tree
+  - run_tests_with_isolated_test_settings
+  - update_requested_documentation_from_verified_facts
+requires_explicit_approval:
+  - change_product_scope_or_business_rules
+  - choose_frontend_design_or_stack
+  - add_runtime_or_development_dependency
+  - apply_migration_outside_test_database
+  - mutate_or_cleanup_non_test_data
+  - configure_external_provider
+  - deploy_or_release
+  - commit_or_push
+denied:
+  - expose_or_commit_secrets
+  - commit_or_push_with_problems_panel_issues
+  - run_destructive_command_against_unverified_target
+  - claim_unrun_check_passed
+  - claim_unapproved_requirement_is_approved
+  - add_direct_cross_app_import_without_registered_integration_contract
+  - add_active_placeholder_or_stub_as_feature_implementation
+  - bypass_governance_for_automatically_generated_content
+data_rules:
+  production_data_access: prohibited_without_task_specific_approval
+  test_database: in_memory_sqlite
+  test_root:
+    backend: tests/backend/
+    frontend: tests/frontend/
+  runtime_database: configured_postgresql
+  cleanup_command_requires_explicit_target_and_review: true

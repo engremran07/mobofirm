@@ -3,6 +3,7 @@ Firmware Admin Auto-Fill System
 Automatically fills missing fields using AI and internet data
 """
 
+import hashlib
 import logging
 
 from django.core.cache import cache
@@ -21,12 +22,17 @@ class FirmwareAutoFill:
     # Cache timeout (24 hours)
     CACHE_TIMEOUT = 86400
 
+    @staticmethod
+    def _cache_key(namespace: str, *parts: str) -> str:
+        digest = hashlib.sha256("\0".join(parts).encode("utf-8")).hexdigest()
+        return f"{namespace}_{digest}"
+
     @classmethod
     def autofill_brand(cls, brand_name: str) -> dict:
         """
         Auto-fill brand information from internet sources
         """
-        cache_key = f"brand_autofill_{brand_name.lower()}"
+        cache_key = cls._cache_key("brand_autofill", brand_name.casefold())
         cached = cache.get(cache_key)
         if cached:
             return cached
@@ -49,7 +55,9 @@ class FirmwareAutoFill:
         """
         Auto-fill model information
         """
-        cache_key = f"model_autofill_{brand_name}_{model_name}".lower()
+        cache_key = cls._cache_key(
+            "model_autofill", brand_name.casefold(), model_name.casefold()
+        )
         cached = cache.get(cache_key)
         if cached:
             return cached
@@ -77,7 +85,12 @@ class FirmwareAutoFill:
         """
         Auto-fill variant information
         """
-        cache_key = f"variant_autofill_{brand_name}_{model_name}_{region}".lower()
+        cache_key = cls._cache_key(
+            "variant_autofill",
+            brand_name.casefold(),
+            model_name.casefold(),
+            (region or "").casefold(),
+        )
         cached = cache.get(cache_key)
         if cached:
             return cached
@@ -147,19 +160,10 @@ class FirmwareAutoFill:
         Generate missing data using AI
         """
         try:
-            # Try to use AI services if available
-            try:
-                from apps.ai.services import test_completion
+            from apps.core import ai_client
 
-                response = test_completion(prompt)
-                if response and "content" in response:
-                    data = cls._parse_ai_response(response["content"])
-                    return data
-            except Exception as ai_error:
-                logger.warning(f"AI service not available: {ai_error}")
-
-            # Fallback: return empty dict
-            return {}
+            response = ai_client.generate_answer(question=prompt, user=None)
+            return cls._parse_ai_response(response) if response else {}
         except Exception as e:
             logger.exception(f"AI generation failed: {e}")
             return {}

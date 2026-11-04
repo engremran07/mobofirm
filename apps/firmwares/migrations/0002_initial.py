@@ -6,376 +6,604 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
-        ('firmwares', '0001_initial'),
+        ("firmwares", "0001_initial"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='brandcreationrequest',
-            name='requested_by',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, to=settings.AUTH_USER_MODEL),
+            model_name="brandcreationrequest",
+            name="requested_by",
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                to=settings.AUTH_USER_MODEL,
+            ),
         ),
         migrations.AddField(
-            model_name='brandcreationrequest',
-            name='reviewed_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='+', to=settings.AUTH_USER_MODEL),
+            model_name="brandcreationrequest",
+            name="reviewed_by",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="+",
+                to=settings.AUTH_USER_MODEL,
+            ),
         ),
         migrations.AddField(
-            model_name='brandschema',
-            name='approved_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, to=settings.AUTH_USER_MODEL),
+            model_name="brandschema",
+            name="approved_by",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                to=settings.AUTH_USER_MODEL,
+            ),
         ),
         migrations.AddField(
-            model_name='brandschema',
-            name='brand',
-            field=models.OneToOneField(on_delete=django.db.models.deletion.CASCADE, related_name='schema', to='firmwares.brand'),
+            model_name="brandschema",
+            name="brand",
+            field=models.OneToOneField(
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="schema",
+                to="firmwares.brand",
+            ),
         ),
         migrations.AddField(
-            model_name='engineeringfirmware',
-            name='brand',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_firmware', to='firmwares.brand'),
+            model_name="engineeringfirmware",
+            name="brand",
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="%(class)s_firmware",
+                to="firmwares.brand",
+            ),
         ),
         migrations.AddField(
-            model_name='engineeringfirmware',
-            name='uploader',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, to=settings.AUTH_USER_MODEL),
+            model_name="engineeringfirmware",
+            name="uploader",
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                to=settings.AUTH_USER_MODEL,
+            ),
         ),
         migrations.AddField(
-            model_name='model',
-            name='brand',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='models', to='firmwares.brand'),
+            model_name="model",
+            name="brand",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="models",
+                to="firmwares.brand",
+            ),
         ),
         migrations.AddField(
-            model_name='engineeringfirmware',
-            name='model',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_firmware', to='firmwares.model'),
+            model_name="engineeringfirmware",
+            name="model",
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="%(class)s_firmware",
+                to="firmwares.model",
+            ),
         ),
         migrations.AddField(
-            model_name='modelcreationrequest',
-            name='brand',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='firmwares.brand'),
+            model_name="modelcreationrequest",
+            name="brand",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE, to="firmwares.brand"
+            ),
         ),
         migrations.AddField(
-            model_name='modelcreationrequest',
-            name='requested_by',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, to=settings.AUTH_USER_MODEL),
+            model_name="modelcreationrequest",
+            name="requested_by",
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                to=settings.AUTH_USER_MODEL,
+            ),
         ),
         migrations.AddField(
-            model_name='modelcreationrequest',
-            name='reviewed_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='+', to=settings.AUTH_USER_MODEL),
+            model_name="modelcreationrequest",
+            name="reviewed_by",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="+",
+                to=settings.AUTH_USER_MODEL,
+            ),
         ),
         migrations.AddField(
-            model_name='modifiedfirmware',
-            name='brand',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_firmware', to='firmwares.brand'),
+            model_name="modifiedfirmware",
+            name="brand",
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="%(class)s_firmware",
+                to="firmwares.brand",
+            ),
         ),
         migrations.AddField(
-            model_name='modifiedfirmware',
-            name='model',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_firmware', to='firmwares.model'),
+            model_name="modifiedfirmware",
+            name="model",
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="%(class)s_firmware",
+                to="firmwares.model",
+            ),
         ),
         migrations.AddField(
-            model_name='modifiedfirmware',
-            name='uploader',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, to=settings.AUTH_USER_MODEL),
+            model_name="modifiedfirmware",
+            name="uploader",
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                to=settings.AUTH_USER_MODEL,
+            ),
         ),
         migrations.AddField(
-            model_name='officialfirmware',
-            name='brand',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_firmware', to='firmwares.brand'),
+            model_name="officialfirmware",
+            name="brand",
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="%(class)s_firmware",
+                to="firmwares.brand",
+            ),
         ),
         migrations.AddField(
-            model_name='officialfirmware',
-            name='model',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_firmware', to='firmwares.model'),
+            model_name="officialfirmware",
+            name="model",
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="%(class)s_firmware",
+                to="firmwares.model",
+            ),
         ),
         migrations.AddField(
-            model_name='officialfirmware',
-            name='uploader',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, to=settings.AUTH_USER_MODEL),
+            model_name="officialfirmware",
+            name="uploader",
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                to=settings.AUTH_USER_MODEL,
+            ),
         ),
         migrations.AddField(
-            model_name='otherfirmware',
-            name='brand',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_firmware', to='firmwares.brand'),
+            model_name="otherfirmware",
+            name="brand",
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="%(class)s_firmware",
+                to="firmwares.brand",
+            ),
         ),
         migrations.AddField(
-            model_name='otherfirmware',
-            name='model',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_firmware', to='firmwares.model'),
+            model_name="otherfirmware",
+            name="model",
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="%(class)s_firmware",
+                to="firmwares.model",
+            ),
         ),
         migrations.AddField(
-            model_name='otherfirmware',
-            name='uploader',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, to=settings.AUTH_USER_MODEL),
+            model_name="otherfirmware",
+            name="uploader",
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                to=settings.AUTH_USER_MODEL,
+            ),
         ),
         migrations.AddField(
-            model_name='pendingfirmware',
-            name='uploaded_brand',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='+', to='firmwares.brand'),
+            model_name="pendingfirmware",
+            name="uploaded_brand",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="+",
+                to="firmwares.brand",
+            ),
         ),
         migrations.AddField(
-            model_name='pendingfirmware',
-            name='uploaded_model',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='+', to='firmwares.model'),
+            model_name="pendingfirmware",
+            name="uploaded_model",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="+",
+                to="firmwares.model",
+            ),
         ),
         migrations.AddField(
-            model_name='pendingfirmware',
-            name='uploader',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, to=settings.AUTH_USER_MODEL),
+            model_name="pendingfirmware",
+            name="uploader",
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                to=settings.AUTH_USER_MODEL,
+            ),
         ),
         migrations.AddField(
-            model_name='readbackfirmware',
-            name='brand',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_firmware', to='firmwares.brand'),
+            model_name="readbackfirmware",
+            name="brand",
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="%(class)s_firmware",
+                to="firmwares.brand",
+            ),
         ),
         migrations.AddField(
-            model_name='readbackfirmware',
-            name='model',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_firmware', to='firmwares.model'),
+            model_name="readbackfirmware",
+            name="model",
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="%(class)s_firmware",
+                to="firmwares.model",
+            ),
         ),
         migrations.AddField(
-            model_name='readbackfirmware',
-            name='uploader',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, to=settings.AUTH_USER_MODEL),
+            model_name="readbackfirmware",
+            name="uploader",
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                to=settings.AUTH_USER_MODEL,
+            ),
         ),
         migrations.AddField(
-            model_name='schemaupdateproposal',
-            name='brand',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='schema_proposals', to='firmwares.brand'),
+            model_name="schemaupdateproposal",
+            name="brand",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="schema_proposals",
+                to="firmwares.brand",
+            ),
         ),
         migrations.AddField(
-            model_name='schemaupdateproposal',
-            name='proposed_by',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, to=settings.AUTH_USER_MODEL),
+            model_name="schemaupdateproposal",
+            name="proposed_by",
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                to=settings.AUTH_USER_MODEL,
+            ),
         ),
         migrations.AddField(
-            model_name='schemaupdateproposal',
-            name='reviewed_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='+', to=settings.AUTH_USER_MODEL),
+            model_name="schemaupdateproposal",
+            name="reviewed_by",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="+",
+                to=settings.AUTH_USER_MODEL,
+            ),
         ),
         migrations.AddField(
-            model_name='unclassifiedfirmware',
-            name='brand',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_firmware', to='firmwares.brand'),
+            model_name="unclassifiedfirmware",
+            name="brand",
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="%(class)s_firmware",
+                to="firmwares.brand",
+            ),
         ),
         migrations.AddField(
-            model_name='unclassifiedfirmware',
-            name='model',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_firmware', to='firmwares.model'),
+            model_name="unclassifiedfirmware",
+            name="model",
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="%(class)s_firmware",
+                to="firmwares.model",
+            ),
         ),
         migrations.AddField(
-            model_name='unclassifiedfirmware',
-            name='uploader',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, to=settings.AUTH_USER_MODEL),
+            model_name="unclassifiedfirmware",
+            name="uploader",
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                to=settings.AUTH_USER_MODEL,
+            ),
         ),
         migrations.AddField(
-            model_name='variant',
-            name='model',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='variants', to='firmwares.model'),
+            model_name="variant",
+            name="model",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="variants",
+                to="firmwares.model",
+            ),
         ),
         migrations.AddField(
-            model_name='unclassifiedfirmware',
-            name='variant',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_firmware', to='firmwares.variant'),
+            model_name="unclassifiedfirmware",
+            name="variant",
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="%(class)s_firmware",
+                to="firmwares.variant",
+            ),
         ),
         migrations.AddField(
-            model_name='readbackfirmware',
-            name='variant',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_firmware', to='firmwares.variant'),
+            model_name="readbackfirmware",
+            name="variant",
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="%(class)s_firmware",
+                to="firmwares.variant",
+            ),
         ),
         migrations.AddField(
-            model_name='pendingfirmware',
-            name='uploaded_variant',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='+', to='firmwares.variant'),
+            model_name="pendingfirmware",
+            name="uploaded_variant",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="+",
+                to="firmwares.variant",
+            ),
         ),
         migrations.AddField(
-            model_name='otherfirmware',
-            name='variant',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_firmware', to='firmwares.variant'),
+            model_name="otherfirmware",
+            name="variant",
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="%(class)s_firmware",
+                to="firmwares.variant",
+            ),
         ),
         migrations.AddField(
-            model_name='officialfirmware',
-            name='variant',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_firmware', to='firmwares.variant'),
+            model_name="officialfirmware",
+            name="variant",
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="%(class)s_firmware",
+                to="firmwares.variant",
+            ),
         ),
         migrations.AddField(
-            model_name='modifiedfirmware',
-            name='variant',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_firmware', to='firmwares.variant'),
+            model_name="modifiedfirmware",
+            name="variant",
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="%(class)s_firmware",
+                to="firmwares.variant",
+            ),
         ),
         migrations.AddField(
-            model_name='engineeringfirmware',
-            name='variant',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_firmware', to='firmwares.variant'),
+            model_name="engineeringfirmware",
+            name="variant",
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="%(class)s_firmware",
+                to="firmwares.variant",
+            ),
         ),
         migrations.AddField(
-            model_name='variantcreationrequest',
-            name='model',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='firmwares.model'),
+            model_name="variantcreationrequest",
+            name="model",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE, to="firmwares.model"
+            ),
         ),
         migrations.AddField(
-            model_name='variantcreationrequest',
-            name='requested_by',
-            field=models.ForeignKey(null=True, on_delete=django.db.models.deletion.SET_NULL, to=settings.AUTH_USER_MODEL),
+            model_name="variantcreationrequest",
+            name="requested_by",
+            field=models.ForeignKey(
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                to=settings.AUTH_USER_MODEL,
+            ),
         ),
         migrations.AddField(
-            model_name='variantcreationrequest',
-            name='reviewed_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='+', to=settings.AUTH_USER_MODEL),
+            model_name="variantcreationrequest",
+            name="reviewed_by",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="+",
+                to=settings.AUTH_USER_MODEL,
+            ),
         ),
         migrations.AddIndex(
-            model_name='model',
-            index=models.Index(fields=['brand', 'is_active'], name='model_brand_active_idx'),
+            model_name="model",
+            index=models.Index(
+                fields=["brand", "is_active"], name="model_brand_active_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='model',
-            index=models.Index(fields=['model_code'], name='model_code_idx'),
+            model_name="model",
+            index=models.Index(fields=["model_code"], name="model_code_idx"),
         ),
         migrations.AlterUniqueTogether(
-            name='model',
-            unique_together={('brand', 'slug')},
+            name="model",
+            unique_together={("brand", "slug")},
         ),
         migrations.AddIndex(
-            model_name='variant',
-            index=models.Index(fields=['model', 'is_active'], name='variant_model_active_idx'),
+            model_name="variant",
+            index=models.Index(
+                fields=["model", "is_active"], name="variant_model_active_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='variant',
-            index=models.Index(fields=['chipset'], name='variant_chipset_idx'),
+            model_name="variant",
+            index=models.Index(fields=["chipset"], name="variant_chipset_idx"),
         ),
         migrations.AddIndex(
-            model_name='variant',
-            index=models.Index(fields=['region'], name='variant_region_idx'),
+            model_name="variant",
+            index=models.Index(fields=["region"], name="variant_region_idx"),
         ),
         migrations.AlterUniqueTogether(
-            name='variant',
-            unique_together={('model', 'slug')},
+            name="variant",
+            unique_together={("model", "slug")},
         ),
         migrations.AddIndex(
-            model_name='unclassifiedfirmware',
-            index=models.Index(fields=['brand', 'model', 'variant'], name='unc_hierarchy_idx'),
+            model_name="unclassifiedfirmware",
+            index=models.Index(
+                fields=["brand", "model", "variant"], name="unc_hierarchy_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='unclassifiedfirmware',
-            index=models.Index(fields=['chipset'], name='unc_chipset_idx'),
+            model_name="unclassifiedfirmware",
+            index=models.Index(fields=["chipset"], name="unc_chipset_idx"),
         ),
         migrations.AddIndex(
-            model_name='unclassifiedfirmware',
-            index=models.Index(fields=['android_version'], name='unc_android_idx'),
+            model_name="unclassifiedfirmware",
+            index=models.Index(fields=["android_version"], name="unc_android_idx"),
         ),
         migrations.AddIndex(
-            model_name='unclassifiedfirmware',
-            index=models.Index(fields=['is_verified', 'is_active'], name='unc_status_idx'),
+            model_name="unclassifiedfirmware",
+            index=models.Index(
+                fields=["is_verified", "is_active"], name="unc_status_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='unclassifiedfirmware',
-            index=models.Index(fields=['-created_at'], name='unc_created_idx'),
+            model_name="unclassifiedfirmware",
+            index=models.Index(fields=["-created_at"], name="unc_created_idx"),
         ),
         migrations.AddIndex(
-            model_name='readbackfirmware',
-            index=models.Index(fields=['brand', 'model', 'variant'], name='rb_hierarchy_idx'),
+            model_name="readbackfirmware",
+            index=models.Index(
+                fields=["brand", "model", "variant"], name="rb_hierarchy_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='readbackfirmware',
-            index=models.Index(fields=['chipset'], name='rb_chipset_idx'),
+            model_name="readbackfirmware",
+            index=models.Index(fields=["chipset"], name="rb_chipset_idx"),
         ),
         migrations.AddIndex(
-            model_name='readbackfirmware',
-            index=models.Index(fields=['android_version'], name='rb_android_idx'),
+            model_name="readbackfirmware",
+            index=models.Index(fields=["android_version"], name="rb_android_idx"),
         ),
         migrations.AddIndex(
-            model_name='readbackfirmware',
-            index=models.Index(fields=['is_verified', 'is_active'], name='rb_status_idx'),
+            model_name="readbackfirmware",
+            index=models.Index(
+                fields=["is_verified", "is_active"], name="rb_status_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='readbackfirmware',
-            index=models.Index(fields=['-created_at'], name='rb_created_idx'),
+            model_name="readbackfirmware",
+            index=models.Index(fields=["-created_at"], name="rb_created_idx"),
         ),
         migrations.AddIndex(
-            model_name='otherfirmware',
-            index=models.Index(fields=['brand', 'model', 'variant'], name='oth_hierarchy_idx'),
+            model_name="otherfirmware",
+            index=models.Index(
+                fields=["brand", "model", "variant"], name="oth_hierarchy_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='otherfirmware',
-            index=models.Index(fields=['chipset'], name='oth_chipset_idx'),
+            model_name="otherfirmware",
+            index=models.Index(fields=["chipset"], name="oth_chipset_idx"),
         ),
         migrations.AddIndex(
-            model_name='otherfirmware',
-            index=models.Index(fields=['android_version'], name='oth_android_idx'),
+            model_name="otherfirmware",
+            index=models.Index(fields=["android_version"], name="oth_android_idx"),
         ),
         migrations.AddIndex(
-            model_name='otherfirmware',
-            index=models.Index(fields=['is_verified', 'is_active'], name='oth_status_idx'),
+            model_name="otherfirmware",
+            index=models.Index(
+                fields=["is_verified", "is_active"], name="oth_status_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='otherfirmware',
-            index=models.Index(fields=['-created_at'], name='oth_created_idx'),
+            model_name="otherfirmware",
+            index=models.Index(fields=["-created_at"], name="oth_created_idx"),
         ),
         migrations.AddIndex(
-            model_name='officialfirmware',
-            index=models.Index(fields=['brand', 'model', 'variant'], name='off_hierarchy_idx'),
+            model_name="officialfirmware",
+            index=models.Index(
+                fields=["brand", "model", "variant"], name="off_hierarchy_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='officialfirmware',
-            index=models.Index(fields=['chipset'], name='off_chipset_idx'),
+            model_name="officialfirmware",
+            index=models.Index(fields=["chipset"], name="off_chipset_idx"),
         ),
         migrations.AddIndex(
-            model_name='officialfirmware',
-            index=models.Index(fields=['android_version'], name='off_android_idx'),
+            model_name="officialfirmware",
+            index=models.Index(fields=["android_version"], name="off_android_idx"),
         ),
         migrations.AddIndex(
-            model_name='officialfirmware',
-            index=models.Index(fields=['is_verified', 'is_active'], name='off_status_idx'),
+            model_name="officialfirmware",
+            index=models.Index(
+                fields=["is_verified", "is_active"], name="off_status_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='officialfirmware',
-            index=models.Index(fields=['-created_at'], name='off_created_idx'),
+            model_name="officialfirmware",
+            index=models.Index(fields=["-created_at"], name="off_created_idx"),
         ),
         migrations.AddIndex(
-            model_name='modifiedfirmware',
-            index=models.Index(fields=['brand', 'model', 'variant'], name='mod_hierarchy_idx'),
+            model_name="modifiedfirmware",
+            index=models.Index(
+                fields=["brand", "model", "variant"], name="mod_hierarchy_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='modifiedfirmware',
-            index=models.Index(fields=['chipset'], name='mod_chipset_idx'),
+            model_name="modifiedfirmware",
+            index=models.Index(fields=["chipset"], name="mod_chipset_idx"),
         ),
         migrations.AddIndex(
-            model_name='modifiedfirmware',
-            index=models.Index(fields=['android_version'], name='mod_android_idx'),
+            model_name="modifiedfirmware",
+            index=models.Index(fields=["android_version"], name="mod_android_idx"),
         ),
         migrations.AddIndex(
-            model_name='modifiedfirmware',
-            index=models.Index(fields=['is_verified', 'is_active'], name='mod_status_idx'),
+            model_name="modifiedfirmware",
+            index=models.Index(
+                fields=["is_verified", "is_active"], name="mod_status_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='modifiedfirmware',
-            index=models.Index(fields=['-created_at'], name='mod_created_idx'),
+            model_name="modifiedfirmware",
+            index=models.Index(fields=["-created_at"], name="mod_created_idx"),
         ),
         migrations.AddIndex(
-            model_name='engineeringfirmware',
-            index=models.Index(fields=['brand', 'model', 'variant'], name='eng_hierarchy_idx'),
+            model_name="engineeringfirmware",
+            index=models.Index(
+                fields=["brand", "model", "variant"], name="eng_hierarchy_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='engineeringfirmware',
-            index=models.Index(fields=['chipset'], name='eng_chipset_idx'),
+            model_name="engineeringfirmware",
+            index=models.Index(fields=["chipset"], name="eng_chipset_idx"),
         ),
         migrations.AddIndex(
-            model_name='engineeringfirmware',
-            index=models.Index(fields=['android_version'], name='eng_android_idx'),
+            model_name="engineeringfirmware",
+            index=models.Index(fields=["android_version"], name="eng_android_idx"),
         ),
         migrations.AddIndex(
-            model_name='engineeringfirmware',
-            index=models.Index(fields=['is_verified', 'is_active'], name='eng_status_idx'),
+            model_name="engineeringfirmware",
+            index=models.Index(
+                fields=["is_verified", "is_active"], name="eng_status_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='engineeringfirmware',
-            index=models.Index(fields=['-created_at'], name='eng_created_idx'),
+            model_name="engineeringfirmware",
+            index=models.Index(fields=["-created_at"], name="eng_created_idx"),
         ),
     ]

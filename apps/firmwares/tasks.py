@@ -54,6 +54,7 @@ def aggregate_daily_firmware_stats():
             "ReadbackFirmware",
             "ModifiedFirmware",
             "OtherFirmware",
+            "UnclassifiedFirmware",
         ]
 
         aggregated_count = 0
@@ -191,25 +192,6 @@ def update_firmware_request_priorities():
         return {"error": str(e)}
 
 
-@shared_task(soft_time_limit=60, time_limit=120)
-def invalidate_homepage_caches():
-    """
-    Hourly task to refresh homepage caches (in addition to signal-based invalidation)
-    Ensures data is never stale for more than 1 hour
-    """
-    try:
-        from apps.pages.widgets import HomePageWidgetService
-
-        HomePageWidgetService.invalidate_caches()
-
-        logger.info("Homepage caches invalidated by scheduled task")
-        return {"status": "success", "time": timezone.now().isoformat()}
-
-    except Exception as e:
-        logger.exception(f"Error invalidating homepage caches: {e}")
-        return {"error": str(e)}
-
-
 @shared_task(
     bind=True,
     max_retries=3,
@@ -292,45 +274,6 @@ def log_firmware_view(
         # Don't fail the main request if logging fails
 
 
-@shared_task(soft_time_limit=30, time_limit=60)
-def log_firmware_download_attempt(
-    firmware_ct_id: int,
-    firmware_id: str,
-    user_id: int,
-    status: str = "initiated",
-    storage_session_id: str | None = None,
-):
-    """
-    Async task to log download attempt
-
-    Args:
-        firmware_ct_id: ContentType ID
-        firmware_id: UUID of firmware
-        user_id: User ID
-        status: Initial status
-        storage_session_id: UserDownloadSession ID if using storage app
-    """
-    try:
-        FirmwareDownloadAttempt = apps.get_model("firmwares", "FirmwareDownloadAttempt")
-        from django.contrib.contenttypes.models import ContentType
-
-        content_type = ContentType.objects.get(id=firmware_ct_id)
-
-        User = apps.get_model("users", "User")
-        user = User.objects.get(id=user_id)
-
-        FirmwareDownloadAttempt.objects.create(
-            content_type=content_type,
-            object_id=firmware_id,
-            user=user,
-            status=status,
-            storage_session_id=storage_session_id,
-        )
-
-    except Exception as e:
-        logger.warning(f"Failed to log download attempt: {e}")
-
-
 # ============================================================
 # Blog Generation Tasks
 # ============================================================
@@ -345,12 +288,12 @@ def log_firmware_download_attempt(
 )
 def generate_firmware_blog_post(self, model_id: int, force_update: bool = False):
     """
-    Async task to generate a blog post for a specific device model.
+    Async task to generate a governed blog post for a specific device model.
     Called when new firmware is uploaded via signal handler.
 
     Args:
         model_id: The ID of the Model (device) to generate blog for
-        force_update: If True, regenerate even if post exists
+        force_update: If True, create a post even when the model has no listings.
     """
     try:
         Model = apps.get_model("firmwares", "Model")
@@ -389,7 +332,11 @@ def generate_firmware_blog_post(self, model_id: int, force_update: bool = False)
         try:
             raise self.retry(exc=e)
         except self.MaxRetriesExceededError:
-            return {"status": "error", "error": str(e), "max_retries_exceeded": True}
+            logger.error(
+                "Firmware blog generation exhausted retries for model %s",
+                model_id,
+            )
+            raise
 
 
 @shared_task(soft_time_limit=3600, time_limit=7200)

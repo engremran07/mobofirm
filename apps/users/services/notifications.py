@@ -51,6 +51,8 @@ def send_notification(
     if not recipient:
         return None
 
+    delivery_channel = channel or "web"
+
     # Check user preferences
     try:
         from apps.users.models import NotificationPreferences
@@ -66,7 +68,9 @@ def send_notification(
                 return None
 
             # Check if web notifications are enabled for this type
-            if channel == "web" and not prefs.should_send_web(action_type or ""):
+            if delivery_channel == "web" and not prefs.should_send_web(
+                action_type or ""
+            ):
                 logger.debug(
                     "Web notifications disabled for user %s, type %s",
                     recipient.pk,
@@ -84,7 +88,7 @@ def send_notification(
                 message=message,
                 url=url[:500] if url else None,
                 priority=level,
-                channel=channel,
+                channel=delivery_channel,
                 action_type=action_type or "system",
                 icon=icon or "",
                 actor=actor,

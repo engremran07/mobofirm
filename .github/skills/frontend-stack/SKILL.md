@@ -4,7 +4,7 @@ description: "Build and verify Django-rendered frontend work involving HTML, HTM
 ---
 # Frontend Stack
 
-Use for frontend changes in this repository. This checkout currently has no frontend source or build manifest: do not claim these tools are installed or introduce them by assumption.
+Use for frontend changes in this repository. The user-approved stack is Django templates, Bootstrap, HTMX, Alpine's CSP-safe runtime, Lucide, and Vite. Verify `package.json`, the build entries, and the actual templates before changing the stack; do not introduce a second framework or styling system.
 
 1. Inventory templates/static files and actual package/build manifests. Select only the requested, already configured stack; ask before adding a framework, compiler, or dependency.
 2. Keep Django as the authorization and persistence authority. Escape output, retain CSRF protection, validate server-side, and make HTMX responses and errors explicit.
@@ -12,4 +12,7 @@ Use for frontend changes in this repository. This checkout currently has no fron
 4. Use existing Sass/CSS or Tailwind conventions and tokens; do not mix styling systems or generate dynamic utility classes the configured build cannot discover.
 5. Use existing Lucide integration and accessible labels. Decorative icons are hidden from assistive technology; icon-only controls get an accessible name. Do not install an icon package just to render a trivial symbol.
 6. Verify keyboard and screen-reader semantics, focus after swaps/dialog changes, responsive layouts, reduced motion, and loading/empty/error states.
-7. Run configured format/build/type checks and focused browser tests. If the app or browser runner is unavailable, state that explicitly; do not fabricate screenshots or emulator evidence.
+7. Run the Vite build, focused Django tests using the repository `.venv` Python interpreter, and Playwright route/responsive/interaction checks. Frontend browser checks are required; do not silently skip missing browser setup or fabricate screenshots or emulator evidence.
+8. For forms, retain the centralized Django CSRF middleware and template tokens; verify the app-owned CSRF failure page, accessible search/validation states, and POST-Redirect-GET behavior. Do not use browser-native alert/confirm/prompt dialogs.
+
+Use HTMX for the server-rendered interactions that benefit from partial updates and Alpine for bounded local state; do not treat "use every feature" as a requirement to activate unrelated or CSP-incompatible capabilities. On changed routes, verify console errors/warnings and horizontal overflow at narrow and desktop viewports, and report any pre-existing global diagnostics separately.

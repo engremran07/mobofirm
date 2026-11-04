@@ -1,28 +1,21 @@
-# Generated migration — absorbs apps.changelog models into apps.firmwares.
-# Tables already exist (created by changelog 0001_initial); we only update
-# Django's migration state so the ORM knows these models live here now.
+# State-only migration registering changelog models with the firmware app.
 
 import django.db.models.deletion
 from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
         (
             "firmwares",
             "0003_hotlinkblock_syncrun_downloadsession_adgatelog_and_more",
         ),
-        # Note: changelog/0001_initial already ran (tables exist in DB).
-        # That app is dissolved — no longer in INSTALLED_APPS.
-        # SeparateDatabaseAndState below does zero DB work; tables are preserved.
+        # Existing table names are retained; the state operations do no DDL.
     ]
 
     operations = [
         migrations.SeparateDatabaseAndState(
-            # No database operations — tables already exist.
             database_operations=[],
-            # State operations register the models in the firmwares app.
             state_operations=[
                 migrations.CreateModel(
                     name="ChangelogEntry",

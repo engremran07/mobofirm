@@ -65,7 +65,9 @@ def _get_locked_target(case: ReviewCase):
     try:
         return model._default_manager.select_for_update().get(pk=case.object_id)
     except model.DoesNotExist as exc:
-        raise GovernanceError("The content item for this case no longer exists.") from exc
+        raise GovernanceError(
+            "The content item for this case no longer exists."
+        ) from exc
 
 
 def _validate_target(obj) -> None:
@@ -111,7 +113,8 @@ def _prepare_target_for_review(obj) -> None:
         obj.status = "in_review"
         obj.save(update_fields=["status", "is_published", "updated_at"])
     elif model == ("comments", "comment"):
-        obj.status = "pending"
+        if obj.status not in {"spam", "rejected"}:
+            obj.status = "pending"
         obj.is_approved = False
         obj.save(update_fields=["status", "is_approved", "updated_at"])
 
@@ -132,7 +135,9 @@ def _append_event(
     ).first()
     if existing:
         if existing.action != action or existing.actor_id != getattr(actor, "pk", None):
-            raise GovernanceError("Idempotency key was already used for another action.")
+            raise GovernanceError(
+                "Idempotency key was already used for another action."
+            )
         return existing
     return ReviewEvent.objects.create(
         case=case,
@@ -163,14 +168,10 @@ def submit_for_review(obj, actor=None) -> ReviewCase:
         if existing:
             if existing.status == ReviewCase.Status.SUBMITTED:
                 return existing
-            if (
-                existing.status
-                not in {
-                    ReviewCase.Status.CHANGES_REQUESTED,
-                    ReviewCase.Status.CORRECTION_REQUIRED,
-                }
-                or existing.requested_by_id != getattr(actor, "pk", None)
-            ):
+            if existing.status not in {
+                ReviewCase.Status.CHANGES_REQUESTED,
+                ReviewCase.Status.CORRECTION_REQUIRED,
+            } or existing.requested_by_id != getattr(actor, "pk", None):
                 raise GovernanceError("This item already has an active review case.")
             previous = existing.status
             existing.status = ReviewCase.Status.SUBMITTED
@@ -228,9 +229,11 @@ def submit_for_review(obj, actor=None) -> ReviewCase:
 
 
 def _locked_case(case_id: int) -> ReviewCase:
-    return ReviewCase.objects.select_for_update().select_related(
-        "content_type", "result_content_type"
-    ).get(pk=case_id)
+    return (
+        ReviewCase.objects.select_for_update()
+        .select_related("content_type", "result_content_type")
+        .get(pk=case_id)
+    )
 
 
 def _find_duplicate(case: ReviewCase, actor, key: uuid.UUID, action: str):
@@ -286,10 +289,11 @@ def _validate_firmware_decision(data: dict[str, Any]) -> dict[str, Any]:
         "model_id",
         "variant_id",
         "unclassified_reason",
+        "package_format",
     }
     if set(data) - allowed:
         raise ValidationError("Firmware decision contains unsupported fields.")
-    from apps.firmwares.models import Brand, Model, Variant
+    from apps.firmwares.models import Brand, FirmwarePackageFormat, Model, Variant
 
     result = dict(data)
     brand = Brand.objects.filter(pk=result.get("brand_id")).first()
@@ -311,6 +315,9 @@ def _validate_firmware_decision(data: dict[str, Any]) -> dict[str, Any]:
         "unclassified",
     }:
         raise ValidationError("Unsupported firmware category.")
+    package_format = result.get("package_format")
+    if package_format and package_format not in FirmwarePackageFormat.values:
+        raise ValidationError("Unsupported firmware package format.")
     return result
 
 
@@ -348,7 +355,9 @@ def decide_case(
             if case.content_type.app_label == "firmwares":
                 clean_data = _validate_firmware_decision(clean_data)
             elif clean_data:
-                raise ValidationError("This content type does not accept decision data.")
+                raise ValidationError(
+                    "This content type does not accept decision data."
+                )
             case.decision_data = clean_data
             case.status = ReviewCase.Status.APPROVED
             case.is_open = True
@@ -448,10 +457,13 @@ def _fulfill_target(case: ReviewCase, actor, scheduled_at: datetime | None):
             .first()
             or "",
             unclassified_reason=data.get("unclassified_reason", ""),
+            package_format=data.get("package_format"),
             governance_case_id=case.pk,
         )
         if result is None:
-            raise GovernanceError("Firmware approval did not create a published record.")
+            raise GovernanceError(
+                "Firmware approval did not create a published record."
+            )
         return result
     raise GovernanceError("No fulfillment policy exists for this content type.")
 
@@ -522,7 +534,9 @@ def report_issue(
         ):
             return duplicate
         if case.status != ReviewCase.Status.COMPLETED:
-            raise GovernanceError("Only completed cases can receive corrective actions.")
+            raise GovernanceError(
+                "Only completed cases can receive corrective actions."
+            )
         result = case.result_object
         if result is None:
             raise GovernanceError("The fulfilled content is no longer available.")
@@ -541,7 +555,9 @@ def report_issue(
             result.is_active = False
             result.save(update_fields=["is_active", "updated_at"])
         else:
-            raise GovernanceError("No corrective-action policy exists for this content.")
+            raise GovernanceError(
+                "No corrective-action policy exists for this content."
+            )
         previous = case.status
         case.status = ReviewCase.Status.CORRECTION_REQUIRED
         case.is_open = True

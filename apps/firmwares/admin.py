@@ -309,12 +309,14 @@ class PendingFirmwareAdmin(admin.ModelAdmin):
         "ai_brand",
         "ai_model",
         "ai_category",
+        "package_format",
         "created_at",
     )
     list_filter = (
         "admin_decision",
         "extraction_status",
         "ai_category",
+        "package_format",
         "is_password_protected",
         "created_at",
     )
@@ -342,7 +344,14 @@ class PendingFirmwareAdmin(admin.ModelAdmin):
         ),
         (
             "User-provided Info",
-            {"fields": ("uploaded_brand", "uploaded_model", "uploaded_variant")},
+            {
+                "fields": (
+                    "uploaded_brand",
+                    "uploaded_model",
+                    "uploaded_variant",
+                    "package_format",
+                )
+            },
         ),
         (
             "AI Suggestions",
@@ -461,7 +470,7 @@ class UnclassifiedFirmwareAdmin(BaseFirmwareAdmin):
 
 
 # ---------------------------------------------------------------------------
-# Changelog — absorbed from apps.changelog
+# Changelog admin
 # ---------------------------------------------------------------------------
 
 
@@ -484,7 +493,7 @@ class FirmwareDiffAdmin(admin.ModelAdmin):
 
 
 # ---------------------------------------------------------------------------
-# GSMArena Sync — absorbed from apps.gsmarena_sync
+# GSMArena device synchronization
 # ---------------------------------------------------------------------------
 
 
@@ -503,7 +512,7 @@ class GSMArenaDeviceAdmin(admin.ModelAdmin):
 
 
 # ---------------------------------------------------------------------------
-# FW Verification — absorbed from apps.fw_verification
+# Firmware verification admin
 # ---------------------------------------------------------------------------
 
 
@@ -536,7 +545,7 @@ class VerificationCreditAdmin(admin.ModelAdmin):
 
 
 # ---------------------------------------------------------------------------
-# Download Links — absorbed from apps.download_links
+# Download links
 # ---------------------------------------------------------------------------
 
 
@@ -625,10 +634,11 @@ class FlashingGuideTemplateAdmin(admin.ModelAdmin):
         "guide_type",
         "brand",
         "auto_generate",
+        "submit_for_review",
         "is_active",
         "generated_count",
     ]
-    list_filter = ["guide_type", "auto_generate", "is_active"]
+    list_filter = ["guide_type", "auto_generate", "submit_for_review", "is_active"]
 
 
 @admin.register(GeneratedFlashingGuide)

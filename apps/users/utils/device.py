@@ -18,12 +18,12 @@ import logging
 from datetime import timedelta
 from typing import Any
 
+from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
 from apps.devices.models import DeviceFingerprint
-from apps.site_settings.models import SiteSettings
 from apps.users.models import CustomUser
 
 logger = logging.getLogger(__name__)
@@ -126,7 +126,7 @@ def register_fingerprint(
 # ---------------------------------------------------------------------
 def enforce_device_limit(user: CustomUser) -> bool:
     """
-    Enforce per-user device limits from SiteSettings.
+    Enforce per-user device limits from Django settings.
 
     ADMIN BYPASS: Staff/superusers have unlimited devices.
     REGULAR USERS: Subject to device limit and eviction mode.
@@ -149,13 +149,10 @@ def enforce_device_limit(user: CustomUser) -> bool:
         return True
 
     try:
-        settings_obj = SiteSettings.get_solo()
-        limit = int(getattr(settings_obj, "max_devices_per_user", 3))
-        mode = str(getattr(settings_obj, "fingerprint_mode", "strict")).lower()
+        limit = int(getattr(settings, "DEVICE_MAX_DEVICES_PER_USER", 3))
+        mode = str(getattr(settings, "DEVICE_FINGERPRINT_MODE", "strict")).lower()
     except Exception as exc:
-        logger.warning(
-            "SiteSettings unavailable; using defaults for device limits: %s", exc
-        )
+        logger.warning("Device settings unavailable; using defaults: %s", exc)
         limit, mode = 3, "strict"
 
     # Lock the active device rows for this user to avoid races

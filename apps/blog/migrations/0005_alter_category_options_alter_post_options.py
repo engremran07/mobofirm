@@ -4,18 +4,25 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('blog', '0004_post_ad_gate_config_post_ad_gate_enabled_and_more'),
+        ("blog", "0004_post_ad_gate_config_post_ad_gate_enabled_and_more"),
     ]
 
     operations = [
         migrations.AlterModelOptions(
-            name='category',
-            options={'ordering': ['name'], 'verbose_name': 'Blog Category', 'verbose_name_plural': 'Categories'},
+            name="category",
+            options={
+                "ordering": ["name"],
+                "verbose_name": "Blog Category",
+                "verbose_name_plural": "Categories",
+            },
         ),
         migrations.AlterModelOptions(
-            name='post',
-            options={'ordering': ['-published_at', '-created_at'], 'verbose_name': 'Blog Post', 'verbose_name_plural': 'Blog Posts'},
+            name="post",
+            options={
+                "ordering": ["-published_at", "-created_at"],
+                "verbose_name": "Blog Post",
+                "verbose_name_plural": "Blog Posts",
+            },
         ),
     ]

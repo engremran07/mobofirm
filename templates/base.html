@@ -1,0 +1,27 @@
+{% load static i18n %}
+<!doctype html>
+<html lang="{% get_current_language as LANGUAGE_CODE %}{{ LANGUAGE_CODE }}" data-bs-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <meta name="application-version" content="{{ release_version }}">
+  <meta name="description" content="{% block meta_description %}Explore mobile firmware, device models, and technical resources in the Mobofirm catalogue.{% endblock %}">
+  <title>{% block title %}{{ site_name|default:"Mobofirm" }}{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'build/tokens.css' %}">
+  <link rel="stylesheet" href="{% static 'build/site.css' %}">
+  {% block extra_head %}{% endblock %}
+</head>
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+  <a class="skip-link" href="#main-content">Skip to content</a>
+  {% include "includes/site_header.html" %}
+  <div id="global-feedback" class="visually-hidden" role="status" aria-live="polite"></div>
+  {% include "includes/messages.html" %}
+  <main id="main-content" class="site-main" tabindex="-1">
+    {% block content %}{% endblock %}
+  </main>
+  {% include "includes/site_footer.html" %}
+  <script type="module" src="{% static 'build/site.js' %}"></script>
+  {% block extra_scripts %}{% endblock %}
+</body>
+</html>

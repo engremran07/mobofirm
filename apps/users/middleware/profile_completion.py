@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+from django.conf import settings
 from django.shortcuts import redirect
 from django.urls import resolve, reverse
 
@@ -60,16 +61,7 @@ class EnforceProfileCompletionMiddleware:
 
         user = getattr(request, "user", None)
 
-        # Feature flag: allow disabling enforcement from SiteSettings
-        try:
-            from apps.site_settings.models import SiteSettings
-
-            ss = SiteSettings.get_solo()
-            require_profile = getattr(ss, "require_profile_completion", False)
-            # Backward-compat: fall back to require_mfa flag if present
-            if not (require_profile or getattr(ss, "require_mfa", False)):
-                return self.get_response(request)
-        except Exception:
+        if not getattr(settings, "REQUIRE_PROFILE_COMPLETION", False):
             return self.get_response(request)
 
         # --- Fast exit for anonymous users ----------------------------------

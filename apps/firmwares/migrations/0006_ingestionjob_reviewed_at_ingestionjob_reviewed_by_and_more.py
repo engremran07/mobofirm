@@ -6,26 +6,44 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('firmwares', '0005_alter_brandcreationrequest_options_and_more'),
+        ("firmwares", "0005_alter_brandcreationrequest_options_and_more"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='ingestionjob',
-            name='reviewed_at',
+            model_name="ingestionjob",
+            name="reviewed_at",
             field=models.DateTimeField(blank=True, null=True),
         ),
         migrations.AddField(
-            model_name='ingestionjob',
-            name='reviewed_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='reviewed_ingestion_jobs', to=settings.AUTH_USER_MODEL),
+            model_name="ingestionjob",
+            name="reviewed_by",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="reviewed_ingestion_jobs",
+                to=settings.AUTH_USER_MODEL,
+            ),
         ),
         migrations.AlterField(
-            model_name='ingestionjob',
-            name='status',
-            field=models.CharField(choices=[('pending', 'Pending Review'), ('approved', 'Approved'), ('rejected', 'Rejected'), ('processing', 'Processing'), ('done', 'Done'), ('failed', 'Failed'), ('skipped', 'Skipped (Duplicate)')], db_index=True, default='pending', max_length=12),
+            model_name="ingestionjob",
+            name="status",
+            field=models.CharField(
+                choices=[
+                    ("pending", "Pending Review"),
+                    ("approved", "Approved"),
+                    ("rejected", "Rejected"),
+                    ("processing", "Processing"),
+                    ("done", "Done"),
+                    ("failed", "Failed"),
+                    ("skipped", "Skipped (Duplicate)"),
+                ],
+                db_index=True,
+                default="pending",
+                max_length=12,
+            ),
         ),
     ]

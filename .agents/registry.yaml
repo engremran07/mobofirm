@@ -1,0 +1,39 @@
+schema_version: 1
+purpose: Repository-local index of engineering agents, governance roles, and workflow skills.
+
+governance_roles:
+  - id: orchestrator
+    path: .agents/roles/orchestrator.md
+  - id: qa-test-engineer
+    path: .agents/roles/qa-test-engineer.md
+  - id: security-reviewer
+    path: .agents/roles/security-reviewer.md
+
+governance_skills:
+  - id: project-onboarding
+    path: .agents/skills/project-onboarding/SKILL.md
+  - id: repository-audit
+    path: .agents/skills/repository-audit/SKILL.md
+  - id: requirements-analysis
+    path: .agents/skills/requirements-analysis/SKILL.md
+  - id: test-engineering
+    path: .agents/skills/test-engineering/SKILL.md
+
+copilot_customizations:
+  agent_directory: .github/agents/
+  agents:
+    - .github/agents/django-feature-engineer.agent.md
+    - .github/agents/verification-engineer.agent.md
+  skill_directory: .github/skills/
+  skills:
+    - .github/skills/deep-verification/SKILL.md
+    - .github/skills/django-feature-loop/SKILL.md
+    - .github/skills/frontend-stack/SKILL.md
+    - .github/skills/frontend-security/SKILL.md
+    - .github/skills/inter-app-automation/SKILL.md
+    - .github/skills/observability-retention/SKILL.md
+    - .github/skills/release-management/SKILL.md
+    - .github/skills/secure-form-workflow/SKILL.md
+
+source_of_truth: .agents/policies/source-of-truth.yaml
+approval_matrix: .agents/policies/approval-matrix.yaml

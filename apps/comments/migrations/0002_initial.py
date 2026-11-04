@@ -6,54 +6,86 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     initial = True
 
     dependencies = [
-        ('blog', '0002_initial'),
-        ('comments', '0001_initial'),
+        ("blog", "0002_initial"),
+        ("comments", "0001_initial"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='comment',
-            name='deleted_by',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_deleted', to=settings.AUTH_USER_MODEL),
+            model_name="comment",
+            name="deleted_by",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.SET_NULL,
+                related_name="%(class)s_deleted",
+                to=settings.AUTH_USER_MODEL,
+            ),
         ),
         migrations.AddField(
-            model_name='comment',
-            name='parent',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='children', to='comments.comment'),
+            model_name="comment",
+            name="parent",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="children",
+                to="comments.comment",
+            ),
         ),
         migrations.AddField(
-            model_name='comment',
-            name='post',
-            field=models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='comments', to='blog.post'),
+            model_name="comment",
+            name="post",
+            field=models.ForeignKey(
+                blank=True,
+                null=True,
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="comments",
+                to="blog.post",
+            ),
         ),
         migrations.AddField(
-            model_name='comment',
-            name='user',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='comments', to=settings.AUTH_USER_MODEL),
+            model_name="comment",
+            name="user",
+            field=models.ForeignKey(
+                on_delete=django.db.models.deletion.CASCADE,
+                related_name="comments",
+                to=settings.AUTH_USER_MODEL,
+            ),
         ),
         migrations.AddIndex(
-            model_name='comment',
-            index=models.Index(fields=['content_type', 'object_id', 'status'], name='comments_co_content_1832ed_idx'),
+            model_name="comment",
+            index=models.Index(
+                fields=["content_type", "object_id", "status"],
+                name="comments_co_content_1832ed_idx",
+            ),
         ),
         migrations.AddIndex(
-            model_name='comment',
-            index=models.Index(fields=['user', 'status'], name='comments_co_user_id_b421d3_idx'),
+            model_name="comment",
+            index=models.Index(
+                fields=["user", "status"], name="comments_co_user_id_b421d3_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='comment',
-            index=models.Index(fields=['post', 'status'], name='comments_co_post_id_915159_idx'),
+            model_name="comment",
+            index=models.Index(
+                fields=["post", "status"], name="comments_co_post_id_915159_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='comment',
-            index=models.Index(fields=['created_at'], name='comments_co_created_5f6a12_idx'),
+            model_name="comment",
+            index=models.Index(
+                fields=["created_at"], name="comments_co_created_5f6a12_idx"
+            ),
         ),
         migrations.AddIndex(
-            model_name='comment',
-            index=models.Index(fields=['toxicity_score'], name='comments_co_toxicit_4cc7cd_idx'),
+            model_name="comment",
+            index=models.Index(
+                fields=["toxicity_score"], name="comments_co_toxicit_4cc7cd_idx"
+            ),
         ),
     ]

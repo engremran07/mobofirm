@@ -23,10 +23,10 @@ from django.views.decorators.http import require_GET, require_POST
 
 from apps.blog.models import Post
 from apps.comments.services.moderation import classify_comment
-from apps.consent.decorators import consent_required
 from apps.core.app_service import AppService
 from apps.core.utils.ip import get_client_ip
 from apps.core.views import _get_site_settings_snapshot
+from apps.users.services.decorators import consent_required
 from apps.users.services.rate_limit import allow_action
 from apps.governance.services import submit_for_review
 
@@ -270,6 +270,10 @@ def add_comment_json(request: HttpRequest, slug: str) -> JsonResponse:
         }
         toxicity_score = float(moderation.score or 0.0)
         label = str(moderation.label or "pending").lower()
+        if label == "spam":
+            status = Comment.Status.SPAM
+        elif label == "rejected":
+            status = Comment.Status.REJECTED
         if label in {"spam", "abuse"} or toxicity_score >= 0.5:
             meta["requires_priority_review"] = True
     except Exception:
@@ -288,7 +292,7 @@ def add_comment_json(request: HttpRequest, slug: str) -> JsonResponse:
             parent=parent,
             created_at=timezone.now(),
             is_approved=False,
-            status=Comment.Status.PENDING,
+            status=status,
             metadata=meta,
             moderation_flags=meta,
             toxicity_score=toxicity_score,
@@ -436,15 +440,7 @@ def _verify_recaptcha(request: HttpRequest) -> bool:
     Optional Recaptcha verification. Returns True if verification is disabled or passes.
     Expects token in request.POST['recaptcha_token'] when enabled.
     """
-    secret = getattr(settings, "RECAPTCHA_SECRET_KEY", None)
-    if not secret:
-        try:
-            from apps.site_settings.models import SiteSettings
-
-            s = SiteSettings.get_solo()
-            secret = getattr(s, "recaptcha_private_key", None)
-        except Exception:
-            secret = None
+    secret = getattr(settings, "RECAPTCHA_PRIVATE_KEY", None)
     if not secret:
         return True
     token = request.POST.get("recaptcha_token") or ""
@@ -555,7 +551,7 @@ def _notify_parent_commenter(
         return
 
 
-@staff_member_required(login_url="admin_suite:admin_suite_login")
+@staff_member_required(login_url="admin:login")
 def moderation_queue(request: HttpRequest) -> HttpResponse:
     pending = Comment.objects.filter(
         status=Comment.Status.PENDING, is_deleted=False
@@ -575,7 +571,7 @@ def moderation_queue(request: HttpRequest) -> HttpResponse:
     )
 
 
-@staff_member_required(login_url="admin_suite:admin_suite_login")
+@staff_member_required(login_url="admin:login")
 @require_POST
 def moderation_action(request: HttpRequest) -> HttpResponse:
     cid = request.POST.get("comment_id")

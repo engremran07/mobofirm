@@ -22,7 +22,7 @@ import secrets
 import time
 from urllib.parse import quote_plus
 
-from apps.site_settings.models import SiteSettings
+from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
@@ -132,33 +132,74 @@ class TOTPService:
         Never raises; logs safe diagnostic info only.
         """
         try:
-            code_str = str(code).strip().zfill(digits)
-            key = _base32_decode(secret)
-            counter = int(time.time()) // period
-
-            for offset in range(-tolerance, tolerance + 1):
-                expected = TOTPService._hotp_from_bytes(key, counter + offset, digits)
-                if hmac.compare_digest(expected, code_str):
-                    return True
-
-            return False
-
+            return (
+                TOTPService.matching_counter(
+                    secret,
+                    code,
+                    tolerance=tolerance,
+                    period=period,
+                    digits=digits,
+                )
+                is not None
+            )
         except Exception:
             logger.exception("TOTP verification error (invalid secret or input).")
             return False
 
+    @staticmethod
+    def matching_counter(
+        secret: str,
+        code: str,
+        tolerance: int = 1,
+        period: int = 30,
+        digits: int = 6,
+        at_time: int | None = None,
+    ) -> int | None:
+        """Return the matching time-step counter, preferring the current step."""
+        try:
+            code_str = str(code).strip()
+            if (
+                len(code_str) != digits
+                or not code_str.isascii()
+                or not code_str.isdigit()
+                or tolerance < 0
+                or period <= 0
+            ):
+                return None
+
+            key = _base32_decode(secret)
+            current_counter = (
+                int(at_time if at_time is not None else time.time()) // period
+            )
+            offsets = sorted(
+                range(-tolerance, tolerance + 1),
+                key=lambda offset: (abs(offset), offset),
+            )
+            for offset in offsets:
+                candidate_counter = current_counter + offset
+                if candidate_counter < 0:
+                    continue
+                expected = TOTPService._hotp_from_bytes(
+                    key,
+                    candidate_counter,
+                    digits,
+                )
+                if hmac.compare_digest(expected, code_str):
+                    return candidate_counter
+            return None
+        except Exception:
+            logger.exception("TOTP counter matching failed.")
+            return None
+
 
 # =====================================================================
-# MFA POLICY (from SiteSettings)
+# MFA POLICY
 # =====================================================================
 class MFAEnforcer:
     """
     Read-only MFA policy provider.
 
-    Reads from SiteSettings:
-        require_mfa
-        mfa_totp_issuer
-        site_name
+    Reads from the users app settings singleton, with Django settings fallbacks.
 
     Never raises — always returns safe values.
     """
@@ -167,11 +208,11 @@ class MFAEnforcer:
     def required() -> bool:
         """Return True if MFA is globally required."""
         try:
-            settings_obj = SiteSettings.get_solo()
-            return bool(getattr(settings_obj, "require_mfa", False))
+            from apps.users.models import UsersSettings
+
+            return bool(UsersSettings.get_solo().require_mfa)
         except Exception:
-            logger.warning("Failed to read require_mfa; defaulting to False.")
-            return False
+            return bool(getattr(settings, "REQUIRE_MFA", False))
 
     @staticmethod
     def issuer() -> str:
@@ -181,11 +222,11 @@ class MFAEnforcer:
             2) generic default (to avoid branding leakage)
         """
         try:
-            s = SiteSettings.get_solo()
-            return getattr(s, "mfa_totp_issuer", None) or DEFAULT_ISSUER
+            from apps.users.models import UsersSettings
+
+            return UsersSettings.get_solo().mfa_totp_issuer or DEFAULT_ISSUER
         except Exception:
-            logger.warning("Failed to read MFA issuer; using default.")
-            return DEFAULT_ISSUER
+            return getattr(settings, "MFA_TOTP_ISSUER", DEFAULT_ISSUER)
 
     @staticmethod
     def provisioning_uri(

@@ -2,6 +2,12 @@ from django.apps import AppConfig
 
 
 class AdsConfig(AppConfig):
-    default_auto_field = "django.db.models.BigAutoField"
     name = "apps.ads"
-    verbose_name = "Ads"
+    verbose_name = "Ads & Monetization"
+
+    def ready(self):
+        # Import signals if present
+        try:
+            import apps.ads.signals  # noqa: F401
+        except Exception:
+            return

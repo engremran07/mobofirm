@@ -27,34 +27,18 @@ logger = logging.getLogger(__name__)
 
 
 def _get_download_config() -> dict[str, Any]:
-    """Load download configuration from SiteSettings singleton."""
-    try:
-        from apps.site_settings.models import SiteSettings
-
-        ss = SiteSettings.get_solo()
-        return {
-            "gate_enabled": ss.download_gate_enabled,
-            "countdown_seconds": ss.download_countdown_seconds,
-            "ad_gate_enabled": ss.download_ad_gate_enabled,
-            "ad_gate_seconds": ss.download_ad_gate_seconds,
-            "token_expiry_minutes": ss.download_token_expiry_minutes,
-            "require_login": ss.download_require_login,
-            "max_per_day": ss.download_max_per_day,
-            "hotlink_protection": ss.download_hotlink_protection,
-            "link_encryption": ss.download_link_encryption,
-        }
-    except Exception:
-        return {
-            "gate_enabled": True,
-            "countdown_seconds": 10,
-            "ad_gate_enabled": False,
-            "ad_gate_seconds": 30,
-            "token_expiry_minutes": 30,
-            "require_login": False,
-            "max_per_day": 0,
-            "hotlink_protection": True,
-            "link_encryption": True,
-        }
+    """Load server-side download policy from Django settings."""
+    return {
+        "gate_enabled": settings.FIRMWARE_DOWNLOAD_GATE_ENABLED,
+        "countdown_seconds": settings.FIRMWARE_DOWNLOAD_COUNTDOWN_SECONDS,
+        "ad_gate_enabled": settings.FIRMWARE_DOWNLOAD_AD_GATE_ENABLED,
+        "ad_gate_seconds": settings.FIRMWARE_DOWNLOAD_AD_GATE_SECONDS,
+        "token_expiry_minutes": settings.FIRMWARE_DOWNLOAD_TOKEN_EXPIRY_MINUTES,
+        "require_login": settings.FIRMWARE_DOWNLOAD_REQUIRE_LOGIN,
+        "max_per_day": settings.FIRMWARE_DOWNLOAD_MAX_PER_DAY,
+        "hotlink_protection": settings.FIRMWARE_DOWNLOAD_HOTLINK_PROTECTION,
+        "link_encryption": settings.FIRMWARE_DOWNLOAD_LINK_ENCRYPTION,
+    }
 
 
 def create_download_token(

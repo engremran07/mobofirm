@@ -9,18 +9,22 @@ import logging
 from typing import Any
 
 from allauth.account.adapter import DefaultAccountAdapter
+from allauth.account.models import EmailAddress
+from allauth.core.exceptions import ImmediateHttpResponse
 from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
-from allauth.socialaccount.models import SocialLogin
-from django.conf import settings
+from allauth.socialaccount.models import SocialApp, SocialLogin
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.http import HttpRequest
+from django.shortcuts import redirect
 from django.urls import NoReverseMatch, reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 
-from apps.consent.utils import hash_ip
 from apps.core.utils.ip import get_client_ip
+from apps.users.models import UsersSettings
+from apps.users.services.consent import hash_ip
+from apps.users.services.email_verification import issue_email_verification_code
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +44,30 @@ def _safe_reverse(name: str, default: str = "/") -> str:
 class CustomAccountAdapter(DefaultAccountAdapter):
     """Account adapter with hardened password rules and trusted social email."""
 
+    def send_confirmation_mail(self, request, emailconfirmation, signup):
+        email_address = emailconfirmation.email_address
+        context = {
+            "user": email_address.user,
+            "key": emailconfirmation.key,
+            "activate_url": self.get_email_confirmation_url(request, emailconfirmation),
+        }
+        if request is not None:
+            context["code"] = issue_email_verification_code(request, email_address)
+        email_template = (
+            "account/email/email_confirmation_signup"
+            if signup
+            else "account/email/email_confirmation"
+        )
+        self.send_mail(email_template, email_address.email, context)
+
+    def save_user(self, request, user, form, commit=True):
+        super().save_user(request, user, form, commit=commit)
+        user.manual_signup = True
+        user.signup_method = "manual"
+        if commit:
+            user.save(update_fields=["manual_signup", "signup_method"])
+        return user
+
     def send_mail(self, template_prefix, email, context):
         # Enrich reset/verification emails with timestamp and anonymized requester IP when available.
         context = context or {}
@@ -54,14 +82,7 @@ class CustomAccountAdapter(DefaultAccountAdapter):
         return super().send_mail(template_prefix, email, context)
 
     def is_open_for_signup(self, request: HttpRequest | None) -> bool:
-        try:
-            from apps.site_settings.models import SiteSettings  # type: ignore
-
-            settings_obj = SiteSettings.get_solo()
-            return bool(getattr(settings_obj, "enable_signup", True))
-        except Exception as exc:
-            logger.warning("Signup availability check failed: %s", exc)
-            return True
+        return UsersSettings.get_solo().enable_signup
 
     def clean_password(self, password: str, user: Any | None = None) -> str:
         if not isinstance(password, str):
@@ -72,38 +93,18 @@ class CustomAccountAdapter(DefaultAccountAdapter):
             raise ValidationError(_("Password cannot be entirely numeric."))
         return super().clean_password(password, user)
 
-    def is_email_verified(self, user):
-        try:
-            social = getattr(user, "socialaccount_set", None)
-            if social and social.first():
-                return True
-        except Exception:  # noqa: S110
-            pass
-        return super().is_email_verified(user)  # type: ignore[call-arg]
+    def is_email_verified(self, request: HttpRequest, email: str) -> bool:
+        if EmailAddress.objects.filter(
+            email__iexact=email,
+            verified=True,
+        ).exists():
+            return True
+        return super().is_email_verified(request, email)
 
     def get_login_redirect_url(self, request: HttpRequest) -> str:
-        try:
-            user = getattr(request, "user", None)
-            if user and getattr(user, "email_verified_at", None) is None:
-                verification_required = False
-                if getattr(user, "manual_signup", False):
-                    verification_required = True
-                elif (
-                    getattr(settings, "ACCOUNT_EMAIL_VERIFICATION", "optional")
-                    == "mandatory"
-                ):
-                    verification_required = True
-
-                if verification_required:
-                    try:
-                        messages.info(
-                            request, _("Please verify your email to continue.")
-                        )
-                    except Exception:  # noqa: S110
-                        pass
-                    return _safe_reverse("users:verify_email", default="/")
-        except Exception as exc:
-            logger.exception("Login redirect evaluation failed: %s", exc)
+        user = getattr(request, "user", None)
+        if user and not getattr(user, "profile_completed", False):
+            return _safe_reverse("users:tell_us_about_you", default="/users/profile/")
         return _safe_reverse("users:dashboard", default="/")
 
     def get_signup_redirect_url(self, request: HttpRequest) -> str:
@@ -123,6 +124,22 @@ class CustomAccountAdapter(DefaultAccountAdapter):
 
 class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
     """Social adapter that trusts provider email and defers completion to onboarding."""
+
+    def get_app(self, request: HttpRequest, provider, client_id=None):
+        try:
+            return super().get_app(request, provider, client_id=client_id)
+        except SocialApp.DoesNotExist as exc:
+            logger.error(
+                "Social sign-in is unavailable: provider %s is not configured", provider
+            )
+            messages.error(
+                request,
+                _(
+                    "Social sign-in is not configured. Use email and password "
+                    "or contact an administrator."
+                ),
+            )
+            raise ImmediateHttpResponse(redirect("users:account_login")) from exc
 
     def get_connect_redirect_url(self, request: HttpRequest, socialaccount) -> str:
         logger.debug(

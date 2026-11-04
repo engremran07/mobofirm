@@ -56,6 +56,7 @@ class PostService:
         """
         from apps.blog.models import Post, PostStatus
         from apps.core.utils.text import reading_time
+        from apps.blog.services.history import PostHistoryService
 
         # Calculate reading time
         read_time = reading_time(body)
@@ -71,8 +72,9 @@ class PostService:
             **kwargs,
         )
 
-        # Create initial version
-        self._create_version(post, author, "Initial version")
+        PostHistoryService.record_current_version(
+            post, user=author, change_summary="Initial version"
+        )
 
         logger.info(f"Created post: {post.title} (ID: {post.pk})")
 
@@ -158,22 +160,6 @@ class PostService:
         if self.queue:
             self.queue.enqueue("apps.blog.tasks.notify_subscribers", post_id=post.pk)
 
-        # Update sitemap
-        if self.queue:
-            self.queue.enqueue("apps.seo.tasks.update_sitemap")
-
-        # Auto-share if distribution app available
-        try:
-            from apps.distribution.services import (
-                create_plan_for_post,
-                should_fanout,
-            )
-
-            if should_fanout(post):
-                create_plan_for_post(post)
-        except ImportError:
-            pass
-
     @transaction.atomic
     def update_post(self, post, updated_by, change_summary: str = "", **fields):
         """
@@ -188,21 +174,14 @@ class PostService:
         Returns:
             Updated Post instance
         """
-        from apps.core.utils.text import reading_time
+        from apps.blog.services.history import PostHistoryService
 
-        # Create version snapshot before update
-        self._create_version(post, updated_by, change_summary)
-
-        # Update fields
-        for key, value in fields.items():
-            setattr(post, key, value)
-
-        # Recalculate reading time if body changed
-        if "body" in fields:
-            post.reading_time = reading_time(fields["body"])
-
-        post.version += 1
-        post.save()
+        post = PostHistoryService.update_post(
+            post,
+            user=updated_by,
+            change_summary=change_summary or "Updated post",
+            **fields,
+        )
 
         logger.info(f"Updated post: {post.title} (v{post.version})")
 
@@ -215,25 +194,6 @@ class PostService:
             pass
 
         return post
-
-    def _create_version(self, post, user, summary: str):
-        """Create version snapshot"""
-        try:
-            from apps.blog.models_versioning import PostVersion
-
-            PostVersion.objects.create(
-                post=post,
-                version_number=post.version,
-                title=post.title,
-                summary=post.summary,
-                body=post.body,
-                created_by=user,
-                change_summary=summary,
-            )
-
-            logger.debug(f"Created version {post.version} for post {post.pk}")
-        except ImportError:
-            logger.warning("PostVersion model not available")
 
     def get_related_posts(self, post, limit: int = 5) -> list:
         """

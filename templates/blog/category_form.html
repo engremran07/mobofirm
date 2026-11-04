@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Create a journal category | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block content %}
+<div class="site-container py-5">
+  <h1 class="h2 mb-4">Create a category</h1>
+  <form method="post" class="surface-card p-4">{% csrf_token %}
+    {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+    {% for field in form %}<div class="mb-3"><label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{% for error in field.errors %}<p class="text-danger small">{{ error }}</p>{% endfor %}</div>{% endfor %}
+    <button class="btn btn-primary" type="submit">Create category</button>
+  </form>
+</div>
+{% endblock %}

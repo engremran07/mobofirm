@@ -1,0 +1,4 @@
+{% extends "admin/base_site.html" %}
+{% block content %}<div class="container-fluid"><h1>Device events</h1>
+  {% for event in events %}<article class="card p-3 mb-2"><strong>{{ event }}</strong><time class="small">{{ event.created_at }}</time>{% if event.device %}<p>{{ event.device }}</p>{% endif %}</article>{% empty %}<p>No device events are available.</p>{% endfor %}
+</div>{% endblock %}

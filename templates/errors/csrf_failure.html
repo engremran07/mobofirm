@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Form expired | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block content %}
+<div class="site-container py-5">
+  <section class="surface-card p-4 p-md-5 mx-auto auth-card" aria-labelledby="csrf-error-title">
+    <p class="section-eyebrow">Secure form check</p>
+    <h1 id="csrf-error-title" class="h2">This form is out of date</h1>
+    <p class="muted">For your security, this request was not accepted. The page may have been open too long or your session may have changed.</p>
+    <p>Return to the form, reload it, and submit again. No changes were made.</p>
+    <div class="d-flex flex-wrap gap-2">
+      {% if user.is_authenticated %}
+        <a class="btn btn-primary" href="{% url 'users:dashboard' %}">Return to your account</a>
+      {% else %}
+        <a class="btn btn-primary" href="{% url 'users:account_login' %}">Return to sign in</a>
+      {% endif %}
+      <a class="btn btn-outline-secondary" href="{% url 'home' %}">Go to home</a>
+    </div>
+  </section>
+</div>
+{% endblock %}

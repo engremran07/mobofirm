@@ -1,0 +1,15 @@
+{% if brands %}
+  <div class="row g-3">
+    {% for brand in brands %}
+      <div class="col-6 col-md-4 col-xl-3">
+        <a class="surface-card p-3 d-flex align-items-center gap-3 text-decoration-none" href="{% url 'firmwares:brand_detail' slug=brand.slug %}">
+          <span class="brand-mark" aria-hidden="true">{{ brand.name|slice:":1"|upper }}</span>
+          <span class="min-w-0"><span class="d-block fw-semibold">{{ brand.name }}</span><span class="small muted">{{ brand.model_count }} models</span></span>
+          <i class="icon ms-auto muted" data-lucide="chevron-right" aria-hidden="true"></i>
+        </a>
+      </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <p class="empty-state p-4 mb-0">No brands match this search.</p>
+{% endif %}

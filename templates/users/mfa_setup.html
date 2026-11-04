@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Set up two-factor authentication | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block content %}
+<div class="site-container py-5">
+  <section class="surface-card auth-card p-4" aria-labelledby="mfa-setup-title">
+    <p class="section-eyebrow">Account security</p>
+    <h1 id="mfa-setup-title" class="h2">Set up an authenticator</h1>
+    <p>Use an authenticator app that supports time-based one-time passwords.</p>
+    <ol>
+      <li>Add a new account in your authenticator app.</li>
+      <li>Enter this setup key: <code>{{ secret }}</code></li>
+      <li>Enter the six-digit code from the app to confirm setup.</li>
+    </ol>
+    <form method="post">
+      {% csrf_token %}
+      <label class="form-label" for="mfa-setup-code">Authenticator code</label>
+      <input class="form-control mb-3" id="mfa-setup-code" name="code"
+             inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}"
+             minlength="6" maxlength="6" required>
+      <button class="btn btn-primary" type="submit">Enable two-factor authentication</button>
+    </form>
+  </section>
+</div>
+{% endblock %}

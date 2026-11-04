@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Manage journal posts | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block content %}
+<div class="site-container py-5">
+  <header class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div><p class="section-eyebrow">Editorial workspace</p><h1 class="h2">Manage posts</h1></div>
+    <a class="btn btn-primary" href="{% url 'blog:post_create' %}">Write a post</a>
+  </header>
+  {% if posts %}<div class="catalog-table-wrap"><table class="table catalog-table"><thead><tr><th>Title</th><th>Status</th><th>Updated</th><th>Action</th></tr></thead><tbody>
+    {% for post in posts %}<tr><td>{{ post.title }}</td><td>{{ post.get_status_display|default:post.status }}</td><td>{{ post.updated_at|date:"M j, Y" }}</td><td><a href="{% url 'blog:post_create' %}?edit={{ post.slug }}">Edit</a>{% if post.is_live %} · <a href="{{ post.get_absolute_url }}">View</a>{% endif %}</td></tr>{% endfor %}
+  </tbody></table></div>{% else %}<p class="empty-state p-4">No posts are available to manage.</p>{% endif %}
+</div>
+{% endblock %}

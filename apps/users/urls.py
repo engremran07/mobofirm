@@ -4,9 +4,10 @@ Enterprise-grade URL configuration for the platform Users module.
 """
 
 from allauth.account.views import LogoutView
-from django.urls import path
+from django.urls import include, path
+from rest_framework.routers import DefaultRouter
 
-from . import admin_views, api, views_notifications
+from . import admin_views, api, api_auth, mfa_views, views_notifications
 from .views import (
     EnterpriseLoginView,
     EnterpriseSignupView,
@@ -28,11 +29,34 @@ from .views import (
     verify_email_required,
     verify_email_status,
     verify_email_view,
+    verify_email_view,
 )
+
+profile_api_router = DefaultRouter()
+profile_api_router.register("profiles", api.ProfileViewSet, basename="profiles")
+profile_api_router.register("following", api.FollowingViewSet, basename="following")
+profile_api_router.register("activity", api.ActivityFeedViewSet, basename="activity")
 
 app_name = "users"
 
 urlpatterns = [
+    path("api/", include(profile_api_router.urls)),
+    path("api/auth/signup/", api_auth.ApiSignupView.as_view(), name="api_signup"),
+    path("api/auth/login/", api_auth.ApiLoginView.as_view(), name="api_login"),
+    path(
+        "api/auth/google/",
+        api_auth.ApiGoogleLoginView.as_view(),
+        name="api_google_login",
+    ),
+    path(
+        "api/auth/password-reset/",
+        api_auth.ApiPasswordResetView.as_view(),
+        name="api_password_reset",
+    ),
+    path("api/auth/logout/", api_auth.ApiLogoutView.as_view(), name="api_logout"),
+    path(
+        "api/auth/me/", api_auth.ApiCurrentUserView.as_view(), name="api_current_user"
+    ),
     path("auth/", auth_hub_view, name="auth_hub"),
     path("login/", EnterpriseLoginView.as_view(), name="account_login"),
     path("signup/", EnterpriseSignupView.as_view(), name="account_signup"),
@@ -44,6 +68,10 @@ urlpatterns = [
     path("devices/approve/", approve_device, name="approve_device"),
     path("devices/evict/", device_eviction, name="device_eviction"),
     path("devices/mfa/", device_mfa_challenge, name="device_mfa_challenge"),
+    path("mfa/setup/", mfa_views.mfa_setup, name="mfa_setup"),
+    path("mfa/verify/", mfa_views.mfa_verify, name="mfa_verify"),
+    path("mfa/backup-codes/", mfa_views.mfa_backup_codes, name="mfa_backup_codes"),
+    path("mfa/disable/", mfa_views.mfa_disable, name="mfa_disable"),
     path("verify-email/", verify_email_view, name="verify_email"),
     path("verify-email/status/", verify_email_status, name="verify_email_status"),
     path("verify-email/required/", verify_email_required, name="verify_email_required"),

@@ -1,0 +1,48 @@
+schema_version: 1
+gates:
+  change_intake:
+    required:
+      - identify_requirement_and_approval_state
+      - identify_owning_app_and_callers
+      - inspect_current_changes_before_editing
+      - inspect_standalone_app_contract_and_import_dependencies
+  implementation:
+    required:
+      - focused_regression_test_for_behavior_changes
+      - cross_app_contract_test_for_changed_integration
+      - root_test_directory_only
+      - no_skipped_in_scope_tests
+      - no_feature_stubs_or_silent_success_fallbacks
+      - root_cause_evidence_for_regression_fixes
+      - bounded_and_tested_retry_rollback_or_compensation
+      - generated_content_uses_governance_review_and_publication
+      - review_migrations_for_reversibility_and_data_impact
+      - no_unapproved_dependency_or_frontend_stack
+  verification:
+    required:
+      - focused_tests_pass
+      - full_pytest_suite_pass_for_behavior_changes
+      - django_check_pass_with_test_settings
+      - makemigrations_check_pass
+      - pip_check_pass
+      - all_in_scope_tests_collected
+      - zero_unexpected_test_skips
+      - changed_files_have_no_problems_panel_errors
+  release:
+    required:
+      - all_applicable_verification_gates_pass
+      - no_unresolved_problems_panel_diagnostics
+      - no_unresolved_critical_or_high_security_findings
+      - product_and_design_approval_recorded
+      - frontend_and_admin_share_approved_central_design_system
+      - shared_static_assets_have_one_canonical_source
+      - frontend_file_size_budgets_pass
+      - explicit_repository_owner_authorization
+    prohibited:
+      - commit_or_push_while_problems_panel_has_issues
+      - production_migration_without_explicit_approval
+      - frontend_work_before_design_approval
+gate_failure_policy:
+  - Report blockers and exact failed evidence.
+  - Do not skip, weaken, or relabel a failed gate to achieve a pass.
+  - A check unavailable due to infrastructure is not a pass.

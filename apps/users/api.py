@@ -8,9 +8,97 @@ from django.urls import reverse
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 from django.views.decorators.http import require_POST
+from rest_framework import permissions, serializers, viewsets
 
 from .models import Notification
+from .profile_models import ActivityFeed, Following, Profile
 from .services.rate_limit import allow_action
+
+
+class ProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Profile
+        fields = [
+            "id",
+            "user",
+            "avatar",
+            "cover",
+            "bio",
+            "website",
+            "location",
+            "social_links",
+            "is_public",
+            "updated_at",
+        ]
+        read_only_fields = ["id", "user", "updated_at"]
+
+    def validate(self, attrs):
+        if (
+            self.instance is None
+            and Profile.objects.filter(user=self.context["request"].user).exists()
+        ):
+            raise serializers.ValidationError(
+                "A profile already exists for the authenticated user."
+            )
+        return attrs
+
+
+class ProfileViewSet(viewsets.ModelViewSet):
+    serializer_class = ProfileSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        profiles = Profile.objects.select_related("user")
+        if self.request.user.is_staff:
+            return profiles
+        return profiles.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+class FollowingSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Following
+        fields = ["id", "follower", "following", "created_at"]
+        read_only_fields = ["id", "follower", "created_at"]
+
+    def validate_following(self, following):
+        follower = self.context["request"].user
+        if follower.pk == following.pk:
+            raise serializers.ValidationError("You cannot follow yourself.")
+        existing = Following.objects.filter(follower=follower, following=following)
+        if self.instance:
+            existing = existing.exclude(pk=self.instance.pk)
+        if existing.exists():
+            raise serializers.ValidationError("You already follow this user.")
+        return following
+
+
+class FollowingViewSet(viewsets.ModelViewSet):
+    serializer_class = FollowingSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return Following.objects.filter(follower=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(follower=self.request.user)
+
+
+class ActivityFeedSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ActivityFeed
+        fields = ["id", "action_type", "object_id", "metadata", "created_at"]
+        read_only_fields = fields
+
+
+class ActivityFeedViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = ActivityFeedSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return ActivityFeed.objects.filter(user=self.request.user)
 
 
 @login_required

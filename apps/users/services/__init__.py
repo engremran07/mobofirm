@@ -1,5 +1,5 @@
-# Users services module
-from .admin_profile import *  # noqa: F403
+"""Shared exports for user-owned services."""
+
 from .country_detection import (
     COUNTRY_PHONE_CODES,  # noqa: F401
     auto_detect_user_country,  # noqa: F401
@@ -17,4 +17,3 @@ from .notifications import (
     send_notification,  # noqa: F401
 )
 from .rate_limit import *  # noqa: F403
-from .recaptcha import *  # noqa: F403

@@ -5,6 +5,8 @@ Responds to notification signals without creating circular dependencies.
 
 import logging
 
+from allauth.account.signals import user_signed_up
+from django.db import transaction
 from django.dispatch import receiver
 
 from apps.core.signals import (
@@ -18,46 +20,54 @@ logger = logging.getLogger(__name__)
 
 @receiver(notification_send_requested)
 def send_notifications(
-    sender, user_ids, title, message, notification_type="info", **kwargs
+    sender, user_ids, title, message, action_type="system", priority="info", **kwargs
 ):
     """Handle notification send requests from other apps"""
-    try:
-        from apps.users.models import CustomUser, Notification
+    from apps.users.models import CustomUser, Notification
+    from apps.users.services.notifications import broadcast_notification
 
-        users = CustomUser.objects.filter(id__in=user_ids)
-        notifications = [
-            Notification(
-                recipient=user,
-                title=title,
-                message=message,
-                notification_type=notification_type,
-            )
-            for user in users
-        ]
+    action_types = {value for value, _ in Notification.ACTION_TYPE_CHOICES}
+    priorities = {value for value, _ in Notification.PRIORITY_CHOICES}
+    if action_type not in action_types:
+        raise ValueError(f"Unsupported notification action type: {action_type}")
+    if priority not in priorities:
+        raise ValueError(f"Unsupported notification priority: {priority}")
 
-        created = Notification.objects.bulk_create(notifications)
-        logger.info(f"Sent {len(created)} notifications")
-        return len(created)
-    except Exception as exc:
-        logger.exception(f"Failed to send notifications: {exc}")
-        return 0
+    created = broadcast_notification(
+        CustomUser.objects.filter(pk__in=user_ids),
+        title=title,
+        message=message,
+        level=priority,
+        channel="web",
+        action_type=action_type,
+    )
+    logger.info("Sent %s notifications", created)
+    return created
 
 
 @receiver(user_registered)
+@receiver(user_signed_up)
 def send_welcome_notification(sender, user, request, **kwargs):
     """Send welcome notification when user registers"""
     try:
         from apps.users.models import Notification
 
-        Notification.objects.create(
-            recipient=user,
-            title="Welcome!",
-            message=f"Welcome to our platform, {user.username}!",
-            notification_type="info",
-        )
-        logger.info(f"Sent welcome notification to user: {user.pk}")
+        with transaction.atomic():
+            locked_user = type(user).objects.select_for_update().get(pk=user.pk)
+            _, created = Notification.objects.get_or_create(
+                recipient=locked_user,
+                title="Welcome!",
+                action_type="system",
+                defaults={
+                    "message": f"Welcome to our platform, {locked_user.username}!",
+                    "priority": "info",
+                    "channel": "web",
+                },
+            )
+        if created:
+            logger.info("Sent welcome notification to user %s", user.pk)
     except Exception as exc:
-        logger.exception(f"Failed to send welcome notification: {exc}")
+        logger.exception("Failed to send welcome notification: %s", exc)
 
 
 @receiver(user_login_success)

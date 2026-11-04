@@ -14,7 +14,6 @@ try:
 except Exception:  # allauth version guard
     password_changed = None
     password_set = None
-from allauth.account.utils import perform_login
 from django.contrib.auth.signals import user_logged_in
 from django.dispatch import receiver
 from django.utils import timezone
@@ -34,7 +33,7 @@ def handle_user_signed_up(request, user, **kwargs):
     Responsibilities:
       • Set signup_method ("manual" | "social").
       • Ensure profile_completed=False so middleware can enforce onboarding.
-      • Mark email_verified_at for social signups.
+      • Synchronize provider-verified social email state.
     """
     if not user:
         logger.debug("handle_user_signed_up: missing user instance.")
@@ -56,7 +55,14 @@ def handle_user_signed_up(request, user, **kwargs):
                 user.profile_completed = False
                 updated_fields.append("profile_completed")
 
-        if is_social and hasattr(user, "email_verified_at"):
+        user_email = str(getattr(user, "email", "") or "").strip().casefold()
+        verified_social_email = bool(user_email) and any(
+            getattr(address, "verified", False)
+            and str(getattr(address, "email", "") or "").strip().casefold()
+            == user_email
+            for address in getattr(sociallogin, "email_addresses", ())
+        )
+        if is_social and verified_social_email and hasattr(user, "email_verified_at"):
             if getattr(user, "email_verified_at", None) is None:
                 user.email_verified_at = timezone.now()
                 updated_fields.append("email_verified_at")
@@ -68,12 +74,6 @@ def handle_user_signed_up(request, user, **kwargs):
                 getattr(user, "email", user.pk),
                 updated_fields,
             )
-
-        if sociallogin:
-            try:
-                perform_login(request, user, email_verification="optional")
-            except Exception:  # noqa: S110
-                pass
 
     except Exception as exc:
         logger.exception(
@@ -89,6 +89,14 @@ def handle_email_confirmed(request, email_address, **kwargs):
     Sync allauth EmailAddress confirmations to CustomUser.email_verified_at.
     """
     try:
+        if request is not None:
+            verification_state = request.session.get("users_email_verification")
+            if (
+                verification_state
+                and verification_state.get("email_address_id") == email_address.pk
+            ):
+                request.session.pop("users_email_verification", None)
+
         user = getattr(email_address, "user", None)
         if not user:
             logger.debug("email_confirmed: missing user on email_address")
@@ -98,12 +106,6 @@ def handle_email_confirmed(request, email_address, **kwargs):
         if not getattr(user, "email_verified_at", None):
             user.email_verified_at = timezone.now()
             updated_fields.append("email_verified_at")
-
-        if hasattr(user, "verification_code") and getattr(
-            user, "verification_code", ""
-        ):
-            user.verification_code = ""
-            updated_fields.append("verification_code")
 
         if updated_fields:
             user.save(update_fields=updated_fields)

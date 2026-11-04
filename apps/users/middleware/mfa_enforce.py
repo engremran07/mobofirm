@@ -3,107 +3,89 @@ from __future__ import annotations
 import logging
 from collections.abc import Iterable
 
+from allauth.account.models import EmailAddress
+from django.conf import settings
+from django.db import DatabaseError
+from django.http import HttpResponse
 from django.shortcuts import redirect
-from django.urls import resolve, reverse
+from django.urls import Resolver404, resolve
+
+from apps.users.models import MFADevice, UsersSettings
 
 logger = logging.getLogger(__name__)
 
 
 class EnforceMfaMiddleware:
-    """
-    Enforce MFA when UsersSettings.require_mfa is enabled.
-
-    - Skips static/admin/api/consent paths.
-    - Applies only to authenticated users.
-    - Redirects to MFA setup if user has MFA required but no active device.
-    - Redirects to MFA challenge if user has devices but hasn't verified this session.
-    """
-
     SAFE_URL_NAMES: Iterable[str] = {
         "account_login",
         "account_logout",
         "account_signup",
+        "users:account_login",
+        "users:account_logout",
+        "users:account_signup",
         "users:verify_email",
+        "users:verify_email_required",
+        "users:tell_us_about_you",
         "users:mfa_setup",
         "users:mfa_verify",
+        "users:mfa_backup_codes",
+        "users:mfa_disable",
     }
     SAFE_PATH_PREFIXES: Iterable[str] = (
-        "/admin",
-        "/static",
-        "/media",
-        "/api",
-        "/consent",
-        "/.well-known",
+        "/static/",
+        "/media/",
+        "/health/",
+        "/.well-known/",
     )
 
     def __init__(self, get_response):
         self.get_response = get_response
-        self.mfa_setup_url = "users:mfa_setup"
-        self.mfa_verify_url = "users:mfa_verify"
-        self.verify_email_url = "users:verify_email"
 
     def __call__(self, request):
         user = getattr(request, "user", None)
-
-        try:
-            from apps.users.models import UsersSettings
-
-            us = UsersSettings.get_solo()
-            require_mfa = bool(getattr(us, "require_mfa", False))
-        except Exception:
-            require_mfa = False
-
-        if not require_mfa or not user or not user.is_authenticated:
+        if not user or not user.is_authenticated:
             return self.get_response(request)
 
-        path = request.path
-        for prefix in self.SAFE_PATH_PREFIXES:
-            if path.startswith(prefix):
-                return self.get_response(request)
-
-        try:
-            match = request.resolver_match or resolve(path)
-            if match and match.view_name in self.SAFE_URL_NAMES:
-                return self.get_response(request)
-        except Exception:
+        if any(
+            request.path_info.startswith(prefix) for prefix in self.SAFE_PATH_PREFIXES
+        ):
             return self.get_response(request)
 
-        # Check if user has verified email first
-        if require_mfa and not getattr(user, "email_verified_at", None):
-            try:
-                return redirect(reverse(self.verify_email_url))
-            except Exception:
-                return self.get_response(request)
-
-        # Check if user has MFA devices enrolled
         try:
-            from apps.users.models import MFADevice
+            view_name = resolve(request.path_info).view_name
+        except Resolver404:
+            view_name = None
+        if view_name in self.SAFE_URL_NAMES:
+            return self.get_response(request)
 
-            has_active_device = MFADevice.objects.filter(
-                user=user, is_active=True, device_type="totp"
+        try:
+            require_mfa = bool(
+                settings.REQUIRE_MFA or UsersSettings.get_solo().require_mfa
+            )
+            has_totp = MFADevice.objects.filter(
+                user=user,
+                device_type="totp",
+                is_active=True,
             ).exists()
+            email_verified = bool(
+                getattr(user, "email_verified_at", None)
+                or EmailAddress.objects.filter(user=user, verified=True).exists()
+            )
+        except DatabaseError:
+            logger.exception(
+                "Could not load authentication policy for user %s", user.pk
+            )
+            return HttpResponse(
+                "Account security policy is temporarily unavailable.",
+                status=503,
+            )
 
-            if not has_active_device:
-                # User needs to set up MFA
-                try:
-                    return redirect(reverse(self.mfa_setup_url))
-                except Exception:
-                    logger.debug("MFA setup URL not configured yet")
-                    return self.get_response(request)
-
-            # Check if MFA has been verified this session
-            mfa_verified = request.session.get("mfa_verified", False)
-            if not mfa_verified:
-                # Redirect to MFA challenge
-                try:
-                    return redirect(reverse(self.mfa_verify_url))
-                except Exception:
-                    logger.debug("MFA verify URL not configured yet")
-                    return self.get_response(request)
-
-        except ImportError:
-            logger.warning("MFADevice model not available")
-        except Exception as e:
-            logger.exception(f"Error checking MFA status: {e}")
-
+        if require_mfa and not email_verified:
+            return redirect("users:verify_email")
+        if require_mfa and not has_totp:
+            return redirect("users:mfa_setup")
+        if (require_mfa or has_totp) and request.session.get(
+            "mfa_verified_user_id"
+        ) != str(user.pk):
+            return redirect("users:mfa_verify")
         return self.get_response(request)

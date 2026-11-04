@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Firmware catalogue | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block meta_description %}Browse active, verified or governance-reviewed firmware records by device, manufacturer, and package type.{% endblock %}
+{% block content %}
+<div class="site-container py-5">
+  <p class="section-eyebrow">Firmware intelligence</p>
+  <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-end gap-3 mb-4">
+    <div><h1 class="h2 mb-2">Firmware catalogue</h1><p class="muted mb-0">Only active firmware that is verified or has completed governance review is listed.</p></div>
+    <a class="btn btn-outline-secondary" href="{% url 'firmwares:brand_list' %}">Browse brands</a>
+  </div>
+  <form id="firmware-filters" class="row g-2 mb-4" method="get" action="{% url 'firmwares:browse' %}"
+        hx-get="{% url 'firmwares:browse' %}" hx-trigger="change, submit" hx-target="#firmware-table-content"
+        hx-include="this" hx-swap="innerHTML" hx-push-url="true">
+    <div class="col-12 col-md-6 col-lg-3">
+      <label class="form-label" for="firmware-query">Search</label>
+      <input id="firmware-query" class="form-control" name="q" value="{{ search_query }}" placeholder="Filename, model, brand, or chipset">
+    </div>
+    <div class="col-12 col-md-6 col-lg-3">
+      <label class="form-label" for="firmware-brand">Brand</label>
+      <select id="firmware-brand" class="form-select" name="brand">
+        <option value="">All brands</option>
+        {% for brand in brands %}<option value="{{ brand.slug }}"{% if selected_brand == brand.slug %} selected{% endif %}>{{ brand.name }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-12 col-md-6 col-lg-2">
+      <label class="form-label" for="firmware-type">Firmware classification</label>
+      <select id="firmware-type" class="form-select" name="type">
+        {% for value, label in firmware_types %}<option value="{{ value }}"{% if selected_type == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-12 col-md-6 col-lg-2">
+      <label class="form-label" for="firmware-package-format">Package format</label>
+      <select id="firmware-package-format" class="form-select" name="package_format">
+        {% for value, label in package_formats %}<option value="{{ value }}"{% if selected_package_format == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-12 col-md-6 col-lg-2">
+      <label class="form-label" for="firmware-chipset">Chipset</label>
+      <select id="firmware-chipset" class="form-select" name="chipset">
+        <option value="">All chipsets</option>
+        {% for chipset in chipsets %}<option value="{{ chipset }}"{% if selected_chipset == chipset %} selected{% endif %}>{{ chipset }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-12 d-flex justify-content-end">
+      <a class="btn btn-outline-secondary" href="{% url 'firmwares:browse' %}">Clear filters</a>
+    </div>
+  </form>
+  <div id="firmware-table-content" aria-live="polite">{% include "firmwares/fragments/firmware_table.html" %}</div>
+</div>
+{% endblock %}

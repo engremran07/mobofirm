@@ -3,6 +3,7 @@ from rest_framework import serializers
 
 from .models import (
     BrandCreationRequest,
+    FirmwarePackageFormat,
     ModelCreationRequest,
     PendingFirmware,
     SchemaUpdateProposal,
@@ -14,6 +15,11 @@ class PendingFirmwareUploadSerializer(serializers.Serializer):
     brand_id = serializers.IntegerField(required=False, allow_null=True)
     model_id = serializers.IntegerField(required=False, allow_null=True)
     variant_id = serializers.IntegerField(required=False, allow_null=True)
+    package_format = serializers.ChoiceField(
+        choices=FirmwarePackageFormat.choices,
+        required=False,
+        default=FirmwarePackageFormat.UNKNOWN,
+    )
     is_password_protected = serializers.BooleanField()
     password = serializers.CharField(
         required=False,
@@ -37,6 +43,7 @@ class PendingFirmwareSerializer(serializers.ModelSerializer):
             "uploaded_brand",
             "uploaded_model",
             "uploaded_variant",
+            "package_format",
             "ai_brand",
             "ai_model",
             "ai_variant",

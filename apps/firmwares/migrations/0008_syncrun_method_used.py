@@ -4,15 +4,22 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-
     dependencies = [
-        ('firmwares', '0007_gsmarenadevice_chipset_gsmarenadevice_marketed_as_and_more'),
+        (
+            "firmwares",
+            "0007_gsmarenadevice_chipset_gsmarenadevice_marketed_as_and_more",
+        ),
     ]
 
     operations = [
         migrations.AddField(
-            model_name='syncrun',
-            name='method_used',
-            field=models.CharField(blank=True, default='', help_text='Scraping method that succeeded (spider, wayback, curl_cffi/*, httpx)', max_length=50),
+            model_name="syncrun",
+            name="method_used",
+            field=models.CharField(
+                blank=True,
+                default="",
+                help_text="Scraping method that succeeded (spider, wayback, curl_cffi/*, httpx)",
+                max_length=50,
+            ),
         ),
     ]

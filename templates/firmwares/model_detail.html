@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}{{ model.display_name }} firmware | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block meta_description %}Device specifications, model variants, and reviewed firmware for {{ model.display_name }}.{% endblock %}
+{% block content %}
+<div class="site-container py-5">
+  <nav aria-label="Breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="{% url 'firmwares:brand_list' %}">Brands</a></li><li class="breadcrumb-item"><a href="{% url 'firmwares:brand_detail' slug=brand.slug %}">{{ brand.name }}</a></li><li class="breadcrumb-item active" aria-current="page">{{ model.display_name }}</li></ol></nav>
+  <header class="hero-panel p-4 p-md-5 mb-5">
+    <p class="section-eyebrow">{{ brand.name }} device profile</p>
+    <h1 class="display-6 fw-bold">{{ model.display_name }}</h1>
+    <p class="muted mb-3">{% if model.model_code %}<span class="model-code">{{ model.model_code }}</span>{% endif %}{% if model.codename %} · Codename {{ model.codename }}{% endif %}</p>
+    {% if model.description %}<p class="hero-copy mb-0">{{ model.description }}</p>{% endif %}
+  </header>
+  <div class="row g-4">
+    <section class="col-12 col-lg-4" aria-labelledby="device-specs-title">
+      <div class="surface-card p-4">
+        <h2 id="device-specs-title" class="h4 mb-3">Device information</h2>
+        <dl class="row mb-0">
+          {% for label, value in model_specifications %}
+            {% if value %}<dt class="col-5 muted fw-normal">{{ label }}</dt><dd class="col-7">{{ value }}</dd>{% endif %}
+          {% endfor %}
+          {% if model.chipset %}<dt class="col-5 muted fw-normal">Chipset</dt><dd class="col-7">{{ model.chipset }}</dd>{% endif %}
+          {% if model.os_version %}<dt class="col-5 muted fw-normal">Launch OS</dt><dd class="col-7">{{ model.os_version }}</dd>{% endif %}
+          {% if model.display_size %}<dt class="col-5 muted fw-normal">Display</dt><dd class="col-7">{{ model.display_size }}</dd>{% endif %}
+          {% if model.battery %}<dt class="col-5 muted fw-normal">Battery</dt><dd class="col-7">{{ model.battery }}</dd>{% endif %}
+          {% if model.release_date %}<dt class="col-5 muted fw-normal">Released</dt><dd class="col-7">{{ model.release_date|date:"F Y" }}</dd>{% endif %}
+        </dl>
+        {% if variants %}
+          <h3 class="h6 mt-4">Model variants</h3>
+          <ul class="list-unstyled mb-0">{% for variant in variants %}<li>{{ variant.name }}{% if variant.region %}<span class="muted"> · {{ variant.region }}</span>{% endif %}{% if variant.model_code %}<span class="d-block small model-code">{{ variant.model_code }}</span>{% endif %}</li>{% endfor %}</ul>
+        {% endif %}
+      </div>
+    </section>
+    <section class="col-12 col-lg-8" aria-labelledby="firmware-title">
+      <div class="d-flex justify-content-between align-items-end gap-2 mb-3">
+        <div><p class="section-eyebrow mb-2">Reviewed files</p><h2 id="firmware-title" class="h3 mb-0">Firmware catalogue</h2></div>
+        <span class="small muted">{{ total_firmwares }} records</span>
+      </div>
+      {% if firmwares %}
+        <div class="d-grid gap-3">
+        {% for firmware in firmwares %}
+          <article class="surface-card p-3 p-md-4">
+            <div class="d-flex flex-wrap justify-content-between gap-3">
+              <div>
+                <span class="badge text-bg-secondary">{{ firmware.firmware_type_display }}</span>
+                <h3 class="h5 mt-2 mb-1"><span class="build-code">{{ firmware.build_number|default:firmware.original_file_name }}</span></h3>
+                <p class="small muted mb-0">{{ firmware.variant.name|default:"Variant not specified" }}{% if firmware.variant.region %} · {{ firmware.variant.region }}{% endif %}{% if firmware.variant.model_code %} · <span class="model-code">{{ firmware.variant.model_code }}</span>{% endif %}</p>
+                <p class="small muted mb-0">{{ firmware.get_package_format_display }}</p>
+              </div>
+              <div class="text-md-end">
+                <p class="small muted mb-2">{{ firmware.android_version|default:"Android version not specified" }} · {{ firmware.file_size_display }}</p>
+                <a class="btn btn-outline-secondary btn-sm" href="{% url 'firmwares:firmware_detail' firmware_type=firmware.firmware_type firmware_id=firmware.pk %}">Review details</a>
+              </div>
+            </div>
+          </article>
+        {% endfor %}
+        </div>
+      {% else %}
+        <p class="empty-state p-4">No active, verified or governance-reviewed firmware is available for this model.</p>
+      {% endif %}
+    </section>
+  </div>
+</div>
+{% endblock %}

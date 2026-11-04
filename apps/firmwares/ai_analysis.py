@@ -190,7 +190,7 @@ class FirmwareAIAnalyzer:
         Fallback when pattern-based analysis has low confidence.
         """
         try:
-            from apps.ai.services import test_completion
+            from apps.core import ai_client
 
             # Read sample for AI analysis
             with open(firmware_file_path, "rb") as f:
@@ -226,8 +226,7 @@ Extract and return ONLY a JSON object with these fields:
 Return ONLY valid JSON, no markdown formatting.
 """
 
-            response = test_completion(prompt)
-            content = response.get("text", "{}")
+            content = ai_client.generate_answer(question=prompt, user=None) or "{}"
 
             # Clean JSON from markdown
             if content.startswith("```json"):

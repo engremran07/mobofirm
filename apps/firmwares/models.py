@@ -8,6 +8,18 @@ from django.db import models
 from .constants import MAIN_CATEGORIES
 
 
+class FirmwarePackageFormat(models.TextChoices):
+    UNKNOWN = "unknown", "Not specified"
+    RECOVERY_ROM = "recovery_rom", "Recovery ROM"
+    FASTBOOT_ROM = "fastboot_rom", "Fastboot ROM"
+    FULL_OTA = "full_ota", "Full OTA"
+    INCREMENTAL_OTA = "incremental_ota", "Incremental OTA"
+    FACTORY_IMAGE = "factory_image", "Factory image"
+    SERVICE_PACKAGE = "service_package", "Service package"
+    PARTITION_IMAGE = "partition_image", "Partition image"
+    OTHER = "other", "Other package format"
+
+
 class Timestamped(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -234,6 +246,12 @@ class Variant(Timestamped):
         max_length=128, help_text="Variant name (e.g., Global, US, EU)"
     )
     slug = models.SlugField(max_length=160)
+    model_code = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        help_text="Manufacturer model code for this regional variant",
+    )
 
     # Identification
     region = models.CharField(
@@ -502,6 +520,11 @@ class PendingFirmware(Timestamped):
         max_length=32, choices=MAIN_CATEGORIES, blank=True, null=True
     )
     ai_subtype = models.CharField(max_length=64, blank=True, null=True)  # noqa: DJ001
+    package_format = models.CharField(
+        max_length=32,
+        choices=FirmwarePackageFormat.choices,
+        default=FirmwarePackageFormat.UNKNOWN,
+    )
     chipset = models.CharField(max_length=128, blank=True, default="")
     partitions = models.JSONField(default=list, blank=True)
     is_password_protected = models.BooleanField(default=False)
@@ -578,6 +601,12 @@ class BaseFirmware(Timestamped):
     )
     file_hash = models.CharField(
         max_length=256, blank=True, default="", help_text="SHA256 hash"
+    )
+    package_format = models.CharField(
+        max_length=32,
+        choices=FirmwarePackageFormat.choices,
+        default=FirmwarePackageFormat.UNKNOWN,
+        help_text="Package layout, distinct from firmware review/classification type",
     )
 
     # Structure
@@ -700,7 +729,7 @@ from .tracking_models import (  # noqa: F401, E402
 )
 
 # =============================================================================
-# GSMArena Sync — merged from apps.gsmarena_sync
+# GSMArena device synchronization
 # =============================================================================
 
 
@@ -781,7 +810,7 @@ class GSMArenaDevice(models.Model):
 
 
 # =============================================================================
-# FW Verification — merged from apps.fw_verification
+# Firmware verification models
 # =============================================================================
 
 
@@ -913,7 +942,7 @@ class VerificationCredit(models.Model):
 
 
 # =============================================================================
-# Download Links — merged from apps.download_links
+# Download links
 # =============================================================================
 
 
@@ -1062,7 +1091,7 @@ class HotlinkBlock(models.Model):
 
 
 # ---------------------------------------------------------------------------
-# Changelog — absorbed from apps.changelog
+# Changelog models
 # ---------------------------------------------------------------------------
 
 
@@ -1306,8 +1335,9 @@ class FlashingGuideTemplate(Timestamped):
         default=False,
         help_text="Automatically generate blog posts for matching brand/models",
     )
-    auto_publish = models.BooleanField(
-        default=False, help_text="Auto-publish generated guides (vs. draft)"
+    submit_for_review = models.BooleanField(
+        default=False,
+        help_text="Automatically submit generated guides for governance review; never publish directly.",
     )
     is_active = models.BooleanField(default=True)
     generated_count = models.PositiveIntegerField(

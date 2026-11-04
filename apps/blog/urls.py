@@ -9,6 +9,16 @@ urlpatterns = [
     path("manage/", views.manage_posts, name="manage_posts"),
     path("manage/bulk_publish/", views.bulk_publish, name="bulk_publish"),
     path("create/", views.post_create, name="post_create"),
+    path(
+        "manage/<slug:slug>/history/",
+        views.post_history,
+        name="post_history",
+    ),
+    path(
+        "manage/<slug:slug>/history/<int:revision_id>/restore/",
+        views.restore_post_revision,
+        name="restore_post_revision",
+    ),
     path("category/create/", views.category_create, name="category_create"),
     path("archives/<int:year>/", views.post_archive_year, name="post_archive_year"),
     path(

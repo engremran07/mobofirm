@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
-    help = "Generate blog posts from the AI topic queue. Autopublishes when AI succeeds; drafts on failure."
+    help = "Generate blog drafts and submit successful content for governed review."
 
     def add_arguments(self, parser: CommandParser) -> None:
         parser.add_argument(
@@ -24,7 +24,7 @@ class Command(BaseCommand):
         parser.add_argument(
             "--draft-only",
             action="store_true",
-            help="Force all generated posts to remain drafts (override autopublish).",
+            help="Leave successful generated posts as drafts instead of submitting them for review.",
         )
         parser.add_argument(
             "--autoplan",
@@ -35,7 +35,7 @@ class Command(BaseCommand):
 
     def handle(self, *args: Any, **options: Any) -> None:
         limit = max(1, options["limit"])
-        autopublish = not options["draft_only"]
+        submit_for_review = not options["draft_only"]
         seed = (options.get("autoplan") or "").strip()
         max_retries = int(getattr(settings, "BLOG_AUTOGEN_MAX_RETRIES", 3))
         daily_cap = int(getattr(settings, "BLOG_AUTOGEN_DAILY_LIMIT", 25))
@@ -65,9 +65,13 @@ class Command(BaseCommand):
         failures = 0
         for topic in queued:
             try:
-                post = generate_post_from_topic(topic, autopublish=autopublish)
+                post = generate_post_from_topic(
+                    topic, submit_for_review=submit_for_review
+                )
                 processed += 1
-                state = "published" if post.is_published else "draft"
+                state = (
+                    "submitted for review" if post.status == "in_review" else "draft"
+                )
                 self.stdout.write(
                     self.style.SUCCESS(f"{topic.topic} -> {state} ({post.slug})")
                 )

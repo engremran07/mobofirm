@@ -43,7 +43,15 @@ class ReviewCaseAdmin(admin.ModelAdmin):
 
 @admin.register(ReviewEvent)
 class ReviewEventAdmin(admin.ModelAdmin):
-    list_display = ("id", "case", "action", "actor", "from_status", "to_status", "occurred_at")
+    list_display = (
+        "id",
+        "case",
+        "action",
+        "actor",
+        "from_status",
+        "to_status",
+        "occurred_at",
+    )
     list_filter = ("action", "occurred_at")
     readonly_fields = (
         "case",

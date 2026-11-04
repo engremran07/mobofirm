@@ -1,0 +1,72 @@
+<header class="site-header">
+  <div class="site-container py-3" x-data="{ mobileOpen: false }" @keydown.escape.window="mobileOpen = false">
+    <div class="d-flex align-items-center justify-content-between gap-3">
+      <a class="site-brand d-inline-flex align-items-center gap-2" href="{% url 'home' %}" aria-label="Mobofirm home">
+        <span class="site-brand-mark" aria-hidden="true"><i data-lucide="smartphone"></i></span>
+        <span>{{ site_name|default:"Mobofirm" }}</span>
+      </a>
+      <button class="btn btn-outline-secondary d-md-none" type="button"
+              @click="mobileOpen = !mobileOpen"
+              :aria-expanded="mobileOpen.toString()"
+              aria-controls="mobile-navigation"
+              aria-label="Toggle navigation">
+        <i data-lucide="menu" aria-hidden="true"></i>
+      </button>
+      <nav id="primary-navigation" class="d-none d-md-flex align-items-center gap-4" aria-label="Main navigation">
+        <a class="site-nav-link" href="{% url 'firmwares:browse' %}">Firmware</a>
+        <a class="site-nav-link" href="{% url 'firmwares:brand_list' %}">Brands</a>
+        <a class="site-nav-link" href="{% url 'blog:post_list' %}">Journal</a>
+        <a class="site-nav-link" href="{% url 'firmwares:flashing_tools' %}">Tools</a>
+        {% if user.is_staff %}
+          <a class="site-nav-link" href="{% url 'admin:index' %}">Admin</a>
+        {% endif %}
+      </nav>
+      <div class="d-none d-md-flex align-items-center gap-2">
+        <button class="btn btn-outline-secondary" type="button" data-theme-toggle
+                aria-label="Switch to dark theme">
+          <i data-lucide="moon" data-theme-icon="dark" aria-hidden="true"></i>
+          <i data-lucide="sun" data-theme-icon="light" aria-hidden="true"></i>
+        </button>
+        {% if user.is_authenticated %}
+          <a class="btn btn-outline-secondary" href="{% url 'users:dashboard' %}">
+            <i data-lucide="user-round" aria-hidden="true"></i><span class="ms-1">Account</span>
+          </a>
+          <form method="post" action="{% url 'users:account_logout' %}" class="d-inline">
+            {% csrf_token %}
+            <button class="btn btn-outline-secondary" type="submit">Sign out</button>
+          </form>
+        {% else %}
+          <a class="btn btn-primary" href="{% url 'users:account_login' %}">Sign in</a>
+          <a class="btn btn-outline-secondary" href="{% url 'users:account_signup' %}">Create account</a>
+        {% endif %}
+      </div>
+    </div>
+    <nav id="mobile-navigation" class="mobile-nav-panel d-md-none mt-3" aria-label="Mobile navigation"
+         x-cloak :hidden="!mobileOpen">
+      <div class="d-grid gap-3">
+        <a class="site-nav-link" href="{% url 'firmwares:browse' %}" @click="mobileOpen = false">Firmware</a>
+        <a class="site-nav-link" href="{% url 'firmwares:brand_list' %}" @click="mobileOpen = false">Brands</a>
+        <a class="site-nav-link" href="{% url 'blog:post_list' %}" @click="mobileOpen = false">Journal</a>
+        <a class="site-nav-link" href="{% url 'firmwares:flashing_tools' %}" @click="mobileOpen = false">Tools</a>
+        {% if user.is_staff %}
+          <a class="site-nav-link" href="{% url 'admin:index' %}" @click="mobileOpen = false">Admin</a>
+        {% endif %}
+        {% if user.is_authenticated %}
+          <a class="site-nav-link" href="{% url 'users:dashboard' %}" @click="mobileOpen = false">Account</a>
+          <form method="post" action="{% url 'users:account_logout' %}">
+            {% csrf_token %}
+            <button class="btn btn-outline-secondary w-100 text-start" type="submit">Sign out</button>
+          </form>
+        {% else %}
+          <a class="site-nav-link" href="{% url 'users:account_login' %}" @click="mobileOpen = false">Sign in</a>
+          <a class="site-nav-link" href="{% url 'users:account_signup' %}" @click="mobileOpen = false">Create account</a>
+        {% endif %}
+        <button class="btn btn-outline-secondary text-start" type="button" data-theme-toggle>
+          <i data-lucide="moon" data-theme-icon="dark" aria-hidden="true"></i>
+          <i data-lucide="sun" data-theme-icon="light" aria-hidden="true"></i>
+          <span class="ms-1">Toggle theme</span>
+        </button>
+      </div>
+    </nav>
+  </div>
+</header>

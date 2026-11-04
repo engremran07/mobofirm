@@ -13,6 +13,8 @@ Key Features:
 
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
 import uuid
 
@@ -22,22 +24,17 @@ from django.contrib.sites.models import Site
 from django.db import models
 from django.utils import timezone
 
-# Import encryption utilities from storage module
-try:
-    from apps.storage.models import get_encryption_key
-except ImportError:
-    import os
 
-    def get_encryption_key():
-        """Get or create encryption key for credentials."""
-        key_path = os.path.join(settings.BASE_DIR, ".credentials_key")
-        if os.path.exists(key_path):
-            with open(key_path, "rb") as f:
-                return f.read()
-        key = Fernet.generate_key()
-        with open(key_path, "wb") as f:
-            f.write(key)
-        return key
+def get_encryption_key() -> bytes:
+    key = getattr(settings, "SOCIAL_CREDENTIAL_ENCRYPTION_KEY", "")
+    if key:
+        return key.encode("ascii") if isinstance(key, str) else key
+    if not settings.SECRET_KEY:
+        raise RuntimeError(
+            "DJANGO_SECRET_KEY is required to encrypt social credentials."
+        )
+    digest = hashlib.sha256(settings.SECRET_KEY.encode("utf-8")).digest()
+    return base64.urlsafe_b64encode(digest)
 
 
 class SocialProviderConfig(models.Model):
