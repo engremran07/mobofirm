@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import secrets
+import string
 import time
 from typing import Any
 
@@ -8,15 +9,32 @@ from allauth.account.models import EmailAddress
 from django.contrib.auth.hashers import check_password, make_password
 from django.http import HttpRequest
 
+from apps.site_settings.services import get_site_settings
+
 SESSION_KEY = "users_email_verification"
 CODE_TTL_SECONDS = 15 * 60
 MAX_CODE_ATTEMPTS = 5
+# No 0/O or 1/I: codes are typed by hand from an email.
+ALPHANUMERIC_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+
+def generate_verification_code() -> str:
+    """A random code whose length and alphabet come from the site settings."""
+    snapshot = get_site_settings()
+    alphabet = (
+        string.digits
+        if snapshot.email_verification_code_type == "numeric"
+        else ALPHANUMERIC_CODE_ALPHABET
+    )
+    return "".join(
+        secrets.choice(alphabet) for _ in range(snapshot.email_verification_code_length)
+    )
 
 
 def issue_email_verification_code(
     request: HttpRequest, email_address: EmailAddress
 ) -> str:
-    code = secrets.token_hex(3).upper()
+    code = generate_verification_code()
     request.session[SESSION_KEY] = {
         "email_address_id": email_address.pk,
         "code_hash": make_password(code),

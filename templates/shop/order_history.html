@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% load mf_ui %}
+{% block content %}
+{% url 'shop:pricing' as shop_url %}
+<div class="site-container py-4 py-lg-5">
+  {% include "components/breadcrumbs.html" with current="My orders" parent_label="Shop" parent_url=shop_url %}
+  {% include "components/page_header.html" with eyebrow="Account" title="Order history" %}
+  {% include "shop/_subnav.html" with shop_tab="orders" %}
+  {% if not online_payments_enabled %}<div class="mb-4">{% include "shop/_payment_notice.html" %}</div>{% endif %}
+  {% if orders %}
+    {% table_scroll "Your orders" %}
+    <table class="table align-middle">
+      <thead><tr><th scope="col">Order</th><th scope="col">Items</th><th scope="col">Total</th><th scope="col">Status</th><th scope="col">Placed</th></tr></thead>
+      <tbody>
+        {% for order in orders %}
+          <tr>
+            <td><a href="{% url 'shop:order_detail' pk=order.pk %}">#{{ order.pk }}</a></td>
+            <td>{% for item in order.items.all %}{{ item.product.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+            <td>{{ order.total }} {{ order.currency }}</td>
+            <td>{% include "shop/_order_status.html" %}</td>
+            <td>{{ order.created_at|date:"j M Y" }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endtable_scroll %}
+  {% else %}
+    {% include "components/empty_state.html" with title="You have not placed any orders" message="Choose a package or product and request an order." action_label="View packages" action_url=shop_url %}
+  {% endif %}
+</div>
+{% endblock %}

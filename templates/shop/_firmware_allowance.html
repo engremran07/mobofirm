@@ -1,0 +1,12 @@
+{# Contract: summary, type_allowed, daily, pricing_url, account_url (from shop_firmware_allowance). Empty context renders nothing. #}
+{% if summary %}
+  <section class="surface-card p-3 mt-4" aria-labelledby="allowance-heading">
+    <h2 class="h6" id="allowance-heading">Your download allowance</h2>
+    <p class="small mb-1">Package: <strong>{{ summary.tier.name }}</strong>{% if daily %} · {{ daily.text }} today{% endif %}</p>
+    {% if not type_allowed %}
+      <p class="small mb-1 status-unverified">{% if summary.enforced %}Your package does not include this firmware category.{% else %}This category is not part of your package.{% endif %}</p>
+    {% endif %}
+    {% if not summary.enforced %}<p class="small muted mb-1">Package limits are not applied to downloads at the moment.</p>{% endif %}
+    <p class="small mb-0"><a href="{{ account_url }}">Your allowance</a> · <a href="{{ pricing_url }}">Compare packages</a></p>
+  </section>
+{% endif %}

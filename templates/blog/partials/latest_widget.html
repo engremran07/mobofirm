@@ -1,4 +1,0 @@
-<ul class="list-unstyled d-grid gap-2">
-  {% for post in posts %}<li><a href="{{ post.get_absolute_url }}">{{ post.title }}</a></li>
-  {% empty %}<li class="muted">No published articles yet.</li>{% endfor %}
-</ul>

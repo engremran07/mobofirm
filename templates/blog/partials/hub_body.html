@@ -1,0 +1,16 @@
+{# Hub body: the entity's own post leads, followed by related articles. Context: lead, cards, page_obj, total. #}
+<div class="journal-layout">
+  <div class="journal-main">
+    {% if lead %}{% include "blog/partials/lead_story.html" with card=lead %}{% endif %}
+    {% if cards %}
+      <h2 class="section-heading">More articles <span class="muted">({{ total }})</span></h2>
+      <div class="post-grid">
+        {% for card in cards %}{% include "blog/partials/post_card.html" with card=card %}{% endfor %}
+      </div>
+      {% include "components/pagination.html" with page_obj=page_obj label="Article pages" %}
+    {% elif not lead %}
+      {% include "components/empty_state.html" with title="No articles yet" message="Articles appear here automatically as firmware is added to the catalogue." action_label="Back to the journal" action_url=journal_url %}
+    {% endif %}
+  </div>
+  {% include "blog/partials/sidebar.html" %}
+</div>

@@ -5,12 +5,12 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-    dependencies = [
+    dependencies = (
         ("ads", "0001_initial"),
         ("blog", "0003_post_firmware_brand_post_firmware_model"),
-    ]
+    )
 
-    operations = [
+    operations = (
         migrations.AddField(
             model_name="post",
             name="ad_gate_config",
@@ -39,4 +39,4 @@ class Migration(migrations.Migration):
                 help_text="Auto-enable ad gate when views_count >= this value. 0 = disabled.",
             ),
         ),
-    ]
+    )

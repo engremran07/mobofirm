@@ -8,13 +8,13 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
     initial = True
 
-    dependencies = [
+    dependencies = (
         ("blog", "0002_initial"),
         ("comments", "0001_initial"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-    ]
+    )
 
-    operations = [
+    operations = (
         migrations.AddField(
             model_name="comment",
             name="deleted_by",
@@ -88,4 +88,4 @@ class Migration(migrations.Migration):
                 fields=["toxicity_score"], name="comments_co_toxicit_4cc7cd_idx"
             ),
         ),
-    ]
+    )

@@ -11,7 +11,7 @@ class AnnotationConflictTest(TestCase):
 
     def setUp(self):
         self.service = TaggingService()
-        self.user = User.objects.create_user(  # type: ignore[attr-defined]
+        self.user = User.objects.create_user(
             email="a@a.com", username="a", password="pw"
         )
 

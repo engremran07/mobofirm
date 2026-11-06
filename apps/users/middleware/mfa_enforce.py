@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Iterable
+from typing import ClassVar
 
 from allauth.account.models import EmailAddress
 from django.conf import settings
@@ -16,25 +16,27 @@ logger = logging.getLogger(__name__)
 
 
 class EnforceMfaMiddleware:
-    SAFE_URL_NAMES: Iterable[str] = {
-        "account_login",
-        "account_logout",
-        "account_signup",
-        "users:account_login",
-        "users:account_logout",
-        "users:account_signup",
-        "users:verify_email",
-        "users:verify_email_required",
-        "users:tell_us_about_you",
-        "users:mfa_setup",
-        "users:mfa_verify",
-        "users:mfa_backup_codes",
-        "users:mfa_disable",
-    }
-    SAFE_PATH_PREFIXES: Iterable[str] = (
+    SAFE_URL_NAMES: ClassVar[frozenset[str]] = frozenset(
+        {
+            "account_login",
+            "account_logout",
+            "account_signup",
+            "users:account_login",
+            "users:account_logout",
+            "users:account_signup",
+            "users:verify_email",
+            "users:verify_email_required",
+            "users:tell_us_about_you",
+            "users:mfa_setup",
+            "users:mfa_verify",
+            "users:mfa_backup_codes",
+        }
+    )
+    SAFE_PATH_PREFIXES: ClassVar[tuple[str, ...]] = (
         "/static/",
         "/media/",
         "/health/",
+        "/site/",
         "/.well-known/",
     )
 
@@ -60,7 +62,8 @@ class EnforceMfaMiddleware:
 
         try:
             require_mfa = bool(
-                settings.REQUIRE_MFA or UsersSettings.get_solo().require_mfa
+                getattr(settings, "REQUIRE_MFA", False)
+                or UsersSettings.get_solo().require_mfa
             )
             has_totp = MFADevice.objects.filter(
                 user=user,

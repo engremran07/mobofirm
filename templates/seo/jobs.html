@@ -1,0 +1,20 @@
+{% extends "seo/base.html" %}
+{% block seo_content %}
+<p>{{ pending }} pending. Jobs are recorded after content commits and succeed only when every attempted action was verified.</p>
+{% if perms.seo.change_seojob %}
+  <form method="post" action="{% url 'seo:process_jobs' %}">{% csrf_token %}<button type="submit" class="button">Process pending jobs now</button></form>
+{% endif %}
+<table class="mf-seo-table">
+  <thead><tr><th scope="col">Kind</th><th scope="col">Key</th><th scope="col">Status</th><th scope="col">Attempts</th><th scope="col">Result / error</th></tr></thead>
+  <tbody>
+    {% for job in jobs %}
+      <tr>
+        <td>{{ job.kind }}</td><td><code>{{ job.job_key }}</code></td><td>{{ job.get_status_display }}</td><td>{{ job.attempts }}/{{ job.max_attempts }}</td>
+        <td>{% if job.last_error %}<strong>{{ job.last_error }}</strong>{% else %}<code>{{ job.result }}</code>{% endif %}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="5">No jobs recorded.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

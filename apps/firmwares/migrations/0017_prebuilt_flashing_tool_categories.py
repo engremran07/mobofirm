@@ -1,5 +1,6 @@
-from django.db import migrations
+from typing import ClassVar
 
+from django.db import migrations
 
 CATEGORIES = (
     {
@@ -48,11 +49,11 @@ def remove_unused_default_categories(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-    dependencies = [
+    dependencies: ClassVar[list[tuple[str, str]]] = [
         ("firmwares", "0016_engineeringfirmware_package_format_and_more"),
     ]
 
-    operations = [
+    operations: ClassVar[list[migrations.operations.base.Operation]] = [
         migrations.RunPython(
             create_default_categories,
             reverse_code=remove_unused_default_categories,

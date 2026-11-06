@@ -380,7 +380,7 @@ def is_safe_url(url: str, allowed_hosts: list | None = None) -> bool:
             parsed = urlparse(url)
             if parsed.netloc and parsed.netloc not in allowed_hosts:
                 return False
-        except Exception:
+        except ValueError:
             return False
 
     return True

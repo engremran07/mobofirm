@@ -1,7 +1,75 @@
 {% extends "base.html" %}
-{% block title %}My device sessions | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block title %}Registered browsers | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block content %}
-<div class="site-container py-5"><p class="section-eyebrow">Account security</p><h1 class="h2">Device sessions</h1><p class="muted">{{ device_count }} of {{ max_devices }} sessions · {{ quota_remaining }} remaining · Reset window {{ quota_window }}</p>
-  {% for device in devices %}<article class="surface-card p-3 mb-3"><h2 class="h5">{{ device.display_name|default:"Device session" }}</h2><p class="small muted">{{ device.os_fingerprint }} · Last seen {{ device.last_seen_at }}</p></article>{% empty %}<p class="empty-state p-4">No device sessions are registered.</p>{% endfor %}
-</div>
+<section class="site-container py-5">
+  <p class="section-eyebrow">Account security</p>
+  <h1 class="h2">Registered browsers</h1>
+  <p class="muted">
+    Mobofirm uses a random first-party browser-profile key for registration. The operating system and browser labels below are informational; they do not prove a physical machine's identity.
+  </p>
+
+  <div class="row g-3 my-3" aria-label="Device registration summary">
+    <div class="col-sm-6">
+      <article class="surface-card p-3">
+        <p class="muted mb-1">Approved browsers</p>
+        <p class="h3 numeric mb-0">{{ active_devices }} / {{ max_devices }}</p>
+      </article>
+    </div>
+    <div class="col-sm-6">
+      <article class="surface-card p-3">
+        <p class="muted mb-1">All registrations and history</p>
+        <p class="h3 numeric mb-0">{{ total_devices }}</p>
+      </article>
+    </div>
+  </div>
+
+  <p class="small muted">
+    Clearing browser data, reinstalling a browser, or using another browser profile may create a new registration. A browser cookie cannot reliably detect an operating-system reinstall or identify hardware. You cannot remove an approved browser yourself; contact an administrator for a reset or revocation.
+  </p>
+
+  <div class="d-grid gap-3 mt-4">
+    {% for device in devices %}
+      <article class="surface-card p-3">
+        <div class="d-flex flex-wrap align-items-start justify-content-between gap-2">
+          <div>
+            <h2 class="h5 mb-1">
+              {{ device.display_name|default:"Browser profile" }}
+              {% if current_device and device.pk == current_device.pk %}
+                <span class="badge text-bg-primary">This browser</span>
+              {% endif %}
+            </h2>
+            <p class="small muted mb-2">
+              {{ device.os_family|default:"Unknown operating system" }}
+              · {{ device.browser_family|default:"Unknown browser" }}
+            </p>
+          </div>
+          <p class="mb-0">
+            {% if device.revoked_at %}
+              <span class="badge text-bg-secondary">Revoked</span>
+            {% elif device.is_blocked %}
+              <span class="badge text-bg-danger">Blocked</span>
+            {% elif not device.browser_key_hash %}
+              <span class="badge text-bg-secondary">Legacy record</span>
+            {% elif device.is_trusted %}
+              <span class="badge text-bg-success">Approved</span>
+            {% else %}
+              <span class="badge text-bg-warning">Awaiting approval</span>
+            {% endif %}
+          </p>
+        </div>
+        {% if not device.browser_key_hash %}
+          <p class="small muted mb-2">
+            This historical record is not an active browser identity. Sign in from the browser to register its new profile key.
+          </p>
+        {% endif %}
+        <p class="small muted mb-0">
+          First seen {{ device.first_seen_at|date:"M j, Y H:i" }} UTC
+          · Last seen {{ device.last_seen_at|date:"M j, Y H:i" }} UTC
+        </p>
+      </article>
+    {% empty %}
+      {% include "components/empty_state.html" with title="No browser registrations are associated with this account yet" %}
+    {% endfor %}
+  </div>
+</section>
 {% endblock %}

@@ -7,11 +7,10 @@ import uuid
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
+from apps.blog.models import Post
 from apps.tags.models import Tag
 from apps.tags.models_tagged_item import TaggedItem
 from apps.tags.services.tagging_service import TaggingService
-
-from apps.blog.models import Post
 
 User = get_user_model()
 
@@ -28,7 +27,7 @@ class TaggingServiceTest(TestCase):
         """Set up test data"""
         self.unique_suffix = uuid.uuid4().hex[:8]
         self.service = TaggingService()
-        self.user = User.objects.create_user(  # type: ignore[attr-defined]
+        self.user = User.objects.create_user(
             email=f"test-{self.unique_suffix}@test.com",
             username=f"testuser-{self.unique_suffix}",
             password="testpass123",
@@ -62,7 +61,7 @@ class TaggingServiceTest(TestCase):
         tagged_item1 = self.service.tag_object(self.post, tag_name)
         tagged_item2 = self.service.tag_object(self.post, tag_name)
 
-        assert tagged_item1.id == tagged_item2.id  # type: ignore[attr-defined]
+        assert tagged_item1.id == tagged_item2.id
 
         # GenericForeignKey cannot be used directly in filter(),
         # use content_type and object_id instead
@@ -328,7 +327,7 @@ class TaggedItemModelTest(TestCase):
         import uuid
 
         self.unique_suffix = str(uuid.uuid4())[:8]
-        self.user = User.objects.create_user(  # type: ignore[attr-defined]
+        self.user = User.objects.create_user(
             email=f"test-{self.unique_suffix}@test.com",
             username=f"testuser-{self.unique_suffix}",
         )

@@ -1,14 +1,57 @@
 {% extends "base.html" %}
-{% block title %}Tag governance | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% load mf_ui %}
 {% block content %}
-<div class="site-container py-5"><p class="section-eyebrow">Editorial governance</p><h1 class="h2">Tag management</h1>
-  <section class="surface-card p-4 my-4"><h2 class="h4">Merge tags</h2><p class="muted">Existing article relationships are reassigned to the destination tag before the source is retired.</p>
-    <form method="post" action="{% url 'tags:merge' %}" hx-post="{% url 'tags:merge' %}" hx-target="#merge-result" hx-swap="innerHTML">
-      {% csrf_token %}<div class="row g-3"><div class="col"><label class="form-label" for="merge-source">Source slug</label><input class="form-control" id="merge-source" name="source" required></div><div class="col"><label class="form-label" for="merge-target">Destination slug</label><input class="form-control" id="merge-target" name="target" required></div></div>
-      <button class="btn btn-primary mt-3" type="submit">Merge tags</button>
-    </form><div id="merge-result" class="mt-3" role="status" aria-live="polite"></div>
+<div class="site-container py-4 py-lg-5">
+  {% include "components/page_header.html" with eyebrow="Staff tools" title="Tag management" lead="Tags from the catalogue are curated automatically. Suggestions from article text are approved automatically once enough articles use them; review the rest here." %}
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-4">{% include "components/stat_tile.html" with label="Tags" value=totals.total %}</div>
+    <div class="col-6 col-md-4">{% include "components/stat_tile.html" with label="Curated" value=totals.curated %}</div>
+    <div class="col-12 col-md-4">{% include "components/stat_tile.html" with label="Waiting for review" value=totals.pending %}</div>
+  </div>
+  <section class="mb-5" aria-labelledby="suggestions-title">
+    <h2 class="section-heading" id="suggestions-title">Suggested tags</h2>
+    {% if suggestions %}
+      {% table_scroll "Suggested tags" %}
+      <table class="table align-middle">
+        <thead><tr><th scope="col">Tag</th><th scope="col">Suggested</th><th scope="col"><span class="visually-hidden">Decision</span></th></tr></thead>
+        <tbody>
+          {% for tag in suggestions %}
+            <tr>
+              <th scope="row">{{ tag.name }}</th>
+              <td><time datetime="{{ tag.created_at|date:'c' }}">{{ tag.created_at|date:"M j, Y" }}</time></td>
+              <td>
+                <form method="post" action="{% url 'tags:review' %}" class="d-flex gap-2 justify-content-end">
+                  {% csrf_token %}
+                  <input type="hidden" name="tag_id" value="{{ tag.pk }}">
+                  <button class="btn btn-sm btn-primary" name="decision" value="approve" type="submit">Approve</button>
+                  <button class="btn btn-sm btn-outline-secondary" name="decision" value="reject" type="submit">Reject</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endtable_scroll %}
+    {% else %}
+      {% include "components/empty_state.html" with title="No suggestions waiting" message="New keywords from article text appear here until enough articles use them." %}
+    {% endif %}
   </section>
-  <div class="row g-4"><section class="col"><h2 class="h4">Most used</h2>{% for tag in top_tags %}<p><a href="{% url 'tags:detail' slug=tag.slug %}">{{ tag.name }}</a> · {{ tag.usage_count }}</p>{% empty %}<p>No active tags.</p>{% endfor %}</section>
-  <section class="col"><h2 class="h4">Curated</h2>{% for tag in curated_tags %}<p>{{ tag.name }}</p>{% empty %}<p>No curated tags.</p>{% endfor %}</section></div>
+  <section class="mb-5" aria-labelledby="merge-title">
+    <h2 class="section-heading" id="merge-title">Merge tags</h2>
+    <p class="muted">Articles move from the source tag to the destination tag. You will confirm on the next page.</p>
+    <form method="get" action="{% url 'tags:merge' %}" class="row g-3 align-items-end">
+      <div class="col-12 col-md-5"><label class="form-label" for="merge-source">Source tag slug</label><input class="form-control" id="merge-source" name="source" required list="tag-slugs"></div>
+      <div class="col-12 col-md-5"><label class="form-label" for="merge-target">Destination tag slug</label><input class="form-control" id="merge-target" name="target" required list="tag-slugs"></div>
+      <div class="col-12 col-md-2"><button class="btn btn-primary w-100" type="submit">Review merge</button></div>
+    </form>
+    <datalist id="tag-slugs">{% for tag in top_tags %}<option value="{{ tag.slug }}">{{ tag.name }}</option>{% endfor %}</datalist>
+    <p class="mt-3 mb-0"><a href="{% url 'tags:duplicates_review' %}">Review similar tags</a> · <a href="{% url 'tags:keyword_review' %}">Keyword suggestions</a></p>
+  </section>
+  <section aria-labelledby="top-title">
+    <h2 class="section-heading" id="top-title">Most used</h2>
+    <ul class="tag-row">
+      {% for tag in top_tags %}<li><a class="tag-pill" href="{% url 'tags:detail' slug=tag.slug %}">{{ tag.name }} <span class="numeric muted">{{ tag.live_count }}</span></a></li>{% empty %}<li class="muted">No active tags.</li>{% endfor %}
+    </ul>
+  </section>
 </div>
 {% endblock %}

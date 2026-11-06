@@ -1,0 +1,8 @@
+<nav class="mf-seo-nav" aria-label="SEO sections">
+  <ul>
+    {% for view_name, label in seo_nav %}
+      {% url view_name as nav_url %}
+      <li><a href="{{ nav_url }}"{% if request.path == nav_url %} aria-current="page"{% endif %}>{{ label }}</a></li>
+    {% endfor %}
+  </ul>
+</nav>

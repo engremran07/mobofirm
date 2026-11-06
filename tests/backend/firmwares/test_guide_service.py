@@ -4,6 +4,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from apps.blog.models import PostRevision, PostStatus
+from apps.firmwares.blog_automation import get_automation_author
 from apps.firmwares.guide_service import generate_guide_for_brand_model
 from apps.firmwares.models import (
     Brand,
@@ -11,14 +12,14 @@ from apps.firmwares.models import (
     GeneratedFlashingGuide,
     Model,
 )
-from apps.governance.models import ReviewCase
 
 
-class FlashingGuideGovernanceTests(TestCase):
+class FlashingGuideReviewTests(TestCase):
     def setUp(self):
-        self.author = get_user_model().objects.create_user(
-            username="guide-author",
-            email="guide-author@example.com",
+        self.author = get_automation_author()
+        get_user_model().objects.create_user(
+            username="guide-editor",
+            email="guide-editor@example.com",
             password="test-password",
             is_staff=True,
         )
@@ -47,7 +48,7 @@ class FlashingGuideGovernanceTests(TestCase):
             submit_for_review=True,
         )
 
-    def test_auto_submit_creates_a_draft_under_governance_and_is_idempotent(self):
+    def test_auto_submit_creates_a_draft_for_review_and_is_idempotent(self):
         guide = generate_guide_for_brand_model(
             self.template,
             self.brand,
@@ -58,11 +59,10 @@ class FlashingGuideGovernanceTests(TestCase):
         assert guide is not None
         post = guide.post
         self.assertEqual(post.author, self.author)
+        self.assertFalse(post.author.is_staff)
         self.assertEqual(post.status, PostStatus.IN_REVIEW)
         self.assertFalse(post.is_published)
         self.assertEqual(PostRevision.objects.filter(post=post).count(), 1)
-        case = ReviewCase.objects.get(object_id=str(post.pk))
-        self.assertEqual(case.status, ReviewCase.Status.SUBMITTED)
 
         duplicate = generate_guide_for_brand_model(
             self.template,
@@ -73,16 +73,10 @@ class FlashingGuideGovernanceTests(TestCase):
         self.assertIsNone(duplicate)
         self.assertEqual(GeneratedFlashingGuide.objects.count(), 1)
 
-    def test_generation_fails_explicitly_without_a_staff_author(self):
-        self.author.delete()
+    def test_brand_wide_guides_are_unique_per_template_and_brand(self):
+        first = generate_guide_for_brand_model(self.template, self.brand, None)
+        second = generate_guide_for_brand_model(self.template, self.brand, None)
 
-        with self.assertRaisesMessage(
-            ValueError, "A staff author is required to generate a governed guide."
-        ):
-            generate_guide_for_brand_model(
-                self.template,
-                self.brand,
-                self.model,
-            )
-
-        self.assertEqual(GeneratedFlashingGuide.objects.count(), 0)
+        self.assertIsNotNone(first)
+        self.assertIsNone(second)
+        self.assertEqual(GeneratedFlashingGuide.objects.count(), 1)

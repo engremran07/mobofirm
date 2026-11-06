@@ -1,24 +1,54 @@
-{% load static i18n %}
+{% load static i18n seo_tags %}
 <!doctype html>
 <html lang="{% get_current_language as LANGUAGE_CODE %}{{ LANGUAGE_CODE }}" data-bs-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="color-scheme" content="dark light">
+  <meta name="color-scheme" content="light dark">
   <meta name="application-version" content="{{ release_version }}">
-  <meta name="description" content="{% block meta_description %}Explore mobile firmware, device models, and technical resources in the Mobofirm catalogue.{% endblock %}">
-  <title>{% block title %}{{ site_name|default:"Mobofirm" }}{% endblock %}</title>
+  {% seo_head %}
+  <script src="{% static 'build/theme-init.js' %}"></script>
   <link rel="stylesheet" href="{% static 'build/tokens.css' %}">
   <link rel="stylesheet" href="{% static 'build/site.css' %}">
+  {% include "site_settings/head.html" %}
   {% block extra_head %}{% endblock %}
 </head>
-<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}' hx-indicator="#global-progress">
   <a class="skip-link" href="#main-content">Skip to content</a>
+  <div id="global-progress" class="global-progress" role="progressbar" aria-label="Loading" aria-hidden="true"></div>
   {% include "includes/site_header.html" %}
-  <div id="global-feedback" class="visually-hidden" role="status" aria-live="polite"></div>
+  <div id="global-feedback" class="site-container" aria-live="polite" aria-atomic="true"></div>
   {% include "includes/messages.html" %}
+  {% if request.session.device_registration_prompt %}
+    <dialog open class="device-registration-dialog" aria-labelledby="device-registration-title" aria-describedby="device-registration-description" data-device-registration-dialog>
+      <p class="section-eyebrow">Account security</p>
+      <h2 id="device-registration-title" class="h4">Review this browser</h2>
+      <p id="device-registration-description">
+        Mobofirm recognizes a browser profile using a random first-party cookie. It does not identify a physical computer or detect an operating-system reinstall.
+      </p>
+      <dl class="device-registration-details">
+        <div><dt>Device</dt><dd>{{ request.session.device_registration_prompt.device_name }}</dd></div>
+        <div><dt>Operating system</dt><dd>{{ request.session.device_registration_prompt.os_family }}</dd></div>
+        <div><dt>Browser</dt><dd>{{ request.session.device_registration_prompt.browser_family }}</dd></div>
+        <div><dt>Approved devices</dt><dd>{{ request.session.device_registration_prompt.active_devices }} / {{ request.session.device_registration_prompt.max_devices }}</dd></div>
+      </dl>
+      <p class="muted small">
+        Clearing browser data or using another browser profile may require a new registration. Users cannot remove approved devices; contact an administrator for a reset.
+      </p>
+      <form method="post" action="{% url 'devices:acknowledge_new_device' %}" class="d-flex flex-wrap gap-2">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+        {% if request.session.device_registration_prompt.can_approve %}
+          <button type="submit" name="decision" value="approve" class="btn btn-primary" autofocus>Register this browser</button>
+        {% else %}
+          <p class="alert alert-warning w-100 mb-0" role="status">Your approved-device allowance is full. Ask an administrator to reset or revoke a registration.</p>
+        {% endif %}
+        <button type="submit" name="decision" value="later" class="btn btn-outline-secondary">Not now</button>
+      </form>
+    </dialog>
+  {% endif %}
   <main id="main-content" class="site-main" tabindex="-1">
-    {% block content %}{% endblock %}
+    {% block main %}{% block content %}{% endblock %}{% endblock %}
   </main>
   {% include "includes/site_footer.html" %}
   <script type="module" src="{% static 'build/site.js' %}"></script>

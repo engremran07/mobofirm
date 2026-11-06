@@ -6,5 +6,6 @@
   <p>A verification email was sent to {{ user.email }}. Verify your address to continue.</p>
   <a class="btn btn-link px-0" href="{% url 'users:verify_email' %}">Enter the verification code</a>
   <form method="post" action="{% url 'users:resend_verification' %}">{% csrf_token %}<button class="btn btn-primary" type="submit">Resend verification email</button></form>
+  {% include "users/includes/verification_poll.html" %}
 </section></div>
 {% endblock %}

@@ -1,0 +1,9 @@
+{# Contract: current (required); parent_label/parent_url and grandparent_label/grandparent_url (optional). Home is implicit. #}
+<nav class="breadcrumbs mb-3" aria-label="Breadcrumb">
+  <ol class="breadcrumb mb-0">
+    <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+    {% if grandparent_label %}<li class="breadcrumb-item"><a href="{{ grandparent_url }}">{{ grandparent_label }}</a></li>{% endif %}
+    {% if parent_label %}<li class="breadcrumb-item"><a href="{{ parent_url }}">{{ parent_label }}</a></li>{% endif %}
+    <li class="breadcrumb-item active" aria-current="page">{{ current }}</li>
+  </ol>
+</nav>

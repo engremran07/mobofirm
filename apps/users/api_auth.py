@@ -1,29 +1,126 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
+from allauth.account.adapter import get_adapter as get_account_adapter
 from allauth.account.forms import LoginForm, ResetPasswordForm, SignupForm
 from allauth.account.models import EmailAddress
 from allauth.account.signals import user_signed_up
-from allauth.account.adapter import get_adapter as get_account_adapter
 from allauth.core.exceptions import ImmediateHttpResponse
 from allauth.socialaccount.adapter import get_adapter as get_social_adapter
 from allauth.socialaccount.helpers import complete_social_login
 from django.conf import settings
+from django.contrib.auth import logout
 from django.core.exceptions import ValidationError
-from django.db import DatabaseError
-from django.db import transaction
+from django.db import DatabaseError, transaction
 from django.urls import reverse
 from rest_framework import permissions, serializers, status
-from rest_framework.authentication import TokenAuthentication
+from rest_framework.authentication import SessionAuthentication
 from rest_framework.authtoken.models import Token
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
-from apps.users.models import UsersSettings
-from apps.users.services.mfa import has_active_totp, verify_mfa_code
+from apps.core.app_service import AppService
+from apps.core.utils.ip import get_client_ip
+from apps.devices.services import DevicePolicyError
+from apps.users.api_authentication import (
+    ExpiringTokenAuthentication,
+    issue_api_token,
+)
+from apps.users.services.mfa import (
+    has_active_totp,
+    mfa_required_globally,
+    verify_mfa_code,
+)
+from apps.users.services.rate_limit import (
+    CACHE_ERRORS,
+    allow_action,
+    reset_rate_limit,
+)
+
+logger = logging.getLogger(__name__)
+
+_MFA_ATTEMPT_LIMIT = 5
+_MFA_ATTEMPT_WINDOW_SECONDS = 300
+
+
+def _check_second_factor(request, user: Any, code: str) -> Response | None:
+    """
+    Verify a TOTP/recovery code behind the same limiter the web flow uses.
+
+    Returns an error response, or None when the code is valid.
+    """
+    key = f"users:mfa:verify:{user.pk}:{get_client_ip(request._request) or 'unknown'}"
+    try:
+        allowed = allow_action(
+            key,
+            max_attempts=_MFA_ATTEMPT_LIMIT,
+            window_seconds=_MFA_ATTEMPT_WINDOW_SECONDS,
+            fail_open=False,
+        )
+    except CACHE_ERRORS:
+        allowed = False
+    if not allowed:
+        return Response(
+            {"detail": "Too many verification attempts. Try again later."},
+            status=status.HTTP_429_TOO_MANY_REQUESTS,
+        )
+    if not verify_mfa_code(user, code):
+        return Response(
+            {"detail": "Invalid authenticator or recovery code."},
+            status=status.HTTP_401_UNAUTHORIZED,
+        )
+    reset_rate_limit(key)
+    return None
+
+
+def _enforce_device_policy(
+    request, user: Any, *, mfa_verified: bool, has_totp: bool
+) -> Response | None:
+    """Apply the shared device login policy; return an error response if denied."""
+    try:
+        devices_api = AppService.get("devices")
+        enforce_policy = getattr(devices_api, "enforce_device_policy_for_login", None)
+        if not callable(enforce_policy):
+            raise TypeError("Device login policy service is unavailable")
+        allowed, _ = enforce_policy(
+            request._request,
+            user,
+            mfa_verified=mfa_verified,
+        )
+    except DevicePolicyError as exc:
+        if exc.reason in {"mfa_required", "mfa_required_risk"}:
+            return Response(
+                {
+                    "detail": "Two-factor verification is required for this device.",
+                    "mfa_required": True,
+                    "mfa_setup_required": not has_totp,
+                    "setup_url": reverse("users:mfa_setup") if not has_totp else None,
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        return Response(
+            {
+                "detail": "Device policy denied this sign-in.",
+                "device_policy_error": exc.reason,
+            },
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    except (DatabaseError, RuntimeError, TypeError, AttributeError):
+        logger.exception("Device policy check failed for API login user %s", user.pk)
+        return Response(
+            {"detail": "Device security check could not be completed."},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+    if not allowed:
+        return Response(
+            {"detail": "Device policy denied this sign-in."},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    return None
 
 
 class LoginSerializer(serializers.Serializer):
@@ -64,9 +161,9 @@ class GoogleTokenSerializer(serializers.Serializer):
 
 
 class ApiSignupView(APIView):
-    authentication_classes = []
-    permission_classes = [permissions.AllowAny]
-    throttle_classes = [ScopedRateThrottle]
+    authentication_classes = ()
+    permission_classes = (permissions.AllowAny,)
+    throttle_classes = (ScopedRateThrottle,)
     throttle_scope = "auth_signup"
 
     def post(self, request):
@@ -114,9 +211,9 @@ class ApiSignupView(APIView):
 
 
 class ApiLoginView(APIView):
-    authentication_classes = []
-    permission_classes = [permissions.AllowAny]
-    throttle_classes = [ScopedRateThrottle]
+    authentication_classes = ()
+    permission_classes = (permissions.AllowAny,)
+    throttle_classes = (ScopedRateThrottle,)
     throttle_scope = "auth_login"
 
     def post(self, request):
@@ -160,9 +257,7 @@ class ApiLoginView(APIView):
             )
 
         try:
-            require_mfa = bool(
-                settings.REQUIRE_MFA or UsersSettings.get_solo().require_mfa
-            )
+            require_mfa = bool(mfa_required_globally())
             has_totp = has_active_totp(user)
         except DatabaseError:
             return Response(
@@ -179,6 +274,7 @@ class ApiLoginView(APIView):
                 },
                 status=status.HTTP_403_FORBIDDEN,
             )
+        mfa_verified = False
         if require_mfa or has_totp:
             code = payload.validated_data.get("totp_code")
             if not code:
@@ -189,20 +285,25 @@ class ApiLoginView(APIView):
                     },
                     status=status.HTTP_403_FORBIDDEN,
                 )
-            if not verify_mfa_code(user, code):
-                return Response(
-                    {"detail": "Invalid authenticator or recovery code."},
-                    status=status.HTTP_401_UNAUTHORIZED,
-                )
+            failure = _check_second_factor(request, user, code)
+            if failure is not None:
+                return failure
+            mfa_verified = True
 
-        token, _ = Token.objects.get_or_create(user=user)
+        failure = _enforce_device_policy(
+            request, user, mfa_verified=mfa_verified, has_totp=has_totp
+        )
+        if failure is not None:
+            return failure
+
+        token = issue_api_token(user)
         return Response({"token": token.key, "token_type": "Token"})
 
 
 class ApiGoogleLoginView(APIView):
-    authentication_classes = []
-    permission_classes = [permissions.AllowAny]
-    throttle_classes = [ScopedRateThrottle]
+    authentication_classes = ()
+    permission_classes = (permissions.AllowAny,)
+    throttle_classes = (ScopedRateThrottle,)
     throttle_scope = "auth_google"
 
     def post(self, request):
@@ -245,6 +346,13 @@ class ApiGoogleLoginView(APIView):
             )
 
         user = django_request.user
+        try:
+            return self._token_response(request, user, payload)
+        finally:
+            # The API issues a token; never leave a browser session behind.
+            logout(django_request)
+
+    def _token_response(self, request, user, payload):
         if not getattr(user, "is_authenticated", False):
             raise AuthenticationFailed("Google sign-in did not authenticate a user.")
         if not _has_verified_email(user):
@@ -266,9 +374,7 @@ class ApiGoogleLoginView(APIView):
             )
 
         try:
-            require_mfa = bool(
-                settings.REQUIRE_MFA or UsersSettings.get_solo().require_mfa
-            )
+            require_mfa = bool(mfa_required_globally())
             has_totp = has_active_totp(user)
         except DatabaseError:
             return Response(
@@ -285,6 +391,7 @@ class ApiGoogleLoginView(APIView):
                 },
                 status=status.HTTP_403_FORBIDDEN,
             )
+        mfa_verified = False
         if require_mfa or has_totp:
             code = payload.validated_data.get("totp_code")
             if not code:
@@ -295,20 +402,25 @@ class ApiGoogleLoginView(APIView):
                     },
                     status=status.HTTP_403_FORBIDDEN,
                 )
-            if not verify_mfa_code(user, code):
-                return Response(
-                    {"detail": "Invalid authenticator or recovery code."},
-                    status=status.HTTP_401_UNAUTHORIZED,
-                )
+            failure = _check_second_factor(request, user, code)
+            if failure is not None:
+                return failure
+            mfa_verified = True
 
-        token, _ = Token.objects.get_or_create(user=user)
+        failure = _enforce_device_policy(
+            request, user, mfa_verified=mfa_verified, has_totp=has_totp
+        )
+        if failure is not None:
+            return failure
+
+        token = issue_api_token(user)
         return Response({"token": token.key, "token_type": "Token"})
 
 
 class ApiPasswordResetView(APIView):
-    authentication_classes = []
-    permission_classes = [permissions.AllowAny]
-    throttle_classes = [ScopedRateThrottle]
+    authentication_classes = ()
+    permission_classes = (permissions.AllowAny,)
+    throttle_classes = (ScopedRateThrottle,)
     throttle_scope = "auth_password_reset"
 
     def post(self, request):
@@ -334,8 +446,8 @@ class ApiPasswordResetView(APIView):
 
 
 class ApiLogoutView(APIView):
-    authentication_classes = [TokenAuthentication]
-    permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = (ExpiringTokenAuthentication,)
+    permission_classes = (permissions.IsAuthenticated,)
 
     def post(self, request):
         token: Token = request.auth
@@ -344,7 +456,8 @@ class ApiLogoutView(APIView):
 
 
 class ApiCurrentUserView(APIView):
-    permission_classes = [permissions.IsAuthenticated]
+    authentication_classes = (ExpiringTokenAuthentication, SessionAuthentication)
+    permission_classes = (permissions.IsAuthenticated,)
 
     def get(self, request):
         user = request.user

@@ -7,6 +7,22 @@ MAIN_CATEGORIES = (
     ("unclassified", "Others (Unclassified)"),
 )
 
+# Brand slugs that would collide with fixed /firmwares/<prefix>/ routes.
+RESERVED_BRAND_SLUGS = (
+    "api",
+    "autofill",
+    "brands",
+    "browse",
+    "chipsets",
+    "file",
+    "guides",
+    "moderate",
+    "search",
+    "serve",
+    "tools",
+    "upload",
+)
+
 MODIFIED_SUBTYPES = (
     "cn_to_global",
     "region_unlock",

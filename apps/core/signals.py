@@ -24,6 +24,8 @@ SINGLETON_MODELS = (
     "comments.CommentSettings",
     "blog.BlogSettings",
     "users.UsersSettings",
+    "seo.SEOSettings",
+    "site_settings.SiteSettings",
 )
 
 DEFAULT_APP_POLICY = {
@@ -31,8 +33,8 @@ DEFAULT_APP_POLICY = {
 }
 
 
-@receiver(post_migrate)
-def seed_singletons(sender, **kwargs):  # pragma: no cover - signal hook
+def ensure_singletons() -> None:
+    """Create every installed singleton settings row (idempotent)."""
     for model_path in SINGLETON_MODELS:
         app_label, model_name = model_path.split(".", maxsplit=1)
         if not django_apps.is_installed(f"apps.{app_label}"):
@@ -49,13 +51,18 @@ def seed_singletons(sender, **kwargs):  # pragma: no cover - signal hook
         )
 
 
+@receiver(post_migrate)
+def seed_singletons(sender, **kwargs):  # pragma: no cover - signal hook
+    ensure_singletons()
+
+
 # ============================================================================
 # Cross-App Communication Signals
 # ============================================================================
 # These signals enable loose coupling between apps without circular dependencies.
 # Apps emit signals instead of calling each other's code directly.
 
-from django.dispatch import Signal  # noqa: E402
+from django.dispatch import Signal
 
 # Blog signals
 blog_post_published = Signal()  # args: post, user

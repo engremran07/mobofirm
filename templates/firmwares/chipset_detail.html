@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}{{ chipset.display_name }} firmware, devices and tools | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block meta_description %}Devices, flashing tools and approved firmware for the {{ chipset.display_name }} chipset.{% endblock %}
+{% block content %}
+<div class="site-container py-5">
+  <nav aria-label="Breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="{% url 'firmwares:chipset_list' %}">Chipsets</a></li><li class="breadcrumb-item active" aria-current="page">{{ chipset.display_name }}</li></ol></nav>
+  <header class="hero-panel p-4 p-md-5 mb-5">
+    <p class="section-eyebrow">{{ chipset.vendor }}{% if chipset.family %} · {{ chipset.family }}{% endif %}</p>
+    <h1 class="display-6 fw-bold mb-2">{{ chipset.display_name }}</h1>
+    {% if chipset.description %}<p class="hero-copy mb-3">{{ chipset.description }}</p>{% endif %}
+    <p class="muted mb-0">{{ model_total }} device model{{ model_total|pluralize }} · {{ total_firmwares }} public firmware record{{ total_firmwares|pluralize }}</p>
+    <div class="d-flex flex-wrap gap-2 mt-4">
+      <a class="btn btn-primary" href="{% url 'firmwares:browse' %}?chipset={{ chipset.slug|urlencode }}">Browse {{ chipset.name }} firmware</a>
+      {% if chipset_post %}<a class="btn btn-outline-secondary" href="{{ chipset_post.get_absolute_url }}">Chipset article</a>{% endif %}
+    </div>
+  </header>
+
+  {% if categories %}
+  <section class="mb-5" aria-labelledby="chipset-categories-title">
+    <h2 id="chipset-categories-title" class="h3 mb-3">Firmware by category</h2>
+    <div class="row g-3">
+      {% for key, label, count in categories %}
+        <div class="col-6 col-md-4 col-xl-2"><a class="surface-card p-3 d-block text-decoration-none" href="{% url 'firmwares:browse' %}?chipset={{ chipset.slug|urlencode }}&type={{ key }}"><span class="d-block fw-semibold">{{ label }}</span><span class="small muted">{{ count }} file{{ count|pluralize }}</span></a></div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  <section class="mb-5" aria-labelledby="chipset-models-title">
+    <h2 id="chipset-models-title" class="h3 mb-3">Devices using this chipset</h2>
+    {% if models %}
+      <div class="row g-3">
+      {% for model in models %}
+        <div class="col-12 col-md-6 col-xl-4">
+          <article class="surface-card p-4 h-100">
+            <p class="small section-eyebrow mb-2"><a href="{% url 'firmwares:brand_detail' slug=model.brand.slug %}">{{ model.brand.name }}</a></p>
+            <h3 class="h5"><a href="{% url 'firmwares:model_detail' brand_slug=model.brand.slug model_slug=model.slug %}">{{ model.display_name }}</a></h3>
+            <p class="muted mb-2">{% if model.model_code %}<span class="model-code">{{ model.model_code }}</span>{% endif %}{% if model.codename %} · {{ model.codename }}{% endif %}</p>
+            <p class="small muted mb-0">{{ model.firmware_count }} firmware records</p>
+          </article>
+        </div>
+      {% endfor %}
+      </div>
+      {% include "firmwares/includes/pagination.html" with page=models label="Device pages" query="" %}
+    {% else %}
+      <p class="empty-state p-4">No active device models use this chipset yet.</p>
+    {% endif %}
+  </section>
+
+  {% if tools %}
+  <section class="mb-5" aria-labelledby="chipset-tools-title">
+    <div class="d-flex justify-content-between align-items-end gap-2 mb-3"><h2 id="chipset-tools-title" class="h3 mb-0">Flashing tools for {{ chipset.name }}</h2><a href="{% url 'firmwares:flashing_tools' %}">Tools and guides hub</a></div>
+    <div class="row g-3">
+      {% for tool in tools %}
+        <div class="col-12 col-md-6 col-xl-4"><article class="surface-card p-3 h-100"><p class="section-eyebrow mb-1">{{ tool.get_platform_display }} · {{ tool.get_risk_level_display }}</p><h3 class="h5 mb-1"><a href="{% url 'firmwares:flashing_tool_detail' slug=tool.slug %}">{{ tool.name }}</a></h3><p class="small muted mb-0">{{ tool.description|truncatewords:20 }}</p></article></div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% if guides %}
+  <section class="mb-5" aria-labelledby="chipset-guides-title">
+    <h2 id="chipset-guides-title" class="h3 mb-3">Flashing guides</h2>
+    <ul class="list-unstyled d-grid gap-2 mb-0">{% for guide in guides %}<li><a href="{{ guide.post.get_absolute_url }}">{{ guide.post.title }}</a></li>{% endfor %}</ul>
+  </section>
+  {% endif %}
+
+  {% if brands %}
+  <section class="mb-5" aria-labelledby="chipset-brands-title">
+    <h2 id="chipset-brands-title" class="h5 mb-3">Brands using this chipset</h2>
+    <p class="mb-0">{% for brand in brands %}<a class="me-3" href="{% url 'firmwares:brand_detail' slug=brand.slug %}">{{ brand.name }}</a>{% endfor %}</p>
+  </section>
+  {% endif %}
+
+  {% if related_chipsets %}
+  <section aria-labelledby="related-chipsets-title">
+    <h2 id="related-chipsets-title" class="h5 mb-3">More {{ chipset.vendor }} chipsets</h2>
+    <p class="mb-0">{% for other in related_chipsets %}<a class="me-3" href="{% url 'firmwares:chipset_detail' slug=other.slug %}">{{ other.name }}</a>{% endfor %}</p>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

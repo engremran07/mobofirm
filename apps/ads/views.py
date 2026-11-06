@@ -2,29 +2,39 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
+from typing import Any
 
 from django.contrib.auth.decorators import user_passes_test
-from django.core.cache import cache
-from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.db import DatabaseError
+from django.http import (
+    HttpRequest,
+    HttpResponse,
+    HttpResponseBadRequest,
+    JsonResponse,
+)
 from django.shortcuts import redirect, render
+from django.utils.text import slugify
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_GET, require_POST
 
+from apps.ads.constants import LOCAL_DEMO_PLACEMENT_PREFIX
+from apps.ads.permissions import can_manage_ads as _can_manage_ads
 from apps.ads.services.analytics.tracker import record_event as tracker_record_event
 from apps.ads.services.rotation.engine import choose_creative
 from apps.ads.services.schemas import AdRequest, AdResponse, CreativeSelection
 from apps.ads.services.targeting.engine import campaign_allowed
-from apps.core.app_service import AppService
-from apps.core.utils import feature_flags
 from apps.core.utils.ip import get_client_ip
-from apps.core.utils.logging import log_event
-from apps.users.services.consent import check as consent_check, hash_ip, hash_ua
+from apps.users.services.consent import check as consent_check
+from apps.users.services.consent import hash_ip, hash_ua
+from apps.users.services.rate_limit import allow_action
 
 from .models import (
-    AdsSettings,
     AdCreative,
     AdEvent,
     AdPlacement,
+    AdsSettings,
+    AdUnit,
+    AffiliateSource,
     Campaign,
     PlacementAssignment,
 )
@@ -33,47 +43,33 @@ logger = logging.getLogger(__name__)
 
 
 def _ads_settings() -> dict:
-    try:
-        ads_api = AppService.get("ads")
-        if ads_api and hasattr(ads_api, "get_settings"):
-            return ads_api.get_settings()
-    except Exception:
-        logger.exception("ads settings fetch failed")
+    settings = AdsSettings.get_solo()
     return {
-        "ads_enabled": False,
-        "affiliate_enabled": False,
-        "ad_networks_enabled": False,
-        "ad_aggressiveness_level": "balanced",
+        "ads_enabled": settings.ads_enabled,
+        "affiliate_enabled": settings.affiliate_enabled,
+        "ad_networks_enabled": settings.ad_networks_enabled,
+        "ad_aggressiveness_level": settings.ad_aggressiveness_level,
     }
 
 
 def _ads_enabled() -> bool:
-    try:
-        settings_obj = _ads_settings()
-        return bool(settings_obj.get("ads_enabled", False))
-    except Exception:
-        logger.warning("ads_enabled check failed, falling back to feature flags")
-        return feature_flags.ads_enabled()
+    return bool(_ads_settings()["ads_enabled"])
 
 
 def _has_ads_consent(request: HttpRequest) -> bool:
     """Honor consent categories; track events only when ads consent granted."""
-    try:
-        return consent_check("ads", request)
-    except Exception:
-        logger.warning("ads consent check failed, defaulting to no-consent")
-        return False
+    return consent_check("ads", request)
 
 
 def _log(request: HttpRequest, message: str, **extra):
     cid = getattr(request, "correlation_id", None)
     payload = {"correlation_id": cid, **extra}
-    logger.info(message, extra=payload)
-    try:
-        log_event(logger, "info", message, **payload)
-    except Exception:
-        logger.debug("log_event call failed for: %s", message)
-        return
+    logger.info(message, extra={"event": payload})
+
+
+def _is_rate_limited(key: str, limit: int) -> bool:
+    """Atomic per-minute counter shared across workers (see rate_limit service)."""
+    return not allow_action(key, max_attempts=limit, window_seconds=60)
 
 
 @require_GET
@@ -113,81 +109,66 @@ def record_event(request: HttpRequest) -> JsonResponse:
     page_url = request.POST.get("page_url", "")
     referrer = request.POST.get("referrer", "")
     user_agent = request.META.get("HTTP_USER_AGENT", "")
-    consent_granted = request.POST.get("consent_granted") in ("1", "true", "True")
+    # Consent was verified server-side above; never trust a client-supplied flag.
+    consent_granted = True
     if not placement_slug or event_type not in {"impression", "click"}:
         return JsonResponse({"ok": False, "error": "bad_payload"}, status=400)
     if page_url and not page_url.startswith(("http://", "https://")):
         return JsonResponse({"ok": False, "error": "bad_payload"}, status=400)
     # Basic abuse throttle per IP
     rl_key = f"ads:event:{get_client_ip(request) or 'anon'}"
-    try:
-        count = cache.get(rl_key, 0)
-        if count and int(count) >= 50:
-            return JsonResponse({"ok": False, "error": "rate_limited"}, status=429)
-        cache.set(rl_key, int(count) + 1, timeout=60)
-    except Exception:  # noqa: S110
-        pass
+    if _is_rate_limited(rl_key, 50):
+        return JsonResponse({"ok": False, "error": "rate_limited"}, status=429)
     hashed_ip = hash_ip(get_client_ip(request))
     hashed_ua = hash_ua(user_agent)
-    try:
-        placement = AdPlacement.objects.filter(
-            slug=placement_slug, is_enabled=True, is_active=True, is_deleted=False
+    placement = AdPlacement.objects.filter(
+        slug=placement_slug, is_enabled=True, is_active=True, is_deleted=False
+    ).first()
+    if placement is None:
+        return JsonResponse({"ok": False, "error": "invalid_placement"}, status=400)
+    campaign = Campaign.objects.filter(pk=campaign_id).first() if campaign_id else None
+    creative = (
+        AdCreative.objects.filter(
+            pk=creative_id, is_enabled=True, is_active=True, is_deleted=False
         ).first()
-        if placement is None:
-            return JsonResponse({"ok": False, "error": "invalid_placement"}, status=400)
-        campaign = (
-            Campaign.objects.filter(pk=campaign_id).first() if campaign_id else None
-        )
-        creative = (
-            AdCreative.objects.filter(
-                pk=creative_id, is_enabled=True, is_active=True
-            ).first()
-            if creative_id
-            else None
-        )
-        if creative:
-            assigned = placement.assignments.filter(  # type: ignore[attr-defined]
-                creative=creative, is_enabled=True, is_active=True
-            ).exists()
-            if not assigned:
-                return JsonResponse(
-                    {"ok": False, "error": "invalid_mapping"}, status=400
-                )
-        if campaign and not campaign_allowed(
-            campaign, {"consent_ads": consent_granted}
-        ):
-            return JsonResponse(
-                {"ok": False, "error": "campaign_not_allowed"}, status=400
-            )
-        tracker_record_event(
-            event_type or "impression",
-            placement=placement,
-            creative=creative,
-            campaign=campaign,
-            user=request.user if request.user.is_authenticated else None,
-            request_meta={
-                "ip": hashed_ip,
-                "referrer": referrer,
-                "user_agent": hashed_ua,
-                "page_url": page_url,
-                "consent_granted": consent_granted,
-                "correlation_id": getattr(request, "correlation_id", None),
-            },
-        )
-        _log(
-            request,
-            "ads_event_recorded",
-            event_type=event_type,
-            placement=placement_slug,
-            campaign=str(campaign_id or ""),
-            page_url=page_url,
-        )
-    except Exception:
-        logger.exception(
-            "record_event failed",
-            extra={"placement": placement_slug, "creative": creative_id},
-        )
-        return JsonResponse({"ok": False}, status=400)
+        if creative_id
+        else None
+    )
+    if creative:
+        assigned = placement.assignments.filter(
+            creative=creative, is_enabled=True, is_active=True, is_deleted=False
+        ).exists()
+        if not assigned:
+            return JsonResponse({"ok": False, "error": "invalid_mapping"}, status=400)
+        # The creative owns its campaign; a client-supplied campaign must match.
+        if campaign is not None and campaign.pk != creative.campaign_id:
+            return JsonResponse({"ok": False, "error": "invalid_mapping"}, status=400)
+        campaign = creative.campaign
+    if campaign and not campaign_allowed(campaign, {"consent_ads": consent_granted}):
+        return JsonResponse({"ok": False, "error": "campaign_not_allowed"}, status=400)
+    tracker_record_event(
+        event_type,
+        placement=placement,
+        creative=creative,
+        campaign=campaign,
+        user=request.user if request.user.is_authenticated else None,
+        request_meta={
+            "ip": hashed_ip,
+            "referrer": referrer,
+            "user_agent": hashed_ua,
+            "page_url": page_url,
+            "consent_granted": consent_granted,
+            "correlation_id": getattr(request, "correlation_id", None),
+        },
+    )
+    _log(
+        request,
+        "ads_event_recorded",
+        event_type=event_type,
+        placement=placement_slug,
+        campaign=str(campaign_id or ""),
+        page_url=page_url,
+    )
     return JsonResponse({"ok": True})
 
 
@@ -206,6 +187,8 @@ def fill_ad(request: HttpRequest) -> JsonResponse:
         return JsonResponse({"ok": False, "error": "bad_payload"}, status=400)
     if not slug:
         return JsonResponse({"ok": False, "error": "missing_placement"}, status=400)
+    if _is_rate_limited(f"ads:fill:{get_client_ip(request) or 'anon'}", 120):
+        return JsonResponse({"ok": False, "error": "rate_limited"}, status=429)
     placement = AdPlacement.objects.filter(
         slug=slug, is_enabled=True, is_active=True, is_deleted=False
     ).first()
@@ -263,7 +246,7 @@ def fill_ad(request: HttpRequest) -> JsonResponse:
         "html": creative.html,
         "image_url": creative.image_url,
         "click_url": creative.click_url,
-        "campaign": creative.campaign_id,  # type: ignore[attr-defined]
+        "campaign": creative.campaign_id,
         "placement": placement.slug,
         "creative": creative.pk,
         "page_url": page_url,
@@ -311,62 +294,46 @@ def record_click(request: HttpRequest) -> JsonResponse:
         return JsonResponse({"ok": False, "error": "bad_payload"}, status=400)
     # Basic abuse throttle per IP
     rl_key = f"ads:click:{get_client_ip(request) or 'anon'}"
-    try:
-        count = cache.get(rl_key, 0)
-        if count and int(count) >= 30:
-            return JsonResponse({"ok": False, "error": "rate_limited"}, status=429)
-        cache.set(rl_key, int(count) + 1, timeout=60)
-    except Exception:  # noqa: S110
-        pass
+    if _is_rate_limited(rl_key, 30):
+        return JsonResponse({"ok": False, "error": "rate_limited"}, status=429)
     placement = AdPlacement.objects.filter(
         slug=placement_slug, is_enabled=True, is_active=True, is_deleted=False
     ).first()
     if placement is None:
         return JsonResponse({"ok": False, "error": "invalid_placement"}, status=400)
+    if not creative_id.isdecimal():
+        return JsonResponse({"ok": False, "error": "invalid_creative"}, status=400)
     creative = AdCreative.objects.filter(
-        pk=creative_id, is_enabled=True, is_active=True
+        pk=int(creative_id), is_enabled=True, is_active=True, is_deleted=False
     ).first()
     if creative is None:
         return JsonResponse({"ok": False, "error": "invalid_creative"}, status=400)
-    assigned = placement.assignments.filter(  # type: ignore[attr-defined]
+    assigned = placement.assignments.filter(
         creative=creative, is_enabled=True, is_active=True
     ).exists()
     if not assigned:
         return JsonResponse({"ok": False, "error": "invalid_mapping"}, status=400)
     if creative.campaign and not creative.campaign.is_live():
         return JsonResponse({"ok": False, "error": "campaign_not_live"}, status=400)
-    try:
-        tracker_record_event(
-            "click",
-            placement=placement,
-            creative=creative,
-            campaign=creative.campaign if creative else None,
-            user=request.user if request.user.is_authenticated else None,
-            request_meta={
-                "ip": hash_ip(get_client_ip(request) or ""),
-                "referrer": referrer,
-                "user_agent": hash_ua(user_agent),
-                "page_url": page_url,
-                "consent_granted": True,
-                "correlation_id": getattr(request, "correlation_id", None),
-            },
-        )
-    except Exception:
-        logger.exception(
-            "record_click failed",
-            extra={"placement": placement_slug, "creative": creative_id},
-        )
-        return JsonResponse({"ok": False}, status=400)
+    tracker_record_event(
+        "click",
+        placement=placement,
+        creative=creative,
+        campaign=creative.campaign,
+        user=request.user if request.user.is_authenticated else None,
+        request_meta={
+            "ip": hash_ip(get_client_ip(request) or ""),
+            "referrer": referrer,
+            "user_agent": hash_ua(user_agent),
+            "page_url": page_url,
+            "consent_granted": True,
+            "correlation_id": getattr(request, "correlation_id", None),
+        },
+    )
     return JsonResponse({"ok": True})
 
 
-@user_passes_test(
-    lambda u: (
-        getattr(u, "is_staff", False)
-        or getattr(u, "is_superuser", False)
-        or getattr(u, "has_role", lambda *r: False)("admin", "editor")
-    )
-)
+@user_passes_test(_can_manage_ads)
 def dashboard(request: HttpRequest) -> HttpResponse:
     # Basic CTR stats
     impressions = AdEvent.objects.filter(event_type="impression").count()
@@ -376,13 +343,7 @@ def dashboard(request: HttpRequest) -> HttpResponse:
     placements = AdPlacement.objects.all()[:50]
     campaigns = Campaign.objects.all()[:50]
     creatives = AdCreative.objects.select_related("campaign")[:50]
-    affiliate_sources = Campaign.objects.none()
-    try:
-        from apps.ads.models import AffiliateSource
-
-        affiliate_sources = AffiliateSource.objects.all()[:10]
-    except Exception:
-        affiliate_sources = []
+    affiliate_sources = AffiliateSource.objects.all()[:10]
     # Fill stats per placement / creative
     placement_stats = {}
     creative_stats = {}
@@ -426,9 +387,9 @@ def dashboard(request: HttpRequest) -> HttpResponse:
     creative_lookup = {stat["creative_id"]: stat for stat in creative_aggregates}
 
     for c in all_creatives:
-        stats = creative_lookup.get(c.pk, {"impressions": 0, "clicks": 0})
-        imp = stats["impressions"]
-        clk = stats["clicks"]
+        creative_row = creative_lookup.get(c.pk, {"impressions": 0, "clicks": 0})
+        imp = creative_row["impressions"]
+        clk = creative_row["clicks"]
         ctr_local = (clk / imp * 100) if imp else 0
         creative_stats[c.pk] = {
             "impressions": imp,
@@ -438,9 +399,9 @@ def dashboard(request: HttpRequest) -> HttpResponse:
     assignments = PlacementAssignment.objects.filter(
         placement__in=placements, is_enabled=True
     ).select_related("placement", "creative", "creative__campaign")
-    placement_campaigns = defaultdict(list)
+    placement_campaigns: defaultdict[int, list[dict[str, Any]]] = defaultdict(list)
     for a in assignments:
-        placement_campaigns[a.placement_id].append(  # type: ignore[attr-defined]
+        placement_campaigns[a.placement_id].append(
             {
                 "creative": a.creative.name,
                 "campaign": getattr(a.creative.campaign, "name", ""),
@@ -471,6 +432,33 @@ def dashboard(request: HttpRequest) -> HttpResponse:
             "creatives": creatives,
         },
     )
+
+
+@user_passes_test(_can_manage_ads)
+@require_GET
+def demo_preview(request: HttpRequest) -> HttpResponse:
+    """Render disabled database-backed demo creatives through the slot renderer."""
+    placement_codes = [
+        f"{LOCAL_DEMO_PLACEMENT_PREFIX}{slugify(code)}" for code, _ in AdUnit.AD_FORMATS
+    ]
+    placements = {
+        placement.code: placement
+        for placement in AdPlacement.objects.filter(
+            code__in=placement_codes, is_deleted=False
+        )
+    }
+    formats = [
+        {
+            "code": code,
+            "label": label,
+            "placement_code": f"{LOCAL_DEMO_PLACEMENT_PREFIX}{slugify(code)}",
+            "placement": placements.get(
+                f"{LOCAL_DEMO_PLACEMENT_PREFIX}{slugify(code)}"
+            ),
+        }
+        for code, label in AdUnit.AD_FORMATS
+    ]
+    return render(request, "ads/demo_preview.html", {"formats": formats})
 
 
 @csrf_protect
@@ -509,14 +497,18 @@ def toggle_settings(request: HttpRequest) -> HttpResponse:
             campaign.locked = not campaign.locked
             campaign.save(update_fields=["locked"])
     else:
-        ss.ads_enabled = request.POST.get("ads_enabled") == "1"  # type: ignore[attr-defined]
-        ss.ad_networks_enabled = request.POST.get("ad_networks_enabled") == "1"  # type: ignore[attr-defined]
-        ss.affiliate_enabled = request.POST.get("affiliate_enabled") == "1"  # type: ignore[attr-defined]
+        # Only the global settings form (no action) may change site-wide ad state;
+        # an unknown action or a missing target id must never switch ads off.
+        if action not in ("", "update_settings") or "ads_enabled" not in request.POST:
+            return HttpResponseBadRequest("Unknown or incomplete ads action.")
+        ss.ads_enabled = request.POST.get("ads_enabled") == "1"
+        ss.ad_networks_enabled = request.POST.get("ad_networks_enabled") == "1"
+        ss.affiliate_enabled = request.POST.get("affiliate_enabled") == "1"
         level = (
-            request.POST.get("ad_aggressiveness_level") or ss.ad_aggressiveness_level  # type: ignore[attr-defined]
+            request.POST.get("ad_aggressiveness_level") or ss.ad_aggressiveness_level
         )
         if level in ("minimal", "balanced", "aggressive"):
-            ss.ad_aggressiveness_level = level  # type: ignore[attr-defined]
+            ss.ad_aggressiveness_level = level
         ss.save()
     _log(
         request,
@@ -540,8 +532,10 @@ def track_affiliate_click(request: HttpRequest) -> JsonResponse:
     """
     import json
 
+    if not _ads_enabled() or not _has_ads_consent(request):
+        return JsonResponse({"ok": True, "skipped": "no_consent"})
+
     try:
-        # Parse JSON body or form data
         if request.content_type == "application/json":
             data = json.loads(request.body)
         else:
@@ -555,23 +549,29 @@ def track_affiliate_click(request: HttpRequest) -> JsonResponse:
 
         # Rate limit per IP
         rl_key = f"affiliate:click:{get_client_ip(request) or 'anon'}"
-        try:
-            count = cache.get(rl_key, 0)
-            if count and int(count) >= 100:
-                return JsonResponse({"ok": False, "error": "rate_limited"}, status=429)
-            cache.set(rl_key, int(count) + 1, timeout=60)
-        except Exception:  # noqa: S110
-            pass
+        if _is_rate_limited(rl_key, 100):
+            return JsonResponse({"ok": False, "error": "rate_limited"}, status=429)
 
         # Track the click
         from apps.ads.api import track_affiliate_click_sync
 
+        try:
+            product_id = int(product_id)
+            referrer_id = int(data.get("referrer_id") or 0) or None
+        except (TypeError, ValueError):
+            return JsonResponse({"ok": False, "error": "bad_payload"}, status=400)
+        if product_id <= 0 or (referrer_id is not None and referrer_id <= 0):
+            return JsonResponse({"ok": False, "error": "bad_payload"}, status=400)
+        page_url = data.get("page_url", "")
+        referrer_type = data.get("referrer_type", "")
+        if not isinstance(page_url, str) or not isinstance(referrer_type, str):
+            return JsonResponse({"ok": False, "error": "bad_payload"}, status=400)
         result = track_affiliate_click_sync(
-            product_id=int(product_id),
+            product_id=product_id,
             user_id=request.user.pk if request.user.is_authenticated else None,
-            page_url=data.get("page_url", "")[:500],
-            referrer_type=data.get("referrer_type", "")[:20],
-            referrer_id=int(data.get("referrer_id") or 0) or None,
+            page_url=page_url[:500],
+            referrer_type=referrer_type[:20],
+            referrer_id=referrer_id,
             ip_address=get_client_ip(request) or "",
             user_agent=request.META.get("HTTP_USER_AGENT", "")[:500],
             session_id=request.session.session_key or "",
@@ -579,6 +579,10 @@ def track_affiliate_click(request: HttpRequest) -> JsonResponse:
 
         if result.get("status") == "success":
             return JsonResponse({"ok": True, "click_id": result.get("click_id")})
+        if result.get("error") == "tracking_unavailable":
+            return JsonResponse(
+                {"ok": False, "error": "tracking_unavailable"}, status=503
+            )
         else:
             return JsonResponse(
                 {"ok": False, "error": result.get("status")}, status=400
@@ -586,9 +590,6 @@ def track_affiliate_click(request: HttpRequest) -> JsonResponse:
 
     except json.JSONDecodeError:
         return JsonResponse({"ok": False, "error": "invalid_json"}, status=400)
-    except Exception as exc:
-        logger.exception(f"Affiliate click tracking failed: {exc}")
-        return JsonResponse({"ok": False, "error": "server_error"}, status=500)
 
 
 @require_GET
@@ -600,6 +601,8 @@ def get_affiliate_products(request: HttpRequest) -> JsonResponse:
     from apps.ads.api import get_affiliate_products_settings, get_contextual_products
 
     settings = get_affiliate_products_settings()
+    if settings.get("error"):
+        return JsonResponse({"ok": False, "error": settings["error"]}, status=503)
     if not settings.get("enabled"):
         return JsonResponse({"ok": False, "products": []})
 
@@ -608,38 +611,47 @@ def get_affiliate_products(request: HttpRequest) -> JsonResponse:
     model_id = request.GET.get("model_id")
     variant_id = request.GET.get("variant_id")
     post_id = request.GET.get("post_id")
-    max_products = int(request.GET.get("max", 4))
-
-    # Get the actual model instances
-    brand = model = variant = post = None
+    try:
+        max_products = int(request.GET.get("max", 4))
+        context_ids = {
+            "brand": int(brand_id) if brand_id else None,
+            "model": int(model_id) if model_id else None,
+            "variant": int(variant_id) if variant_id else None,
+            "post": int(post_id) if post_id else None,
+        }
+    except ValueError:
+        return JsonResponse({"ok": False, "error": "bad_context"}, status=400)
 
     try:
-        if brand_id:
+        brand = model = variant = post = None
+
+        if context_ids["brand"]:
             from apps.firmwares.models import Brand
 
-            brand = Brand.objects.filter(id=brand_id).first()
-        if model_id:
+            brand = Brand.objects.filter(id=context_ids["brand"]).first()
+        if context_ids["model"]:
             from apps.firmwares.models import Model
 
-            model = Model.objects.filter(id=model_id).first()
-        if variant_id:
+            model = Model.objects.filter(id=context_ids["model"]).first()
+        if context_ids["variant"]:
             from apps.firmwares.models import Variant
 
-            variant = Variant.objects.filter(id=variant_id).first()
-        if post_id:
+            variant = Variant.objects.filter(id=context_ids["variant"]).first()
+        if context_ids["post"]:
             from apps.blog.models import Post
 
-            post = Post.objects.filter(id=post_id).first()
-    except Exception as exc:
-        logger.warning(f"Failed to get context objects: {exc}")
+            post = Post.objects.filter(id=context_ids["post"]).first()
 
-    products = get_contextual_products(
-        brand=brand,
-        model=model,
-        variant=variant,
-        blog_post=post,
-        max_products=max_products,
-    )
+        products = get_contextual_products(
+            brand=brand,
+            model=model,
+            variant=variant,
+            blog_post=post,
+            max_products=max_products,
+        )
+    except DatabaseError:
+        logger.exception("Failed to load affiliate products.")
+        return JsonResponse({"ok": False, "error": "products_unavailable"}, status=503)
 
     return JsonResponse(
         {

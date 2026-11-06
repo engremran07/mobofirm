@@ -97,7 +97,7 @@ class Command(BaseCommand):
         fixed = 0
 
         for tmpl in templates:
-            brand_name = tmpl.brand.name if tmpl.brand_id else ""  # type: ignore[attr-defined]
+            brand_name = tmpl.brand.name if tmpl.brand else ""
             guide_type = tmpl.guide_type
             chipset = tmpl.chipset_filter or ""
 
@@ -118,7 +118,7 @@ class Command(BaseCommand):
                     correct_tools.append(tool)
 
             # Check if current assignment is already correct
-            current_tools = set(tmpl.recommended_tools.values_list("name", flat=True))  # type: ignore[attr-defined]
+            current_tools = set(tmpl.recommended_tools.values_list("name", flat=True))
             new_tools = {t.name for t in correct_tools}
 
             if current_tools == new_tools:
@@ -132,7 +132,7 @@ class Command(BaseCommand):
             self.stdout.write(f"    NEW: {new_list}")
 
             if not dry_run:
-                tmpl.recommended_tools.set(correct_tools)  # type: ignore[attr-defined]
+                tmpl.recommended_tools.set(correct_tools)
             fixed += 1
 
         self.stdout.write(self.style.SUCCESS(f"  ✓ {fixed} templates fixed"))
@@ -155,10 +155,8 @@ class Command(BaseCommand):
         ]
 
         for post in posts:
-            brand_name = post.firmware_brand.name if post.firmware_brand else ""  # type: ignore[attr-defined]
-            model_name = (
-                post.firmware_model.name if post.firmware_model else ""  # type: ignore[attr-defined]
-            )
+            brand_name = post.firmware_brand.name if post.firmware_brand else ""
+            model_name = post.firmware_model.name if post.firmware_model else ""
             body = post.body or ""
 
             if not brand_name or not body:

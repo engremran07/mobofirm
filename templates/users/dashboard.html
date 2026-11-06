@@ -1,17 +1,26 @@
 {% extends "base.html" %}
+{% load shop_tags filemanager_tags marketplace_tags %}
 {% block title %}Account overview | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block content %}
 <div class="site-container py-5">
   <header class="mb-4"><p class="section-eyebrow">Account</p><h1 class="h2">Welcome, {{ display_name }}</h1></header>
   {% if profile_missing_fields %}<div class="alert alert-info" role="status">Complete your profile: {{ profile_missing_fields|join:", " }}. <a href="{% url 'users:profile' %}">Review profile</a></div>{% endif %}
   <div class="row g-3 mb-4">
-    <div class="col-6 col-lg-3"><div class="surface-card p-3"><span class="muted small">Completed downloads</span><div class="stat-value fs-3 fw-bold">{{ download_count }}</div></div></div>
-    <div class="col-6 col-lg-3"><div class="surface-card p-3"><span class="muted small">Journal posts</span><div class="stat-value fs-3 fw-bold">{{ stats.posts_count }}</div></div></div>
-    <div class="col-6 col-lg-3"><div class="surface-card p-3"><span class="muted small">Comments</span><div class="stat-value fs-3 fw-bold">{{ stats.comments_count }}</div></div></div>
-    <div class="col-6 col-lg-3"><div class="surface-card p-3"><span class="muted small">Unread notifications</span><div class="stat-value fs-3 fw-bold">{{ unread_notifications }}</div></div></div>
+    <div class="col-6 col-lg-3">{% include "components/stat_tile.html" with label="Completed downloads" value=download_count %}</div>
+    <div class="col-6 col-lg-3">{% include "components/stat_tile.html" with label="Journal posts" value=stats.posts_count %}</div>
+    <div class="col-6 col-lg-3">{% include "components/stat_tile.html" with label="Comments" value=stats.comments_count %}</div>
+    <div class="col-6 col-lg-3">{% include "components/stat_tile.html" with label="Unread notifications" value=unread_notifications %}</div>
   </div>
+  <section class="mb-4" aria-labelledby="services-title">
+    <h2 id="services-title" class="h5">Your services</h2>
+    <div class="row g-3">
+      <div class="col-12 col-sm-6 col-lg-4">{% shop_dashboard_tile %}</div>
+      <div class="col-12 col-sm-6 col-lg-4">{% filemanager_dashboard_tile %}</div>
+      <div class="col-12 col-sm-6 col-lg-4">{% marketplace_dashboard_tile %}</div>
+    </div>
+  </section>
   <nav class="d-flex flex-wrap gap-2 mb-4" aria-label="Account actions">
-    <a class="btn btn-outline-secondary" href="{% url 'users:profile' %}">Edit profile</a>
+    {% if user.is_staff %}<a class="btn btn-outline-secondary" href="{% url 'admin:index' %}">Administration</a>{% endif %}    <a class="btn btn-outline-secondary" href="{% url 'users:profile' %}">Edit profile</a>
     <a class="btn btn-outline-secondary" href="{% url 'users:devices' %}">My devices</a>
     <a class="btn btn-outline-secondary" href="{% url 'users:notifications' %}">Notifications</a>
     <a class="btn btn-outline-secondary" href="{% url 'users:notification_settings' %}">Notification settings</a>

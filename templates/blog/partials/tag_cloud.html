@@ -1,0 +1,12 @@
+{# Contract: cloud (list of CloudTag). Sizes come from the weight bucket; links only. #}
+{% if cloud %}
+  <section class="side-widget" aria-labelledby="tag-cloud-title">
+    <h2 class="side-widget__title" id="tag-cloud-title">Topics</h2>
+    <ul class="tag-cloud">
+      {% for tag in cloud %}
+        <li><a class="tag-cloud__tag tag-cloud__tag--{{ tag.weight }}" href="{% url 'tags:detail' slug=tag.slug %}" title="{{ tag.count }} article{{ tag.count|pluralize }}">#{{ tag.name }}</a></li>
+      {% endfor %}
+    </ul>
+    <a class="side-widget__more" href="{% url 'tags:list' %}">All topics <i data-lucide="arrow-right" class="icon" aria-hidden="true"></i></a>
+  </section>
+{% endif %}

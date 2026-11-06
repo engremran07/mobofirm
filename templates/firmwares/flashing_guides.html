@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Flashing guides | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block meta_description %}Step-by-step flashing guides for mobile devices, by guide type and brand.{% endblock %}
+{% block content %}
+<div class="site-container py-5">
+  <nav aria-label="Breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="{% url 'firmwares:flashing_tools' %}">Tools and guides</a></li><li class="breadcrumb-item active" aria-current="page">Guides</li></ol></nav>
+  <h1 class="h2 mb-3">Flashing guides</h1>
+  <form class="row g-2 mb-4" method="get" action="{% url 'firmwares:flashing_guides' %}">
+    <div class="col-12 col-md-4"><label class="form-label" for="guide-type">Guide type</label><select id="guide-type" class="form-select" name="type"><option value="">All types</option>{% for value, label in guide_types %}<option value="{{ value }}"{% if selected_type == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+    <div class="col-12 col-md-4"><label class="form-label" for="guide-brand">Brand</label><select id="guide-brand" class="form-select" name="brand"><option value="">All brands</option>{% for brand in brands %}<option value="{{ brand.slug }}"{% if selected_brand == brand.slug %} selected{% endif %}>{{ brand.name }}</option>{% endfor %}</select></div>
+    <div class="col-12 col-md-auto d-flex align-items-end"><button class="btn btn-primary" type="submit">Filter</button></div>
+  </form>
+  {% if guides %}
+    <div class="row g-3">
+      {% for guide in guides %}
+        <div class="col-12 col-md-6 col-xl-4"><article class="surface-card p-3 h-100"><p class="section-eyebrow mb-1">{{ guide.template.get_guide_type_display }}</p><h2 class="h5"><a href="{{ guide.post.get_absolute_url }}">{{ guide.post.title }}</a></h2><p class="small muted mb-0">{{ guide.brand.name }}{% if guide.model %} · {{ guide.model.name }}{% endif %}</p></article></div>
+      {% endfor %}
+    </div>
+    {% include "firmwares/includes/pagination.html" with page=guides label="Guide pages" query="" %}
+  {% else %}
+    <p class="empty-state p-4">No published guides match these filters.</p>
+  {% endif %}
+</div>
+{% endblock %}

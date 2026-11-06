@@ -1,0 +1,9 @@
+{# Contract: url (renders nothing when empty), label, value, icon (registered Lucide name), hint (optional). A linked tile for the account dashboard. #}
+{% if url %}
+  <a class="surface-card surface-card--interactive eco-tile" href="{{ url }}">
+    <span class="eco-tile__icon"><i data-lucide="{{ icon }}" aria-hidden="true"></i></span>
+    <span class="muted small">{{ label }}</span>
+    <span class="eco-tile__value">{{ value }}</span>
+    {% if hint %}<span class="small muted">{{ hint }}</span>{% endif %}
+  </a>
+{% endif %}

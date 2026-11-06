@@ -1,0 +1,62 @@
+{# Contract: node (apps.comments.selectors.CommentNode). Includes itself for replies. #}
+<li class="comment comment--d{{ node.depth }}" id="comment-{{ node.comment.pk }}">
+  <span class="avatar avatar--v{{ node.variant }}" aria-hidden="true">{{ node.initials }}</span>
+  <div class="comment__main">
+    <header class="comment__head">
+      <strong class="comment__author">{{ node.author }}</strong>
+      <time class="comment__time" datetime="{{ node.created_at|date:'c' }}">{{ node.created_at|date:"M j, Y" }}</time>
+      {% if node.comment.edited_at %}<span class="comment__edited">edited</span>{% endif %}
+      {% if node.is_pending %}<span class="badge text-bg-warning">Awaiting review</span>{% endif %}
+    </header>
+    <p class="comment__body">{{ node.comment.body|linebreaksbr }}</p>
+    {% if user.is_authenticated and not node.is_pending %}
+      <div class="comment__actions">
+        <form method="post" action="{% url 'comments:upvote_comment' comment_id=node.comment.pk %}" class="comment__vote">
+          {% csrf_token %}
+          <button class="btn btn-sm btn-outline-secondary" type="submit" aria-pressed="{% if node.voted %}true{% else %}false{% endif %}">
+            <i data-lucide="thumbs-up" class="icon" aria-hidden="true"></i>
+            <span class="visually-hidden">{% if node.voted %}Remove your upvote{% else %}Upvote{% endif %}, </span><span class="numeric">{{ node.comment.score }}</span>
+          </button>
+        </form>
+        {% if node.depth < 3 %}
+          <details class="comment__panel">
+            <summary class="btn btn-sm btn-outline-secondary"><i data-lucide="reply" class="icon" aria-hidden="true"></i> Reply</summary>
+            {% include "comments/form.html" with parent_id=node.comment.pk form_id=node.reply_form_id %}
+          </details>
+        {% endif %}
+        {% if node.can_report %}
+          <details class="comment__panel">
+            <summary class="btn btn-sm btn-outline-secondary"><i data-lucide="flag" class="icon" aria-hidden="true"></i> Report</summary>
+            <form method="post" action="{% url 'comments:report_comment' comment_id=node.comment.pk %}" class="comment__inline-form">
+              {% csrf_token %}
+              <label class="form-label small" for="report-reason-{{ node.comment.pk }}">Reason</label>
+              <select class="form-select form-select-sm" id="report-reason-{{ node.comment.pk }}" name="reason">
+                <option value="spam">Spam or advertising</option>
+                <option value="abuse">Abusive or hateful</option>
+                <option value="off_topic">Off topic</option>
+                <option value="other" selected>Something else</option>
+              </select>
+              <button class="btn btn-sm btn-primary" type="submit">Send report</button>
+            </form>
+          </details>
+        {% endif %}
+      </div>
+    {% endif %}
+    {% if node.can_edit %}
+      <details class="comment__panel">
+        <summary class="btn btn-sm btn-outline-secondary"><i data-lucide="pencil" class="icon" aria-hidden="true"></i> Edit</summary>
+        <form method="post" action="{% url 'comments:edit_comment' comment_id=node.comment.pk %}" class="comment__inline-form">
+          {% csrf_token %}
+          <label class="form-label small" for="edit-body-{{ node.comment.pk }}">Edit your comment</label>
+          <textarea class="form-control" id="edit-body-{{ node.comment.pk }}" name="body" rows="3" minlength="3" maxlength="5000" required>{{ node.comment.body }}</textarea>
+          <button class="btn btn-sm btn-primary" type="submit">Save changes</button>
+        </form>
+      </details>
+    {% endif %}
+    {% if node.children %}
+      <ol class="comment-list comment-list--children">
+        {% for child in node.children %}{% include "comments/node.html" with node=child %}{% endfor %}
+      </ol>
+    {% endif %}
+  </div>
+</li>

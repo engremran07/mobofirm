@@ -16,3 +16,4 @@ applyTo: ["**/*.html", "**/*.htm", "**/*.css", "**/*.scss", "**/*.js"]
 - Verify keyboard/focus behavior, reduced motion, narrow viewports, horizontal overflow, and error/loading/empty states. Run the Vite build and Playwright route/interaction checks for frontend changes; browser coverage is required, not silently skipped.
 - Inspect browser console errors and warnings on changed routes. Resolve newly introduced diagnostics; do not hide pre-existing or out-of-scope messages merely to make the console appear clean.
 - Run Django and Python checks with the repository `.venv` interpreter (`.venv\Scripts\python.exe` on Windows, `.venv/bin/python` on Linux/macOS).
+- Do not treat a static gallery or mocked placeholder as completion of a requested live feature. Use the actual application rendering and authorization path for functional previews; clearly separate inert visual samples from provider-backed behavior, and ask before omitting requested formats or flows.

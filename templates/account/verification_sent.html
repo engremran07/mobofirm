@@ -7,6 +7,7 @@
     <h1 class="h2">Check your email</h1>
     <p>Use the one-time code in the message, or follow its signed verification link.</p>
     <a class="btn btn-primary" href="{% url 'users:verify_email' %}">Enter verification code</a>
+    {% include "users/includes/verification_poll.html" %}
   </section>
 </div>
 {% endblock %}

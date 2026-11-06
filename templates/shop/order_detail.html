@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% load mf_ui %}
+{% block content %}
+{% url 'shop:pricing' as shop_url %}
+{% url 'shop:order_history' as orders_url %}
+<div class="site-container py-4 py-lg-5">
+  {% include "components/breadcrumbs.html" with current="Order" parent_label="My orders" parent_url=orders_url grandparent_label="Shop" grandparent_url=shop_url %}
+  {% include "components/page_header.html" with eyebrow="Account" title="Order" %}
+  <p class="h5 mb-4">#{{ order.pk }} {% include "shop/_order_status.html" %}</p>
+  {% if not online_payments_enabled and order.status == "pending" %}<div class="mb-4">{% include "shop/_payment_notice.html" %}</div>{% endif %}
+
+  <div class="row g-4">
+    <div class="col-12 col-lg-8">
+      {% table_scroll "Order items" %}
+      <table class="table align-middle mb-0">
+        <thead><tr><th scope="col">Item</th><th scope="col">Billing</th><th scope="col">Qty</th><th scope="col">Price</th></tr></thead>
+        <tbody>
+          {% for item in order.items.all %}
+            <tr>
+              <td><a href="{% url 'shop:product_detail' slug=item.product.slug %}">{{ item.product.name }}</a></td>
+              <td>{{ item.get_billing_cycle_display }}</td>
+              <td>{{ item.quantity }}</td>
+              <td>{{ item.line_total }} {{ order.currency }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot><tr><th scope="row" colspan="3" class="text-end">Total</th><td><strong>{{ order.total }} {{ order.currency }}</strong></td></tr></tfoot>
+      </table>
+      {% endtable_scroll %}
+    </div>
+    <div class="col-12 col-lg-4">
+      <section class="surface-card p-4" aria-labelledby="order-progress">
+        <h2 class="h5" id="order-progress">Progress</h2>
+        <dl class="eco-kv">
+          <dt>Placed</dt><dd>{{ order.created_at|date:"j M Y, H:i" }}</dd>
+          <dt>Payment</dt><dd>{{ order.get_payment_method_display }}</dd>
+          {% if order.paid_at %}<dt>Confirmed</dt><dd>{{ order.paid_at|date:"j M Y, H:i" }}</dd>{% endif %}
+          {% if order.payment_reference %}<dt>Reference</dt><dd>{{ order.payment_reference }}</dd>{% endif %}
+        </dl>
+        <p class="small muted mt-3 mb-0">
+          {% if order.status == "pending" %}Waiting for staff to confirm your payment.
+          {% elif order.status == "paid" %}Payment confirmed and the order has been fulfilled.
+          {% elif order.status == "cancelled" %}This order was cancelled.
+          {% else %}This order was refunded.{% endif %}
+        </p>
+      </section>
+    </div>
+  </div>
+</div>
+{% endblock %}

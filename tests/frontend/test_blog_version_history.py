@@ -32,6 +32,9 @@ def test_draft_version_restore_is_responsive_and_functional(live_server):
 
     authenticated_client = Client()
     authenticated_client.force_login(author)
+    session = authenticated_client.session
+    session.pop("device_registration_prompt", None)
+    session.save()
     session_cookie = authenticated_client.cookies[settings.SESSION_COOKIE_NAME]
     errors = []
 

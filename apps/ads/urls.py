@@ -22,5 +22,6 @@ urlpatterns = [
     ),
     # Dashboard
     path("dashboard/", views.dashboard, name="dashboard"),
+    path("dashboard/preview/", views.demo_preview, name="demo_preview"),
     path("dashboard/toggles/", views.toggle_settings, name="toggle_settings"),
 ]

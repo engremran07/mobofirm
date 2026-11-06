@@ -5,8 +5,10 @@ Webhook Dispatcher - External Event Notifications
 Send webhooks to external systems when events occur.
 """
 
+from __future__ import annotations
+
 import logging
-from typing import Any
+from typing import Any, ClassVar
 
 import requests
 from django.db import models
@@ -40,17 +42,17 @@ class Webhook(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    objects: ClassVar[models.Manager[Webhook]] = models.Manager()
+
     class Meta:
-        ordering = ["-created_at"]
-        indexes = [
-            models.Index(fields=["event_type", "active"]),
-        ]
+        ordering: ClassVar[list[str]] = ["-created_at"]
+        indexes = (models.Index(fields=["event_type", "active"]),)
 
     def __str__(self):
         return f"{self.name} ({self.event_type})"
 
 
-class WebhookDelivery(models.Model):  # noqa: DJ008
+class WebhookDelivery(models.Model):
     """Log of webhook deliveries"""
 
     webhook = models.ForeignKey(
@@ -72,11 +74,11 @@ class WebhookDelivery(models.Model):  # noqa: DJ008
     # Success
     success = models.BooleanField(default=False)
 
+    objects: ClassVar[models.Manager[WebhookDelivery]] = models.Manager()
+
     class Meta:
-        ordering = ["-delivered_at"]
-        indexes = [
-            models.Index(fields=["webhook", "success"]),
-        ]
+        ordering: ClassVar[list[str]] = ["-delivered_at"]
+        indexes = (models.Index(fields=["webhook", "success"]),)
 
 
 class WebhookDispatcher:
@@ -181,17 +183,17 @@ class WebhookDispatcher:
                     )
 
             except requests.Timeout:
-                logger.exception(f"Webhook timeout to {webhook.url}")
+                logger.exception("Webhook timeout to %s", webhook.url)
                 self._log_failed_delivery(
                     webhook, event_type, payload, attempt, "Timeout"
                 )
 
             except requests.RequestException as e:
-                logger.exception(f"Webhook request failed to {webhook.url}: {e}")
+                logger.exception("Webhook request failed to %s", webhook.url)
                 self._log_failed_delivery(webhook, event_type, payload, attempt, str(e))
 
             except Exception as e:
-                logger.error(f"Webhook dispatch error: {e}", exc_info=True)
+                logger.exception("Webhook dispatch error")
                 self._log_failed_delivery(webhook, event_type, payload, attempt, str(e))
 
             # Wait before retry (exponential backoff)

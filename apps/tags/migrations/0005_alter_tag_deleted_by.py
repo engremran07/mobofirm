@@ -6,12 +6,12 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-    dependencies = [
+    dependencies = (
         ("tags", "0004_alter_tag_deleted_by"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-    ]
+    )
 
-    operations = [
+    operations = (
         migrations.AlterField(
             model_name="tag",
             name="deleted_by",
@@ -23,4 +23,4 @@ class Migration(migrations.Migration):
                 to=settings.AUTH_USER_MODEL,
             ),
         ),
-    ]
+    )

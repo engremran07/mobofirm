@@ -1,0 +1,2 @@
+{# Contract: label (required); tone (success, warning, danger or accent; neutral when empty); icon (optional Lucide name, must be registered in icons.js). #}
+<span class="eco-pill{% if tone %} eco-pill--{{ tone }}{% endif %}">{% if icon %}<i class="icon" data-lucide="{{ icon }}" aria-hidden="true"></i>{% endif %}{{ label }}</span>

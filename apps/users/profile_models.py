@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import ClassVar
+
 from django.conf import settings
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
@@ -41,7 +43,7 @@ class Reputation(models.Model):
     class Meta:
         verbose_name = "Reputation"
         verbose_name_plural = "Reputations"
-        ordering = ["-total_score"]
+        ordering: ClassVar[list[str]] = ["-total_score"]
 
     def __str__(self) -> str:
         return f"{self.user} rep={self.total_score}"
@@ -59,15 +61,15 @@ class Following(models.Model):
     class Meta:
         verbose_name = "Following"
         verbose_name_plural = "Followings"
-        ordering = ["-created_at"]
-        constraints = [
+        ordering: ClassVar[list[str]] = ["-created_at"]
+        constraints = (
             models.UniqueConstraint(
                 fields=["follower", "following"], name="users_following_unique"
             ),
             models.CheckConstraint(
                 condition=~Q(follower=F("following")), name="users_no_self_follow"
             ),
-        ]
+        )
 
     def __str__(self) -> str:
         return f"{self.follower} -> {self.following}"
@@ -96,12 +98,12 @@ class ActivityFeed(models.Model):
     class Meta:
         verbose_name = "Activity"
         verbose_name_plural = "Activity Feed"
-        ordering = ["-created_at"]
-        indexes = [
+        ordering: ClassVar[list[str]] = ["-created_at"]
+        indexes = (
             models.Index(
                 fields=["user", "action_type"], name="users_activity_action_idx"
-            )
-        ]
+            ),
+        )
 
     def __str__(self) -> str:
         return f"{self.user} {self.action_type} @ {self.created_at}"

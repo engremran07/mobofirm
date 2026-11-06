@@ -1,179 +1,224 @@
+"""Deterministic keyword extraction and tag matching for blog content.
+
+No network or AI service is involved: candidate tags come from the post's own
+title, summary and body, and are matched against the curated tag vocabulary.
+"""
+
 from __future__ import annotations
 
-import hashlib
+import re
+from collections import Counter
 from typing import Any
 
-from django.db import transaction
-from django.utils import timezone
+from django.db import IntegrityError, transaction
+from django.utils.html import strip_tags
 from django.utils.text import slugify
 
-from apps.core import ai_client
 from apps.tags.models import Tag
-from apps.tags.models_keyword import KeywordProvider, KeywordSuggestion
+from apps.tags.selectors import public_tags
+
+STOPWORDS = frozenset(
+    [
+        "a",
+        "about",
+        "after",
+        "all",
+        "also",
+        "an",
+        "and",
+        "any",
+        "are",
+        "as",
+        "at",
+        "be",
+        "because",
+        "been",
+        "before",
+        "but",
+        "by",
+        "can",
+        "do",
+        "does",
+        "for",
+        "from",
+        "get",
+        "has",
+        "have",
+        "how",
+        "if",
+        "in",
+        "into",
+        "is",
+        "it",
+        "its",
+        "just",
+        "like",
+        "more",
+        "most",
+        "new",
+        "no",
+        "not",
+        "of",
+        "on",
+        "one",
+        "only",
+        "or",
+        "other",
+        "our",
+        "out",
+        "over",
+        "so",
+        "some",
+        "than",
+        "that",
+        "the",
+        "their",
+        "them",
+        "then",
+        "there",
+        "these",
+        "they",
+        "this",
+        "to",
+        "up",
+        "use",
+        "used",
+        "using",
+        "was",
+        "we",
+        "were",
+        "what",
+        "when",
+        "which",
+        "while",
+        "who",
+        "will",
+        "with",
+        "without",
+        "you",
+        "your",
+        "guide",
+        "download",
+        "firmware",
+    ]
+)
+_ENTITY = re.compile(
+    r"\b(?:[A-Z][\w+-]*|\d[\w+-]*)(?:\s+(?:[A-Z][\w+-]*|\d[\w+-]*)){0,3}\b"
+)
+_TOKEN = re.compile(r"[a-z0-9][a-z0-9+-]*")
+MAX_NAME_LENGTH = 64
 
 
-def _normalize(text: str) -> str:
+def normalize(text: str) -> str:
     return " ".join((text or "").lower().strip().split())
 
 
+def post_text(post: Any) -> str:
+    return " ".join(
+        [
+            getattr(post, "title", "") or "",
+            getattr(post, "summary", "") or "",
+            strip_tags(getattr(post, "body", "") or "")[:4000],
+        ]
+    )
+
+
 def suggest_tags_from_text(text: str, limit: int = 10) -> list[dict[str, str]]:
+    """Rank capitalised entities and frequent keywords found in ``text``."""
     text = (text or "").strip()
     if not text:
         return []
-    # Basic heuristic seeds
-    seeds = []
+    scores: Counter[str] = Counter()
+    display: dict[str, str] = {}
+
+    for match in _ENTITY.finditer(text):
+        phrase = match.group(0).strip()
+        norm = normalize(phrase)
+        words = norm.split()
+        if (
+            len(norm) < 3
+            or len(norm) > MAX_NAME_LENGTH
+            or all(word in STOPWORDS for word in words)
+        ):
+            continue
+        scores[norm] += 2 + len(words)
+        display.setdefault(norm, phrase)
+
+    for token, count in Counter(_TOKEN.findall(text.lower())).items():
+        if len(token) >= 4 and token not in STOPWORDS and count >= 2:
+            scores[token] += count
+            display.setdefault(token, token.title())
+
+    ranked = [name for name, _score in scores.most_common(limit)]
+    return [
+        {"name": display[norm], "normalized": norm, "score": str(scores[norm])}
+        for norm in ranked
+    ]
+
+
+def curated_matches(text: str) -> list[Tag]:
+    """Curated tags whose name or synonym appears in ``text``."""
+    haystack = f" {normalize(strip_tags(text))} "
+    matches: list[Tag] = []
+    for tag in public_tags():
+        names = {tag.normalized_name or normalize(tag.name)}
+        names.update(
+            normalize(item) for item in (tag.synonyms or []) if isinstance(item, str)
+        )
+        if any(name and f" {name} " in haystack for name in names):
+            matches.append(tag)
+    return matches
+
+
+def get_or_create_suggestion(name: str) -> Tag | None:
+    """Return the tag for ``name``, creating an uncurated suggestion if unknown."""
+    name = " ".join((name or "").split())[:MAX_NAME_LENGTH]
+    norm = normalize(name)
+    slug = slugify(norm)[:80]
+    if not norm or not slug:
+        return None
+    existing = (
+        Tag.objects.filter(
+            normalized_name=norm, merge_into__isnull=True, is_deleted=False
+        ).first()
+        or Tag.objects.filter(slug=slug, is_deleted=False).first()
+    )
+    if existing is not None:
+        return existing
     try:
-        ai_tags = ai_client.suggest_tags(text, None)
-        seeds.extend(ai_tags or [])
-    except Exception:  # noqa: S110
-        pass
-    # Deduplicate and normalize
-    seen = set()
-    out = []
-    for name in seeds:
-        norm = _normalize(name)
-        if not norm or norm in seen:
-            continue
-        seen.add(norm)
-        out.append({"name": name.strip(), "normalized": norm, "score": 0.6})
-        if len(out) >= limit:
-            break
-    return out
-
-
-def merge_tags(source: Tag, target: Tag, user=None) -> None:
-    if source.pk == target.pk:
-        return
-    with transaction.atomic():
-        # Reassign many-to-many relations from source to target (posts)
-        posts_qs = getattr(source, "posts", None)
-        if posts_qs is not None:
-            for post in posts_qs.all():
-                post.tags.add(target)
-                post.tags.remove(source)
-        source.merge_into = target
-        source.is_active = False
-        source.deleted_at = timezone.now()
-        source.deleted_by = user
-        source.save(
-            update_fields=["merge_into", "is_active", "deleted_at", "deleted_by"]
-        )
-        # Update target usage
-        target.usage_count = getattr(target, "posts", Tag.objects.none()).count()
-        target.save(update_fields=["usage_count"])
-
-
-def rebuild_usage() -> None:
-    for tag in Tag.objects.all():
-        try:
-            tag.usage_count = getattr(tag, "posts", Tag.objects.none()).count()
-            tag.save(update_fields=["usage_count"])
-        except Exception:  # noqa: S112
-            continue
-
-
-def compute_content_hash(text: str) -> str:
-    return hashlib.sha256((text or "").encode("utf-8", errors="ignore")).hexdigest()
-
-
-def store_suggestions(tag: Tag, suggestions: list[dict], content_hash: str) -> None:
-    tag.suggestions = suggestions
-    tag.content_hash = content_hash
-    tag.last_suggested_at = timezone.now()
-    tag.save(update_fields=["suggestions", "content_hash", "last_suggested_at"])
-
-
-def jaccard(a: str, b: str) -> float:
-    sa = set(a.lower().split())
-    sb = set(b.lower().split())
-    if not sa or not sb:
-        return 0.0
-    return len(sa & sb) / len(sa | sb)
-
-
-def fetch_external_keywords(provider: KeywordProvider) -> list[dict[str, str]]:
-    """
-    Stub for external keyword fetch; replace with real API calls per provider.config.
-    Stores suggestions and returns normalized list for review.
-    """
-    if not provider.is_enabled:
-        return []
-    # Placeholder: no real API call without provider details.
-    # In real integration, use provider.config / api_key to fetch data.
-    return []
-
-
-def store_keyword_suggestions(
-    provider: KeywordProvider, keywords: list[dict[str, str]]
-) -> None:
-    now = timezone.now()
-    for kw in keywords:
-        norm = _normalize(kw.get("keyword", ""))
-        if not norm:
-            continue
-        KeywordSuggestion.objects.update_or_create(
-            provider=provider,
-            normalized=norm,
-            defaults={
-                "keyword": kw.get("keyword", norm),
-                "score": kw.get("score", 0.0),
-                "locale": kw.get("locale", ""),
-                "category": kw.get("category", ""),
-                "metadata": kw.get("metadata", {}),
-            },
-        )
-    provider.last_run_at = now
-    provider.last_status = "ok"
-    provider.save(update_fields=["last_run_at", "last_status"])
+        with transaction.atomic():
+            return Tag.objects.create(
+                name=name,
+                normalized_name=norm,
+                slug=slug,
+                ai_suggested=True,
+                is_curated=False,
+            )
+    except IntegrityError:
+        return Tag.objects.filter(slug=slug).first()
 
 
 @transaction.atomic
 def auto_tag_post(post: Any, allow_create: bool = True, max_tags: int = 5) -> list[Tag]:
-    """
-    Heuristic auto-tagging: derive candidate tags from title/summary/body.
-    Creates AI-suggested tags if allowed and attaches them to the post.
-    """
-    text = " ".join(
-        [
-            getattr(post, "title", "") or "",
-            getattr(post, "summary", "") or "",
-            (getattr(post, "body", "") or "")[:4000],  # cap to avoid over-processing
-        ]
-    )
-    suggestions = suggest_tags_from_text(text, limit=max_tags * 2)
+    """Attach matching curated tags; record unknown keywords as staff suggestions."""
+    text = post_text(post)
     attached: list[Tag] = []
-    for s in suggestions:
-        norm = s.get("normalized") or _normalize(s.get("name", ""))
-        if not norm:
-            continue
-        tag_obj = Tag.objects.filter(
-            normalized_name=norm, is_deleted=False, merge_into__isnull=True
+    seen: set[int] = set()
+    for suggestion in suggest_tags_from_text(text, limit=max_tags * 2):
+        tag = Tag.objects.filter(
+            normalized_name=suggestion["normalized"],
+            is_deleted=False,
+            merge_into__isnull=True,
         ).first()
-        if tag_obj is None and allow_create:
-            Tag.objects.create(
-                name=s.get("name", norm).strip()[:64],
-                normalized_name=norm[:64],
-                slug=slugify(norm)[:80],
-                ai_suggested=True,
-                is_curated=False,
-            )
+        if tag is None:
+            if allow_create:
+                get_or_create_suggestion(suggestion["name"])
             continue
-        if (
-            tag_obj is None
-            or not tag_obj.is_curated
-            or not tag_obj.is_active
-            or tag_obj.is_deleted
-        ):
+        if not (tag.is_curated and tag.is_active) or tag.pk in seen:
             continue
-        post.tags.add(tag_obj)
-        attached.append(tag_obj)
+        seen.add(tag.pk)
+        post.tags.add(tag)
+        attached.append(tag)
         if len(attached) >= max_tags:
             break
-    # Update usage counts for attached tags
-    for t in attached:
-        try:
-            t.usage_count = t.posts.count()  # type: ignore[attr-defined]
-            t.save(update_fields=["usage_count"])
-        except Exception:  # noqa: S112
-            continue
     return attached

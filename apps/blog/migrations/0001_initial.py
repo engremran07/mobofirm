@@ -8,9 +8,9 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
     initial = True
 
-    dependencies = []
+    dependencies = ()
 
-    operations = [
+    operations = (
         migrations.CreateModel(
             name="AutoTopic",
             fields=[
@@ -307,4 +307,4 @@ class Migration(migrations.Migration):
                 "verbose_name_plural": "Tag Translations",
             },
         ),
-    ]
+    )

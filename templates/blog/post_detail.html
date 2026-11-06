@@ -1,41 +1,79 @@
 {% extends "base.html" %}
 {% load ad_tags %}
-{% block title %}{{ post.seo_title|default:post.title }} | {{ site_name|default:"Mobofirm" }}{% endblock %}
-{% block meta_description %}{{ post.seo_description|default:post.summary }}{% endblock %}
-{% block extra_head %}{% if canonical_url %}<link rel="canonical" href="{{ canonical_url }}">{% endif %}{% endblock %}
 {% block content %}
-<article class="site-container py-4 py-lg-5">
-  <nav aria-label="Breadcrumb" class="small muted mb-3"><a href="{% url 'blog:post_list' %}">Journal</a>{% if post.category %} / <span>{{ post.category.name }}</span>{% endif %}</nav>
-  <header class="mb-4">
-    {% if post.category %}<p class="section-eyebrow mb-2">{{ post.category.name }}</p>{% endif %}
-    <h1 class="display-5 fw-bold">{{ post.title }}</h1>
-    <p class="muted">By {{ post.author }}{% if post.published_at %} · {{ post.published_at|date:"F j, Y" }}{% endif %}{% if post.reading_time %} · {{ post.reading_time }} min read{% endif %}</p>
-    {% if post.summary %}<p class="lead muted">{{ post.summary }}</p>{% endif %}
-    {% if user.is_authenticated and user == post.author or user.is_staff %}<a class="btn btn-outline-secondary btn-sm" href="{% url 'blog:post_create' %}?edit={{ post.slug }}">Edit article</a>{% endif %}
-  </header>
-  {% render_ad_slot "in-article-top" %}
-  {% if ad_gate_required %}
-    {% include "blog/fragments/ad_gate.html" %}
-  {% else %}
-    <div class="article-body">{{ post_body_html|safe }}</div>
-    {% if post.curated_tags %}<ul class="list-inline mt-4" aria-label="Article tags">{% for tag in post.curated_tags %}<li class="list-inline-item"><a href="{% url 'tags:detail' slug=tag.slug %}">#{{ tag.name }}</a></li>{% endfor %}</ul>{% endif %}
-    {% render_ad_slot "in-article-mid" %}
-    {% if firmware_table_data %}
-      <section class="mt-5" aria-labelledby="related-firmware-title"><h2 id="related-firmware-title" class="h3">Related firmware</h2>
-        <div class="catalog-table-wrap"><table class="table catalog-table"><thead><tr><th scope="col">File</th><th scope="col">Classification</th><th scope="col">Package format</th><th scope="col">Build</th><th scope="col">Version</th><th scope="col">Review</th></tr></thead><tbody>
-          {% for item in firmware_table_data %}<tr><td>{{ item.original_file_name }}</td><td>{{ item.firmware_type_display }}</td><td>{{ item.get_package_format_display }}</td><td>{{ item.build_number|default:"—" }}</td><td>{{ item.android_version|default:"—" }}</td><td>{% if item.is_verified %}Verified{% else %}Governance reviewed{% endif %}</td></tr>{% empty %}<tr><td colspan="6">No public firmware records are available.</td></tr>{% endfor %}
-        </tbody></table></div>
-      </section>
+<article class="article-page">
+  <div class="site-container py-4 py-lg-5">
+    {% url 'blog:post_list' as journal_url %}
+    {% if post.category %}
+      {% url 'blog:post_list' as category_base %}
+      {% include "components/breadcrumbs.html" with current=post.title parent_label=post.category.name parent_url=category_base|add:"?category="|add:post.category.slug grandparent_label="Journal" grandparent_url=journal_url %}
+    {% else %}
+      {% include "components/breadcrumbs.html" with current=post.title parent_label="Journal" parent_url=journal_url %}
     {% endif %}
-    {% if related_posts %}
-      <section class="mt-5" aria-labelledby="related-articles-title"><h2 id="related-articles-title" class="h3">Related articles</h2>{% include "blog/partials/related_widget.html" %}</section>
+    {% if is_preview %}
+      <div class="alert alert-warning" role="status"><strong>Preview.</strong> This article is {{ post.get_status_display|lower }} and not visible to readers yet.</div>
     {% endif %}
-    {% if post.allow_comments %}
-      <section class="mt-5" aria-labelledby="comments-title"><h2 id="comments-title" class="h3">Discussion</h2>
-        {% for comment in comments %}{% if comment.is_approved or comment.status == "approved" %}<article class="surface-card p-3 mb-3"><p class="small muted">{{ comment.user }} · {{ comment.created_at|date:"M j, Y" }}</p><p class="mb-0">{{ comment.body|linebreaksbr }}</p></article>{% endif %}{% empty %}<p class="muted">No approved comments yet.</p>{% endfor %}
-        {% include "comments/form.html" %}
-      </section>
+    <header class="article-header">
+      <p class="section-eyebrow mb-2">{% if post.category %}{{ post.category.name }}{% else %}{{ card.kind }}{% endif %}</p>
+      <h1 class="article-title">{{ post.title }}</h1>
+      {% if post.summary %}<p class="article-dek">{{ post.summary }}</p>{% endif %}
+      <div class="article-meta">
+        <span class="avatar avatar--sm avatar--v{{ card.variant }}" aria-hidden="true">{{ author_initials }}</span>
+        <span class="article-meta__author">{{ card.author }}</span>
+        {% if post.published_at %}<span aria-hidden="true">·</span><time datetime="{{ post.published_at|date:'c' }}">{{ post.published_at|date:"F j, Y" }}</time>{% endif %}
+        {% if post.updated_at and post.published_at and post.updated_at|date:"Ymd" != post.published_at|date:"Ymd" %}<span aria-hidden="true">·</span><span>Updated <time datetime="{{ post.updated_at|date:'c' }}">{{ post.updated_at|date:"M j, Y" }}</time></span>{% endif %}
+        <span aria-hidden="true">·</span><span><i data-lucide="clock" class="icon" aria-hidden="true"></i> {{ post.reading_time }} min read</span>
+        {% if comments_open %}<span aria-hidden="true">·</span><a href="#comments"><i data-lucide="message-circle" class="icon" aria-hidden="true"></i> {{ comment_count }} comment{{ comment_count|pluralize }}</a>{% endif %}
+        {% if can_edit %}<a class="btn btn-outline-secondary btn-sm ms-auto" href="{% url 'blog:post_create' %}?edit={{ post.slug }}"><i data-lucide="pencil" class="icon" aria-hidden="true"></i> Edit</a>{% endif %}
+      </div>
+    </header>
+    {% if cover %}
+      <figure class="article-cover"><img src="{{ cover }}" alt="" width="1200" height="630"></figure>
+    {% else %}
+      <div class="article-cover article-cover--placeholder">{% include "blog/partials/thumb.html" with card=card %}</div>
     {% endif %}
-  {% endif %}
+    <div class="article-layout">
+      <div class="article-main">
+        {% if article.toc %}
+          <details class="toc toc--inline d-lg-none">
+            <summary><i data-lucide="list" class="icon" aria-hidden="true"></i> In this article</summary>
+            <ol class="toc__list">{% for entry in article.toc %}<li class="toc__item toc__item--h{{ entry.level }}"><a href="#{{ entry.anchor }}">{{ entry.text }}</a></li>{% endfor %}</ol>
+          </details>
+        {% endif %}
+        {% render_ad_slot "in-article-top" %}
+        <div class="article-body">{{ article.html }}</div>
+        {% render_ad_slot "in-article-mid" %}
+        {% if show_inventory %}{% include "blog/partials/firmware_inventory.html" %}{% endif %}
+        {% if tags %}
+          <ul class="tag-row" aria-label="Article tags">
+            {% for tag in tags %}<li><a class="tag-pill" href="{% url 'tags:detail' slug=tag.slug %}"><i data-lucide="hash" class="icon" aria-hidden="true"></i>{{ tag.name }}</a></li>{% endfor %}
+          </ul>
+        {% endif %}
+        {% include "blog/partials/share.html" %}
+        {% include "blog/partials/author_box.html" %}
+        {% include "blog/partials/post_nav.html" %}
+        {% if related %}
+          <section class="related" aria-labelledby="related-title">
+            <h2 class="section-heading" id="related-title">Related articles</h2>
+            <div class="post-grid post-grid--related">
+              {% for item in related %}{% include "blog/partials/post_card.html" with card=item show_excerpt=False %}{% endfor %}
+            </div>
+          </section>
+        {% endif %}
+        {% if comments_open %}{% include "comments/section.html" %}{% elif post.allow_comments %}<p class="muted small mt-5">Comments are switched off for now.</p>{% endif %}
+      </div>
+      <aside class="article-aside" aria-label="Article sidebar">
+        {% if article.toc %}
+          <nav class="toc toc--sticky d-none d-lg-block" aria-label="Table of contents">
+            <h2 class="toc__title"><i data-lucide="list" class="icon" aria-hidden="true"></i> In this article</h2>
+            <ol class="toc__list">{% for entry in article.toc %}<li class="toc__item toc__item--h{{ entry.level }}"><a href="#{{ entry.anchor }}">{{ entry.text }}</a></li>{% endfor %}</ol>
+          </nav>
+        {% endif %}
+        {% if firmware %}{% include "blog/partials/firmware_panel.html" %}{% endif %}
+        {% include "blog/partials/mini_list.html" with title="Latest" cards=latest heading_id="aside-latest-title" %}
+        {% include "blog/partials/tag_cloud.html" %}
+      </aside>
+    </div>
+  </div>
 </article>
 {% endblock %}

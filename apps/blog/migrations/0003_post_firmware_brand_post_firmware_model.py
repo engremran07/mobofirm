@@ -5,12 +5,12 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-    dependencies = [
+    dependencies = (
         ("blog", "0002_initial"),
         ("firmwares", "0011_brand_description_brand_is_featured_and_more"),
-    ]
+    )
 
-    operations = [
+    operations = (
         migrations.AddField(
             model_name="post",
             name="firmware_brand",
@@ -35,4 +35,4 @@ class Migration(migrations.Migration):
                 to="firmwares.model",
             ),
         ),
-    ]
+    )

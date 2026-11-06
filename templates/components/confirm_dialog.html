@@ -1,0 +1,13 @@
+{# Contract: dialog_id, title, message, action (POST URL), confirm_label (all required); hidden_name/hidden_value (optional single hidden field); danger (truthy for destructive styling). Open with <button type="button" data-dialog-open="<dialog_id>">. The POST is still validated server-side. #}
+<dialog class="app-dialog" id="{{ dialog_id }}" aria-labelledby="{{ dialog_id }}-title" aria-describedby="{{ dialog_id }}-message" data-app-dialog>
+  <form method="post" action="{{ action }}" class="app-dialog__body">
+    {% csrf_token %}
+    {% if hidden_name %}<input type="hidden" name="{{ hidden_name }}" value="{{ hidden_value }}">{% endif %}
+    <h2 id="{{ dialog_id }}-title" class="h4">{{ title }}</h2>
+    <p id="{{ dialog_id }}-message">{{ message }}</p>
+    <div class="d-flex flex-wrap justify-content-end gap-2">
+      <button type="button" class="btn btn-outline-secondary" data-dialog-close autofocus>Cancel</button>
+      <button type="submit" class="btn {% if danger %}btn-danger{% else %}btn-primary{% endif %}">{{ confirm_label }}</button>
+    </div>
+  </form>
+</dialog>

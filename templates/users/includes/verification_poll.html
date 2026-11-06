@@ -1,0 +1,5 @@
+<p class="small muted mt-4 mb-0" role="status" aria-live="polite"
+   hx-get="{% url 'users:verify_email_status' %}" hx-trigger="every 5s" hx-swap="none" hx-indicator="this">
+  This page checks automatically and continues as soon as your email is verified.
+  <a href="{{ request.get_full_path }}">Check now</a>
+</p>

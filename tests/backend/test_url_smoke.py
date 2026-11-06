@@ -1,3 +1,5 @@
+"""Smoke tests for named URLs and the staff-only route redirects."""
+
 from __future__ import annotations
 
 from django.test import TestCase
@@ -7,7 +9,10 @@ from tests.url_inventory import named_routes
 
 
 class NamedUrlSmokeTests(TestCase):
+    """Named routes respond without server errors on a fresh schema."""
+
     def test_homepage_and_changelog_api_work_on_a_fresh_schema(self):
+        """The homepage and the empty changelog API both return 200."""
         homepage = self.client.get(reverse("home"))
         changelog = self.client.get(reverse("firmwares:changelog-entries-list"))
 
@@ -16,6 +21,7 @@ class NamedUrlSmokeTests(TestCase):
         self.assertEqual(changelog.json(), [])
 
     def test_staff_pages_redirect_to_the_registered_admin_login(self):
+        """Anonymous requests to staff pages redirect to the admin login."""
         routes = (
             "comments:moderation_queue",
             "comments:moderation_action",
@@ -36,6 +42,7 @@ class NamedUrlSmokeTests(TestCase):
                 )
 
     def test_every_named_get_route_responds_without_a_server_error(self):
+        """No named GET route answers with a 5xx status."""
         routes = list(named_routes(get_resolver().url_patterns))
         self.assertTrue(routes, "No named URL routes were discovered.")
 

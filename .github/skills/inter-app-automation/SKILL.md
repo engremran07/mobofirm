@@ -13,7 +13,8 @@ Use when a workflow crosses app ownership or runs through a Django signal, task,
 5. Test each changed boundary: source action, consumer result, permission/validation failure, rollback, duplicate delivery, and retry/exhaustion where applicable. Assert final persisted state and externally observable effects.
 6. Check logs/metrics for correlation IDs and useful outcomes without secrets, personal data, or unbounded payloads. Validate migrations and operational recovery steps.
 7. Describe consistency guarantees, idempotency key, retry policy, and remaining failure modes.
+8. Verify both fresh writes and already-existing records. If automation relies on `created=True` signals, provide an idempotent catch-up/reconciliation path for seed commands and records created before the automation existed.
 
-For firmware and editorial integrations, firmware owns device/package records while blog history owns revisions and governance owns review/publication. Keep provenance classification distinct from package format, seed only sourced catalog metadata, never fabricate downloadable files, and create generated posts as reviewable content rather than publishing them from seed commands.
+For firmware and editorial integrations, firmware owns device/package records and the automated brand/model/chipset posts, blog history owns revisions, and each app owns its moderation state. Keep provenance classification distinct from package format, seed only sourced catalog metadata, never fabricate downloadable files, and keep automated posts idempotent (one per entity).
 
 Do not retrofit a generic event bus, distributed transaction, or new dependency when a small existing service boundary suffices.

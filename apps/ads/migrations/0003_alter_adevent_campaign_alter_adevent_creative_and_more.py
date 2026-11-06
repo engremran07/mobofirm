@@ -6,12 +6,12 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-    dependencies = [
+    dependencies = (
         ("ads", "0002_initial"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-    ]
+    )
 
-    operations = [
+    operations = (
         migrations.AlterField(
             model_name="adevent",
             name="campaign",
@@ -56,4 +56,4 @@ class Migration(migrations.Migration):
                 to=settings.AUTH_USER_MODEL,
             ),
         ),
-    ]
+    )

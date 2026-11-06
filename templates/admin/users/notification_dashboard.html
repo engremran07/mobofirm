@@ -1,11 +1,92 @@
-{% extends "admin/base_site.html" %}
+{% extends "admin/base.html" %}
+
+{% load i18n %}
+
+{% block title %}{{ title }} | {{ site_title }}{% endblock %}
+
 {% block content %}
-<div class="container-fluid">
-  <h1>Notification operations</h1>
-  <h2>Users</h2><p>{{ user_stats.total }} active users · {{ user_stats.with_preferences }} preferences · {{ user_stats.with_push }} active push users</p>
-  <h2>Notifications</h2><p>{{ notification_stats.total }} total · {{ notification_stats.unread }} unread · {{ notification_stats.read_rate }}% read rate</p>
-  <div class="row"><div class="col">24 hours: {{ notification_stats.last_24h }}</div><div class="col">7 days: {{ notification_stats.last_7d }}</div><div class="col">30 days: {{ notification_stats.last_30d }}</div></div>
-  <h2 class="mt-4">Subscription activity</h2><p>{{ push_stats.active }} active subscriptions of {{ push_stats.total }}</p>
-  {% if type_distribution %}<h2>Notification types</h2><ul>{% for item in type_distribution %}<li>{{ item.action_type }}: {{ item.count }}</li>{% endfor %}</ul>{% endif %}
-</div>
+    <div class="flex flex-col gap-6">
+        <section aria-labelledby="notif-users" class="gap-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
+            <div class="bg-white border border-base-200 p-6 rounded-default shadow-xs dark:bg-base-900 dark:border-base-800">
+                <h2 id="notif-users" class="font-semibold text-important text-sm">{% trans "Active users" %}</h2>
+                <p class="font-semibold mt-3 text-3xl text-important tabular-nums">{{ user_stats.total }}</p>
+                <p class="mt-1 text-subtle text-xs">{{ user_stats.with_preferences }} {% trans "with preferences" %} ({{ user_stats.prefs_percentage }}%)</p>
+            </div>
+            <div class="bg-white border border-base-200 p-6 rounded-default shadow-xs dark:bg-base-900 dark:border-base-800">
+                <h2 class="font-semibold text-important text-sm">{% trans "Notifications" %}</h2>
+                <p class="font-semibold mt-3 text-3xl text-important tabular-nums">{{ notification_stats.total }}</p>
+                <p class="mt-1 text-subtle text-xs">{{ notification_stats.unread }} {% trans "unread" %} &middot; {{ notification_stats.read_rate }}% {% trans "read rate" %}</p>
+            </div>
+            <div class="bg-white border border-base-200 p-6 rounded-default shadow-xs dark:bg-base-900 dark:border-base-800">
+                <h2 class="font-semibold text-important text-sm">{% trans "Volume" %}</h2>
+                <p class="font-semibold mt-3 text-3xl text-important tabular-nums">{{ notification_stats.last_24h }}</p>
+                <p class="mt-1 text-subtle text-xs">{% trans "last 24 hours" %} &middot; {{ notification_stats.last_7d }} / 7d &middot; {{ notification_stats.last_30d }} / 30d</p>
+            </div>
+            <div class="bg-white border border-base-200 p-6 rounded-default shadow-xs dark:bg-base-900 dark:border-base-800">
+                <h2 class="font-semibold text-important text-sm">{% trans "Push subscriptions" %}</h2>
+                <p class="font-semibold mt-3 text-3xl text-important tabular-nums">{{ push_stats.active }}</p>
+                <p class="mt-1 text-subtle text-xs">{{ push_stats.total }} {% trans "total" %} &middot; {{ push_stats.new_24h }} {% trans "new in 24h" %}</p>
+            </div>
+        </section>
+
+        <section aria-labelledby="notif-health" class="bg-white border border-base-200 p-6 rounded-default shadow-xs dark:bg-base-900 dark:border-base-800">
+            <h2 id="notif-health" class="font-semibold mb-3 text-important text-sm">{% trans "Delivery health" %}</h2>
+            <ul class="flex flex-col gap-2">
+                {% for check in health_checks %}
+                    <li class="flex flex-row gap-3 items-center">
+                        {% if check.ok %}
+                            {% include "unfold/helpers/label.html" with variant="success" text=_("OK") %}
+                        {% else %}
+                            {% include "unfold/helpers/label.html" with variant="danger" text=_("Attention") %}
+                        {% endif %}
+                        <span class="font-medium text-important">{{ check.name }}</span>
+                        <span class="text-subtle">{{ check.message }}</span>
+                    </li>
+                {% endfor %}
+            </ul>
+        </section>
+
+        <div class="gap-6 grid grid-cols-1 lg:grid-cols-2">
+            <section aria-labelledby="notif-types" class="bg-white border border-base-200 p-6 rounded-default shadow-xs dark:bg-base-900 dark:border-base-800">
+                <h2 id="notif-types" class="font-semibold mb-3 text-important text-sm">{% trans "Notification types" %}</h2>
+                <ul class="flex flex-col gap-2">
+                    {% for item in type_distribution %}
+                        <li class="flex flex-row justify-between"><span>{{ item.action_type }}</span><span class="tabular-nums">{{ item.count }}</span></li>
+                    {% empty %}
+                        <li class="text-subtle">{% trans "No notifications have been sent yet." %}</li>
+                    {% endfor %}
+                </ul>
+            </section>
+            <section aria-labelledby="notif-browsers" class="bg-white border border-base-200 p-6 rounded-default shadow-xs dark:bg-base-900 dark:border-base-800">
+                <h2 id="notif-browsers" class="font-semibold mb-3 text-important text-sm">{% trans "Push browsers" %}</h2>
+                <ul class="flex flex-col gap-2">
+                    {% for item in push_stats.browsers %}
+                        <li class="flex flex-row justify-between"><span>{{ item.name }}</span><span class="tabular-nums">{{ item.count }} ({{ item.percentage }}%)</span></li>
+                    {% empty %}
+                        <li class="text-subtle">{% trans "No active push subscriptions." %}</li>
+                    {% endfor %}
+                </ul>
+            </section>
+            <section aria-labelledby="notif-top" class="bg-white border border-base-200 p-6 rounded-default shadow-xs dark:bg-base-900 dark:border-base-800">
+                <h2 id="notif-top" class="font-semibold mb-3 text-important text-sm">{% trans "Top recipients" %}</h2>
+                <ul class="flex flex-col gap-2">
+                    {% for item in top_recipients %}
+                        <li class="flex flex-row gap-3 justify-between"><span class="min-w-0 truncate">{{ item.recipient__email|default:item.recipient__username }}</span><span class="tabular-nums">{{ item.total }} ({{ item.unread }} {% trans "unread" %})</span></li>
+                    {% empty %}
+                        <li class="text-subtle">{% trans "No recipients yet." %}</li>
+                    {% endfor %}
+                </ul>
+            </section>
+            <section aria-labelledby="notif-recent" class="bg-white border border-base-200 p-6 rounded-default shadow-xs dark:bg-base-900 dark:border-base-800">
+                <h2 id="notif-recent" class="font-semibold mb-3 text-important text-sm">{% trans "Recent notifications" %}</h2>
+                <ul class="flex flex-col gap-2">
+                    {% for item in recent_notifications %}
+                        <li class="flex flex-row gap-3 justify-between"><span class="min-w-0 truncate">{{ item.title }}</span><span class="text-subtle text-xs whitespace-nowrap">{{ item.created_at|timesince }} {% trans "ago" %}</span></li>
+                    {% empty %}
+                        <li class="text-subtle">{% trans "Nothing sent yet." %}</li>
+                    {% endfor %}
+                </ul>
+            </section>
+        </div>
+    </div>
 {% endblock %}

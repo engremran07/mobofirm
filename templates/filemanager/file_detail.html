@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+{% load filemanager_tags mf_ui %}
+{% block content %}
+<div class="site-container py-4 py-lg-5">
+  <nav class="breadcrumbs mb-3" aria-label="Folder path">
+    <ol class="breadcrumb mb-0">
+      <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+      <li class="breadcrumb-item"><a href="{% url 'filemanager:browser' %}">My files</a></li>
+      {% for ancestor in breadcrumbs %}<li class="breadcrumb-item"><a href="{% url 'filemanager:browser' %}?folder={{ ancestor.pk }}">{{ ancestor.name }}</a></li>{% endfor %}
+      {% if folder %}<li class="breadcrumb-item"><a href="{% url 'filemanager:browser' %}?folder={{ folder.pk }}">{{ folder.name }}</a></li>{% endif %}
+      <li class="breadcrumb-item active" aria-current="page">{{ item.name }}</li>
+    </ol>
+  </nav>
+  {% include "components/page_header.html" with eyebrow="File" title=item.name %}
+
+  <div class="fm-layout">
+    {% include "filemanager/_sidebar.html" with fm_tab="files" %}
+
+    <div class="min-w-0 d-grid gap-4">
+      <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-primary" href="{% url 'filemanager:download' pk=item.pk %}"><i class="icon" data-lucide="download" aria-hidden="true"></i> Download</a>
+        {% if can.delete %}
+          <form method="post" action="{% url 'filemanager:delete_file' pk=item.pk %}">{% csrf_token %}<button type="submit" class="btn btn-outline-danger"><i class="icon" data-lucide="trash-2" aria-hidden="true"></i> Move to trash</button></form>
+        {% endif %}
+      </div>
+
+      <div class="row g-4">
+        <section class="col-12 col-xl-6" aria-labelledby="details-heading">
+          <div class="surface-card p-3 d-grid gap-3">
+            <h2 class="h5 mb-0" id="details-heading">Details</h2>
+            {% if item.thumbnail %}
+              <div class="fm-thumb"><img src="{% url 'filemanager:thumbnail' pk=item.pk %}" alt="Preview of {{ item.name }}" width="320" height="240"></div>
+            {% endif %}
+            <dl class="eco-kv mb-0">
+              <dt>Type</dt><dd>{{ item.get_file_type_display }} ({{ item.mime_type|default:"unknown" }})</dd>
+              <dt>Size</dt><dd>{{ item.size|filesize }}{% if versions %} · {{ total_bytes|filesize }} with versions{% endif %}</dd>
+              <dt>SHA-256</dt><dd><code>{{ item.sha256|default:"not recorded" }}</code></dd>
+              <dt>Added</dt><dd>{{ item.created_at|date:"j M Y, H:i" }}</dd>
+              <dt>Modified</dt><dd>{{ item.updated_at|date:"j M Y, H:i" }}</dd>
+              <dt>Downloads</dt><dd>{{ item.download_count }}</dd>
+              <dt>Folder</dt><dd>{% if folder %}{{ folder.name }}{% else %}Top level{% endif %}</dd>
+            </dl>
+          </div>
+        </section>
+
+        <div class="col-12 col-xl-6 d-grid gap-3 align-content-start">
+          {% if can.write %}
+            <section class="surface-card p-3" aria-labelledby="rename-heading">
+              <h2 class="h5" id="rename-heading">Rename</h2>
+              <form method="post" action="{% url 'filemanager:rename_file' pk=item.pk %}" class="d-flex gap-2">
+                {% csrf_token %}
+                <label class="visually-hidden" for="rename-file">File name</label>
+                <input class="form-control" id="rename-file" name="name" value="{{ item.name }}" maxlength="255" required>
+                <button type="submit" class="btn btn-outline-secondary">Rename</button>
+              </form>
+              <p class="small muted mt-2 mb-0">The file extension cannot be changed.</p>
+            </section>
+            {% if is_owner %}
+              <section class="surface-card p-3" aria-labelledby="move-heading">
+                <h2 class="h5" id="move-heading">Move</h2>
+                <form method="post" action="{% url 'filemanager:move_file' pk=item.pk %}" class="d-flex gap-2">
+                  {% csrf_token %}
+                  <label class="visually-hidden" for="move-destination">Destination folder</label>
+                  <select class="form-select" id="move-destination" name="destination">
+                    <option value="">Top level</option>
+                    {% for folder_id, path in folder_choices %}<option value="{{ folder_id }}"{% if folder and folder.pk == folder_id %} selected{% endif %}>{{ path }}</option>{% endfor %}
+                  </select>
+                  <button type="submit" class="btn btn-outline-secondary">Move</button>
+                </form>
+              </section>
+            {% endif %}
+            <section class="surface-card p-3" id="tags" aria-labelledby="tags-heading-detail">
+              <h2 class="h5" id="tags-heading-detail">Tags</h2>
+              <form method="post" action="{% url 'filemanager:set_tags' pk=item.pk %}">
+                {% csrf_token %}
+                {% include "components/form_field.html" with field=tags_form.tags %}
+                <button type="submit" class="btn btn-outline-secondary">Save tags</button>
+              </form>
+            </section>
+          {% endif %}
+        </div>
+      </div>
+
+      {% if can.share %}
+        <section class="surface-card p-3" id="shares" aria-labelledby="share-heading">
+          <h2 class="h5" id="share-heading"><i class="icon" data-lucide="link" aria-hidden="true"></i> Share links</h2>
+          <p class="small muted">Anyone with a share link can download this file until the link expires or you revoke it. Add a password for extra protection.</p>
+          <form method="post" action="{% url 'filemanager:create_share' pk=item.pk %}" class="row g-3 align-items-end mb-4">
+            {% csrf_token %}
+            <div class="col-12 col-md-4">{% include "components/form_field.html" with field=share_form.expires_hours %}</div>
+            <div class="col-12 col-md-3">{% include "components/form_field.html" with field=share_form.max_downloads %}</div>
+            <div class="col-12 col-md-3">{% include "components/form_field.html" with field=share_form.password %}</div>
+            <div class="col-12 col-md-2 mb-3"><button type="submit" class="btn btn-primary w-100">Create link</button></div>
+          </form>
+          {% if shares %}
+            {% table_scroll "Share links for this file" %}
+            <table class="table align-middle mb-0">
+              <thead><tr><th scope="col">Link</th><th scope="col">Expires</th><th scope="col">Downloads</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+              <tbody>
+                {% for share in shares %}
+                  <tr>
+                    <td>
+                      <label class="visually-hidden" for="share-link-{{ share.pk }}">Share link</label>
+                      <input class="form-control form-control-sm fm-share-link" id="share-link-{{ share.pk }}" readonly value="{{ request.scheme }}://{{ request.get_host }}{% url 'filemanager:shared_file' token=share.token %}">
+                      {% if share.password_hash %}<span class="small muted"><i class="icon" data-lucide="lock" aria-hidden="true"></i> Password protected</span>{% endif %}
+                    </td>
+                    <td>{% if share.expires_at %}{{ share.expires_at|date:"j M Y, H:i" }}{% else %}Never{% endif %}</td>
+                    <td>{{ share.download_count }}{% if share.max_downloads %} / {{ share.max_downloads }}{% endif %}</td>
+                    <td class="text-nowrap">
+                      <button type="button" class="btn btn-sm btn-outline-secondary" x-data="fmCopy" data-copy-target="share-link-{{ share.pk }}" @click="copy" x-text="label">Copy link</button>
+                      <button type="button" class="btn btn-sm btn-outline-danger" data-dialog-open="revoke-{{ share.pk }}">Revoke</button>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+            {% endtable_scroll %}
+            {% for share in shares %}
+              {% url 'filemanager:revoke_share' pk=share.pk as revoke_url %}
+              {% with pk_text=share.pk|stringformat:"s" %}
+                {% include "components/confirm_dialog.html" with dialog_id="revoke-"|add:pk_text title="Revoke this link?" message="Anyone using the link will lose access immediately." action=revoke_url confirm_label="Revoke link" danger=True %}
+              {% endwith %}
+            {% endfor %}
+          {% else %}
+            <p class="muted mb-0">No active share links for this file.</p>
+          {% endif %}
+        </section>
+      {% endif %}
+
+      <section class="surface-card p-3" id="versions" aria-labelledby="versions-heading">
+        <h2 class="h5" id="versions-heading"><i class="icon" data-lucide="history" aria-hidden="true"></i> Versions</h2>
+        <p class="small muted">Uploading a new version keeps the previous content here so you can download or restore it. Up to {{ version_limit }} earlier versions are kept, and they count towards your storage.</p>
+        {% if can.write %}
+          <form method="post" action="{% url 'filemanager:upload_version' pk=item.pk %}" enctype="multipart/form-data" class="d-flex flex-wrap gap-2 mb-4">
+            {% csrf_token %}
+            <label class="visually-hidden" for="version-file">New version of {{ item.name }}</label>
+            <input class="form-control w-auto" id="version-file" type="file" name="file" required>
+            <button type="submit" class="btn btn-outline-primary">Upload new version</button>
+          </form>
+        {% endif %}
+        {% if versions %}
+          {% table_scroll "Earlier versions" %}
+          <table class="table align-middle mb-0">
+            <thead><tr><th scope="col">Version</th><th scope="col">Size</th><th scope="col">Replaced</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+            <tbody>
+              {% for version in versions %}
+                <tr>
+                  <td>v{{ version.version_number }}</td>
+                  <td>{{ version.size|filesize }}</td>
+                  <td>{{ version.created_at|date:"j M Y, H:i" }}</td>
+                  <td class="text-nowrap">
+                    <a class="btn btn-sm btn-outline-secondary" href="{% url 'filemanager:download_version' pk=item.pk version_pk=version.pk %}">Download</a>
+                    {% if can.write %}
+                      <form class="d-inline" method="post" action="{% url 'filemanager:restore_version' pk=item.pk version_pk=version.pk %}">{% csrf_token %}<button type="submit" class="btn btn-sm btn-outline-secondary"><i class="icon" data-lucide="rotate-ccw" aria-hidden="true"></i> Restore</button></form>
+                    {% endif %}
+                    {% if can.delete %}<button type="button" class="btn btn-sm btn-outline-danger" data-dialog-open="delete-version-{{ version.pk }}">Delete</button>{% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% endtable_scroll %}
+          {% if can.delete %}
+            {% for version in versions %}
+              {% url 'filemanager:delete_version' pk=item.pk version_pk=version.pk as delete_version_url %}
+              {% with pk_text=version.pk|stringformat:"s" %}
+                {% include "components/confirm_dialog.html" with dialog_id="delete-version-"|add:pk_text title="Delete this version?" message="This version is removed permanently." action=delete_version_url confirm_label="Delete version" danger=True %}
+              {% endwith %}
+            {% endfor %}
+          {% endif %}
+        {% else %}
+          <p class="muted mb-0">No earlier versions yet.</p>
+        {% endif %}
+      </section>
+    </div>
+  </div>
+</div>
+{% endblock %}

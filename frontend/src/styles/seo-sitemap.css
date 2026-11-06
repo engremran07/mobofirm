@@ -1,0 +1,23 @@
+/* Presentation for sitemap XML. Served from 'self' so the strict CSP stays intact
+   and the browser does not fall back to its inline-styled XML viewer. */
+urlset,
+sitemapindex {
+  display: block;
+  padding: 1rem;
+  font: 14px/1.6 ui-monospace, "SFMono-Regular", Consolas, monospace;
+}
+
+url,
+sitemap {
+  display: block;
+  margin-bottom: 0.75rem;
+}
+
+loc,
+lastmod {
+  display: block;
+}
+
+lastmod {
+  opacity: 0.7;
+}

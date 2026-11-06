@@ -1,11 +1,16 @@
 import os
 from pathlib import Path
+from typing import Any
 
 from dotenv import load_dotenv
-from .security import BASE_CSP
+
+from . import unfold as unfold_config
+from .security import ADMIN_CSP, BASE_CSP
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 load_dotenv(BASE_DIR / ".env")
+
+UNFOLD = unfold_config.UNFOLD
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "")
 if not SECRET_KEY:
@@ -21,13 +26,20 @@ ALLOWED_HOSTS = [
 ]
 
 INSTALLED_APPS = [
-    "django.contrib.admin",
+    # Unfold must precede the admin app so its templates win. BasicAppConfig keeps
+    # Unfold from swapping admin.site; MobofirmAdminConfig installs the project site.
+    "unfold.apps.BasicAppConfig",
+    "unfold.contrib.filters",
+    "unfold.contrib.forms",
+    "unfold.contrib.inlines",
+    "apps.core.admin_config.MobofirmAdminConfig",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.sites",
+    "django.contrib.sitemaps",
     "allauth",
     "allauth.account",
     "allauth.socialaccount",
@@ -39,28 +51,44 @@ INSTALLED_APPS = [
     "apps.core.apps.CoreConfig",
     "apps.ads.apps.AdsConfig",
     "apps.devices.apps.DevicesConfig",
-    "apps.governance.apps.GovernanceConfig",
     "apps.blog.apps.BlogConfig",
     "apps.comments.apps.CommentsConfig",
     "apps.firmwares.apps.FirmwaresConfig",
     "apps.tags.apps.TagsConfig",
+    "apps.storage.apps.StorageConfig",
+    "apps.seo.apps.SeoConfig",
+    "apps.pages.apps.PagesConfig",
+    "apps.shop.apps.ShopConfig",
+    "apps.marketplace.apps.MarketplaceConfig",
+    "apps.filemanager.apps.FileManagerConfig",
+    "apps.site_settings.apps.SiteSettingsConfig",
 ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.middleware.csp.ContentSecurityPolicyMiddleware",
+    "apps.core.middleware.admin_csp.AdminContentSecurityPolicyMiddleware",
+    "apps.site_settings.middleware.SiteAnalyticsCspMiddleware",
+    "apps.core.middleware.correlation.CorrelationIdMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
-    "django.middleware.locale.LocaleMiddleware",
+    "apps.site_settings.middleware.SiteLocaleMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "apps.core.middleware.maintenance.MaintenanceModeMiddleware",
+    "apps.users.middleware.reset_throttle.PasswordResetThrottleMiddleware",
+    "apps.devices.middleware.DeviceBrowserKeyCookieMiddleware",
     "allauth.account.middleware.AccountMiddleware",
     "apps.users.middleware.mfa_enforce.EnforceMfaMiddleware",
+    "apps.users.middleware.profile_completion.EnforceProfileCompletionMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "apps.seo.middleware.RedirectFallbackMiddleware",
+    "apps.seo.middleware.RobotsHeaderMiddleware",
 ]
 
 SECURE_CSP = BASE_CSP
+SECURE_CSP_ADMIN = ADMIN_CSP
 
 ROOT_URLCONF = "app.urls"
 
@@ -74,7 +102,10 @@ TEMPLATES = [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "django.template.context_processors.csp",
                 "app.context_processors.release_metadata",
+                "apps.site_settings.context_processors.site_settings",
+                "app.context_processors.site_chrome",
             ],
         },
     },
@@ -83,7 +114,7 @@ TEMPLATES = [
 WSGI_APPLICATION = "app.wsgi.application"
 ASGI_APPLICATION = "app.asgi.application"
 
-DATABASES = {
+DATABASES: dict[str, dict[str, Any]] = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
         "NAME": os.getenv("DB_NAME", "mobofirm"),
@@ -121,6 +152,15 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 SITE_NAME = os.getenv("SITE_NAME", "Mobofirm")
 SITE_DESCRIPTION = os.getenv("SITE_DESCRIPTION", "")
 SITE_URL = os.getenv("SITE_URL", "")
+# Published on the seeded Contact and DMCA pages; the .invalid default is a dummy
+# address that `seed_pages` warns about until a real mailbox is configured.
+SITE_CONTACT_EMAIL = os.getenv("SITE_CONTACT_EMAIL", "contact@mobofirm.invalid")
+# SEO outbound HTTP (SafeFetcher). Private networks stay blocked unless local
+# settings opt in; credentials for optional integrations come from the environment.
+SEO_FETCH_ALLOW_PRIVATE_NETWORKS = False
+SEO_PAGESPEED_API_KEY = os.getenv("SEO_PAGESPEED_API_KEY", "")
+SEO_GSC_ACCESS_TOKEN = os.getenv("SEO_GSC_ACCESS_TOKEN", "")
+SEO_GSC_PROPERTY = os.getenv("SEO_GSC_PROPERTY", "")
 ENABLE_SIGNUP = os.getenv("ENABLE_SIGNUP", "true").lower() in {"1", "true", "yes"}
 REQUIRE_MFA = os.getenv("REQUIRE_MFA", "false").lower() in {"1", "true", "yes"}
 REQUIRE_PROFILE_COMPLETION = os.getenv(
@@ -158,14 +198,22 @@ CONSENT_BANNER_ENABLED = os.getenv("CONSENT_BANNER_ENABLED", "false").lower() in
     "true",
     "yes",
 }
-DEVICE_MAX_DEVICES_PER_USER = int(os.getenv("DEVICE_MAX_DEVICES_PER_USER", "3"))
-DEVICE_FINGERPRINT_MODE = os.getenv("DEVICE_FINGERPRINT_MODE", "strict").lower()
-DEVICE_QUOTA_ENFORCEMENT_ENABLED = os.getenv(
-    "DEVICE_QUOTA_ENFORCEMENT_ENABLED", "false"
-).lower() in {"1", "true", "yes"}
-DEVICE_QUOTA_WINDOW_DAYS = int(os.getenv("DEVICE_QUOTA_WINDOW_DAYS", "365"))
-DEVICE_QUOTA_DEFAULT_WINDOW = os.getenv("DEVICE_QUOTA_DEFAULT_WINDOW", "12m")
-DEVICE_QUOTA_DEFAULT_LIMIT = int(os.getenv("DEVICE_QUOTA_DEFAULT_LIMIT", "5"))
+DEVICE_MAX_PENDING_PER_USER = int(os.getenv("DEVICE_MAX_PENDING_PER_USER", "10"))
+DEVICE_EVENT_RETENTION_DAYS = int(os.getenv("DEVICE_EVENT_RETENTION_DAYS", "90"))
+API_TOKEN_TTL_SECONDS = int(os.getenv("API_TOKEN_TTL_SECONDS", str(7 * 24 * 3600)))
+SIGNUP_ATTEMPTS_PER_HOUR = int(os.getenv("SIGNUP_ATTEMPTS_PER_HOUR", "10"))
+# Number of trusted reverse proxies in front of the app (nginx = 1). Zero means
+# REMOTE_ADDR is used and forwarded headers are ignored.
+TRUSTED_PROXY_COUNT = int(os.getenv("TRUSTED_PROXY_COUNT", "0"))
+TRUSTED_PROXIES = frozenset(
+    proxy.strip() for proxy in os.getenv("TRUSTED_PROXIES", "").split(",") if proxy
+)
+NUM_PROXIES = TRUSTED_PROXY_COUNT
+ALLAUTH_TRUSTED_PROXY_COUNT = TRUSTED_PROXY_COUNT
+# Edge header carrying the visitor's ISO country (for example CF-IPCountry).
+COUNTRY_HEADER = os.getenv("COUNTRY_HEADER", "")
+MFA_ENCRYPTION_KEY = os.getenv("MFA_ENCRYPTION_KEY", "")
+SOCIAL_CREDENTIAL_ENCRYPTION_KEY = os.getenv("SOCIAL_CREDENTIAL_ENCRYPTION_KEY", "")
 FORCE_HTTPS = os.getenv("FORCE_HTTPS", "false").lower() in {"1", "true", "yes"}
 MFA_TOTP_ISSUER = os.getenv("MFA_TOTP_ISSUER", "Account Portal")
 GMAIL_ENABLED = os.getenv("GMAIL_ENABLED", "false").lower() in {"1", "true", "yes"}
@@ -197,6 +245,21 @@ FIRMWARE_DOWNLOAD_HOTLINK_PROTECTION = os.getenv(
 FIRMWARE_DOWNLOAD_LINK_ENCRYPTION = os.getenv(
     "FIRMWARE_DOWNLOAD_LINK_ENCRYPTION", "true"
 ).lower() in {"1", "true", "yes"}
+FIRMWARE_DOWNLOAD_LINK_TTL_SECONDS = int(
+    os.getenv("FIRMWARE_DOWNLOAD_LINK_TTL_SECONDS", "600")
+)
+# Hosts (exact, or "*.example.com" for subdomains) that external firmware URLs may use.
+FIRMWARE_EXTERNAL_URL_ALLOWED_HOSTS = [
+    host.strip().lower()
+    for host in os.getenv(
+        "FIRMWARE_EXTERNAL_URL_ALLOWED_HOSTS", "downloads.example.invalid"
+    ).split(",")
+    if host.strip()
+]
+# Dedicated non-login account that authors automated brand/model/chipset posts.
+FIRMWARE_BLOG_AUTOMATION_USERNAME = os.getenv(
+    "FIRMWARE_BLOG_AUTOMATION_USERNAME", "mobofirm-automation"
+)
 AUTH_USER_MODEL = "users.CustomUser"
 AUTHENTICATION_BACKENDS = [
     "django.contrib.auth.backends.ModelBackend",
@@ -234,38 +297,65 @@ LOGIN_URL = "/users/login/"
 DEFAULT_EMAIL_BACKEND = os.getenv(
     "DEFAULT_EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend"
 )
-_email_backend = os.getenv(
-    "EMAIL_BACKEND",
-    (
-        "apps.core.email_backends.gmail.GmailBackend"
-        if GMAIL_ENABLED
-        else "django.core.mail.backends.smtp.EmailBackend"
-    ),
-)
-MAILERS = {
+# The runtime backend reads the admin-edited email settings (site_settings) and
+# falls back to the environment values below; pinning EMAIL_BACKEND bypasses it.
+RUNTIME_EMAIL_BACKEND = "apps.core.email_backends.runtime.RuntimeEmailBackend"
+_email_backend = os.getenv("EMAIL_BACKEND", RUNTIME_EMAIL_BACKEND)
+_smtp_options = {
+    "host": os.getenv("EMAIL_HOST", ""),
+    "port": int(os.getenv("EMAIL_PORT", "587")),
+    "username": os.getenv("EMAIL_HOST_USER", ""),
+    "password": os.getenv("EMAIL_HOST_PASSWORD", ""),
+    "use_tls": os.getenv("EMAIL_USE_TLS", "true").lower() in {"1", "true", "yes"},
+    "use_ssl": os.getenv("EMAIL_USE_SSL", "false").lower() in {"1", "true", "yes"},
+    "timeout": int(os.getenv("EMAIL_TIMEOUT", "10")),
+}
+# Django 6.1 reads only BACKEND and OPTIONS; other backends reject SMTP options.
+MAILERS: dict[str, dict[str, Any]] = {
     "default": {
         "BACKEND": _email_backend,
-        "HOST": os.getenv("EMAIL_HOST", ""),
-        "PORT": int(os.getenv("EMAIL_PORT", "587")),
-        "USERNAME": os.getenv("EMAIL_HOST_USER", ""),
-        "PASSWORD": os.getenv("EMAIL_HOST_PASSWORD", ""),
-        "USE_TLS": os.getenv("EMAIL_USE_TLS", "true").lower() in {"1", "true", "yes"},
-        "USE_SSL": os.getenv("EMAIL_USE_SSL", "false").lower() in {"1", "true", "yes"},
+        **(
+            {"OPTIONS": _smtp_options}
+            if _email_backend
+            in {"django.core.mail.backends.smtp.EmailBackend", RUNTIME_EMAIL_BACKEND}
+            else {}
+        ),
     }
 }
 DEFAULT_FROM_EMAIL = os.getenv(
     "DEFAULT_FROM_EMAIL", GMAIL_FROM_EMAIL or GMAIL_USERNAME or "noreply@localhost"
 )
-CACHE_BACKEND = "django.core.cache.backends.locmem.LocMemCache"
-CACHES = {"default": {"BACKEND": CACHE_BACKEND, "LOCATION": "mobofirm"}}
+# A shared cache is required for rate limits and MFA throttles to hold across
+# workers; LocMemCache is per process and only suitable for local development.
+CACHE_URL = os.getenv("CACHE_URL", "")
+if CACHE_URL:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": CACHE_URL,
+            "KEY_PREFIX": "mobofirm",
+        }
+    }
+else:
+    CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "mobofirm",
+        }
+    }
 
 REST_FRAMEWORK = {
+    # Token authentication is opt-in per view (see apps.users.api_authentication).
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework.authentication.TokenAuthentication",
         "rest_framework.authentication.SessionAuthentication",
-        "rest_framework.authentication.BasicAuthentication",
+    ],
+    "DEFAULT_THROTTLE_CLASSES": [
+        "rest_framework.throttling.AnonRateThrottle",
+        "rest_framework.throttling.UserRateThrottle",
     ],
     "DEFAULT_THROTTLE_RATES": {
+        "anon": "60/min",
+        "user": "240/min",
         "auth_login": "10/min",
         "auth_signup": "5/hour",
         "auth_google": "10/min",
@@ -277,7 +367,112 @@ FIRMWARE_BLOG_AUTOGENERATION_ASYNC = os.getenv(
     "FIRMWARE_BLOG_AUTOGENERATION_ASYNC", "false"
 ).strip().lower() in {"1", "true", "yes"}
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://127.0.0.1:6379/0")
+QUEUE_BACKEND = os.getenv("QUEUE_BACKEND", "sync")
 CELERY_TASK_IGNORE_RESULT = True
+CELERY_BEAT_SCHEDULE = {
+    "blog-publish-due-scheduled-posts": {
+        "task": "apps.blog.tasks.publish_due_scheduled_posts",
+        "schedule": 60,
+    },
+    "blog-process-queued-topics": {
+        "task": "apps.blog.tasks.process_queued_topics",
+        "schedule": 60 * 60,
+    },
+    "tags-curate-suggested-tags": {
+        "task": "apps.tags.tasks.curate_suggested_tags",
+        "schedule": 24 * 60 * 60,
+    },
+    "tags-refresh-usage-counts": {
+        "task": "apps.tags.tasks.refresh_usage_counts",
+        "schedule": 24 * 60 * 60,
+    },
+    "firmwares-sync-automated-blogs": {
+        "task": "apps.firmwares.tasks.catchup_missing_blog_posts",
+        "schedule": 6 * 60 * 60,
+    },
+    "firmwares-expire-download-tokens": {
+        "task": "apps.firmwares.tasks.expire_download_tokens",
+        "schedule": 60 * 60,
+    },
+    "firmwares-aggregate-daily-stats": {
+        "task": "apps.firmwares.tasks.aggregate_daily_firmware_stats",
+        "schedule": 24 * 60 * 60,
+    },
+    "firmwares-cleanup-tracking-data": {
+        "task": "apps.firmwares.tasks.cleanup_old_tracking_data",
+        "schedule": 7 * 24 * 60 * 60,
+    },
+    "storage-verify-locations": {
+        "task": "apps.storage.tasks.verify_storage_locations",
+        "schedule": 24 * 60 * 60,
+    },
+    "filemanager-purge-expired-shares": {
+        "task": "apps.filemanager.tasks.purge_expired_shares",
+        "schedule": 60 * 60,
+    },
+    "filemanager-purge-deleted-files": {
+        "task": "apps.filemanager.tasks.purge_deleted_files",
+        "schedule": 24 * 60 * 60,
+    },
+    "shop-expire-packages": {
+        "task": "apps.shop.tasks.expire_packages",
+        "schedule": 60 * 60,
+    },
+    "core-cleanup-old-data": {
+        "task": "apps.core.tasks.cleanup_old_data",
+        "schedule": 24 * 60 * 60,
+    },
+    "seo-process-pending-jobs": {
+        "task": "apps.seo.tasks.process_pending_jobs",
+        "schedule": 60,
+    },
+    "seo-scheduled-crawl": {
+        "task": "apps.seo.tasks.scheduled_crawl",
+        "schedule": 24 * 60 * 60,
+    },
+    "devices-purge-old-events": {
+        "task": "apps.devices.tasks.purge_old_device_events",
+        "schedule": 24 * 60 * 60,
+    },
+    "devices-expire-old-fingerprints": {
+        "task": "apps.devices.tasks.expire_old_fingerprints",
+        "schedule": 24 * 60 * 60,
+    },
+    "devices-cleanup-behavior-insights": {
+        "task": "apps.devices.tasks.cleanup_behavior_insights",
+        "schedule": 7 * 24 * 60 * 60,
+    },
+}
+
+# Local filesystem storage is the default provider; cloud providers stay disabled
+# until their packages are installed and the explicit flags below are enabled.
+STORAGE_GOOGLE_DRIVE_ENABLED = os.getenv(
+    "STORAGE_GOOGLE_DRIVE_ENABLED", "false"
+).lower() in {"1", "true", "yes"}
+STORAGE_S3_ENABLED = os.getenv("STORAGE_S3_ENABLED", "false").lower() in {
+    "1",
+    "true",
+    "yes",
+}
+# Off by default: when true, signed-in firmware downloads also have to pass the
+# shop package checks (type access, daily/monthly quota); see
+# apps.firmwares.download_service.check_entitlement.
+SHOP_ENTITLEMENTS_ENFORCED = os.getenv(
+    "SHOP_ENTITLEMENTS_ENFORCED", "false"
+).lower() in {
+    "1",
+    "true",
+    "yes",
+}
+# External download links use the firmware catalogue allow-list
+# (FIRMWARE_EXTERNAL_URL_ALLOWED_HOSTS); storage does not keep a second one.
+FILEMANAGER_ROOT = BASE_DIR / "storage" / "filemanager"
+FILEMANAGER_MAX_UPLOAD_BYTES = int(
+    os.getenv("FILEMANAGER_MAX_UPLOAD_BYTES", str(512 * 1024 * 1024))
+)
+FILEMANAGER_USER_QUOTA_BYTES = int(
+    os.getenv("FILEMANAGER_USER_QUOTA_BYTES", str(5 * 1024 * 1024 * 1024))
+)
 
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SESSION_COOKIE_HTTPONLY = True
@@ -289,6 +484,24 @@ RECAPTCHA_PRIVATE_KEY = os.getenv("RECAPTCHA_PRIVATE_KEY", "")
 RECAPTCHA_TIMEOUT_MS = int(os.getenv("RECAPTCHA_TIMEOUT_MS", "3000"))
 RECAPTCHA_SCORE_THRESHOLD = float(os.getenv("RECAPTCHA_SCORE_THRESHOLD", "0.5"))
 RECAPTCHA_EXPECTED_HOSTNAME = os.getenv("RECAPTCHA_EXPECTED_HOSTNAME", "")
+
+LOG_DIR = os.getenv("LOG_DIR", "")
+LOG_RETENTION_DAYS = int(os.getenv("LOG_RETENTION_DAYS", "14"))
+_log_handlers = ["console"]
+_file_handlers = {}
+if LOG_DIR:
+    # Daily-rotated file with bounded retention; console output stays enabled so
+    # container runtimes can still collect stdout.
+    Path(LOG_DIR).mkdir(parents=True, exist_ok=True)
+    _file_handlers["file"] = {
+        "class": "logging.handlers.TimedRotatingFileHandler",
+        "filename": str(Path(LOG_DIR) / "mobofirm.log"),
+        "when": "midnight",
+        "backupCount": LOG_RETENTION_DAYS,
+        "encoding": "utf-8",
+        "formatter": "standard",
+    }
+    _log_handlers.append("file")
 
 LOGGING = {
     "version": 1,
@@ -303,7 +516,8 @@ LOGGING = {
         "console": {
             "class": "logging.StreamHandler",
             "formatter": "standard",
-        }
+        },
+        **_file_handlers,
     },
-    "root": {"handlers": ["console"], "level": os.getenv("DJANGO_LOG_LEVEL", "INFO")},
+    "root": {"handlers": _log_handlers, "level": os.getenv("DJANGO_LOG_LEVEL", "INFO")},
 }

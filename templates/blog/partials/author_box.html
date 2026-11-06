@@ -1,0 +1,14 @@
+{# Context: card, author_initials, author_post_count, is_editorial, post. #}
+<section class="author-box" aria-labelledby="author-title">
+  <span class="avatar avatar--lg avatar--v{{ card.variant }}" aria-hidden="true">{{ author_initials }}</span>
+  <div>
+    <p class="author-box__label mb-1">Written by</p>
+    <h2 class="author-box__name" id="author-title">{{ card.author }}</h2>
+    {% if is_editorial %}
+      <p class="author-box__bio">Articles like this one are generated from reviewed catalogue data and refreshed automatically whenever firmware is added, approved or removed.</p>
+    {% else %}
+      <p class="author-box__bio">{{ author_post_count }} published article{{ author_post_count|pluralize }} in the journal.</p>
+      <a class="author-box__link" href="{% url 'blog:post_list' %}?author={{ post.author.username|urlencode }}">More from {{ card.author }} <i data-lucide="arrow-right" class="icon" aria-hidden="true"></i></a>
+    {% endif %}
+  </div>
+</section>

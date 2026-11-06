@@ -6,16 +6,21 @@ from typing import Any
 from django.contrib import messages
 from django.contrib.auth import get_user_model, login
 from django.contrib.auth.decorators import login_required
-from django.conf import settings
 from django.db import transaction
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
+from apps.core.utils.ip import get_client_ip
 from apps.users.mfa import TOTPService
-from apps.users.models import MFADevice, UsersSettings
-from apps.users.services.mfa import has_active_totp, verify_mfa_code
+from apps.users.models import MFADevice
+from apps.users.request_user import current_user
+from apps.users.services.mfa import (
+    has_active_totp,
+    mfa_required_globally,
+    verify_mfa_code,
+)
 from apps.users.services.rate_limit import allow_action, reset_rate_limit
 
 _PENDING_USER = "pending_mfa_user_id"
@@ -30,8 +35,9 @@ _PENDING_LOGIN_SECONDS = 300
 _PENDING_SETUP_SECONDS = 600
 
 
-def _attempt_key(user_id: int) -> str:
-    return f"users:mfa:verify:{user_id}"
+def _attempt_key(request: HttpRequest, user_id: int) -> str:
+    """Key by account and client so a password holder cannot lock out the owner."""
+    return f"users:mfa:verify:{user_id}:{get_client_ip(request) or 'unknown'}"
 
 
 def _render_verify(
@@ -42,7 +48,7 @@ def _render_verify(
     is_verified: bool = False,
     status: int = 200,
 ) -> HttpResponse:
-    require_mfa = bool(settings.REQUIRE_MFA or UsersSettings.get_solo().require_mfa)
+    require_mfa = mfa_required_globally()
     return render(
         request,
         "users/mfa_verify.html",
@@ -79,7 +85,7 @@ def mfa_setup(request: HttpRequest) -> HttpResponse:
 
     if request.method == "POST":
         if not allow_action(
-            _attempt_key(request.user.pk),
+            _attempt_key(request, current_user(request).pk),
             max_attempts=_ATTEMPT_LIMIT,
             window_seconds=_ATTEMPT_WINDOW_SECONDS,
             fail_open=False,
@@ -97,7 +103,9 @@ def mfa_setup(request: HttpRequest) -> HttpResponse:
 
         with transaction.atomic():
             locked_user = (
-                get_user_model().objects.select_for_update().get(pk=request.user.pk)
+                get_user_model()
+                .objects.select_for_update()
+                .get(pk=current_user(request).pk)
             )
             if has_active_totp(locked_user):
                 messages.info(request, "An authenticator is already configured.")
@@ -126,9 +134,9 @@ def mfa_setup(request: HttpRequest) -> HttpResponse:
 
         request.session.pop(_PENDING_SETUP_SECRET, None)
         request.session.pop(_PENDING_SETUP_CREATED, None)
-        request.session[_MFA_VERIFIED_USER] = str(request.user.pk)
+        request.session[_MFA_VERIFIED_USER] = str(current_user(request).pk)
         request.session[_BACKUP_CODES_ONCE] = backup_codes
-        reset_rate_limit(_attempt_key(request.user.pk))
+        reset_rate_limit(_attempt_key(request, current_user(request).pk))
         messages.success(request, "Two-factor authentication is enabled.")
         return redirect("users:mfa_backup_codes")
 
@@ -151,7 +159,7 @@ def mfa_verify(request: HttpRequest) -> HttpResponse:
     pending_expiry = request.session.get(_PENDING_EXPIRES)
     is_pre_auth = pending_user_id is not None
 
-    if is_pre_auth:
+    if pending_user_id is not None:
         if (
             not isinstance(pending_expiry, (int, float))
             or timezone.now().timestamp() > pending_expiry
@@ -163,7 +171,7 @@ def mfa_verify(request: HttpRequest) -> HttpResponse:
             )
             return redirect("users:account_login")
         user = get_user_model().objects.filter(pk=pending_user_id).first()
-        if user is None:
+        if user is None or not user.is_active:
             request.session.pop(_PENDING_USER, None)
             request.session.pop(_PENDING_EXPIRES, None)
             messages.error(
@@ -184,7 +192,7 @@ def mfa_verify(request: HttpRequest) -> HttpResponse:
                 "No authenticator is configured. Sign in from a trusted device to set one up.",
             )
             return redirect("users:account_login")
-        if settings.REQUIRE_MFA or UsersSettings.get_solo().require_mfa:
+        if mfa_required_globally():
             return redirect("users:mfa_setup")
         messages.info(request, "No authenticator is configured for this account.")
         return redirect("users:dashboard")
@@ -194,7 +202,7 @@ def mfa_verify(request: HttpRequest) -> HttpResponse:
     ) == str(user.pk)
     if request.method == "POST":
         if not allow_action(
-            _attempt_key(user.pk),
+            _attempt_key(request, user.pk),
             max_attempts=_ATTEMPT_LIMIT,
             window_seconds=_ATTEMPT_WINDOW_SECONDS,
             fail_open=False,
@@ -206,7 +214,7 @@ def mfa_verify(request: HttpRequest) -> HttpResponse:
             messages.error(request, "That authenticator or recovery code is not valid.")
             return redirect("users:mfa_verify")
 
-        reset_rate_limit(_attempt_key(user.pk))
+        reset_rate_limit(_attempt_key(request, user.pk))
         if is_pre_auth:
             login(
                 request,
@@ -231,20 +239,29 @@ def mfa_verify(request: HttpRequest) -> HttpResponse:
 @login_required(login_url="users:account_login")
 @require_POST
 def mfa_disable(request: HttpRequest) -> HttpResponse:
-    if settings.REQUIRE_MFA or UsersSettings.get_solo().require_mfa:
+    if mfa_required_globally():
         return HttpResponse(
             "Two-factor authentication is required by your administrator.",
             status=403,
         )
+
+    if not allow_action(
+        _attempt_key(request, current_user(request).pk),
+        max_attempts=_ATTEMPT_LIMIT,
+        window_seconds=_ATTEMPT_WINDOW_SECONDS,
+        fail_open=False,
+    ):
+        messages.error(request, "Too many verification attempts. Try again later.")
+        return redirect("users:mfa_verify")
 
     code = request.POST.get("code", "")
     if not verify_mfa_code(request.user, code):
         messages.error(request, "A valid authenticator or recovery code is required.")
         return redirect("users:mfa_verify")
 
-    MFADevice.objects.filter(user=request.user).delete()
+    MFADevice.objects.filter(user=current_user(request)).delete()
     request.session.pop(_MFA_VERIFIED_USER, None)
-    reset_rate_limit(_attempt_key(request.user.pk))
+    reset_rate_limit(_attempt_key(request, current_user(request).pk))
     messages.success(request, "Two-factor authentication has been disabled.")
     return redirect("users:dashboard")
 

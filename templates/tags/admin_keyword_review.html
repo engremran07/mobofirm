@@ -1,9 +1,15 @@
 {% extends "base.html" %}
-{% block title %}Review suggested keywords | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block content %}
-<div class="site-container py-5"><p class="section-eyebrow">Editorial governance</p><h1 class="h2">Keyword suggestions</h1>
-  {% for suggestion in suggestions %}<article class="surface-card p-3 mb-3"><h2 class="h5">{{ suggestion.keyword }}</h2><p class="muted">{{ suggestion.provider }} · Score {{ suggestion.score }}</p>
-    <form method="post" action="{% url 'tags:apply_keyword' %}">{% csrf_token %}<input type="hidden" name="id" value="{{ suggestion.pk }}"><button class="btn btn-primary" type="submit">Create tag from suggestion</button></form>
-  </article>{% empty %}<p class="empty-state p-4">No keyword suggestions are awaiting review.</p>{% endfor %}
+<div class="site-container py-4 py-lg-5">
+  {% include "components/page_header.html" with eyebrow="Staff tools" title="Keyword suggestions" lead="Keywords added in the admin as suggestions. Creating a tag from one makes it a curated tag immediately." %}
+  {% for suggestion in suggestions %}
+    <article class="surface-card p-3 mb-3">
+      <h2 class="h5">{{ suggestion.keyword }}</h2>
+      <p class="muted">{{ suggestion.provider }} · Score {{ suggestion.score }}</p>
+      <form method="post" action="{% url 'tags:apply_keyword' %}">{% csrf_token %}<input type="hidden" name="id" value="{{ suggestion.pk }}"><button class="btn btn-primary" type="submit">Create tag from suggestion</button></form>
+    </article>
+  {% empty %}
+    {% include "components/empty_state.html" with title="No keyword suggestions are waiting" %}
+  {% endfor %}
 </div>
 {% endblock %}

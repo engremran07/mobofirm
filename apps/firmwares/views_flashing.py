@@ -1,53 +1,97 @@
-"""apps.firmwares.views_flashing — Public flashing tool catalog views."""
+"""apps.firmwares.views_flashing — Public flashing tools and guides hub."""
 
 from __future__ import annotations
 
 import logging
 
-from django.db.models import F
+from django.core.paginator import Paginator
+from django.db.models import F, Prefetch, Q
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, render
+from django.utils import timezone
 
-from .models import FlashingTool, FlashingToolCategory, GeneratedFlashingGuide
+from .models import (
+    Brand,
+    FlashingGuideTemplate,
+    FlashingTool,
+    FlashingToolCategory,
+    GeneratedFlashingGuide,
+)
 
 logger = logging.getLogger(__name__)
 
+GUIDES_PAGE_SIZE = 12
 
-def flashing_tools(request: HttpRequest) -> HttpResponse:
-    """Browse catalog of flashing tools, grouped by category."""
-    platform = request.GET.get("platform", "").strip()
 
-    categories = (
-        FlashingToolCategory.objects.filter(is_active=True)
-        .prefetch_related("tools")
-        .order_by("sort_order", "name")
+def _published_guides():
+    """Guides whose blog post is live; drafts are never exposed publicly."""
+    from apps.blog.models import PostStatus
+
+    return (
+        GeneratedFlashingGuide.objects.filter(
+            post__status=PostStatus.PUBLISHED, post__publish_at__lte=timezone.now()
+        )
+        .select_related("post", "brand", "model", "template")
+        .order_by("-post__published_at", "-created_at")
     )
 
-    # Annotate each category with its active tools (optionally filtered)
-    for cat in categories:
-        tools_qs = cat.tools.filter(is_active=True)  # type: ignore[attr-defined]
-        if platform and platform in dict(FlashingTool.Platform.choices):
-            tools_qs = tools_qs.filter(platform=platform)
-        cat.active_tools = list(tools_qs.order_by("-is_featured", "name"))  # type: ignore[attr-defined]
 
-    featured_tools = FlashingTool.objects.filter(is_active=True, is_featured=True)
-    if platform and platform in dict(FlashingTool.Platform.choices):
-        featured_tools = featured_tools.filter(platform=platform)
-    featured_tools = featured_tools.select_related("category")[:6]
+def flashing_tools(request: HttpRequest) -> HttpResponse:
+    """Tools and guides hub: tools by category, featured tools and latest guides."""
+    platform = request.GET.get("platform", "").strip()
+    valid_platform = platform if platform in dict(FlashingTool.Platform.choices) else ""
 
-    total_tools = FlashingTool.objects.filter(is_active=True).count()
+    tool_filter = Q(is_active=True)
+    if valid_platform:
+        tool_filter &= Q(platform=valid_platform)
+    tools = FlashingTool.objects.filter(tool_filter).order_by("-is_featured", "name")
+    categories = list(
+        FlashingToolCategory.objects.filter(is_active=True)
+        .prefetch_related(Prefetch("tools", queryset=tools, to_attr="active_tools"))
+        .order_by("sort_order", "name")
+    )
 
     return render(
         request,
         "firmwares/flashing_tools.html",
         {
             "categories": categories,
-            "featured_tools": featured_tools,
-            "total_tools": total_tools,
+            "featured_tools": tools.filter(is_featured=True).select_related("category")[
+                :6
+            ],
+            "total_tools": FlashingTool.objects.filter(is_active=True).count(),
+            "latest_guides": _published_guides()[:6],
+            "guide_types": FlashingGuideTemplate.GuideType.choices,
             "platform_choices": FlashingTool.Platform.choices,
-            "current_platform": platform
-            if platform in dict(FlashingTool.Platform.choices)
-            else "",
+            "current_platform": valid_platform,
+        },
+    )
+
+
+def flashing_guides(request: HttpRequest) -> HttpResponse:
+    """Paginated list of published flashing guides, filterable by type and brand."""
+    guide_type = request.GET.get("type", "").strip()
+    brand_slug = request.GET.get("brand", "").strip()
+    guides = _published_guides()
+    if guide_type in dict(FlashingGuideTemplate.GuideType.choices):
+        guides = guides.filter(template__guide_type=guide_type)
+    else:
+        guide_type = ""
+    if brand_slug:
+        guides = guides.filter(brand__slug=brand_slug)
+
+    page = Paginator(guides, GUIDES_PAGE_SIZE).get_page(request.GET.get("page"))
+    return render(
+        request,
+        "firmwares/flashing_guides.html",
+        {
+            "guides": page,
+            "guide_types": FlashingGuideTemplate.GuideType.choices,
+            "brands": Brand.objects.filter(generated_guides__isnull=False)
+            .distinct()
+            .order_by("name"),
+            "selected_type": guide_type,
+            "selected_brand": brand_slug,
         },
     )
 
@@ -59,35 +103,22 @@ def flashing_tool_detail(request: HttpRequest, slug: str) -> HttpResponse:
         slug=slug,
         is_active=True,
     )
-
-    # Increment view count
     FlashingTool.objects.filter(pk=tool.pk).update(views_count=F("views_count") + 1)
-
-    # Get supported brands
-    brands = tool.supported_brands.all().order_by("name")
-
-    # Related generated guides
-    related_guides = (
-        GeneratedFlashingGuide.objects.filter(
-            template__recommended_tools=tool,
-        )
-        .select_related("post", "brand", "model")
-        .order_by("-post__created_at")[:5]
-    )
-
-    breadcrumbs = [
-        {"label": "Flashing Tools", "url": "/firmwares/tools/"},
-        {"label": tool.category.name},
-        {"label": tool.name},
-    ]
 
     return render(
         request,
         "firmwares/flashing_tool_detail.html",
         {
             "tool": tool,
-            "brands": brands,
-            "related_guides": related_guides,
-            "breadcrumbs": breadcrumbs,
+            "brands": tool.supported_brands.all().order_by("name"),
+            "chipsets": tool.chipsets.all().order_by("vendor", "name"),
+            "related_guides": _published_guides().filter(
+                template__recommended_tools=tool
+            )[:5],
+            "breadcrumbs": [
+                {"label": "Flashing Tools", "url": "/firmwares/tools/"},
+                {"label": tool.category.name},
+                {"label": tool.name},
+            ],
         },
     )

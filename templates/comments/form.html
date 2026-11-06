@@ -1,12 +1,19 @@
+{# Contract: post, form_id (unique per page), parent_id (empty for a top-level comment). #}
 {% if user.is_authenticated %}
-  <form method="post" action="{% url 'comments:add_comment' slug=post.slug %}" class="surface-card p-3 mt-4">
+  <form method="post" action="{% url 'comments:add_comment' slug=post.slug %}" class="comment-form" id="{{ form_id }}">
     {% csrf_token %}
-    <label class="form-label" for="comment-body">Add a comment</label>
-    <textarea class="form-control mb-3" id="comment-body" name="body" rows="4" maxlength="10000" required></textarea>
-    <div class="visually-hidden" aria-hidden="true"><label for="comment-hp">Leave this field empty</label><input id="comment-hp" name="hp" tabindex="-1" autocomplete="off"></div>
-    <p class="small muted">Comments are reviewed before appearing publicly.</p>
-    <button class="btn btn-primary" type="submit">Submit for review</button>
+    {% if parent_id %}<input type="hidden" name="parent" value="{{ parent_id }}">{% endif %}
+    <label class="form-label" for="{{ form_id }}-body">{% if parent_id %}Your reply{% else %}Add a comment{% endif %}</label>
+    <textarea class="form-control" id="{{ form_id }}-body" name="body" rows="{% if parent_id %}3{% else %}4{% endif %}" minlength="3" maxlength="5000" required aria-describedby="{{ form_id }}-help"></textarea>
+    <div class="hp-field" inert>
+      <label for="{{ form_id }}-hp">Leave this field empty</label>
+      <input id="{{ form_id }}-hp" name="hp" tabindex="-1" autocomplete="off">
+    </div>
+    <div class="comment-form__footer">
+      <p class="form-text mb-0" id="{{ form_id }}-help">Plain text, up to 5,000 characters. Comments are screened automatically; unusual ones wait for a moderator.</p>
+      <button class="btn btn-primary" type="submit">{% if parent_id %}Post reply{% else %}Post comment{% endif %}</button>
+    </div>
   </form>
-{% else %}
-  <p class="mt-4"><a href="{% url 'users:account_login' %}?next={{ request.path|urlencode }}">Sign in</a> to join the discussion.</p>
+{% elif not parent_id %}
+  <p class="comment-signin"><a href="{% url 'users:account_login' %}?next={{ request.path|urlencode }}%23comments">Sign in</a> to join the discussion.</p>
 {% endif %}

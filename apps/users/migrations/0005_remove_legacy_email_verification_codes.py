@@ -4,11 +4,9 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-    dependencies = [
-        ("users", "0004_mfadevice_last_used_counter"),
-    ]
+    dependencies = (("users", "0004_mfadevice_last_used_counter"),)
 
-    operations = [
+    operations = (
         migrations.RemoveField(
             model_name="customuser",
             name="verification_code",
@@ -17,4 +15,4 @@ class Migration(migrations.Migration):
             model_name="customuser",
             name="verification_code_sent_at",
         ),
-    ]
+    )

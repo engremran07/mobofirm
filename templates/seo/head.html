@@ -1,0 +1,9 @@
+{% comment %}Single SEO head block. Rendered by {% seo_head %} from base.html only.{% endcomment %}<title>{{ seo.title }}</title>
+<meta name="description" content="{{ seo.description }}">
+<meta name="robots" content="{{ seo.robots }}">
+{% if seo.canonical %}<link rel="canonical" href="{{ seo.canonical }}">
+{% endif %}{% for lang, href in seo.alternates %}<link rel="alternate" hreflang="{{ lang }}" href="{{ href }}">
+{% endfor %}{% for name, value in og_items %}<meta property="{{ name }}" content="{{ value }}">
+{% endfor %}{% for name, value in twitter_items %}<meta name="{{ name }}" content="{{ value }}">
+{% endfor %}{% for payload in json_ld %}<script type="application/ld+json">{{ payload }}</script>
+{% endfor %}

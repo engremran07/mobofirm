@@ -7,6 +7,10 @@ import hashlib
 import logging
 
 from django.core.cache import cache
+from django.db import DatabaseError
+
+from apps.core import ai_client
+from apps.core.ai_client import AiClientError
 
 logger = logging.getLogger(__name__)
 
@@ -46,8 +50,8 @@ class FirmwareAutoFill:
 
             cache.set(cache_key, data, cls.CACHE_TIMEOUT)
             return data
-        except Exception as e:
-            logger.exception(f"Error autofilling brand {brand_name}: {e}")
+        except (AiClientError, DatabaseError):
+            logger.exception("Error autofilling brand %s", brand_name)
             return {}
 
     @classmethod
@@ -74,8 +78,8 @@ class FirmwareAutoFill:
 
             cache.set(cache_key, data, cls.CACHE_TIMEOUT)
             return data
-        except Exception as e:
-            logger.exception(f"Error autofilling model {brand_name} {model_name}: {e}")
+        except (AiClientError, DatabaseError):
+            logger.exception("Error autofilling model %s %s", brand_name, model_name)
             return {}
 
     @classmethod
@@ -109,8 +113,8 @@ class FirmwareAutoFill:
 
             cache.set(cache_key, data, cls.CACHE_TIMEOUT)
             return data
-        except Exception as e:
-            logger.exception(f"Error autofilling variant: {e}")
+        except (AiClientError, DatabaseError):
+            logger.exception("Error autofilling variant %s %s", brand_name, model_name)
             return {}
 
     @classmethod
@@ -122,8 +126,8 @@ class FirmwareAutoFill:
             from .gsmarena_service import lookup_gsmarena_brand
 
             return lookup_gsmarena_brand(brand_name)
-        except Exception as e:
-            logger.warning(f"GSMArena fetch failed: {e}")
+        except DatabaseError:
+            logger.exception("GSMArena brand lookup failed")
             return {}
 
     @classmethod
@@ -135,8 +139,8 @@ class FirmwareAutoFill:
             from .gsmarena_service import lookup_gsmarena_model
 
             return lookup_gsmarena_model(brand_name, model_name)
-        except Exception as e:
-            logger.warning(f"GSMArena model fetch failed: {e}")
+        except DatabaseError:
+            logger.exception("GSMArena model lookup failed")
             return {}
 
     @classmethod
@@ -150,8 +154,8 @@ class FirmwareAutoFill:
             from .gsmarena_service import lookup_gsmarena_variant
 
             return lookup_gsmarena_variant(brand_name, model_name, region)
-        except Exception as e:
-            logger.warning(f"GSMArena variant fetch failed: {e}")
+        except DatabaseError:
+            logger.exception("GSMArena variant lookup failed")
             return {}
 
     @classmethod
@@ -160,13 +164,11 @@ class FirmwareAutoFill:
         Generate missing data using AI
         """
         try:
-            from apps.core import ai_client
-
             response = ai_client.generate_answer(question=prompt, user=None)
-            return cls._parse_ai_response(response) if response else {}
-        except Exception as e:
-            logger.exception(f"AI generation failed: {e}")
+        except AiClientError:
+            logger.exception("AI generation failed")
             return {}
+        return cls._parse_ai_response(response) if response else {}
 
     @classmethod
     def _parse_ai_response(cls, response: str) -> dict:
@@ -209,16 +211,16 @@ def autofill_on_save(sender, instance, created, **kwargs):
                 instance.description = data.get("description", "")
             instance.save(update_fields=["marketing_name", "model_code", "description"])
 
-    elif sender.__name__ == "Variant":
-        # Auto-fill variant fields
-        if not instance.chipset or not instance.ram_options:
-            data = FirmwareAutoFill.autofill_variant(
-                instance.model.brand.name, instance.model.name, instance.region
-            )
-            if not instance.chipset:
-                instance.chipset = data.get("chipset", "")
-            if not instance.ram_options:
-                instance.ram_options = data.get("ram_options", [])
-            if not instance.storage_options:
-                instance.storage_options = data.get("storage_options", [])
-            instance.save(update_fields=["chipset", "ram_options", "storage_options"])
+    elif sender.__name__ == "Variant" and (
+        not instance.chipset or not instance.ram_options
+    ):
+        data = FirmwareAutoFill.autofill_variant(
+            instance.model.brand.name, instance.model.name, instance.region
+        )
+        if not instance.chipset:
+            instance.chipset = data.get("chipset", "")
+        if not instance.ram_options:
+            instance.ram_options = data.get("ram_options", [])
+        if not instance.storage_options:
+            instance.storage_options = data.get("storage_options", [])
+        instance.save(update_fields=["chipset", "ram_options", "storage_options"])

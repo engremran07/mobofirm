@@ -13,6 +13,9 @@ HTMX and Alpine are part of the user-approved frontend foundation. The current b
 - Alpine is limited to local ephemeral UI state such as the mobile menu. It must not duplicate server-owned records or policies.
 - Keep fragments idempotent and avoid event-handler accumulation. Reinitialize only behaviors that require it after a swap.
 - Provide loading/error feedback, accessible live regions, keyboard operation, and sensible focus behavior.
+- Loading: the body carries `hx-indicator="#global-progress"` so every request shows a progress bar; use `components/spinner.html` or a local `hx-indicator` for inline feedback. HTMX failures (`responseError`, `sendError`, `timeout`) render a visible, dismissible alert in `#global-feedback` (`modules/feedback.js`).
+- Triggers: put `hx-trigger="input changed delay:…"` on the input itself or use `from:find input` inside a form; never `from:input`, which binds to the first input in the document (the header search).
+- Global search: the header combobox calls `firmwares:api_search_autocomplete` through HTMX; `modules/search.js` turns the JSON into DOM nodes (no server HTML is inserted) and the plain GET form falls back to `firmwares:universal_search`.
 
 ## Security and operations
 

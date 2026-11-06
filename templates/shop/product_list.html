@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block content %}
+{% url 'shop:pricing' as shop_url %}
+<div class="site-container py-4 py-lg-5">
+  {% include "components/breadcrumbs.html" with current="Products" parent_label="Shop" parent_url=shop_url %}
+  {% include "components/page_header.html" with eyebrow="Shop" title="Products" lead="Packages, subscriptions and services you can request." %}
+  {% include "shop/_subnav.html" with shop_tab="products" %}
+  {% if not online_payments_enabled %}<div class="mb-4">{% include "shop/_payment_notice.html" %}</div>{% endif %}
+  {% if products %}
+    <div class="row g-3">
+      {% for product in products %}
+        <div class="col-12 col-md-6 col-lg-4">
+          <article class="surface-card eco-tier">
+            <div>{% include "components/status_pill.html" with label=product.get_product_type_display %}</div>
+            <h2 class="h5 mb-0"><a href="{% url 'shop:product_detail' slug=product.slug %}">{{ product.name }}</a></h2>
+            {% if product.description %}<p class="small muted mb-0">{{ product.description|truncatechars:120 }}</p>{% endif %}
+            <p class="eco-price mt-auto">{{ product.price }} <small>USD</small></p>
+          </article>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    {% include "components/empty_state.html" with title="No products are available yet" message="Check back soon, or compare the download packages." action_label="View packages" action_url=shop_url %}
+  {% endif %}
+</div>
+{% endblock %}

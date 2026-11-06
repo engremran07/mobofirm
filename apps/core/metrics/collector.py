@@ -6,9 +6,9 @@ Collect and track application metrics.
 """
 
 import logging
-from typing import Any
+from typing import Any, ClassVar
 
-from django.db import models
+from django.db import DatabaseError, models
 
 logger = logging.getLogger(__name__)
 
@@ -22,10 +22,8 @@ class Metric(models.Model):
     timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
 
     class Meta:
-        ordering = ["-timestamp"]
-        indexes = [
-            models.Index(fields=["name", "timestamp"]),
-        ]
+        ordering: ClassVar[list[str]] = ["-timestamp"]
+        indexes = (models.Index(fields=["name", "timestamp"]),)
 
     def __str__(self):
         return f"{self.name}={self.value} @{self.timestamp}"
@@ -65,34 +63,18 @@ class MetricsCollector:
         try:
             if self.backend == "database":
                 Metric.objects.create(name=metric_name, value=value, tags=tags)
+            else:
+                logger.warning(
+                    "Metrics backend %r is not implemented; dropped %s",
+                    self.backend,
+                    metric_name,
+                )
+                return
 
-            elif self.backend == "prometheus":
-                # Prometheus integration (requires prometheus_client)
-                try:
-                    from prometheus_client import (  # noqa: F401  # type: ignore[import-not-found]
-                        Counter,
-                        Gauge,
-                    )
+            logger.debug("Tracked metric: %s=%s %s", metric_name, value, tags)
 
-                    # Implementation here
-                    pass
-                except ImportError:
-                    logger.warning("prometheus_client not installed")
-
-            elif self.backend == "statsd":
-                # StatsD integration (requires statsd)
-                try:
-                    import statsd  # noqa: F401  # type: ignore[import-not-found]
-
-                    # Implementation here
-                    pass
-                except ImportError:
-                    logger.warning("statsd not installed")
-
-            logger.debug(f"Tracked metric: {metric_name}={value} {tags}")
-
-        except Exception as e:
-            logger.exception(f"Failed to track metric {metric_name}: {e}")
+        except DatabaseError:
+            logger.exception("Failed to track metric %s", metric_name)
 
     def increment(
         self, counter_name: str, amount: int = 1, tags: dict[str, Any] | None = None
@@ -200,7 +182,7 @@ class Timer:
         self.metric_name = metric_name
         self.tags = tags or {}
         self.collector = MetricsCollector()
-        self.start_time = None
+        self.start_time: float | None = None
 
     def __enter__(self):
         import time

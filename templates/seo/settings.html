@@ -1,0 +1,18 @@
+{% extends "seo/base.html" %}
+{% block seo_content %}
+{% if not can_change %}<p>You can view these settings but need the "change SEO settings" permission to save.</p>{% endif %}
+<form method="post" class="mf-seo-settings">
+  {% csrf_token %}
+  {{ form.non_field_errors }}
+  {% for field in form %}
+    <div class="mf-seo-field">
+      {{ field.label_tag }}
+      {{ field }}
+      {% if field.help_text %}<p class="mf-seo-help">{{ field.help_text }}</p>{% endif %}
+      {{ field.errors }}
+    </div>
+  {% endfor %}
+  <p class="mf-seo-help">Protected policies (AI crawler rules, autonomy mode, integration switches) are only changed here by a person and are ledgered with before and after values.</p>
+  {% if can_change %}<button type="submit" class="button">Save settings</button>{% endif %}
+</form>
+{% endblock %}

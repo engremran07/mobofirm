@@ -4,11 +4,9 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-    dependencies = [
-        ("core", "0001_initial"),
-    ]
+    dependencies = (("core", "0001_initial"),)
 
-    operations = [
+    operations = (
         migrations.CreateModel(
             name="AppRegistry",
             fields=[
@@ -26,7 +24,6 @@ class Migration(migrations.Migration):
                 ("comments_enabled", models.BooleanField(default=True)),
                 ("devices_enabled", models.BooleanField(default=True)),
                 ("firmwares_enabled", models.BooleanField(default=True)),
-                ("governance_enabled", models.BooleanField(default=True)),
                 ("tags_enabled", models.BooleanField(default=True)),
                 ("users_enabled", models.BooleanField(default=True)),
                 ("device_identity_enabled", models.BooleanField(default=True)),
@@ -35,4 +32,4 @@ class Migration(migrations.Migration):
                 "verbose_name": "Application Registry",
             },
         ),
-    ]
+    )

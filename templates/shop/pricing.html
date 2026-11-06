@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="site-container py-4 py-lg-5">
+  {% include "components/breadcrumbs.html" with current="Shop" %}
+  {% include "components/page_header.html" with eyebrow="Shop" title="Download packages" lead="Compare download allowances and request the package that fits how you use the library." %}
+  {% include "shop/_subnav.html" with shop_tab="packages" %}
+  {% if not online_payments_enabled %}<div class="mb-4">{% include "shop/_payment_notice.html" %}</div>{% endif %}
+
+  {% if tiers %}
+    <div class="row g-3">
+      {% for tier in tiers %}
+        <div class="col-12 col-md-6 col-xl-4">
+          <article class="surface-card eco-tier{% if tier.is_featured %} eco-tier--featured{% endif %}" aria-labelledby="tier-{{ tier.pk }}">
+            <div class="d-flex flex-wrap align-items-center gap-2">
+              <h2 class="h4 mb-0" id="tier-{{ tier.pk }}">{{ tier.name }}</h2>
+              {% if tier.is_featured %}{% include "components/status_pill.html" with label="Popular" tone="accent" %}{% endif %}
+              {% if tier.pk == current_tier_id %}{% include "components/status_pill.html" with label="Your package" tone="success" icon="check" %}{% endif %}
+              {% if tier.is_default %}{% include "components/status_pill.html" with label="Included with every account" %}{% endif %}
+            </div>
+            {% if tier.description %}<p class="small muted mb-0">{{ tier.description }}</p>{% endif %}
+            <p class="eco-price">{% if tier.price_monthly %}{{ tier.price_monthly }} <small>USD / month</small>{% else %}Free{% endif %}</p>
+            {% if tier.price_quarterly or tier.price_yearly or tier.price_lifetime %}
+              <p class="small muted mb-0">
+                {% if tier.price_quarterly %}{{ tier.price_quarterly }} per quarter{% endif %}
+                {% if tier.price_yearly %}· {{ tier.price_yearly }} per year{% endif %}
+                {% if tier.price_lifetime %}· {{ tier.price_lifetime }} lifetime{% endif %}
+              </p>
+            {% endif %}
+            <ul class="eco-feature-list">
+              <li><i class="icon" data-lucide="check" aria-hidden="true"></i><span>{% if tier.daily_download_limit < 0 %}Unlimited{% else %}{{ tier.daily_download_limit }}{% endif %} downloads per day</span></li>
+              <li><i class="icon" data-lucide="check" aria-hidden="true"></i><span>{% if tier.monthly_download_limit < 0 %}Unlimited{% else %}{{ tier.monthly_download_limit }}{% endif %} downloads per month</span></li>
+              <li><i class="icon" data-lucide="check" aria-hidden="true"></i><span>{% if tier.max_file_size_mb < 0 %}No file size limit{% else %}Files up to {{ tier.max_file_size_mb }} MB{% endif %}</span></li>
+              <li{% if not tier.ad_free %} class="is-off"{% endif %}><i class="icon" data-lucide="{% if tier.ad_free %}check{% else %}x{% endif %}" aria-hidden="true"></i><span>{% if tier.ad_free %}Ad-free downloads{% else %}Ad-supported downloads{% endif %}</span></li>
+              <li{% if not tier.access_engineering %} class="is-off"{% endif %}><i class="icon" data-lucide="{% if tier.access_engineering %}check{% else %}x{% endif %}" aria-hidden="true"></i><span>Engineering firmware{% if not tier.access_engineering %} <span class="visually-hidden">not included</span>{% endif %}</span></li>
+              <li{% if not tier.access_readback %} class="is-off"{% endif %}><i class="icon" data-lucide="{% if tier.access_readback %}check{% else %}x{% endif %}" aria-hidden="true"></i><span>Readback firmware{% if not tier.access_readback %} <span class="visually-hidden">not included</span>{% endif %}</span></li>
+              <li{% if not tier.access_modified %} class="is-off"{% endif %}><i class="icon" data-lucide="{% if tier.access_modified %}check{% else %}x{% endif %}" aria-hidden="true"></i><span>Modified firmware{% if not tier.access_modified %} <span class="visually-hidden">not included</span>{% endif %}</span></li>
+            </ul>
+            <div class="mt-auto">
+              {% for product in tier.products.all %}
+                {% if product.is_active %}<a class="btn btn-primary" href="{% url 'shop:product_detail' slug=product.slug %}">Request this package</a>{% endif %}
+              {% empty %}
+                {% if not tier.is_default %}<span class="small muted">Not available to order right now.</span>{% endif %}
+              {% endfor %}
+            </div>
+          </article>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    {% include "components/empty_state.html" with title="No packages are available yet" message="Download packages appear here once they are configured." %}
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+from typing import ClassVar
+
 from django.db import models
 from django.utils.text import slugify
 from solo.models import SingletonModel
 
 from apps.core.models import SoftDeleteModel, TimestampedModel
+from apps.tags.models_tagged_item import TaggedItem
 
 # Legacy enhanced models removed - archived in apps/core/versions/
 # Keeping import placeholder for historical migration compatibility
@@ -83,10 +86,10 @@ class Tag(TimestampedModel, SoftDeleteModel):
     )
 
     class Meta:
-        ordering = ["name"]
+        ordering: ClassVar[list[str]] = ["name"]
         verbose_name = "Tag"
         verbose_name_plural = "Tags"
-        indexes = [
+        indexes = (
             models.Index(fields=["normalized_name"], name="tag_normalized_idx"),
             models.Index(fields=["slug"], name="tag_slug_idx"),
             models.Index(
@@ -96,14 +99,14 @@ class Tag(TimestampedModel, SoftDeleteModel):
             models.Index(fields=["merge_into"], name="tag_merge_into_idx"),
             models.Index(fields=["parent"], name="tag_parent_idx"),
             models.Index(fields=["path_cache"], name="tag_path_idx"),
-        ]
-        constraints = [
+        )
+        constraints = (
             models.UniqueConstraint(
                 fields=["normalized_name"],
                 name="tag_unique_normalized",
                 condition=models.Q(merge_into__isnull=True),
-            )
-        ]
+            ),
+        )
 
     def __str__(self) -> str:
         return self.name
@@ -127,7 +130,8 @@ class TagsSettings(SingletonModel):
         default=True, help_text="Allow authenticated users to suggest new tags."
     )
     enable_ai_suggestions = models.BooleanField(
-        default=True, help_text="Enable AI-assisted tag suggestions where available."
+        default=True,
+        help_text="Automatically create, attach and curate tags for published posts.",
     )
     show_tag_usage = models.BooleanField(
         default=True, help_text="Expose tag usage counts in public views."
@@ -139,8 +143,5 @@ class TagsSettings(SingletonModel):
     def __str__(self) -> str:
         return "Tags Settings"
 
-
-# Import TaggedItem to register it with Django's model system
-from apps.tags.models_tagged_item import TaggedItem  # noqa: E402
 
 __all__ = ["Tag", "TaggedItem", "TagsSettings"]

@@ -1,0 +1,28 @@
+{% load mf_ui %}
+{# Contract: page_obj (required); label (optional aria-label); hx_target (optional CSS selector; enables HTMX paging with a plain-link fallback). Preserves the current query string. #}
+{% if page_obj.has_other_pages %}
+  <nav class="pagination-nav mt-4" aria-label="{{ label|default:'Pagination' }}">
+    <ul class="pagination flex-wrap justify-content-center mb-2">
+      {% if page_obj.has_previous %}
+        <li class="page-item"><a class="page-link" rel="prev" href="{% querystring page=page_obj.previous_page_number %}"{% if hx_target %} hx-get="{% querystring page=page_obj.previous_page_number %}" hx-target="{{ hx_target }}" hx-push-url="true"{% endif %}>Previous</a></li>
+      {% else %}
+        <li class="page-item disabled"><span class="page-link">Previous</span></li>
+      {% endif %}
+      {% for number in page_obj|elided_pages %}
+        {% if number == page_obj.paginator.ELLIPSIS %}
+          <li class="page-item disabled"><span class="page-link">&hellip;</span></li>
+        {% elif number == page_obj.number %}
+          <li class="page-item active" aria-current="page"><span class="page-link">{{ number }}</span></li>
+        {% else %}
+          <li class="page-item"><a class="page-link" href="{% querystring page=number %}"{% if hx_target %} hx-get="{% querystring page=number %}" hx-target="{{ hx_target }}" hx-push-url="true"{% endif %} aria-label="Page {{ number }}">{{ number }}</a></li>
+        {% endif %}
+      {% endfor %}
+      {% if page_obj.has_next %}
+        <li class="page-item"><a class="page-link" rel="next" href="{% querystring page=page_obj.next_page_number %}"{% if hx_target %} hx-get="{% querystring page=page_obj.next_page_number %}" hx-target="{{ hx_target }}" hx-push-url="true"{% endif %}>Next</a></li>
+      {% else %}
+        <li class="page-item disabled"><span class="page-link">Next</span></li>
+      {% endif %}
+    </ul>
+    <p class="text-center muted small mb-0">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</p>
+  </nav>
+{% endif %}

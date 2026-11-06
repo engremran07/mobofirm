@@ -174,7 +174,7 @@ class Command(BaseCommand):
 
 def _get_brand_name(post: Post) -> str:
     if post.firmware_brand:
-        return post.firmware_brand.name  # type: ignore[attr-defined]
+        return post.firmware_brand.name
     # Extract from title
     title = post.title or ""
     for prefix in ("How to Flash Stock Firmware on ", "Root ", "Unlock Bootloader on "):
@@ -186,7 +186,7 @@ def _get_brand_name(post: Post) -> str:
 
 def _get_model_name(post: Post) -> str:
     if post.firmware_model:
-        return post.firmware_model.name  # type: ignore[attr-defined]
+        return post.firmware_model.name
     title = post.title or ""
     # Extract device name from parentheses or before em-dash
     before_dash = title.split("—")[0].strip()
@@ -420,7 +420,7 @@ def _guide_enrichment(device: str, brand: str, post: Post) -> str:
         You will need a Windows PC with the correct USB drivers installed, the appropriate flash tool for \
         your device chipset, and the firmware file downloaded from this page. A quality USB cable is \
         essential for a stable connection during the flash process.</p>
-    """  # noqa: S608
+    """
     return textwrap.dedent(html)
 
 

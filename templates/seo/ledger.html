@@ -1,0 +1,36 @@
+{% extends "seo/base.html" %}
+{% block seo_content %}
+<form method="get" class="mf-seo-form">
+  <label for="seo-ledger-status">Status</label>
+  <select id="seo-ledger-status" name="status">
+    <option value="">All</option>
+    {% for value, label in statuses %}<option value="{{ value }}"{% if value == status %} selected{% endif %}>{{ label }}</option>{% endfor %}
+  </select>
+  <button type="submit" class="button">Filter</button>
+</form>
+<table class="mf-seo-table">
+  <thead><tr><th scope="col">When</th><th scope="col">Change</th><th scope="col">Before</th><th scope="col">After</th><th scope="col">Why</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead>
+  <tbody>
+    {% for entry in entries %}
+      <tr>
+        <td>{{ entry.created_at|date:"Y-m-d H:i" }}</td>
+        <td>{{ entry.kind }}<br>{{ entry.target_label }}<br><small>{{ entry.source }} / {{ entry.mode }}</small></td>
+        <td><code>{{ entry.before }}</code></td>
+        <td><code>{{ entry.after }}</code></td>
+        <td>{{ entry.reason }}{% if entry.error %}<br><strong>{{ entry.error }}</strong>{% endif %}</td>
+        <td>{{ entry.get_status_display }}{% if entry.requires_approval and entry.status == "proposed" %} (needs approval){% endif %}</td>
+        <td>
+          {% if entry.status == "proposed" and can_approve %}
+            <form method="post" action="{% url 'seo:ledger_action' pk=entry.pk action='approve' %}">{% csrf_token %}<button type="submit" class="button">Approve and apply</button></form>
+            <form method="post" action="{% url 'seo:ledger_action' pk=entry.pk action='reject' %}">{% csrf_token %}<button type="submit" class="button">Reject</button></form>
+          {% elif entry.status == "applied" and can_rollback %}
+            <form method="post" action="{% url 'seo:ledger_action' pk=entry.pk action='rollback' %}">{% csrf_token %}<button type="submit" class="button">Roll back</button></form>
+          {% endif %}
+        </td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="7">No changes recorded.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

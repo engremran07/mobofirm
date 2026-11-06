@@ -1,8 +1,21 @@
 {% extends "base.html" %}
-{% block title %}{{ model.display_name }} articles | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block content %}
-<div class="site-container py-5"><p class="section-eyebrow">{{ brand.name }}</p><h1 class="h2">{{ model.display_name }}</h1>
-  <p class="muted">Guides and articles connected with this device.</p>
-  {% include "blog/partials/post_list_items.html" %}
+<div class="site-container py-4 py-lg-5">
+  {% url 'blog:post_list' as journal_url %}
+  {% url 'blog:brand_posts' brand_slug=brand.slug as brand_url %}
+  {% include "components/breadcrumbs.html" with current=model.name parent_label=brand.name parent_url=brand_url grandparent_label="Journal" grandparent_url=journal_url %}
+  <header class="hub-header">
+    <span class="hub-header__mark" aria-hidden="true"><i data-lucide="smartphone"></i></span>
+    <div class="hub-header__text">
+      <p class="section-eyebrow mb-1">Device journal</p>
+      <h1 class="hub-header__title">{{ brand.name }} {{ model.name }}{% if model.marketing_name and model.marketing_name != model.name %} <span class="muted">({{ model.marketing_name }})</span>{% endif %}</h1>
+      <p class="hub-header__lead">Firmware downloads, flashing guides and notes for this device.</p>
+      <div class="hub-header__actions">
+        <a class="btn btn-primary" href="{% url 'firmwares:model_detail' brand_slug=brand.slug model_slug=model.slug %}"><i data-lucide="download" class="icon" aria-hidden="true"></i> Firmware files</a>
+        {% if chipset %}<a class="btn btn-outline-secondary" href="{% url 'blog:chipset_posts' slug=chipset.slug %}"><i data-lucide="cpu" class="icon" aria-hidden="true"></i> {{ chipset.display_name }}</a>{% endif %}
+      </div>
+    </div>
+  </header>
+  {% include "blog/partials/hub_body.html" %}
 </div>
 {% endblock %}

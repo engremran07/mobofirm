@@ -11,15 +11,12 @@ class CoreConfig(AppConfig):
     def ready(self):
         """
         Core app initialization:
-        - Safely clear the django.contrib.sites cache after registry load
+        - Clear the django.contrib.sites in-memory cache after registry load
         - Autodiscover signals or other startup modules
         """
-        try:
-            from django.contrib.sites.models import Site
+        from django.contrib.sites.models import Site
 
-            Site.objects.clear_cache()
-        except Exception:  # noqa: S110
-            pass
+        Site.objects.clear_cache()
 
         # Auto-discover signals.py in submodules
         autodiscover_modules("signals")

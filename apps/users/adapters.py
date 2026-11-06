@@ -13,6 +13,7 @@ from allauth.account.models import EmailAddress
 from allauth.core.exceptions import ImmediateHttpResponse
 from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
 from allauth.socialaccount.models import SocialApp, SocialLogin
+from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import ValidationError
 from django.http import HttpRequest
@@ -35,9 +36,6 @@ def _safe_reverse(name: str, default: str = "/") -> str:
         return reverse(name)
     except NoReverseMatch:
         logger.warning("reverse(%s) failed - fallback=%s", name, default)
-        return default
-    except Exception as exc:
-        logger.exception("reverse(%s) unexpected error: %s", name, exc)
         return default
 
 
@@ -72,17 +70,15 @@ class CustomAccountAdapter(DefaultAccountAdapter):
         # Enrich reset/verification emails with timestamp and anonymized requester IP when available.
         context = context or {}
         context.setdefault("now", timezone.now())
-        try:
-            request = context.get("request")
-            ip = get_client_ip(request) if request else None
-            if ip:
-                context["client_ip"] = hash_ip(ip)
-        except Exception:
-            context.setdefault("client_ip", None)
+        request = context.get("request")
+        ip = get_client_ip(request) if request else None
+        context["client_ip"] = hash_ip(ip) if ip else None
         return super().send_mail(template_prefix, email, context)
 
     def is_open_for_signup(self, request: HttpRequest | None) -> bool:
-        return UsersSettings.get_solo().enable_signup
+        return bool(UsersSettings.get_solo().enable_signup) and bool(
+            getattr(settings, "ENABLE_SIGNUP", True)
+        )
 
     def clean_password(self, password: str, user: Any | None = None) -> str:
         if not isinstance(password, str):
@@ -94,10 +90,15 @@ class CustomAccountAdapter(DefaultAccountAdapter):
         return super().clean_password(password, user)
 
     def is_email_verified(self, request: HttpRequest, email: str) -> bool:
-        if EmailAddress.objects.filter(
-            email__iexact=email,
-            verified=True,
-        ).exists():
+        """Trust a verified address only for the signed-in user who owns it."""
+        user = getattr(request, "user", None)
+        if (
+            user is not None
+            and user.is_authenticated
+            and EmailAddress.objects.filter(
+                user=user, email__iexact=email, verified=True
+            ).exists()
+        ):
             return True
         return super().is_email_verified(request, email)
 
@@ -165,16 +166,12 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
         Otherwise, let EnforceProfileCompletionMiddleware drive them to the
         tell-us-about-you flow.
         """
-        try:
-            user = getattr(sociallogin, "user", None)
-            if (
-                user
-                and getattr(user, "id", None)
-                and getattr(user, "profile_completed", False)
-            ):
-                sociallogin.redirect_url = _safe_reverse("users:dashboard", default="/")  # type: ignore[attr-defined]
-                return
-            logger.debug("pre_social_login: social login requires onboarding.")
-        except Exception as exc:
-            logger.exception("pre_social_login fatal error: %s", exc)
+        user = getattr(sociallogin, "user", None)
+        if (
+            user
+            and getattr(user, "id", None)
+            and getattr(user, "profile_completed", False)
+        ):
+            sociallogin.redirect_url = _safe_reverse("users:dashboard", default="/")
             return
+        logger.debug("pre_social_login: social login requires onboarding.")

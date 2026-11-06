@@ -1,0 +1,6 @@
+{# Contract: title (required); message (optional); action_label + action_url (optional). #}
+<div class="empty-state p-4 text-center" role="status">
+  <p class="h5 mb-1">{{ title }}</p>
+  {% if message %}<p class="mb-0">{{ message }}</p>{% endif %}
+  {% if action_label and action_url %}<a class="btn btn-outline-secondary mt-3" href="{{ action_url }}">{{ action_label }}</a>{% endif %}
+</div>

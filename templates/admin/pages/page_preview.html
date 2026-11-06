@@ -1,0 +1,38 @@
+{% extends "admin/base.html" %}
+
+{% load i18n %}
+
+{% block title %}{{ title }} | {{ site_title }}{% endblock %}
+
+{% block content %}
+    <div class="flex flex-col gap-6">
+        <section aria-labelledby="preview-status" class="bg-white border border-base-200 flex flex-col gap-3 p-6 rounded-default shadow-xs dark:bg-base-900 dark:border-base-800">
+            <div class="flex flex-row flex-wrap gap-3 items-center">
+                <h2 id="preview-status" class="font-semibold text-important text-sm">{% trans "Publication state" %}</h2>
+                {% include "unfold/helpers/label.html" with variant="info" text=page.get_status_display %}
+                {% if is_live %}
+                    {% include "unfold/helpers/label.html" with variant="success" text=_("Live now") %}
+                {% else %}
+                    {% include "unfold/helpers/label.html" with variant="warning" text=_("Not visible on the public site") %}
+                {% endif %}
+                {% include "unfold/helpers/label.html" with variant="info" text=page.get_access_level_display %}
+            </div>
+            <p class="text-subtle text-xs">
+                {{ rendered.reading_minutes }} {% trans "min read" %}
+                {% if page.publish_at %}&middot; {% trans "publishes" %} {{ page.publish_at|date:"j M Y H:i" }}{% endif %}
+                {% if page.unpublish_at %}&middot; {% trans "unpublishes" %} {{ page.unpublish_at|date:"j M Y H:i" }}{% endif %}
+            </p>
+            <div class="flex flex-row flex-wrap gap-4 text-sm">
+                <a class="text-primary-600 underline dark:text-primary-500" href="{{ change_url }}">{% trans "Back to editing" %}</a>
+                {% if is_live %}
+                    <a class="text-primary-600 underline dark:text-primary-500" href="{{ page.get_absolute_url }}" target="_blank" rel="noopener">{% trans "Open the live page" %}</a>
+                {% endif %}
+            </div>
+        </section>
+
+        <article aria-labelledby="preview-title" class="bg-white border border-base-200 p-6 rounded-default shadow-xs dark:bg-base-900 dark:border-base-800">
+            <h1 id="preview-title" class="font-semibold mb-4 text-important text-2xl">{{ page.title }}</h1>
+            <div class="flex flex-col gap-3 leading-relaxed">{{ rendered.html|safe }}</div>
+        </article>
+    </div>
+{% endblock %}

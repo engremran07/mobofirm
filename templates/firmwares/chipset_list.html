@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Chipsets | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block meta_description %}Browse mobile chipsets and the device models, flashing tools and firmware that use them.{% endblock %}
+{% block content %}
+<div class="site-container py-5">
+  <p class="section-eyebrow">Device catalogue</p>
+  <h1 class="h2 mb-2">Chipsets</h1>
+  <p class="muted mb-4">{{ total_chipsets }} chipset{{ total_chipsets|pluralize }} across the catalogue. Open a chipset to see the devices, tools and firmware that use it.</p>
+  <form class="row g-2 mb-4" method="get" action="{% url 'firmwares:chipset_list' %}">
+    <div class="col-12 col-md">
+      <label class="form-label" for="chipset-query">Search chipsets</label>
+      <input id="chipset-query" class="form-control" type="search" name="q" value="{{ search_query }}" placeholder="Helio, Snapdragon, Exynos…">
+    </div>
+    <div class="col-12 col-md-auto d-flex align-items-end"><button class="btn btn-primary" type="submit">Search</button></div>
+  </form>
+  {% if chipsets %}
+    <div class="row g-3">
+      {% for chipset in chipsets %}
+        <div class="col-12 col-md-6 col-xl-4">
+          <a class="surface-card p-3 d-flex align-items-center gap-3 text-decoration-none" href="{% url 'firmwares:chipset_detail' slug=chipset.slug %}">
+            <span class="brand-mark" aria-hidden="true"><i data-lucide="cpu"></i></span>
+            <span><strong class="d-block">{{ chipset.display_name }}</strong><span class="small muted">{% if chipset.family %}{{ chipset.family }} · {% endif %}{{ chipset.model_total }} model{{ chipset.model_total|pluralize }}</span></span>
+          </a>
+        </div>
+      {% endfor %}
+    </div>
+    {% include "firmwares/includes/pagination.html" with page=chipsets label="Chipset pages" query=pagination_query %}
+  {% else %}
+    <p class="empty-state p-4">No chipsets match this search.</p>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,8 +1,8 @@
 # Mobofirm
 
-Mobofirm is a Django project with a PostgreSQL-backed runtime and nine installed domain/support applications. The codebase includes user and profile management, device identity, firmware management, advertising, blog and comments, tagging, and a content-review governance workflow.
+Mobofirm is a Django project with a PostgreSQL-backed runtime and installed domain/support applications. The codebase includes user and profile management, device identity, firmware management (catalogue, chipsets, gated downloads, external download sources), advertising, blog and comments, tagging, and app-owned moderation workflows.
 
-The user has approved an initial hybrid frontend foundation: Django templates with Bootstrap, HTMX, CSP-safe Alpine, Lucide, and Vite. Public and Django admin experiences have distinct shells over a centralized shared token/static-asset source. The implementation is functional but the final visual identity and detailed design calibration remain open for review.
+The user has approved an initial hybrid frontend foundation: Django templates with Bootstrap, HTMX, CSP-safe Alpine, Lucide, and Vite. Public and Django admin experiences have distinct shells: the public site uses the Vite-built token/static-asset source, and the admin is django-unfold themed from the same brand tokens. The implementation is functional but the final visual identity and detailed design calibration remain open for review.
 
 ## Repository layout
 
@@ -91,7 +91,7 @@ CI installs Chromium, builds the frontend, and runs this browser sweep automatic
 
 ## URLs and health checks
 
-The root URL configuration mounts Django admin, allauth accounts, and the `users`, `devices`, `firmwares`, `tags`, `ads`, `blog`, `comments`, and `governance` routes. Liveness is exposed at `/health/live/`; readiness checks the configured database at `/health/ready/`.
+The root URL configuration mounts the Unfold admin (`/admin/`: sidebar, dashboard, filters, actions and tabs configured in `app/settings/unfold.py`, `apps/core/admin_base.py` and `apps/core/admin_navigation.py`; its own nonce-based CSP applies to the admin shell pages only), allauth accounts, and the `users`, `devices`, `firmwares`, `tags`, `ads`, `blog`, and `comments` routes (plus the integrated storage, SEO, pages, shop, marketplace and file-manager routes). Liveness is exposed at `/health/live/`; readiness checks the configured database at `/health/ready/`.
 
 ## Governance
 

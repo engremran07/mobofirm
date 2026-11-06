@@ -1,0 +1,6 @@
+{# Contract: eyebrow (optional), title (required), lead (optional), title_id (optional). #}
+<header class="page-header mb-4">
+  {% if eyebrow %}<p class="section-eyebrow mb-1">{{ eyebrow }}</p>{% endif %}
+  <h1 class="page-title"{% if title_id %} id="{{ title_id }}"{% endif %}>{{ title }}</h1>
+  {% if lead %}<p class="page-lead muted mb-0">{{ lead }}</p>{% endif %}
+</header>

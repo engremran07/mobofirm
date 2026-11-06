@@ -7,7 +7,7 @@ Decoupled event system for app-to-app communication.
 
 import logging
 from collections.abc import Callable
-from typing import Any
+from typing import Any, ClassVar
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ class EventBus:
     """
 
     _instance = None
-    _handlers: dict[str, list[Callable]] = {}
+    _handlers: ClassVar[dict[str, list[Callable]]] = {}
 
     def __new__(cls):
         if cls._instance is None:
@@ -82,10 +82,9 @@ class EventBus:
         for handler in handlers:
             try:
                 handler(data)
-            except Exception as e:
-                logger.error(
-                    f"Event handler {handler.__name__} failed for {event_type}: {e}",
-                    exc_info=True,
+            except Exception:
+                logger.exception(
+                    "Event handler %s failed for %s", handler.__name__, event_type
                 )
 
     def unsubscribe(self, event_type: str, handler: Callable):

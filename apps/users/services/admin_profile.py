@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from django.contrib.auth import get_user_model
+from django.db import DatabaseError
 
 User = get_user_model()
 
@@ -38,7 +39,7 @@ def get_user_profile(user_id: str) -> dict[str, Any]:
                 "email", "verified", "primary"
             )
         )
-    except Exception:
+    except DatabaseError:
         profile["email_addresses"] = []
 
     # allauth: social accounts
@@ -50,7 +51,7 @@ def get_user_profile(user_id: str) -> dict[str, Any]:
             .order_by("provider")
             .values("provider", "uid", "last_login")
         )
-    except Exception:
+    except DatabaseError:
         profile["social_accounts"] = []
 
     # Devices + events
@@ -73,7 +74,7 @@ def get_user_profile(user_id: str) -> dict[str, Any]:
             .order_by("-created_at")[:20]
             .values("event_type", "success", "reason", "created_at")
         )
-    except Exception:
+    except DatabaseError:
         profile["devices"] = []
         profile["device_events"] = []
 
@@ -87,12 +88,13 @@ def get_user_profile(user_id: str) -> dict[str, Any]:
             .values(
                 "severity",
                 "status",
-                "device_identifier",
-                "related_ip",
+                "recommendation",
+                "fingerprint_id",
+                "metadata",
                 "created_at",
             )
         )
-    except Exception:
+    except DatabaseError:
         profile["risk_insights"] = []
 
     return profile

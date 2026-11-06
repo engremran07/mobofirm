@@ -1,0 +1,2 @@
+LOCAL_DEMO_CAMPAIGN_NAME = "Mobofirm Local Demo Campaign"
+LOCAL_DEMO_PLACEMENT_PREFIX = "demo-"

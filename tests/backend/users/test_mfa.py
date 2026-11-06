@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from unittest.mock import Mock, patch
 
+from allauth.account.models import EmailAddress
 from django.contrib.auth import get_user_model
 from django.core.cache import cache
 from django.test import TestCase, override_settings
@@ -9,7 +10,6 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from allauth.account.models import EmailAddress
 from apps.users.mfa import TOTPService
 from apps.users.models import MFADevice, UsersSettings
 from apps.users.services.mfa import verify_mfa_code
@@ -226,6 +226,9 @@ class MultiFactorAuthenticationTests(TestCase):
         settings_obj = UsersSettings.get_solo()
         settings_obj.require_mfa = True
         settings_obj.save(update_fields=["require_mfa"])
+        session = self.client.session
+        session["mfa_verified_user_id"] = str(self.user.pk)
+        session.save()
 
         response = self.client.post(
             reverse("users:mfa_disable"),
@@ -238,6 +241,9 @@ class MultiFactorAuthenticationTests(TestCase):
     @override_settings(REQUIRE_MFA=True)
     def test_global_mfa_requirement_prevents_disabling_authenticator(self):
         _, secret = self.create_totp_device()
+        session = self.client.session
+        session["mfa_verified_user_id"] = str(self.user.pk)
+        session.save()
 
         verify_response = self.client.get(reverse("users:mfa_verify"))
         self.assertEqual(verify_response.status_code, 200)
@@ -273,13 +279,13 @@ class MultiFactorAuthenticationTests(TestCase):
         )
         self.assertEqual(invalid_response.status_code, 401)
 
-        valid_code = api_client.post(
+        valid_response = api_client.post(
             url,
             {**credentials, "totp_code": valid_code},
             format="json",
         )
-        self.assertEqual(valid_code.status_code, 200)
-        self.assertIn("token", valid_code.data)
+        self.assertEqual(valid_response.status_code, 200)
+        self.assertIn("token", valid_response.data)
 
     def test_api_login_requires_setup_when_site_requires_mfa(self):
         settings_obj = UsersSettings.get_solo()

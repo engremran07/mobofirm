@@ -6,12 +6,12 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-    dependencies = [
+    dependencies = (
         ("contenttypes", "0002_remove_content_type_name"),
         ("users", "0001_initial"),
-    ]
+    )
 
-    operations = [
+    operations = (
         migrations.CreateModel(
             name="ActivityFeed",
             fields=[
@@ -198,4 +198,4 @@ class Migration(migrations.Migration):
                 name="users_no_self_follow",
             ),
         ),
-    ]
+    )

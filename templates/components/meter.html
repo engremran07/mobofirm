@@ -1,0 +1,8 @@
+{# Contract: id, label and percent (0-100) are required; text (optional visible value). Renders a labelled <meter>: green up to 70%, amber to 90%, red above. #}
+<div class="eco-meter-group">
+  <div class="d-flex flex-wrap justify-content-between gap-2 small">
+    <label for="{{ id }}">{{ label }}</label>
+    {% if text %}<span class="muted">{{ text }}</span>{% endif %}
+  </div>
+  <meter class="eco-meter" id="{{ id }}" min="0" max="100" low="70" high="90" optimum="0" value="{{ percent }}">{{ percent }}%</meter>
+</div>

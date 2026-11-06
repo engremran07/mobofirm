@@ -5,6 +5,7 @@ Removes old sessions, logs, temporary files, and expired data
 
 from datetime import timedelta
 
+from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.utils import timezone
 
@@ -47,6 +48,7 @@ class Command(BaseCommand):
         total_deleted = 0
 
         total_deleted += self.cleanup_sessions(dry_run)
+        total_deleted += self.cleanup_api_tokens(dry_run)
         total_deleted += self.cleanup_download_sessions(cutoff, dry_run)
         total_deleted += self.cleanup_ad_events(cutoff, dry_run)
 
@@ -55,6 +57,22 @@ class Command(BaseCommand):
                 f"\nTotal records {'matched' if dry_run else 'deleted'}: {total_deleted:,}"
             )
         )
+
+    def cleanup_api_tokens(self, dry_run=False):
+        """Cleanup API tokens past their configured lifetime"""
+        from rest_framework.authtoken.models import Token
+
+        expired = Token.objects.filter(
+            created__lt=timezone.now()
+            - timedelta(
+                seconds=getattr(settings, "API_TOKEN_TTL_SECONDS", 7 * 24 * 3600)
+            )
+        )
+        count = expired.count()
+        if count and not dry_run:
+            expired.delete()
+        self.stdout.write(f"  Expired API tokens: {count:,}")
+        return count
 
     def cleanup_sessions(self, dry_run=False):
         """Cleanup expired Django sessions"""

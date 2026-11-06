@@ -5,7 +5,7 @@
   <p class="section-eyebrow">Catalogue search</p>
   <h1 class="h2 mb-4">Find a device</h1>
   <form class="row g-2 mb-4" method="get" action="{% url 'firmwares:universal_search' %}"
-        hx-get="{% url 'firmwares:universal_search' %}" hx-trigger="input changed delay:350ms from:input, submit"
+        hx-get="{% url 'firmwares:universal_search' %}" hx-trigger="input changed delay:350ms from:find input, submit"
         hx-target="#search-results" hx-swap="innerHTML">
     <div class="col"><label class="visually-hidden" for="search-query">Search</label><input id="search-query" class="form-control" type="search" name="q" value="{{ query }}" placeholder="Model, codename, model code, or brand"></div>
     <div class="col-auto"><button class="btn btn-primary" type="submit">Search</button></div>

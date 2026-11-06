@@ -14,7 +14,7 @@ This is an initial trust-boundary inventory, not a security certification. Revis
 ## Trust boundaries and threats
 
 | Boundary | Representative threats | Required controls/evidence |
-|---|---|---|
+| --- | --- | --- |
 | Anonymous client → Django | CSRF, account enumeration, injection, abusive traffic, forged consent/device payload | Server-side validation, Django protections, scoped rate limits, permission tests |
 | Authenticated user → owned resources | IDOR, privilege escalation, cross-account profile/device access | Object-level ownership, least privilege, cross-owner regression tests |
 | Upload/download → local firmware storage | Path traversal, unauthorized download, token replay, hotlinking, file replacement | Canonical path/authorization checks, expiring tokens/signatures, file-type/size policy, audit tests |

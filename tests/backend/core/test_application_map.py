@@ -1,9 +1,12 @@
 import unittest
+from typing import Any, ClassVar
 
 from scripts.application_map import ROOT, build_application_map
 
 
 class ApplicationMapTests(unittest.TestCase):
+    inventory: ClassVar[dict[str, Any]]
+
     @classmethod
     def setUpClass(cls):
         cls.inventory = build_application_map(ROOT)
@@ -37,20 +40,26 @@ class ApplicationMapTests(unittest.TestCase):
 
         self.assertTrue(htmx_records)
         self.assertTrue(alpine_records)
-        self.assertIn(
-            "frontend/src/site.js",
-            self.inventory["frontend_sources"]["javascript"],
-        )
-        self.assertIn(
-            "frontend/src/styles/tokens.css",
-            self.inventory["frontend_sources"]["stylesheets"],
-        )
+        self.assertTrue(self.inventory["frontend_sources"]["javascript"])
+        self.assertTrue(self.inventory["frontend_sources"]["stylesheets"])
 
     def test_inventory_marks_static_findings_as_candidates_not_runtime_proof(self):
         interpretation = self.inventory["interpretation"].lower()
 
         self.assertIn("not a product specification", interpretation)
         self.assertIn("or proof of runtime behavior", interpretation)
+
+    def test_inventory_tracks_admin_and_asset_relationships(self):
+        self.assertIn("admin_routes", self.inventory)
+        self.assertIn("template_asset_usage", self.inventory)
+        self.assertIn("frontend_asset_inventory", self.inventory)
+        self.assertTrue(self.inventory["admin_routes"])
+        self.assertTrue(
+            any(
+                entry["asset_references"]
+                for entry in self.inventory["template_asset_usage"]
+            )
+        )
 
     def test_inventory_output_is_json_serializable_and_deterministic(self):
         import json

@@ -1,0 +1,82 @@
+{% extends "seo/base.html" %}
+{% block seo_content %}
+<section aria-labelledby="seo-health" class="mf-seo-cards">
+  <h2 id="seo-health" class="visually-hidden">Measured health</h2>
+  <article class="mf-seo-card">
+    <h3>Crawl health</h3>
+    {% if latest_run and latest_run.health_percent is not None %}
+      <p class="mf-seo-figure">{{ latest_run.health_percent }}%</p>
+      <p>Share of {{ latest_run.pages_crawled }} crawled pages without an error-level issue (crawl {{ latest_run.pk }}).</p>
+    {% else %}
+      <p class="mf-seo-figure">No data</p>
+      <p>No completed crawl yet. Health is computed only from measured issues.</p>
+    {% endif %}
+  </article>
+  <article class="mf-seo-card">
+    <h3>Open issues</h3>
+    <p class="mf-seo-figure">{{ open_errors }} <span>errors</span></p>
+    <p>{{ open_warnings }} warnings. <a href="{% url 'seo:issues' %}">Review issues</a></p>
+  </article>
+  <article class="mf-seo-card">
+    <h3>Approvals</h3>
+    <p class="mf-seo-figure">{{ pending_changes }}</p>
+    <p>Proposed changes waiting. <a href="{% url 'seo:ledger' %}?status=proposed">Open the queue</a></p>
+  </article>
+  <article class="mf-seo-card">
+    <h3>Jobs</h3>
+    <p class="mf-seo-figure">{{ pending_jobs }} <span>pending</span></p>
+    <p>{{ failed_jobs }} failed. <a href="{% url 'seo:jobs' %}">View jobs</a></p>
+  </article>
+</section>
+
+<section aria-labelledby="seo-mode">
+  <h2 id="seo-mode">Autonomy</h2>
+  <p>Mode: <strong>{{ seo_settings.get_autonomy_mode_display }}</strong>. SEO is {{ seo_settings.seo_enabled|yesno:"enabled,disabled" }}; sitemap is {{ seo_settings.sitemap_enabled|yesno:"enabled,disabled" }}.</p>
+  {% if can_crawl %}
+    <form method="post" action="{% url 'seo:start_crawl' %}">
+      {% csrf_token %}
+      <button type="submit" class="button">Run crawl and audit now</button>
+    </form>
+  {% endif %}
+</section>
+
+<section aria-labelledby="seo-sitemaps">
+  <h2 id="seo-sitemaps">Sitemap sections</h2>
+  <table class="mf-seo-table">
+    <thead><tr><th scope="col">Section</th><th scope="col">URLs</th></tr></thead>
+    <tbody>
+      {% for section in sections %}
+        <tr><td><a href="{% url 'seo_public:sitemap_section' section=section.name %}">{{ section.name }}</a></td><td>{{ section.urls }}</td></tr>
+      {% empty %}
+        <tr><td colspan="2">No sitemap sections are registered.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section aria-labelledby="seo-integrations">
+  <h2 id="seo-integrations">Integrations</h2>
+  <table class="mf-seo-table">
+    <thead><tr><th scope="col">Integration</th><th scope="col">State</th><th scope="col">Detail</th></tr></thead>
+    <tbody>
+      {% for item in integrations %}
+        <tr><td>{{ item.label }}</td><td><span class="mf-seo-state mf-seo-state--{{ item.state }}">{{ item.state }}</span></td><td>{{ item.detail }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<section aria-labelledby="seo-runs">
+  <h2 id="seo-runs">Recent crawls</h2>
+  <table class="mf-seo-table">
+    <thead><tr><th scope="col">Run</th><th scope="col">Status</th><th scope="col">Pages</th><th scope="col">With errors</th><th scope="col">Finished</th></tr></thead>
+    <tbody>
+      {% for run in recent_runs %}
+        <tr><td>{{ run.pk }}</td><td>{{ run.get_status_display }}</td><td>{{ run.pages_crawled }}</td><td>{{ run.pages_with_errors }}</td><td>{{ run.finished_at|default:"-" }}</td></tr>
+      {% empty %}
+        <tr><td colspan="5">No crawls have run.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

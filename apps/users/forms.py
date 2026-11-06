@@ -52,6 +52,18 @@ def phone_code_form_choices() -> list[tuple[str, str]]:
     ]
 
 
+def _apply_country_choices(form: forms.BaseForm) -> None:
+    """Populate the country and calling-code selects of a signup/profile form."""
+    for name, choices in (
+        ("country", country_form_choices()),
+        ("phone_country_code", phone_code_form_choices()),
+    ):
+        field = form.fields[name]
+        if not isinstance(field, forms.ChoiceField):
+            raise TypeError(f"{name} must be a ChoiceField")
+        field.choices = choices
+
+
 class CustomSignupForm(forms.Form):
     """
     Enterprise-grade wrapper around django-allauth's signup system.
@@ -114,7 +126,7 @@ class CustomSignupForm(forms.Form):
         label=_("Country"),
         widget=forms.Select(
             attrs={
-                "class": "form-select country-input",
+                "class": "form-select",
             }
         ),
     )
@@ -124,7 +136,7 @@ class CustomSignupForm(forms.Form):
         label=_("Country Code"),
         widget=forms.Select(
             attrs={
-                "class": "form-select phone-code-select",
+                "class": "form-select",
             }
         ),
     )
@@ -137,7 +149,7 @@ class CustomSignupForm(forms.Form):
             attrs={
                 "autocomplete": "tel-national",
                 "placeholder": _("Phone number (optional)"),
-                "class": "auth-input phone-number-input",
+                "class": "form-control",
                 "type": "tel",
                 "inputmode": "numeric",
                 "pattern": "[0-9]{6,15}",
@@ -148,8 +160,7 @@ class CustomSignupForm(forms.Form):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         self.request = kwargs.pop("request", None)
         super().__init__(*args, **kwargs)
-        self.fields["country"].choices = country_form_choices()
-        self.fields["phone_country_code"].choices = phone_code_form_choices()
+        _apply_country_choices(self)
 
     @property
     def base_form_class(self) -> type:
@@ -179,7 +190,7 @@ class CustomSignupForm(forms.Form):
         try:
             password_validation.validate_password(password)
         except ValidationError as e:
-            raise ValidationError(e.messages)  # noqa: B904
+            raise ValidationError(e.messages)
         return password
 
     def clean_country(self) -> str:
@@ -278,7 +289,7 @@ class TellUsAboutYouForm(forms.Form):
             attrs={
                 "autocomplete": "username",
                 "placeholder": _("Choose a username"),
-                "class": "auth-input",
+                "class": "form-control",
             }
         ),
     )
@@ -290,7 +301,7 @@ class TellUsAboutYouForm(forms.Form):
             attrs={
                 "autocomplete": "name",
                 "placeholder": _("Your full name"),
-                "class": "auth-input",
+                "class": "form-control",
             }
         ),
     )
@@ -301,7 +312,7 @@ class TellUsAboutYouForm(forms.Form):
         label=_("Country"),
         widget=forms.Select(
             attrs={
-                "class": "form-select country-input",
+                "class": "form-select",
             }
         ),
     )
@@ -311,7 +322,7 @@ class TellUsAboutYouForm(forms.Form):
         label=_("Country Code"),
         widget=forms.Select(
             attrs={
-                "class": "form-select phone-code-select",
+                "class": "form-select",
             }
         ),
     )
@@ -324,7 +335,7 @@ class TellUsAboutYouForm(forms.Form):
             attrs={
                 "autocomplete": "tel-national",
                 "placeholder": _("Phone number (optional)"),
-                "class": "auth-input phone-number-input",
+                "class": "form-control",
                 "type": "tel",
             }
         ),
@@ -338,7 +349,7 @@ class TellUsAboutYouForm(forms.Form):
         widget=forms.Textarea(
             attrs={
                 "placeholder": _("Tell us a bit about yourself…"),
-                "class": "auth-input",
+                "class": "form-control",
                 "rows": 3,
             }
         ),
@@ -350,7 +361,7 @@ class TellUsAboutYouForm(forms.Form):
         widget=forms.URLInput(
             attrs={
                 "placeholder": _("https://yoursite.com"),
-                "class": "auth-input",
+                "class": "form-control",
             }
         ),
     )
@@ -362,12 +373,12 @@ class TellUsAboutYouForm(forms.Form):
         widget=forms.TextInput(
             attrs={
                 "placeholder": _("e.g. Istanbul, Turkey"),
-                "class": "auth-input",
+                "class": "form-control",
             }
         ),
     )
 
-    INTEREST_CHOICES = [
+    INTEREST_CHOICES = (
         ("firmware_download", _("Downloading firmware")),
         ("firmware_upload", _("Contributing firmware")),
         ("device_repair", _("Device repair & flash")),
@@ -376,14 +387,14 @@ class TellUsAboutYouForm(forms.Form):
         ("blogging", _("Writing tech articles")),
         ("beta_testing", _("Beta testing firmware")),
         ("development", _("ROM / kernel development")),
-    ]
+    )
 
     interests = forms.MultipleChoiceField(
         choices=INTEREST_CHOICES,
         required=True,
         label=_("What are you interested in?"),
         widget=forms.CheckboxSelectMultiple(
-            attrs={"class": "interest-checkbox"},
+            attrs={"class": "form-check-input"},
         ),
         error_messages={"required": _("Please select at least one interest.")},
     )
@@ -396,7 +407,7 @@ class TellUsAboutYouForm(forms.Form):
             attrs={
                 "autocomplete": "new-password",
                 "placeholder": _("Create a password"),
-                "class": "auth-input",
+                "class": "form-control",
             }
         ),
     )
@@ -408,7 +419,7 @@ class TellUsAboutYouForm(forms.Form):
             attrs={
                 "autocomplete": "new-password",
                 "placeholder": _("Confirm password"),
-                "class": "auth-input",
+                "class": "form-control",
             }
         ),
     )
@@ -423,8 +434,7 @@ class TellUsAboutYouForm(forms.Form):
         self.user = user
         self.request = request
         super().__init__(*args, **kwargs)
-        self.fields["country"].choices = country_form_choices()
-        self.fields["phone_country_code"].choices = phone_code_form_choices()
+        _apply_country_choices(self)
 
         # Require password only if user has no usable password (typical for social)
         self.require_password = bool(user and not user.has_usable_password())

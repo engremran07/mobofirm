@@ -9,7 +9,7 @@ register = template.Library()
 
 
 @register.simple_tag(takes_context=True)
-def query_string(context: dict, **kwargs: object) -> str:  # type: ignore[type-arg]
+def query_string(context: dict, **kwargs: object) -> str:
     """Build a query string preserving current GET params, overriding with *kwargs*.
 
     Usage::

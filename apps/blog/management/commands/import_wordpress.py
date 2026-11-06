@@ -29,9 +29,9 @@ class Command(BaseCommand):
         author_email = options.get("author_email")
         default_status = options.get("status", "published").lower()
         try:
-            tree = ET.parse(path)  # noqa: S314
-        except Exception as exc:
-            raise CommandError(f"Failed to parse XML: {exc}")  # noqa: B904
+            tree = ET.parse(path)
+        except (ET.ParseError, OSError) as exc:
+            raise CommandError(f"Failed to parse XML: {exc}") from exc
 
         root = tree.getroot()
         channel = root.find("channel")
@@ -72,7 +72,7 @@ class Command(BaseCommand):
             dt = timezone.now()
             try:
                 dt = datetime.fromisoformat(post_date)
-            except Exception:  # noqa: S110
+            except ValueError:
                 pass
 
             post, _created = Post.objects.get_or_create(

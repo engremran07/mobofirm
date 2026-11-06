@@ -1,213 +1,227 @@
-import os
-import random
-import re
-from datetime import timedelta
+from __future__ import annotations
 
-from django.conf import settings
-from django.contrib.auth import get_user_model
-from django.core.management.base import BaseCommand
-from django.utils import timezone
+from django.core.management.base import BaseCommand, CommandError
+from django.db import connection, transaction
 from django.utils.text import slugify
 
-from apps.ads.models import AdCreative, AdPlacement, Campaign, PlacementAssignment
-from apps.blog.models import Category, Post, PostStatus
-
-try:
-    from faker import Faker
-
-    fake = Faker()
-except ImportError:
-    fake = None
+from apps.ads.constants import LOCAL_DEMO_CAMPAIGN_NAME, LOCAL_DEMO_PLACEMENT_PREFIX
+from apps.ads.models import (
+    AdCreative,
+    AdNetwork,
+    AdPlacement,
+    AdUnit,
+    AffiliateProvider,
+    Campaign,
+    PlacementAssignment,
+    RewardedAdConfig,
+)
 
 
 class Command(BaseCommand):
-    help = "Scans templates for ad placements, creates placeholders, and generates dummy blog posts."
+    help = (
+        "Create local-only, disabled ad-format demo profiles and pending "
+        "template placement discoveries."
+    )
 
-    def handle(self, *args, **options):
-        self.stdout.write("Starting setup of test environment...")
+    def handle(self, *args, **options) -> None:
+        self._require_local_database()
 
-        # 1. Create Placeholder Campaign & Creative
-        placeholder_creative = self.create_placeholder_campaign()
+        from apps.ads.services.scanner import scan_templates_for_placements
 
-        # 2. Scan for Ad Placements and assign placeholder
-        self.scan_ad_placements(placeholder_creative)
-
-        # 3. Generate Dummy Blog Posts
-        self.generate_dummy_posts()
-
-        self.stdout.write(self.style.SUCCESS("Test environment setup complete!"))
-
-    def create_placeholder_campaign(self):
-        self.stdout.write("Creating placeholder campaign and creative...")
-        campaign, _ = Campaign.objects.get_or_create(
-            name="Placeholder Campaign",
-            defaults={
-                "type": "house",
-                "is_active": True,
-                "start_at": timezone.now(),
-                "budget": 1000.00,
-            },
-        )
-
-        # Create a generic HTML creative
-        creative, _ = AdCreative.objects.get_or_create(
-            name="Generic Placeholder",
-            campaign=campaign,
-            defaults={
-                "creative_type": "html",
-                "html": """
-                <div style="width:100%; height:100%; min-height:250px; background:#f8fafc; border:2px dashed #cbd5e1; display:flex; align-items:center; justify-content:center; border-radius:8px;">
-                    <div style="text-align:center; color:#64748b;">
-                        <h3 style="margin:0; font-weight:600;">Ad Space Available</h3>
-                        <p style="margin:5px 0 0; font-size:0.875rem;">Contact us to advertise here</p>
-                    </div>
-                </div>
-                """,
-                "is_active": True,
-                "weight": 1,
-            },
-        )
-        return creative
-
-    def scan_ad_placements(self, placeholder_creative):
-        self.stdout.write("Scanning templates for ad placements...")
-
-        template_dirs = []
-        if hasattr(settings, "TEMPLATES"):
-            for t in settings.TEMPLATES:
-                template_dirs.extend(t.get("DIRS", []))
-
-        for root, dirs, files in os.walk(settings.BASE_DIR):  # noqa: B007
-            if "templates" in dirs:
-                template_dirs.append(os.path.join(root, "templates"))
-
-        regex = re.compile(r"{%\s*render_ad_slot\s+['\"]([^'\"]+)['\"]")
-
-        count = 0
-        for template_dir in template_dirs:
-            for root, _, files in os.walk(template_dir):
-                for file in files:
-                    if file.endswith(".html"):
-                        file_path = os.path.join(root, file)
-                        try:
-                            with open(file_path, encoding="utf-8") as f:
-                                content = f.readlines()
-                                for i, line in enumerate(content):
-                                    matches = regex.findall(line)
-                                    for slug in matches:
-                                        self.register_placement(
-                                            slug, file_path, i + 1, placeholder_creative
-                                        )
-                                        count += 1
-                        except Exception as e:
-                            self.stdout.write(
-                                self.style.WARNING(f"Could not read {file_path}: {e}")
-                            )
-
-        self.stdout.write(f"Found and processed {count} ad placement references.")
-
-    def register_placement(self, slug, file_path, line_number, placeholder_creative):
-        rel_path = os.path.relpath(file_path, settings.BASE_DIR)
-        reference = f"{rel_path}:{line_number}"
-
-        placement, created = AdPlacement.objects.get_or_create(
-            code=slug,
-            defaults={
-                "name": slug.replace("-", " ").replace("_", " ").title(),
-                "slug": slug,
-                "description": f"Auto-discovered from {rel_path}",
-                "template_reference": reference,
-                "is_enabled": True,
-                "is_active": True,
-            },
-        )
-
-        if not created:
-            if placement.template_reference != reference:
-                placement.template_reference = reference
-                placement.save(update_fields=["template_reference"])
-
-        # Assign placeholder if no assignments exist
-        if placeholder_creative and not placement.assignments.exists():  # type: ignore[attr-defined]
-            PlacementAssignment.objects.create(
-                placement=placement,
-                creative=placeholder_creative,
-                weight=1,
-                is_active=True,
+        with transaction.atomic():
+            network, _ = AdNetwork.objects.get_or_create(
+                name="Mobofirm Local Demo Network",
+                defaults={
+                    "network_type": "custom",
+                    "is_enabled": False,
+                    "supports_display": True,
+                    "supports_native": True,
+                    "supports_video": True,
+                    "supports_rewarded": True,
+                    "supports_auto_ads": True,
+                    "config": {"demo_only": True, "serving_disabled": True},
+                },
             )
-            self.stdout.write(f"Assigned placeholder to {slug}")
-
-    def generate_dummy_posts(self):
-        self.stdout.write("Generating 50 dummy blog posts...")
-
-        User = get_user_model()
-        if not User.objects.exists():
-            self.stdout.write(
-                self.style.ERROR("No users found. Please create a superuser first.")
+            network.is_enabled = False
+            network.api_key = ""
+            network.api_secret = ""
+            network.header_script = ""
+            network.body_script = ""
+            network.save(
+                update_fields=[
+                    "is_enabled",
+                    "api_key",
+                    "api_secret",
+                    "header_script",
+                    "body_script",
+                ]
             )
-            return
 
-        author = User.objects.filter(is_superuser=True).first() or User.objects.first()
-
-        categories = ["Technology", "AI", "Programming", "Startups", "Gadgets"]
-        cat_objs = []
-        for cat_name in categories:
-            c, _ = Category.objects.get_or_create(name=cat_name)
-            cat_objs.append(c)
-
-        existing_count = Post.objects.count()
-        _target_count = existing_count + 50  # noqa: F841
-
-        created_count = 0
-
-        for i in range(50):  # noqa: B007
-            title = self.get_random_title()
-            slug = slugify(title)
-
-            original_slug = slug
-            counter = 1
-            while Post.objects.filter(slug=slug).exists():
-                slug = f"{original_slug}-{counter}"
-                counter += 1
-
-            body = self.get_random_body()
-
-            post = Post(
-                title=title,
-                slug=slug,
-                summary=self.get_random_text(150),
-                body=body,
-                author=author,
-                category=random.choice(cat_objs),  # noqa: S311
-                status=PostStatus.PUBLISHED,
-                is_published=True,
-                published_at=timezone.now() - timedelta(days=random.randint(0, 365)),  # noqa: S311
-                allow_comments=True,
-                reading_time=random.randint(2, 15),  # noqa: S311
+            campaign, _ = Campaign.objects.get_or_create(
+                name=LOCAL_DEMO_CAMPAIGN_NAME,
+                defaults={"type": "house", "is_active": False, "locked": True},
             )
-            post.save()
-            created_count += 1
+            campaign.type = "house"
+            campaign.is_active = False
+            campaign.locked = True
+            campaign.save(update_fields=["type", "is_active", "locked"])
+
+            affiliate_campaign, _ = Campaign.objects.get_or_create(
+                name="Mobofirm Local Demo Affiliate Campaign",
+                defaults={
+                    "type": "affiliate",
+                    "ad_network": "demo-only",
+                    "is_active": False,
+                    "locked": True,
+                },
+            )
+            affiliate_campaign.is_active = False
+            affiliate_campaign.save(update_fields=["is_active"])
+
+            provider, _ = AffiliateProvider.objects.get_or_create(
+                name="Mobofirm Local Demo Affiliate Provider",
+                defaults={"provider_type": "custom", "is_enabled": False},
+            )
+            provider.is_enabled = False
+            provider.api_key = ""
+            provider.api_secret = ""
+            provider.save(update_fields=["is_enabled", "api_key", "api_secret"])
+
+            rewarded_placement = None
+            for format_code, format_label in AdUnit.AD_FORMATS:
+                slug = slugify(format_code)
+                placement_code = f"{LOCAL_DEMO_PLACEMENT_PREFIX}{slug}"
+                placement, _ = AdPlacement.objects.get_or_create(
+                    code=placement_code,
+                    defaults={
+                        "name": f"Local Demo {format_label}",
+                        "slug": f"local-{LOCAL_DEMO_PLACEMENT_PREFIX.rstrip('-')}-{slug}",
+                        "description": "Disabled local test placement.",
+                        "allowed_types": format_code,
+                        "is_enabled": False,
+                        "is_active": False,
+                    },
+                )
+                placement.is_enabled = False
+                placement.is_active = False
+                placement.name = f"Local Demo {format_label}"
+                placement.slug = (
+                    f"local-{LOCAL_DEMO_PLACEMENT_PREFIX.rstrip('-')}-{slug}"
+                )
+                placement.description = (
+                    "Disabled local demo placement; not eligible for public serving."
+                )
+                placement.allowed_types = format_code
+                placement.save(
+                    update_fields=[
+                        "name",
+                        "slug",
+                        "description",
+                        "allowed_types",
+                        "is_enabled",
+                        "is_active",
+                    ]
+                )
+
+                creative, _ = AdCreative.objects.get_or_create(
+                    campaign=campaign,
+                    name=f"Local Demo {format_label}",
+                    defaults={"creative_type": "html"},
+                )
+                creative.creative_type = "html"
+                creative.html = (
+                    f'<aside class="ad-demo-card" data-ad-format="{format_code}" '
+                    'aria-label="Local demo advertisement">'
+                    '<span class="ad-demo-card__label">Local demo advertisement</span>'
+                    f"<strong>{format_label}</strong>"
+                    "<p>Rendered from the saved demo creative. No provider, "
+                    "impression, click, or reward is triggered.</p>"
+                    "</aside>"
+                )
+                creative.is_enabled = False
+                creative.is_active = False
+                creative.save(
+                    update_fields=[
+                        "creative_type",
+                        "html",
+                        "is_enabled",
+                        "is_active",
+                    ]
+                )
+
+                assignment, _ = PlacementAssignment.objects.get_or_create(
+                    placement=placement,
+                    creative=creative,
+                    defaults={"is_enabled": False, "is_active": False},
+                )
+                assignment.weight = 1
+                assignment.is_enabled = False
+                assignment.is_active = False
+                assignment.save(update_fields=["weight", "is_enabled", "is_active"])
+
+                unit, _ = AdUnit.objects.get_or_create(
+                    network=network,
+                    unit_id=f"mobofirm-local-demo-{slug}",
+                    defaults={
+                        "name": f"Local Demo {format_label}",
+                        "ad_format": format_code,
+                        "is_enabled": False,
+                        "render_code": "",
+                    },
+                )
+                unit.name = f"Local Demo {format_label}"
+                unit.ad_format = format_code
+                unit.is_enabled = False
+                unit.render_code = ""
+                unit.save(
+                    update_fields=["name", "ad_format", "is_enabled", "render_code"]
+                )
+                if format_code == "rewarded":
+                    rewarded_placement = placement
+
+            if rewarded_placement:
+                rewarded_config, _ = RewardedAdConfig.objects.get_or_create(
+                    name="Mobofirm Local Demo Rewarded Ad",
+                    defaults={
+                        "placement": rewarded_placement,
+                        "network": network,
+                        "reward_type": "download",
+                        "reward_description": "Local demo only; no reward is granted.",
+                        "is_enabled": False,
+                        "min_watch_seconds": 15,
+                    },
+                )
+                rewarded_config.is_enabled = False
+                rewarded_config.save(update_fields=["is_enabled"])
+
+            scan_result = scan_templates_for_placements()
+            if scan_result.get("status") != "success":
+                raise CommandError(
+                    "Template placement scan failed: "
+                    f"{scan_result.get('reason', 'unknown error')}"
+                )
 
         self.stdout.write(
-            self.style.SUCCESS(f"Successfully created {created_count} posts.")
+            self.style.SUCCESS(
+                "Local demo profiles are ready: "
+                f"{len(AdUnit.AD_FORMATS)} supported ad formats, "
+                "affiliate provider, and rewarded configuration. "
+                "All demo serving is disabled."
+            )
+        )
+        self.stdout.write(
+            "Template scan created or refreshed pending review discoveries: "
+            f"{scan_result['discoveries']} across {scan_result['scanned']} templates. "
+            "No blogs, firmware files, or live ad placements were created."
         )
 
-    def get_random_title(self):
-        if fake:
-            return fake.sentence(nb_words=6).rstrip(".")
-        return f"Random Post Title {random.randint(1000, 9999)}"  # noqa: S311
-
-    def get_random_text(self, length=100):
-        if fake:
-            return fake.text(max_nb_chars=length)
-        return "Lorem ipsum dolor sit amet " * (length // 20)
-
-    def get_random_body(self):
-        if fake:
-            # Generate 10-15 paragraphs to ensure we trigger the ad injector multiple times
-            paragraphs = fake.paragraphs(nb=random.randint(10, 15))  # noqa: S311
-            html = ""
-            for p in paragraphs:
-                html += f"<p>{p}</p>"
-            return html
-        return "<p>This is a dummy post body.</p>" * 10
+    @staticmethod
+    def _require_local_database() -> None:
+        if connection.vendor == "sqlite":
+            return
+        host = connection.settings_dict.get("HOST") or ""
+        if host not in {"localhost", "127.0.0.1", "::1"}:
+            raise CommandError(
+                "Demo ad setup is limited to a local database; refusing "
+                "the configured non-local database host."
+            )

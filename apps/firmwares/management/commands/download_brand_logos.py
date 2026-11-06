@@ -13,11 +13,11 @@ from __future__ import annotations
 
 import hashlib
 import time
-from pathlib import Path
 
 import requests
-from django.conf import settings
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandParser
+
+from apps.firmwares import conf
 
 # Simple Icons CDN base URL
 _CDN_BASE = "https://cdn.simpleicons.org"
@@ -675,7 +675,7 @@ _BRAND_COLORS = [
 
 
 def _brand_color(name: str) -> str:
-    h = int(hashlib.md5(name.lower().encode()).hexdigest()[:8], 16)  # noqa: S324
+    h = int(hashlib.md5(name.lower().encode()).hexdigest()[:8], 16)
     return _BRAND_COLORS[h % len(_BRAND_COLORS)][0]
 
 
@@ -719,7 +719,7 @@ def _download_simple_icon(slug: str) -> str | None:
 class Command(BaseCommand):
     help = "Seed all smartphone brands into DB and download SVG logos"
 
-    def add_arguments(self, parser):  # type: ignore[override]
+    def add_arguments(self, parser: CommandParser) -> None:
         parser.add_argument(
             "--overwrite",
             action="store_true",
@@ -741,7 +741,7 @@ class Command(BaseCommand):
 
         from apps.firmwares.models import Brand
 
-        out_dir = Path(settings.BASE_DIR) / "static" / "img" / "brands"
+        out_dir = conf.base_dir() / "static" / "img" / "brands"
         out_dir.mkdir(parents=True, exist_ok=True)
 
         overwrite = bool(options.get("overwrite"))

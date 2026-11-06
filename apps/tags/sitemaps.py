@@ -3,9 +3,11 @@ from __future__ import annotations
 from django.conf import settings
 from django.contrib.sitemaps import Sitemap
 from django.urls import reverse
-from django.utils import timezone
+
+from apps.site_settings.services import get_site_settings
 
 from .models import Tag
+from .selectors import public_tags, with_live_post_counts
 
 
 class PublishedTagsSitemap(Sitemap):
@@ -19,20 +21,19 @@ class PublishedTagsSitemap(Sitemap):
     def __init__(self):
         super().__init__()
         self._enabled = bool(getattr(settings, "TAGS_SITEMAP_ENABLED", True))
-        self.protocol = "https" if settings.FORCE_HTTPS else "http"
+        self.protocol = "https" if get_site_settings().force_https else "http"
 
     def items(self):
         if not self._enabled:
             return []
-        return Tag.objects.filter(
-            is_active=True, is_curated=True, is_deleted=False
-        ).order_by("-usage_count")[:500]
+        return (
+            with_live_post_counts(public_tags())
+            .filter(live_count__gt=0)
+            .order_by("-live_count", "name")[:500]
+        )
 
     def lastmod(self, obj: Tag):
-        return obj.updated_at or timezone.now()
+        return obj.updated_at
 
     def location(self, obj: Tag):
-        try:
-            return reverse("tags:detail", kwargs={"slug": obj.slug})
-        except Exception:
-            return ""
+        return reverse("tags:detail", kwargs={"slug": obj.slug})

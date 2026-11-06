@@ -13,12 +13,10 @@ class SettingsProvider(ABC):
     @abstractmethod
     def get(self, key: str, default: Any = None) -> Any:
         """Get a setting value by key"""
-        pass
 
     @abstractmethod
     def get_all(self) -> dict[str, Any]:
         """Get all settings as dictionary"""
-        pass
 
 
 class NotificationService(ABC):
@@ -34,7 +32,6 @@ class NotificationService(ABC):
         **kwargs,
     ) -> bool:
         """Send a notification to a user"""
-        pass
 
     @abstractmethod
     def send_bulk(
@@ -45,7 +42,6 @@ class NotificationService(ABC):
         notification_type: str = "info",
     ) -> int:
         """Send notification to multiple users, returns count sent"""
-        pass
 
 
 class CacheService(ABC):
@@ -54,17 +50,14 @@ class CacheService(ABC):
     @abstractmethod
     def get(self, key: str, default: Any = None) -> Any:
         """Get cached value"""
-        pass
 
     @abstractmethod
     def set(self, key: str, value: Any, timeout: int | None = None) -> bool:
         """Set cached value"""
-        pass
 
     @abstractmethod
     def delete(self, key: str) -> bool:
         """Delete cached value"""
-        pass
 
 
 class RateLimitService(ABC):
@@ -73,9 +66,7 @@ class RateLimitService(ABC):
     @abstractmethod
     def check_limit(self, identifier: str, limit: int, period: int) -> bool:
         """Check if rate limit is exceeded"""
-        pass
 
     @abstractmethod
     def increment(self, identifier: str, period: int) -> int:
         """Increment counter and return current count"""
-        pass

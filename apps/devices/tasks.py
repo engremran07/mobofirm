@@ -6,19 +6,8 @@ import logging
 from datetime import timedelta
 from typing import Any
 
-try:
-    from celery import shared_task
-except Exception:  # pragma: no cover - fallback when Celery not installed
-
-    def shared_task(*dargs, **dkwargs):  # type: ignore[assignment]
-        def decorator(func):
-            return func
-
-        if dargs and callable(dargs[0]):
-            return dargs[0]
-        return decorator
-
-
+from celery import shared_task
+from django.db import DatabaseError
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
@@ -55,9 +44,9 @@ def expire_old_fingerprints(self) -> dict[str, Any]:
 
         logger.info("expire_old_fingerprints: deleted %d stale records", deleted_count)
         return {"status": "success", "deleted": deleted_count}
-    except Exception as exc:
-        logger.error("expire_old_fingerprints failed: %s", exc, exc_info=True)
-        raise self.retry(exc=exc, countdown=60 * (2**self.request.retries))  # noqa: B904
+    except DatabaseError as exc:
+        logger.exception("expire_old_fingerprints failed")
+        raise self.retry(exc=exc, countdown=60 * (2**self.request.retries)) from exc
 
 
 # =============================================================================
@@ -93,9 +82,9 @@ def cleanup_behavior_insights(self) -> dict[str, Any]:
             "cleanup_behavior_insights: deleted %d resolved insights", deleted_count
         )
         return {"status": "success", "deleted": deleted_count}
-    except Exception as exc:
-        logger.error("cleanup_behavior_insights failed: %s", exc, exc_info=True)
-        raise self.retry(exc=exc, countdown=120 * (2**self.request.retries))  # noqa: B904
+    except DatabaseError as exc:
+        logger.exception("cleanup_behavior_insights failed")
+        raise self.retry(exc=exc, countdown=120 * (2**self.request.retries)) from exc
 
 
 # =============================================================================
@@ -141,9 +130,9 @@ def sync_trust_scores(self) -> dict[str, Any]:
 
         logger.info("sync_trust_scores: updated %d trust scores", updated)
         return {"status": "success", "updated": updated}
-    except Exception as exc:
-        logger.error("sync_trust_scores failed: %s", exc, exc_info=True)
-        raise self.retry(exc=exc, countdown=60 * (2**self.request.retries))  # noqa: B904
+    except DatabaseError as exc:
+        logger.exception("sync_trust_scores failed")
+        raise self.retry(exc=exc, countdown=60 * (2**self.request.retries)) from exc
 
 
 def _compute_trust_score(fp: Any) -> dict[str, Any]:
@@ -256,14 +245,12 @@ def detect_quota_abuse(self) -> dict[str, Any]:
 
             # Find appropriate tier based on trust score
             tier = default_tier
-            try:
-                ts_score = fp.trust_score.score  # type: ignore[attr-defined]
+            trust_score = getattr(fp, "trust_score", None)
+            if trust_score is not None:
                 for t in tiers:
-                    if t.min_trust_score <= ts_score <= t.max_trust_score:
+                    if t.min_trust_score <= trust_score.score <= t.max_trust_score:
                         tier = t
                         break
-            except Exception:
-                logger.debug("Trust-score tier resolution failed", exc_info=True)
 
             abuse_reasons: list[str] = []
             if daily_count > tier.daily_download_limit * 2:
@@ -300,6 +287,41 @@ def detect_quota_abuse(self) -> dict[str, Any]:
 
         logger.info("detect_quota_abuse: flagged %d abusers", flagged)
         return {"status": "success", "flagged": flagged}
-    except Exception as exc:
-        logger.error("detect_quota_abuse failed: %s", exc, exc_info=True)
-        raise self.retry(exc=exc, countdown=120 * (2**self.request.retries))  # noqa: B904
+    except DatabaseError as exc:
+        logger.exception("detect_quota_abuse failed")
+        raise self.retry(exc=exc, countdown=120 * (2**self.request.retries)) from exc
+
+
+# =============================================================================
+# DEVICE EVENT RETENTION
+# =============================================================================
+
+
+@shared_task(
+    bind=True,
+    max_retries=3,
+    default_retry_delay=300,
+    acks_late=True,
+    soft_time_limit=300,
+    time_limit=600,
+)
+def purge_old_device_events(self) -> dict[str, Any]:
+    """
+    Daily task: delete DeviceEvent rows (raw IP and user agent) past the
+    ``DEVICE_EVENT_RETENTION_DAYS`` window.
+    """
+    from django.conf import settings
+
+    from apps.devices.models import DeviceEvent
+
+    retention_days = int(getattr(settings, "DEVICE_EVENT_RETENTION_DAYS", 90))
+    if retention_days <= 0:
+        return {"status": "disabled", "deleted": 0}
+    cutoff = timezone.now() - timedelta(days=retention_days)
+    try:
+        deleted_count, _ = DeviceEvent.objects.filter(created_at__lt=cutoff).delete()
+    except DatabaseError as exc:
+        logger.exception("purge_old_device_events failed")
+        raise self.retry(exc=exc, countdown=120 * (2**self.request.retries)) from exc
+    logger.info("purge_old_device_events: deleted %d events", deleted_count)
+    return {"status": "success", "deleted": deleted_count}

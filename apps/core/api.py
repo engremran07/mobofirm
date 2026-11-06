@@ -25,19 +25,21 @@ class BaseAPIView(APIView):
     pagination_class = StandardResultsSetPagination
 
     def log_event(self, level: str, message: str, **extra: Any) -> None:
-        try:
-            cid = getattr(getattr(self, "request", None), "correlation_id", None)
-            logger.log(
-                getattr(logging, level.upper(), logging.INFO),
-                message,
-                extra={"event": extra, "correlation_id": cid},
-            )
-        except Exception:
-            return
+        cid = getattr(getattr(self, "request", None), "correlation_id", None)
+        level_no = getattr(logging, level.upper(), logging.INFO)
+        if not isinstance(level_no, int):
+            level_no = logging.INFO
+        logger.log(
+            level_no,
+            message,
+            extra={"event": extra, "correlation_id": cid},
+        )
 
     def paginate(self, queryset):
         paginator = self.pagination_class()
-        page = paginator.paginate_queryset(queryset, self.request, view=self)
+        page: list[Any] | None = paginator.paginate_queryset(
+            queryset, self.request, view=self
+        )
         return page, paginator
 
     def ok(

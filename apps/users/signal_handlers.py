@@ -6,14 +6,10 @@ Responds to notification signals without creating circular dependencies.
 import logging
 
 from allauth.account.signals import user_signed_up
-from django.db import transaction
+from django.db import DatabaseError, transaction
 from django.dispatch import receiver
 
-from apps.core.signals import (
-    notification_send_requested,
-    user_login_success,
-    user_registered,
-)
+from apps.core.signals import notification_send_requested, user_registered
 
 logger = logging.getLogger(__name__)
 
@@ -49,9 +45,9 @@ def send_notifications(
 @receiver(user_signed_up)
 def send_welcome_notification(sender, user, request, **kwargs):
     """Send welcome notification when user registers"""
-    try:
-        from apps.users.models import Notification
+    from apps.users.models import Notification
 
+    try:
         with transaction.atomic():
             locked_user = type(user).objects.select_for_update().get(pk=user.pk)
             _, created = Notification.objects.get_or_create(
@@ -64,20 +60,8 @@ def send_welcome_notification(sender, user, request, **kwargs):
                     "channel": "web",
                 },
             )
-        if created:
-            logger.info("Sent welcome notification to user %s", user.pk)
-    except Exception as exc:
-        logger.exception("Failed to send welcome notification: %s", exc)
-
-
-@receiver(user_login_success)
-def track_login(sender, user, request, **kwargs):
-    """Track successful login"""
-    try:
-        from django.core.cache import cache
-
-        cache_key = f"user_last_login_{user.pk}"
-        cache.set(cache_key, user.last_login, 3600)
-        logger.debug(f"Tracked login for user: {user.pk}")
-    except Exception as exc:
-        logger.exception(f"Failed to track login: {exc}")
+    except DatabaseError:
+        logger.exception("Failed to send welcome notification")
+        return
+    if created:
+        logger.info("Sent welcome notification to user %s", user.pk)

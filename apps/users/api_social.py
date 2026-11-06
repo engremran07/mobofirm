@@ -14,13 +14,28 @@ import json
 import logging
 
 from django.contrib.admin.views.decorators import staff_member_required
+from django.core.exceptions import ImproperlyConfigured, ValidationError
+from django.db import DatabaseError
 from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_http_methods
 
 from .models_social import SocialPostingAccount, SocialProviderConfig
+from .request_user import current_user
 
 logger = logging.getLogger(__name__)
+
+# Failures the provider/account operations can raise: storage errors, invalid
+# values, malformed request payloads and misconfigured encryption/allauth.
+_OPERATION_ERRORS = (
+    DatabaseError,
+    ValidationError,
+    ImproperlyConfigured,
+    ValueError,
+    TypeError,
+    AttributeError,
+    KeyError,
+)
 
 
 # ==============================================================================
@@ -48,7 +63,7 @@ def social_providers_list(request: HttpRequest) -> JsonResponse:
                 {
                     "id": str(p.id),
                     "provider": p.provider,
-                    "display_name": p.display_name or p.get_provider_display(),  # type: ignore[attr-defined]
+                    "display_name": p.display_name or p.get_provider_display(),
                     "status": p.status,
                     "is_enabled": p.is_enabled,
                     "has_credentials": p.has_credentials,
@@ -66,8 +81,8 @@ def social_providers_list(request: HttpRequest) -> JsonResponse:
             )
 
         return JsonResponse({"providers": data})
-    except Exception as exc:
-        logger.exception("Failed to list social providers: %s", exc)
+    except _OPERATION_ERRORS as exc:
+        logger.exception("Failed to list social providers")
         return JsonResponse({"error": str(exc)}, status=500)
 
 
@@ -118,11 +133,11 @@ def social_provider_create(request: HttpRequest) -> JsonResponse:
             provider=provider,
             defaults={
                 "display_name": data.get("display_name")
-                or dict(SocialProviderConfig.PROVIDER_CHOICES).get(provider),
+                or dict(SocialProviderConfig.PROVIDER_CHOICES).get(provider, ""),
                 "status": "unconfigured",
                 "scopes": data.get("scopes")
                 or SocialProviderConfig.get_default_scopes(provider),
-                "created_by": request.user,
+                "created_by": current_user(request),
             },
         )
 
@@ -167,8 +182,8 @@ def social_provider_create(request: HttpRequest) -> JsonResponse:
 
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON body"}, status=400)
-    except Exception as exc:
-        logger.exception("Failed to create social provider: %s", exc)
+    except _OPERATION_ERRORS as exc:
+        logger.exception("Failed to create social provider")
         return JsonResponse({"error": str(exc)}, status=500)
 
 
@@ -191,7 +206,7 @@ def social_provider_detail(request: HttpRequest, provider_id: str) -> JsonRespon
                     "id": str(config.id),
                     "provider": config.provider,
                     "display_name": config.display_name
-                    or config.get_provider_display(),  # type: ignore[attr-defined]
+                    or config.get_provider_display(),
                     "status": config.status,
                     "is_enabled": config.is_enabled,
                     "has_credentials": config.has_credentials,
@@ -266,8 +281,8 @@ def social_provider_detail(request: HttpRequest, provider_id: str) -> JsonRespon
 
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON body"}, status=400)
-    except Exception as exc:
-        logger.exception("Social provider operation failed: %s", exc)
+    except _OPERATION_ERRORS as exc:
+        logger.exception("Social provider operation failed")
         return JsonResponse({"error": str(exc)}, status=500)
     return JsonResponse({"error": "Method not allowed"}, status=405)
 
@@ -289,15 +304,16 @@ def social_provider_test(request: HttpRequest, provider_id: str) -> JsonResponse
         return JsonResponse(
             {
                 "success": success,
-                "message": message,
+                "message": f"{message} (format check only; the provider was not contacted)",
+                "verified_remotely": False,
                 "tested_at": config.last_tested_at.isoformat()
                 if config.last_tested_at
                 else None,
             }
         )
 
-    except Exception as exc:
-        logger.exception("Social provider test failed: %s", exc)
+    except _OPERATION_ERRORS as exc:
+        logger.exception("Social provider test failed")
         return JsonResponse({"error": str(exc)}, status=500)
 
 
@@ -322,8 +338,8 @@ def social_provider_sync(request: HttpRequest, provider_id: str) -> JsonResponse
             }
         )
 
-    except Exception as exc:
-        logger.exception("Social provider sync failed: %s", exc)
+    except _OPERATION_ERRORS as exc:
+        logger.exception("Social provider sync failed")
         return JsonResponse({"error": str(exc)}, status=500)
 
 
@@ -348,7 +364,7 @@ def social_posting_list(request: HttpRequest) -> JsonResponse:
                 {
                     "id": str(a.id),
                     "platform": a.platform,
-                    "platform_display": a.get_platform_display(),  # type: ignore[attr-defined]
+                    "platform_display": a.get_platform_display(),
                     "account_name": a.account_name,
                     "auth_type": a.auth_type,
                     "destination_type": a.destination_type,
@@ -376,8 +392,8 @@ def social_posting_list(request: HttpRequest) -> JsonResponse:
             )
 
         return JsonResponse({"accounts": data})
-    except Exception as exc:
-        logger.exception("Failed to list social posting accounts: %s", exc)
+    except _OPERATION_ERRORS as exc:
+        logger.exception("Failed to list social posting accounts")
         return JsonResponse({"error": str(exc)}, status=500)
 
 
@@ -433,7 +449,7 @@ def social_posting_create(request: HttpRequest) -> JsonResponse:
             destination_id=data.get("destination_id", "").strip(),
             destination_name=data.get("destination_name", "").strip(),
             status="unconfigured",
-            created_by=request.user,
+            created_by=current_user(request),
         )
 
         # Set credentials based on auth type
@@ -470,8 +486,8 @@ def social_posting_create(request: HttpRequest) -> JsonResponse:
 
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON body"}, status=400)
-    except Exception as exc:
-        logger.exception("Failed to create social posting account: %s", exc)
+    except _OPERATION_ERRORS as exc:
+        logger.exception("Failed to create social posting account")
         return JsonResponse({"error": str(exc)}, status=500)
 
 
@@ -492,7 +508,7 @@ def social_posting_detail(request: HttpRequest, account_id: str) -> JsonResponse
                 {
                     "id": str(account.id),
                     "platform": account.platform,
-                    "platform_display": account.get_platform_display(),  # type: ignore[attr-defined]
+                    "platform_display": account.get_platform_display(),
                     "account_name": account.account_name,
                     "auth_type": account.auth_type,
                     "destination_type": account.destination_type,
@@ -614,8 +630,8 @@ def social_posting_detail(request: HttpRequest, account_id: str) -> JsonResponse
 
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON body"}, status=400)
-    except Exception as exc:
-        logger.exception("Social posting account operation failed: %s", exc)
+    except _OPERATION_ERRORS as exc:
+        logger.exception("Social posting account operation failed")
         return JsonResponse({"error": str(exc)}, status=500)
     return JsonResponse({"error": "Method not allowed"}, status=405)
 
@@ -637,15 +653,16 @@ def social_posting_test(request: HttpRequest, account_id: str) -> JsonResponse:
         return JsonResponse(
             {
                 "success": success,
-                "message": message,
+                "message": f"{message} (format check only; the platform was not contacted)",
+                "verified_remotely": False,
                 "tested_at": account.last_tested_at.isoformat()
                 if account.last_tested_at
                 else None,
             }
         )
 
-    except Exception as exc:
-        logger.exception("Social posting account test failed: %s", exc)
+    except _OPERATION_ERRORS as exc:
+        logger.exception("Social posting account test failed")
         return JsonResponse({"error": str(exc)}, status=500)
 
 
@@ -674,18 +691,18 @@ def social_posting_send_test(request: HttpRequest, account_id: str) -> JsonRespo
             tags=["test"],
         )
 
-        # In a real implementation, this would call the actual posting service
-        # For now, we just return the formatted content
+        # No posting service exists, so nothing is sent; report that honestly.
         return JsonResponse(
             {
-                "success": True,
-                "message": "Test post prepared (actual sending requires posting service)",
-                "content": test_content,
-            }
+                "success": False,
+                "error": "Sending test posts is not implemented; no post was sent.",
+                "preview": test_content,
+            },
+            status=501,
         )
 
-    except Exception as exc:
-        logger.exception("Social posting test send failed: %s", exc)
+    except _OPERATION_ERRORS as exc:
+        logger.exception("Social posting test send failed")
         return JsonResponse({"error": str(exc)}, status=500)
 
 
@@ -699,25 +716,19 @@ def social_providers_info(request: HttpRequest) -> JsonResponse:
     Get public information about available social providers.
     No authentication required - used for login page.
     """
-    try:
-        # Get enabled providers
-        providers = SocialProviderConfig.objects.filter(
-            is_enabled=True, status="active"
-        ).values("provider", "display_name")
+    providers = SocialProviderConfig.objects.filter(
+        is_enabled=True, status="active"
+    ).values("provider", "display_name")
 
-        data = []
-        for p in providers:
-            data.append(
-                {
-                    "provider": p["provider"],
-                    "name": p["display_name"]
-                    or dict(SocialProviderConfig.PROVIDER_CHOICES).get(p["provider"]),
-                }
-            )
-
-        return JsonResponse({"providers": data})
-    except Exception:
-        return JsonResponse({"providers": []})
+    data = [
+        {
+            "provider": p["provider"],
+            "name": p["display_name"]
+            or dict(SocialProviderConfig.PROVIDER_CHOICES).get(p["provider"]),
+        }
+        for p in providers
+    ]
+    return JsonResponse({"providers": data})
 
 
 def social_platforms_info(request: HttpRequest) -> JsonResponse:

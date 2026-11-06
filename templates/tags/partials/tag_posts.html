@@ -1,0 +1,10 @@
+{# Context: cards, page_obj. Fragment returned for HTMX paging inside #tag-posts. #}
+{% if cards %}
+  <h2 class="visually-hidden">Articles tagged {{ tag.name }}</h2>
+  <div class="post-grid">
+    {% for card in cards %}{% include "blog/partials/post_card.html" with card=card %}{% endfor %}
+  </div>
+  {% include "components/pagination.html" with page_obj=page_obj label="Article pages" hx_target="#tag-posts" %}
+{% else %}
+  {% include "components/empty_state.html" with title="No published articles yet" message="Articles using this topic appear here once published." %}
+{% endif %}

@@ -31,6 +31,8 @@ jobs:
         run: .venv/bin/python -m pip install -e ".[dev]"
       - name: Check Python formatting
         run: .venv/bin/ruff format --check .
+      - name: Check Python diagnostics
+        run: .venv/bin/python -m pylint --enable=all --fail-on=E,F,W,R,C,I app apps tests scripts manage.py
       - name: Validate release metadata
         run: .venv/bin/python scripts/release.py check
       - name: Generate application implementation map
@@ -51,14 +53,35 @@ jobs:
         run: .venv/bin/python -m pytest -q
       - name: Run Django system checks
         run: .venv/bin/python manage.py check --settings=app.settings.test
+      - name: Run Django deployment checks against production settings
+        run: |
+          export DJANGO_SECRET_KEY="$(.venv/bin/python -c 'import secrets; print(secrets.token_urlsafe(64))')"
+          export MFA_ENCRYPTION_KEY="$(.venv/bin/python -c 'import secrets; print(secrets.token_urlsafe(48))')"
+          export SOCIAL_CREDENTIAL_ENCRYPTION_KEY="$(.venv/bin/python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')"
+          export DB_PASSWORD=ci-only DJANGO_ALLOWED_HOSTS=ci.example.org SITE_URL=https://ci.example.org
+          export CACHE_URL=redis://localhost:6379/1 CELERY_BROKER_URL=redis://localhost:6379/0
+          export EMAIL_HOST=smtp.example.org DEFAULT_FROM_EMAIL=noreply@example.org
+          .venv/bin/python manage.py check --deploy --fail-level WARNING --settings=app.settings.production
       - name: Check migration consistency
         run: .venv/bin/python manage.py makemigrations --check --dry-run --settings=app.settings.test
       - name: Check installed dependencies
         run: .venv/bin/python -m pip check
+      - name: Audit Python dependencies
+        run: .venv/bin/pip-audit
+      - name: Audit frontend dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+  docker-image:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7.0.1
+      - name: Build the production image (no push)
+        run: docker build --tag mobofirm:ci .
 
   publish-release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: test
+    needs: [test, docker-image]
     runs-on: ubuntu-latest
     permissions:
       contents: write

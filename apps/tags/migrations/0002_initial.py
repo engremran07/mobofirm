@@ -8,13 +8,13 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
     initial = True
 
-    dependencies = [
+    dependencies = (
         ("contenttypes", "0002_remove_content_type_name"),
         ("tags", "0001_initial"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-    ]
+    )
 
-    operations = [
+    operations = (
         migrations.AddField(
             model_name="tag",
             name="deleted_by",
@@ -155,4 +155,4 @@ class Migration(migrations.Migration):
             name="taggeditem",
             unique_together={("tag", "content_type", "object_id")},
         ),
-    ]
+    )

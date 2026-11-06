@@ -1,4 +1,16 @@
-{% extends "admin/base_site.html" %}
-{% block content %}<div class="container-fluid"><h1>Device events</h1>
-  {% for event in events %}<article class="card p-3 mb-2"><strong>{{ event }}</strong><time class="small">{{ event.created_at }}</time>{% if event.device %}<p>{{ event.device }}</p>{% endif %}</article>{% empty %}<p>No device events are available.</p>{% endfor %}
-</div>{% endblock %}
+{% extends "base.html" %}
+{% block title %}Device events | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block content %}
+<div class="site-container py-5">
+  {% include "components/page_header.html" with eyebrow="Staff" title="Device events" %}
+  {% for event in events %}
+    <article class="surface-card p-3 mb-2">
+      <strong>{{ event }}</strong>
+      <time class="small muted d-block" datetime="{{ event.created_at|date:'c' }}">{{ event.created_at|date:"M j, Y H:i" }} UTC</time>
+      {% if event.device %}<p class="mb-0 muted">{{ event.device }}</p>{% endif %}
+    </article>
+  {% empty %}
+    {% include "components/empty_state.html" with title="No device events are available" %}
+  {% endfor %}
+</div>
+{% endblock %}

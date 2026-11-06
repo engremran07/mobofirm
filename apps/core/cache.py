@@ -19,11 +19,20 @@ from collections.abc import Callable
 from typing import TypeVar
 
 from django.contrib.sites.models import Site
-from django.core.cache import cache
+from django.core.cache import InvalidCacheBackendError, cache
+from django.db import DatabaseError
 
 logger = logging.getLogger(__name__)
 
 _T = TypeVar("_T")
+
+# Failures a cache backend (locmem, file, DB, Redis/memcached sockets) can raise.
+CACHE_BACKEND_ERRORS = (
+    InvalidCacheBackendError,
+    OSError,
+    ValueError,
+    TypeError,
+)
 
 # =====================================================================
 # KEY UTILITIES
@@ -73,7 +82,7 @@ def _digest_key(base: str) -> str:
 class DistributedCacheManager:
     """
     High-reliability cache manager for multi-site deployments.
-    All operations are fully defensive (never crash).
+    Cache backend outages are logged and never crash the caller.
     """
 
     # ------------------------------------------------------------------
@@ -84,14 +93,16 @@ class DistributedCacheManager:
         """
         Delete keys matching pattern (if backend supports it).
         """
+        delete_pattern = getattr(cache, "delete_pattern", None)
+        if not callable(delete_pattern):
+            logger.debug("Backend lacks delete_pattern (pattern=%s)", pattern)
+            return
         try:
-            if hasattr(cache, "delete_pattern"):
-                cache.delete_pattern(pattern)  # type: ignore[attr-defined]
-                logger.debug("Pattern delete: %s", pattern)
-            else:
-                logger.debug("Backend lacks delete_pattern (pattern=%s)", pattern)
-        except Exception as exc:
+            delete_pattern(pattern)
+        except CACHE_BACKEND_ERRORS as exc:
             logger.debug("delete_pattern failed (%s → %s)", pattern, exc)
+        else:
+            logger.debug("Pattern delete: %s", pattern)
 
     # ------------------------------------------------------------------
     # SITE SETTINGS INVALIDATION
@@ -107,35 +118,22 @@ class DistributedCacheManager:
         """
         try:
             # Remove legacy global key
-            try:
-                cache.delete("active_site_settings")
-            except Exception:  # noqa: S110
-                pass
+            cache.delete("active_site_settings")
 
             # Remove new hashed-domain keys (pattern)
             DistributedCacheManager.safe_delete_pattern("active_site_settings_*")
 
             # Remove site-specific numeric key
             if site_id is not None:
-                try:
-                    cache.delete(f"site_settings_{site_id}")
-                except Exception:  # noqa: S110
-                    pass
+                cache.delete(f"site_settings_{site_id}")
 
-            # Defensive enumeration (non-fatal)
-            try:
-                for s in Site.objects.only("id"):
-                    try:
-                        cache.delete(f"site_settings_{s.pk}")
-                    except Exception:  # noqa: S110
-                        pass
-            except Exception:  # noqa: S110
-                pass
+            for site_pk in Site.objects.values_list("pk", flat=True):
+                cache.delete(f"site_settings_{site_pk}")
+        except (*CACHE_BACKEND_ERRORS, DatabaseError):
+            logger.exception("invalidate_site_settings failed")
+            return
 
-            logger.info("Site settings cache invalidated (site_id=%s)", site_id)
-
-        except Exception as exc:
-            logger.exception("invalidate_site_settings failed → %s", exc)
+        logger.info("Site settings cache invalidated (site_id=%s)", site_id)
 
     # ------------------------------------------------------------------
     # CONSENT POLICY INVALIDATION
@@ -145,29 +143,16 @@ class DistributedCacheManager:
         """
         Invalidate consent policy caches with full pattern-safe cleanup.
         """
+        ident = (site_identifier or "global").strip().lower()
         try:
-            ident = (site_identifier or "global").strip().lower()
-            digest_key = _digest_key(f"active_consent_policy::{ident}")
-
-            # exact delete
-            try:
-                cache.delete(digest_key)
-            except Exception:  # noqa: S110
-                pass
-
-            # legacy
-            try:
-                cache.delete("active_consent_policy")
-            except Exception:  # noqa: S110
-                pass
-
-            # pattern cleanup
+            cache.delete(_digest_key(f"active_consent_policy::{ident}"))
+            cache.delete("active_consent_policy")  # legacy
             DistributedCacheManager.safe_delete_pattern("active_consent_policy_*")
+        except CACHE_BACKEND_ERRORS:
+            logger.exception("invalidate_consent_policy failed")
+            return
 
-            logger.info("ConsentPolicy cache invalidated (identifier=%s)", ident)
-
-        except Exception as exc:
-            logger.exception("invalidate_consent_policy failed → %s", exc)
+        logger.info("ConsentPolicy cache invalidated (identifier=%s)", ident)
 
     # ------------------------------------------------------------------
     # ATOMIC GET / SET WITH FALLBACK
@@ -184,55 +169,21 @@ class DistributedCacheManager:
         """
         Atomic get-or-compute with digest-safe keys.
 
-        • Uses get_or_set when available (atomic)
-        • Falls back to manual get → compute → set
-        • Never raises exceptions
+        • Uses get_or_set (atomic) when the backend is reachable
+        • Falls back to computing the value directly when the cache backend fails
+        • Exceptions raised by ``fallback_func`` itself propagate to the caller
         """
+        namespaced = _namespaced_key(key, version=version, namespace=namespace)
+        cache_key = _digest_key(namespaced)
+
         try:
-            namespaced = _namespaced_key(key, version=version, namespace=namespace)
-            cache_key = _digest_key(namespaced)
+            val = cache.get_or_set(cache_key, fallback_func, timeout=timeout)
+        except CACHE_BACKEND_ERRORS as exc:
+            logger.warning("Cache coherence failure (%s): %s", cache_key, exc)
+            return fallback_func()
 
-            # Preferred atomic path
-            if hasattr(cache, "get_or_set"):
-                try:
-                    val = cache.get_or_set(cache_key, fallback_func, timeout=timeout)
-                    logger.debug("get_or_set OK (%s)", cache_key)
-                    return val
-                except Exception:
-                    logger.debug("get_or_set failed → manual fallback")
-
-            # Manual path
-            try:
-                existing = cache.get(cache_key)
-                if existing is not None:
-                    logger.debug("Cache HIT (%s)", cache_key)
-                    return existing
-            except Exception:
-                logger.debug("Cache.get failed for %s", cache_key)
-
-            logger.debug("Cache MISS (%s) — computing fallback", cache_key)
-            val = fallback_func()
-
-            # Race-safe: try add() before set()
-            try:
-                added = False
-                if hasattr(cache, "add"):
-                    added = cache.add(cache_key, val, timeout=timeout)
-                if not added:
-                    cache.set(cache_key, val, timeout=timeout)
-                logger.debug("Stored (%s, added=%s)", cache_key, added)
-            except Exception:
-                logger.debug("Cache set/add failed (%s)", cache_key)
-
-            return val
-
-        except Exception as exc:
-            logger.warning("Cache coherence failure (%s)", exc)
-            try:
-                return fallback_func()
-            except Exception as inner:
-                logger.exception("Fallback compute failed → %s", inner)
-                return None
+        logger.debug("get_or_set OK (%s)", cache_key)
+        return val
 
 
 # Legacy alias for compatibility

@@ -1,7 +1,0 @@
-{% extends "base.html" %}
-{% block title %}Journal archive: {{ year }}-{{ month|stringformat:"02d" }} | {{ site_name|default:"Mobofirm" }}{% endblock %}
-{% block content %}
-<div class="site-container py-5"><p class="section-eyebrow">Journal archive</p><h1 class="h2">Articles from {{ year }}-{{ month|stringformat:"02d" }}</h1>
-  {% include "blog/partials/post_list_items.html" %}
-</div>
-{% endblock %}

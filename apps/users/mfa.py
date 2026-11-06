@@ -23,6 +23,7 @@ import time
 from urllib.parse import quote_plus
 
 from django.conf import settings
+from django.db import DatabaseError
 
 logger = logging.getLogger(__name__)
 
@@ -211,7 +212,7 @@ class MFAEnforcer:
             from apps.users.models import UsersSettings
 
             return bool(UsersSettings.get_solo().require_mfa)
-        except Exception:
+        except DatabaseError:
             return bool(getattr(settings, "REQUIRE_MFA", False))
 
     @staticmethod
@@ -225,7 +226,7 @@ class MFAEnforcer:
             from apps.users.models import UsersSettings
 
             return UsersSettings.get_solo().mfa_totp_issuer or DEFAULT_ISSUER
-        except Exception:
+        except DatabaseError:
             return getattr(settings, "MFA_TOTP_ISSUER", DEFAULT_ISSUER)
 
     @staticmethod

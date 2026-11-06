@@ -1,0 +1,19 @@
+{# Context: firmware (FirmwareSummary). Live approved-firmware counts per category with links into the catalogue. #}
+<section class="side-widget firmware-panel" aria-labelledby="firmware-panel-title">
+  <h2 class="side-widget__title" id="firmware-panel-title"><i data-lucide="download" class="icon" aria-hidden="true"></i> Firmware at a glance</h2>
+  {% if firmware.total %}
+    <p class="firmware-panel__total"><strong class="numeric">{{ firmware.total }}</strong> approved file{{ firmware.total|pluralize }}{% if firmware.external %} <span class="badge text-bg-secondary">{{ firmware.external }} on external hosts</span>{% endif %}</p>
+    <ul class="firmware-panel__list">
+      {% for category in firmware.categories %}
+        <li><a href="{{ category.browse_url }}"><span>{{ category.label }}</span><span class="badge text-bg-light numeric">{{ category.count }}</span></a></li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    <p class="muted small">No approved firmware files are listed yet. This list updates automatically.</p>
+  {% endif %}
+  <ul class="side-links">
+    {% if firmware.model_url %}<li><a href="{{ firmware.model_url }}"><i data-lucide="smartphone" class="icon" aria-hidden="true"></i> {{ firmware.model_name }} page</a></li>{% endif %}
+    {% if firmware.brand_url %}<li><a href="{{ firmware.brand_url }}"><i data-lucide="smartphone" class="icon" aria-hidden="true"></i> All {{ firmware.brand_name }} firmware</a></li>{% endif %}
+    {% for name, url in firmware.chipsets %}<li><a href="{{ url }}"><i data-lucide="cpu" class="icon" aria-hidden="true"></i> {{ name }}</a></li>{% endfor %}
+  </ul>
+</section>

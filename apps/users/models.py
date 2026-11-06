@@ -15,8 +15,9 @@ from __future__ import annotations
 import logging
 import re
 import secrets
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 
+from cryptography.fernet import Fernet, InvalidToken
 from django.conf import settings
 from django.contrib.auth.hashers import check_password, make_password
 from django.contrib.auth.models import (
@@ -24,13 +25,11 @@ from django.contrib.auth.models import (
     BaseUserManager,
     PermissionsMixin,
 )
-from django.db import IntegrityError, models, transaction
+from django.db import DatabaseError, IntegrityError, models, transaction
 from django.utils import timezone
+from django.utils.encoding import force_bytes
 from django.utils.text import slugify
 from solo.models import SingletonModel
-
-if TYPE_CHECKING:
-    from cryptography.fernet import Fernet
 
 # ===========================================================================
 # Abstract Base Models (dissolved from apps.core)
@@ -104,7 +103,13 @@ _PHONE_NORMALIZE_RE = re.compile(r"[^\d+]")  # keep digits and leading +
 # --------------------------------------------------------------------------
 # User manager
 # --------------------------------------------------------------------------
-class CustomUserManager(BaseUserManager):
+if TYPE_CHECKING:
+    _UserManagerBase = BaseUserManager["CustomUser"]
+else:
+    _UserManagerBase = BaseUserManager
+
+
+class CustomUserManager(_UserManagerBase):
     """Custom manager with unified user/superuser creation."""
 
     use_in_migrations = True
@@ -123,20 +128,14 @@ class CustomUserManager(BaseUserManager):
 
         # FINDING-0015: Guard against duplicate username — generic message to prevent
         # account enumeration (ACCOUNT_PREVENT_ENUMERATION = True must be consistent).
-        existing_username = (
-            self.model.objects.filter(username=username).only("id", "email").first()
-        )
+        existing_username = self.filter(username=username).only("id", "email").first()
         if existing_username and str(existing_username.email).strip().lower() != email:
             raise ValueError(
                 "Registration failed. Please check your details and try again."
             )
 
         # FINDING-0015: Guard against duplicate email — suppress detail to prevent enumeration.
-        existing_email = (
-            self.model.objects.filter(email__iexact=email)
-            .only("id", "username")
-            .first()
-        )
+        existing_email = self.filter(email__iexact=email).only("id", "username").first()
         if existing_email and (existing_email.username or "") != username:
             raise ValueError(
                 "Registration failed. Please check your details and try again."
@@ -223,7 +222,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         help_text="Phone country code (e.g., +1, +44, +966)",
     )
     phone = models.CharField(max_length=20, unique=True, null=True, blank=True)
-    currency = models.CharField(max_length=10, null=True, blank=True)  # noqa: DJ001
+    currency = models.CharField(max_length=10, null=True, blank=True)
 
     class Roles(models.TextChoices):
         ADMIN = "admin", "Admin"
@@ -232,7 +231,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         MODERATOR = "moderator", "Moderator"
         READER = "reader", "Reader"
 
-    role = models.CharField(max_length=50, null=True, blank=True, choices=Roles.choices)  # noqa: DJ001
+    role = models.CharField(max_length=50, null=True, blank=True, choices=Roles.choices)
 
     # Permissions
     is_active = models.BooleanField(default=True)
@@ -265,17 +264,19 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
 
     # Manager / ID
     USERNAME_FIELD = "email"
-    REQUIRED_FIELDS: list[str] = []  # keep empty to simplify superuser creation prompts
+    REQUIRED_FIELDS: ClassVar[
+        list[str]
+    ] = []  # keep empty to simplify superuser creation prompts
     objects = CustomUserManager()
 
     class Meta:
-        ordering = ["-date_joined"]
+        ordering: ClassVar[list[str]] = ["-date_joined"]
         verbose_name = "User"
         verbose_name_plural = "Users"
-        indexes = [
+        indexes = (
             models.Index(fields=["email"], name="user_email_idx"),
             models.Index(fields=["username"], name="user_username_idx"),
-        ]
+        )
 
     def __str__(self) -> str:
         return self.email or (self.username or f"user-{self.pk}")
@@ -299,10 +300,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         post_save signal fires and unnecessary DB writes.  Now uses a single
         super().save() call.
         """
-        try:
-            self.clean()
-        except Exception:
-            logger.debug("cleanup failed in save(); proceeding with save")
+        self.clean()
 
         if not self.pk and not self.username and self.email:
             base = self.email.split("@")[0][:120]
@@ -311,13 +309,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
                 slug = f"{slug[:10]}{secrets.token_hex(2)}"
             self.username = slug
 
-        try:
-            super().save(*args, **kwargs)
-        except Exception as exc:
-            logger.exception(
-                "Failed to save user %s : %s", getattr(self, "email", None), exc
-            )
-            raise
+        super().save(*args, **kwargs)
 
     # ============================================================
     # Utilities
@@ -325,6 +317,15 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     def get_full_name(self) -> str:
         """Return the full name or username as fallback."""
         return self.full_name or self.username or self.email.split("@")[0]
+
+    @property
+    def public_display_name(self) -> str:
+        """Name for public pages (authors, commenters); never the email address."""
+        return (
+            self.full_name.strip()
+            or (self.username or "").strip()
+            or f"Member {self.pk or ''}".strip()
+        )
 
     @property
     def is_verified(self) -> bool:
@@ -366,26 +367,17 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     def mark_email_verified(self) -> None:
         if not self.email_verified_at:
             self.email_verified_at = timezone.now()
-            try:
-                self.save(update_fields=["email_verified_at"])
-            except Exception as exc:
-                logger.exception("Email verification update failed: %s", exc)
+            self.save(update_fields=["email_verified_at"])
 
     def increment_unlock(self) -> None:
-        try:
-            self.unlock_count = (self.unlock_count or 0) + 1
-            self.last_unlock = timezone.now()
-            self.save(update_fields=["unlock_count", "last_unlock"])
-        except Exception as exc:
-            logger.exception("Unlock counter update failed: %s", exc)
+        self.unlock_count = (self.unlock_count or 0) + 1
+        self.last_unlock = timezone.now()
+        self.save(update_fields=["unlock_count", "last_unlock"])
 
     def add_credits(self, amount: int) -> None:
         if amount > 0:
-            try:
-                self.credits = (self.credits or 0) + int(amount)
-                self.save(update_fields=["credits"])
-            except Exception as exc:
-                logger.exception("Credit update failed: %s", exc)
+            self.credits = (self.credits or 0) + int(amount)
+            self.save(update_fields=["credits"])
 
 
 # --------------------------------------------------------------------------
@@ -394,18 +386,18 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
 class Notification(models.Model):
     """Multi-channel user notifications with audit timestamps."""
 
-    PRIORITY_CHOICES = [
+    PRIORITY_CHOICES = (
         ("info", "Info"),
         ("warning", "Warning"),
         ("critical", "Critical"),
-    ]
-    CHANNEL_CHOICES = [
+    )
+    CHANNEL_CHOICES = (
         ("web", "Web"),
         ("email", "Email"),
         ("sms", "SMS"),
         ("push", "Push"),
-    ]
-    ACTION_TYPE_CHOICES = [
+    )
+    ACTION_TYPE_CHOICES = (
         ("comment", "Comment"),
         ("reply", "Reply"),
         ("reaction", "Reaction"),
@@ -418,7 +410,7 @@ class Notification(models.Model):
         ("security", "Security"),
         ("moderation", "Moderation"),
         ("system", "System"),
-    ]
+    )
 
     recipient = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -427,7 +419,7 @@ class Notification(models.Model):
     )
     title = models.CharField(max_length=255)
     message = models.TextField()
-    url = models.URLField(max_length=500, blank=True, null=True)  # noqa: DJ001
+    url = models.URLField(max_length=500, blank=True, null=True)
     priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default="info")
     channel = models.CharField(max_length=20, choices=CHANNEL_CHOICES, default="web")
     action_type = models.CharField(
@@ -454,14 +446,14 @@ class Notification(models.Model):
     read_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        ordering = ["-created_at"]
+        ordering: ClassVar[list[str]] = ["-created_at"]
         verbose_name = "Notification"
         verbose_name_plural = "Notifications"
-        indexes = [
+        indexes = (
             models.Index(
                 fields=["recipient", "is_read"], name="notif_recipient_read_idx"
-            )
-        ]
+            ),
+        )
 
     def __str__(self) -> str:
         return f"{self.title} → {getattr(self.recipient, 'email', 'unknown')}"
@@ -472,8 +464,8 @@ class Notification(models.Model):
             self.read_at = timezone.now()
             try:
                 self.save(update_fields=["is_read", "read_at"])
-            except Exception as exc:
-                logger.exception("Failed to mark notification read: %s", exc)
+            except DatabaseError:
+                logger.exception("Failed to mark notification read")
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -506,11 +498,11 @@ class Notification(models.Model):
 class Announcement(models.Model):
     """Global or segmented announcements for users or staff."""
 
-    AUDIENCE_CHOICES = [
+    AUDIENCE_CHOICES = (
         ("all", "All"),
         ("user", "Users"),
         ("staff", "Staff"),
-    ]
+    )
 
     title = models.CharField(max_length=255)
     message = models.TextField()
@@ -528,14 +520,14 @@ class Announcement(models.Model):
     expires_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
-        ordering = ["-created_at"]
+        ordering: ClassVar[list[str]] = ["-created_at"]
         verbose_name = "Announcement"
         verbose_name_plural = "Announcements"
-        indexes = [
+        indexes = (
             models.Index(
                 fields=["is_global", "start_at"], name="announce_global_start_idx"
-            )
-        ]
+            ),
+        )
 
     def __str__(self) -> str:
         return self.title
@@ -546,17 +538,15 @@ class Announcement(models.Model):
             return False
         if self.start_at and self.start_at > now:
             return False
-        if self.expires_at and self.expires_at <= now:
-            return False
-        return True
+        return not (self.expires_at and self.expires_at <= now)
 
     def deactivate_if_expired(self) -> None:
         if self.expires_at and self.expires_at <= timezone.now() and self.is_active:
             self.is_active = False
             try:
                 self.save(update_fields=["is_active"])
-            except Exception as exc:
-                logger.exception("Failed to deactivate expired announcement: %s", exc)
+            except DatabaseError:
+                logger.exception("Failed to deactivate expired announcement")
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -622,13 +612,13 @@ class SecurityQuestion(models.Model):
     Answers are hashed with Django's password hasher.
     """
 
-    QUESTION_CHOICES = [
+    QUESTION_CHOICES = (
         ("first_pet", "Name of your first pet?"),
         ("mother_maiden", "What is your mother's maiden name?"),
         ("first_school", "Name of your first school?"),
         ("city_born", "City where you were born?"),
         ("custom", "Custom question"),
-    ]
+    )
 
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
@@ -649,7 +639,7 @@ class SecurityQuestion(models.Model):
         verbose_name_plural = "Security Questions"
 
     def __str__(self) -> str:
-        return f"Security Question for {getattr(self.user, 'email', self.user_id)}"  # type: ignore[attr-defined]
+        return f"Security Question for {getattr(self.user, 'email', self.user_id)}"
 
     @property
     def question_text(self) -> str:
@@ -673,10 +663,10 @@ class MFADevice(models.Model):
     Secret is encrypted at rest using Fernet.
     """
 
-    DEVICE_TYPE_CHOICES = [
+    DEVICE_TYPE_CHOICES = (
         ("totp", "TOTP Authenticator App"),
         ("backup", "Backup Codes"),
-    ]
+    )
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="mfa_devices"
@@ -704,12 +694,12 @@ class MFADevice(models.Model):
     class Meta:
         verbose_name = "MFA Device"
         verbose_name_plural = "MFA Devices"
-        indexes = [
+        indexes = (
             models.Index(fields=["user", "is_active"], name="mfa_user_active_idx"),
-        ]
+        )
 
     def __str__(self) -> str:
-        return f"MFA {self.get_device_type_display()} for {self.user.email}"  # type: ignore[attr-defined]
+        return f"MFA {self.get_device_type_display()} for {self.user.email}"
 
     @classmethod
     def get_fernet(cls) -> Fernet:
@@ -723,22 +713,18 @@ class MFADevice(models.Model):
         for proper cryptographic key derivation with domain separation.
         """
         import base64
-        import warnings
 
-        from cryptography.fernet import Fernet
         from cryptography.hazmat.primitives import hashes
         from cryptography.hazmat.primitives.kdf.hkdf import HKDF
         from django.conf import settings
+        from django.core.exceptions import ImproperlyConfigured
 
-        # Use dedicated MFA key if available, fallback to SECRET_KEY
+        # A dedicated key lets SECRET_KEY rotate without invalidating MFA secrets.
         mfa_key = getattr(settings, "MFA_ENCRYPTION_KEY", None)
         if not mfa_key:
-            # Fallback for backwards compatibility
             if not settings.DEBUG:
-                warnings.warn(  # noqa: B028
-                    "MFA_ENCRYPTION_KEY not configured. Using SECRET_KEY as fallback. "
-                    "Set MFA_ENCRYPTION_KEY in production for key rotation safety.",
-                    UserWarning,
+                raise ImproperlyConfigured(
+                    "MFA_ENCRYPTION_KEY must be configured outside DEBUG."
                 )
             mfa_key = settings.SECRET_KEY
 
@@ -750,7 +736,7 @@ class MFADevice(models.Model):
             salt=None,
             info=b"gsmfws-mfa-secret-v1",
         )
-        key = hkdf.derive(mfa_key.encode())
+        key = hkdf.derive(force_bytes(mfa_key))
         fernet_key = base64.urlsafe_b64encode(key)
         return Fernet(fernet_key)
 
@@ -759,22 +745,20 @@ class MFADevice(models.Model):
         if not raw_secret:
             self.secret_encrypted = ""
             return
-        try:
-            fernet = self.get_fernet()
-            self.secret_encrypted = fernet.encrypt(raw_secret.encode()).decode()
-        except Exception as e:
-            logger.exception("Failed to encrypt MFA secret: %s", e)
-            raise ValueError("Failed to encrypt MFA secret")  # noqa: B904
+        self.secret_encrypted = self.get_fernet().encrypt(raw_secret.encode()).decode()
 
     def get_secret(self) -> str | None:
-        """Decrypt and return the TOTP secret."""
+        """Decrypt and return the TOTP secret; None if the key no longer matches."""
         if not self.secret_encrypted:
             return None
         try:
-            fernet = self.get_fernet()
-            return fernet.decrypt(self.secret_encrypted.encode()).decode()
-        except Exception as e:
-            logger.exception("Failed to decrypt MFA secret: %s", e)
+            return self.get_fernet().decrypt(self.secret_encrypted.encode()).decode()
+        except InvalidToken:
+            logger.error(
+                "MFA secret for device %s cannot be decrypted with the configured "
+                "MFA_ENCRYPTION_KEY",
+                self.pk,
+            )
             return None
 
     def verify_code(self, code: str) -> bool:
@@ -832,13 +816,13 @@ class MFADevice(models.Model):
 class NotificationPreferences(models.Model):
     """User notification preferences for granular control over notification channels and types."""
 
-    FREQUENCY_CHOICES = [
+    FREQUENCY_CHOICES = (
         ("instant", "Instant"),
         ("hourly", "Hourly Digest"),
         ("daily", "Daily Digest"),
         ("weekly", "Weekly Digest"),
         ("never", "Never"),
-    ]
+    )
 
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
@@ -982,9 +966,9 @@ class PushSubscription(models.Model):
     class Meta:
         verbose_name = "Push Subscription"
         verbose_name_plural = "Push Subscriptions"
-        indexes = [
+        indexes = (
             models.Index(fields=["user", "is_active"], name="push_user_active_idx"),
-        ]
+        )
 
     def __str__(self) -> str:
         return f"Push subscription for {self.user.email} ({self.device_name or 'Unknown device'})"
@@ -1023,7 +1007,7 @@ class ConsentPolicy(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["-created_at"]
+        ordering: ClassVar[list[str]] = ["-created_at"]
         verbose_name = "Consent Policy"
         verbose_name_plural = "Consent Policies"
 
@@ -1038,7 +1022,7 @@ class ConsentPolicy(models.Model):
         return qs.order_by("-effective_from").first()
 
 
-class ConsentDecision(models.Model):  # noqa: DJ008
+class ConsentDecision(models.Model):
     """Records a user or session consent decision against a policy version."""
 
     user = models.ForeignKey(
@@ -1054,7 +1038,7 @@ class ConsentDecision(models.Model):  # noqa: DJ008
     user_agent_hash = models.CharField(max_length=64, blank=True, default="")
 
     class Meta:
-        ordering = ["-created_at"]
+        ordering: ClassVar[list[str]] = ["-created_at"]
         verbose_name = "Consent Decision"
 
     def set_hashes(self, ip: str = "", ua: str = "") -> None:
@@ -1064,7 +1048,7 @@ class ConsentDecision(models.Model):  # noqa: DJ008
         self.user_agent_hash = hash_ua(ua)
 
 
-class ConsentEvent(models.Model):  # noqa: DJ008
+class ConsentEvent(models.Model):
     """Audit event tied to a ConsentDecision."""
 
     decision = models.ForeignKey(
@@ -1084,7 +1068,7 @@ class ConsentEvent(models.Model):  # noqa: DJ008
     user_agent_hash = models.CharField(max_length=64, blank=True, default="")
 
     class Meta:
-        ordering = ["-created_at"]
+        ordering: ClassVar[list[str]] = ["-created_at"]
         verbose_name = "Consent Event"
 
     def set_hashes(self, ip: str = "", ua: str = "") -> None:
@@ -1094,7 +1078,7 @@ class ConsentEvent(models.Model):  # noqa: DJ008
         self.user_agent_hash = hash_ua(ua)
 
 
-class ConsentRecord(ConsentDecision):  # noqa: DJ008
+class ConsentRecord(ConsentDecision):
     """Proxy for admin/import backwards compatibility."""
 
     class Meta:
@@ -1103,7 +1087,7 @@ class ConsentRecord(ConsentDecision):  # noqa: DJ008
         verbose_name_plural = "Consent Records"
 
 
-class ConsentLog(ConsentEvent):  # noqa: DJ008
+class ConsentLog(ConsentEvent):
     """Proxy for admin/import backwards compatibility."""
 
     class Meta:
@@ -1112,5 +1096,5 @@ class ConsentLog(ConsentEvent):  # noqa: DJ008
         verbose_name_plural = "Consent Logs"
 
 
-from apps.users.models_social import SocialPostingAccount, SocialProviderConfig  # noqa: E402,F401
-from apps.users.profile_models import ActivityFeed, Following, Profile, Reputation  # noqa: E402,F401
+from apps.users.models_social import SocialPostingAccount, SocialProviderConfig  # noqa: F401
+from apps.users.profile_models import ActivityFeed, Following, Profile, Reputation  # noqa: F401

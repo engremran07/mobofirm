@@ -1,24 +1,24 @@
 import os
 
-from .base import *  # noqa: F403
+from . import base
+
+globals().update({name: value for name, value in vars(base).items() if name.isupper()})
 
 DEBUG = True
 SECURE_SSL_REDIRECT = False
-MAILERS = {  # noqa: F405
-    **MAILERS,  # noqa: F405
+# Local development crawls its own http://127.0.0.1 server; production never does.
+SEO_FETCH_ALLOW_PRIVATE_NETWORKS = True
+MAILERS = {
     "default": {
-        **MAILERS["default"],  # noqa: F405
-        "BACKEND": os.getenv(
-            "EMAIL_BACKEND",
-            (
-                "apps.core.email_backends.gmail.GmailBackend"
-                if GMAIL_ENABLED  # noqa: F405
-                else "django.core.mail.backends.console.EmailBackend"
-            ),
-        ),
+        "BACKEND": os.getenv("EMAIL_BACKEND", base.RUNTIME_EMAIL_BACKEND),
     },
 }
-DATABASES["default"]["OPTIONS"] = {  # noqa: F405
-    **DATABASES["default"].get("OPTIONS", {}),  # noqa: F405
-    "options": "-c search_path=mobofirm_local",
+DATABASES = {
+    "default": {
+        **base.DATABASES["default"],
+        "OPTIONS": {
+            **base.DATABASES["default"].get("OPTIONS", {}),
+            "options": f"-c search_path={os.getenv('DB_SCHEMA', 'mobofirm_local')}",
+        },
+    }
 }

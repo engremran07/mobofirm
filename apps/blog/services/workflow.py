@@ -1,16 +1,25 @@
+"""Blog post workflow: owner or staff request review, permitted staff publish."""
+
 from __future__ import annotations
 
 import enum
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 
-from django.contrib.contenttypes.models import ContentType
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.utils import timezone
 
-from apps.governance.models import ReviewCase
-from apps.governance.services import fulfill_case, submit_for_review
 from apps.blog.models import Post, PostStatus
+from apps.core.utils.logging import log_event
+
+logger = logging.getLogger(__name__)
+
+PUBLISHABLE_STATUSES = {
+    PostStatus.DRAFT,
+    PostStatus.IN_REVIEW,
+    PostStatus.SCHEDULED,
+}
 
 
 class WorkflowAction(enum.Enum):
@@ -27,45 +36,88 @@ class WorkflowResult:
     message: str = ""
 
 
-def request_review(post: Post, user=None) -> WorkflowResult:
-    case = submit_for_review(post, actor=user)
-    return WorkflowResult(
-        ok=True,
-        status=case.status,
-        message=f"Submitted for governed review (case {case.pk})",
+def can_moderate(user) -> bool:
+    """Staff holding the blog change permission may publish, schedule and archive."""
+    return bool(
+        user is not None
+        and getattr(user, "is_authenticated", False)
+        and user.is_active
+        and user.is_staff
+        and user.has_perm("blog.change_post")
     )
 
 
+def _require_moderator(user) -> None:
+    if not can_moderate(user):
+        raise PermissionDenied("Staff publishing permission is required.")
+
+
+def _audit(action: str, post: Post, user, **extra) -> None:
+    log_event(
+        logger,
+        "info",
+        f"blog.workflow.{action}",
+        post=post.pk,
+        actor=getattr(user, "pk", None),
+        status=post.status,
+        **extra,
+    )
+
+
+def request_review(post: Post, user=None) -> WorkflowResult:
+    if user is None or not getattr(user, "is_authenticated", False):
+        raise PermissionDenied("Authentication is required.")
+    if not (user.is_staff or post.author_id == user.pk):
+        raise PermissionDenied("Only the post author or staff may request review.")
+    if not post.title.strip() or not post.body.strip():
+        raise ValidationError("A post requires a title and body before review.")
+    if post.status not in {PostStatus.DRAFT, PostStatus.IN_REVIEW}:
+        raise ValidationError("Only draft posts can enter review.")
+    if post.status != PostStatus.IN_REVIEW:
+        post.status = PostStatus.IN_REVIEW
+        post.save(update_fields=["status", "is_published", "updated_at"])
+        _audit("request_review", post, user)
+    return WorkflowResult(ok=True, status=post.status, message="Submitted for review")
+
+
 def schedule(post: Post, when: datetime, user=None) -> WorkflowResult:
-    case = _approved_case(post)
-    fulfill_case(case.pk, user, scheduled_at=when or timezone.now())
-    post.refresh_from_db()
+    _require_moderator(user)
+    when = when or timezone.now()
+    if timezone.is_naive(when):
+        raise ValidationError("Scheduled publication time must include a timezone.")
+    if post.status not in PUBLISHABLE_STATUSES:
+        raise ValidationError("This post cannot be scheduled from its current status.")
+    post.status = PostStatus.SCHEDULED
+    post.publish_at = when
+    post.save(update_fields=["status", "publish_at", "is_published", "updated_at"])
+    _audit("schedule", post, user, publish_at=when.isoformat())
     return WorkflowResult(ok=True, status=post.status, message="Scheduled")
 
 
 def publish(post: Post, user=None) -> WorkflowResult:
-    case = _approved_case(post)
-    fulfill_case(case.pk, user)
-    post.refresh_from_db()
+    _require_moderator(user)
+    if post.status not in PUBLISHABLE_STATUSES:
+        raise ValidationError("This post cannot be published from its current status.")
+    now = timezone.now()
+    post.status = PostStatus.PUBLISHED
+    post.publish_at = now
+    post.published_at = post.published_at or now
+    post.save(
+        update_fields=[
+            "status",
+            "publish_at",
+            "published_at",
+            "is_published",
+            "updated_at",
+        ]
+    )
+    _audit("publish", post, user)
     return WorkflowResult(ok=True, status=post.status, message="Published")
 
 
 def archive(post: Post, user=None) -> WorkflowResult:
-    if user is None or not user.has_perm("governance.can_publish_content"):
-        raise PermissionDenied("Publishing permission is required to archive a post.")
+    _require_moderator(user)
     post.status = PostStatus.ARCHIVED
     post.save(update_fields=["status", "is_published", "updated_at"])
+    _audit("archive", post, user)
     return WorkflowResult(ok=True, status=post.status, message="Archived")
-
-
-def _approved_case(post: Post) -> ReviewCase:
-    content_type = ContentType.objects.get_for_model(post, for_concrete_model=False)
-    case = ReviewCase.objects.filter(
-        content_type=content_type,
-        object_id=str(post.pk),
-        status=ReviewCase.Status.APPROVED,
-        is_open=True,
-    ).first()
-    if case is None:
-        raise PermissionDenied("A completed governance review is required first.")
-    return case

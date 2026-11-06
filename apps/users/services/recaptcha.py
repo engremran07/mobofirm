@@ -15,17 +15,18 @@ Enterprise-Grade Google reCAPTCHA Verification Service
 from __future__ import annotations
 
 import hashlib
-import json
 import logging
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 import requests
-from django.conf import settings as django_settings
 from django.core.cache import cache
 from requests import Response
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from requests.exceptions import RequestException, Timeout
+
+from apps.core.cache import CACHE_BACKEND_ERRORS
+from apps.site_settings.services import get_recaptcha_secret, get_site_settings
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +51,7 @@ def _safe_decimal(value: Any, default: Decimal = Decimal(0)) -> Decimal:
     """Safely convert a value to Decimal; return default on failure."""
     try:
         return Decimal(str(value))
-    except Exception:
+    except InvalidOperation:
         return default
 
 
@@ -76,9 +77,10 @@ def verify_recaptcha(
         }
     """
     # ----------------------------------------------------------
-    recaptcha_enabled = bool(getattr(django_settings, "RECAPTCHA_ENABLED", False))
-    recaptcha_mode = str(getattr(django_settings, "RECAPTCHA_MODE", "off")).lower()
-    private_key = getattr(django_settings, "RECAPTCHA_PRIVATE_KEY", "")
+    config = get_site_settings().recaptcha
+    recaptcha_enabled = config.enabled
+    recaptcha_mode = config.mode
+    private_key = get_recaptcha_secret() if recaptcha_enabled else ""
 
     # ----------------------------------------------------------
     # Step 2. Skip if disabled
@@ -107,7 +109,7 @@ def verify_recaptcha(
         if cached is not None:
             logger.debug("reCAPTCHA: using cached result for %s", action)
             return cached
-    except Exception as exc:
+    except CACHE_BACKEND_ERRORS as exc:
         logger.debug("reCAPTCHA: cache.get failed → %s", exc)
 
     # ----------------------------------------------------------
@@ -117,9 +119,7 @@ def verify_recaptcha(
     if remote_ip:
         payload["remoteip"] = remote_ip
 
-    timeout_s: float = max(
-        float(getattr(django_settings, "RECAPTCHA_TIMEOUT_MS", 3000)) / 1000.0, 1.0
-    )
+    timeout_s: float = max(config.timeout_ms / 1000.0, 1.0)
 
     # ----------------------------------------------------------
     # Step 6. Perform network verification
@@ -131,18 +131,15 @@ def verify_recaptcha(
     except Timeout:
         logger.warning("reCAPTCHA: timeout verifying token (%s)", action)
         return {"ok": False, "error": "timeout", "errors": []}
-    except RequestsConnectionError as exc:
-        logger.exception("reCAPTCHA: connection error → %s", exc)
+    except RequestsConnectionError:
+        logger.exception("reCAPTCHA: connection error")
         return {"ok": False, "error": "connection_error", "errors": []}
-    except RequestException as exc:
-        logger.exception("reCAPTCHA: network failure → %s", exc)
+    except RequestException:
+        logger.exception("reCAPTCHA: network failure")
         return {"ok": False, "error": "network_error", "errors": []}
-    except json.JSONDecodeError:
+    except ValueError:
         logger.exception("reCAPTCHA: invalid JSON response")
         return {"ok": False, "error": "invalid_response", "errors": []}
-    except Exception as exc:
-        logger.exception("reCAPTCHA: unexpected exception → %s", exc)
-        return {"ok": False, "error": "recaptcha_unreachable", "errors": []}
 
     # ----------------------------------------------------------
     # Step 7. Validate response integrity
@@ -151,9 +148,7 @@ def verify_recaptcha(
     hostname: str | None = data.get("hostname")
     error_codes: list[str] = list(data.get("error-codes", []) or [])
 
-    expected_host: str | None = getattr(
-        django_settings, "RECAPTCHA_EXPECTED_HOSTNAME", None
-    )
+    expected_host: str | None = config.expected_hostname or None
     if expected_host and hostname and hostname != expected_host:
         logger.warning(
             "reCAPTCHA: hostname mismatch (%s ≠ %s)", hostname, expected_host
@@ -166,9 +161,7 @@ def verify_recaptcha(
     # ----------------------------------------------------------
     if recaptcha_mode == "v3":
         score = _safe_decimal(data.get("score", 0))
-        threshold = _safe_decimal(
-            getattr(django_settings, "RECAPTCHA_SCORE_THRESHOLD", 0.5)
-        )
+        threshold = _safe_decimal(config.score_threshold)
         valid = success and score >= threshold
 
         result: dict[str, Any] = {
@@ -201,7 +194,7 @@ def verify_recaptcha(
         logger.debug(
             "reCAPTCHA: cached result key=%s TTL=%ss", cache_key, CACHE_TTL_SECONDS
         )
-    except Exception as exc:
+    except CACHE_BACKEND_ERRORS as exc:
         logger.debug("reCAPTCHA: cache.set failed for %s → %s", cache_key, exc)
 
     return result

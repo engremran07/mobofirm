@@ -4,6 +4,7 @@ import logging
 from typing import Any
 
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 from django.core.mail.backends.base import BaseEmailBackend
 from django.core.mail.backends.smtp import EmailBackend as SmtpEmailBackend
 from django.utils.module_loading import import_string
@@ -19,11 +20,10 @@ def _get_fallback_backend_class():
     )
     try:
         return import_string(backend_path)
-    except Exception as exc:
-        logger.warning(
-            "Failed to import fallback email backend %s: %s", backend_path, exc
-        )
-        return SmtpEmailBackend
+    except ImportError as exc:
+        raise ImproperlyConfigured(
+            f"DEFAULT_EMAIL_BACKEND {backend_path!r} cannot be imported: {exc}"
+        ) from exc
 
 
 def _gmail_config() -> dict[str, Any]:
@@ -41,7 +41,6 @@ def _gmail_config() -> dict[str, Any]:
         "username": username,
         "password": app_password,
         "use_tls": True,
-        "fail_silently": False,
         "from_email": from_email,
     }
 
@@ -56,20 +55,10 @@ class GmailBackend(BaseEmailBackend):
         super().__init__(*args, **kwargs)
         cfg = _gmail_config()
         if cfg:
-            self._backend = SmtpEmailBackend(
-                host=cfg["host"],
-                port=cfg["port"],
-                username=cfg["username"],
-                password=cfg["password"],
-                use_tls=cfg["use_tls"],
-                fail_silently=cfg.get("fail_silently", False),
-            )
-            self._from_email = cfg.get("from_email")
+            self._from_email = cfg.pop("from_email")
+            self._backend = SmtpEmailBackend(**cfg)
         else:
-            backend_cls = _get_fallback_backend_class()
-            self._backend = backend_cls(
-                fail_silently=kwargs.get("fail_silently", False)
-            )
+            self._backend = _get_fallback_backend_class()()
             self._from_email = getattr(settings, "DEFAULT_FROM_EMAIL", None)
 
     def open(self):

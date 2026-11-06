@@ -10,6 +10,7 @@ AI provider integration for the assistant endpoint.
 
 from __future__ import annotations
 
+import importlib
 import json
 import logging
 import time
@@ -21,9 +22,11 @@ from django.contrib.auth import get_user_model
 from django.core.cache import cache
 
 try:
-    from openai import OpenAI  # type: ignore
-except Exception:  # pragma: no cover
-    OpenAI = None  # type: ignore
+    _openai_module: Any = importlib.import_module("openai")
+except ImportError:
+    _openai_module = None
+
+OpenAI: Any = getattr(_openai_module, "OpenAI", None)
 
 logger = logging.getLogger(__name__)
 User = get_user_model()
@@ -31,6 +34,21 @@ User = get_user_model()
 
 class AiClientError(RuntimeError):
     """Raised when the AI backend cannot be used safely."""
+
+
+# Failures a provider call can raise: our own client errors plus, when the SDK is
+# installed, its OpenAIError hierarchy (connection, timeout, status, auth, ...).
+_PROVIDER_ERRORS: tuple[type[Exception], ...] = (
+    (AiClientError, _openai_module.OpenAIError)
+    if _openai_module is not None
+    else (AiClientError,)
+)
+# Provider failures plus malformed provider payloads (bad JSON / unexpected types).
+_PAYLOAD_ERRORS: tuple[type[Exception], ...] = (
+    *_PROVIDER_ERRORS,
+    ValueError,
+    TypeError,
+)
 
 
 class AIRateLimiter:
@@ -80,7 +98,7 @@ class AICircuitBreaker:
         self.failure_threshold = failure_threshold
         self.recovery_timeout = recovery_timeout
         self.failure_count = 0
-        self.last_failure_time = 0
+        self.last_failure_time: float = 0.0
         self.cache_key = "ai_circuit_breaker"
 
     def is_open(self) -> bool:
@@ -178,7 +196,7 @@ def _calculate_backoff_delay(attempt: int, base_delay: float = 1.0) -> float:
     import random
 
     delay = base_delay * (2**attempt)
-    jitter = random.uniform(0.1, 1.0) * delay * 0.1  # 10% jitter  # noqa: S311
+    jitter = random.uniform(0.1, 1.0) * delay * 0.1  # 10% jitter
     return min(delay + jitter, 60.0)  # Cap at 60 seconds
 
 
@@ -287,8 +305,8 @@ def predict_ad_performance(features: dict[str, Any]) -> dict[str, Any]:
         parsed = json.loads(text)
         if isinstance(parsed, dict):
             return parsed
-    except Exception:  # noqa: S110
-        pass
+    except _PAYLOAD_ERRORS as exc:
+        logger.warning("AI ad performance prediction fell back to heuristics: %s", exc)
     return _heuristic()
 
 
@@ -314,7 +332,7 @@ def optimize_bidding_strategy(payload: dict[str, Any]) -> dict[str, Any]:
             "strategy": "heuristic",
             "confidence": 0.5,
         }
-    except Exception:
+    except (ValueError, TypeError, AttributeError):
         return {
             "bid": float(payload.get("budget", 0.0)) * 0.001,
             "strategy": "fallback",
@@ -346,8 +364,8 @@ def detect_ad_anomalies(payload: dict[str, Any]) -> list[dict[str, Any]]:
                     "description": "Impressions dropped by >50%",
                 }
             )
-    except Exception:  # noqa: S110
-        pass
+    except (ValueError, TypeError, AttributeError) as exc:
+        logger.warning("Ad anomaly detection skipped malformed data: %s", exc)
     return anomalies
 
 
@@ -378,7 +396,8 @@ def generate_personalized_ad_content(payload: dict[str, Any]) -> dict[str, Any]:
         text = _call_openai_response(cfg, system, prompt)
         # Best-effort: assume returned text is the personalized html
         return {"html": text, "confidence": 0.6}
-    except Exception:
+    except _PAYLOAD_ERRORS as exc:
+        logger.warning("AI ad personalization fell back to the template: %s", exc)
         return {"html": template, "confidence": 0.5}
 
 
@@ -398,8 +417,8 @@ def predict_campaign_performance(features: dict[str, Any]) -> dict[str, Any]:
         parsed = json.loads(text)
         if isinstance(parsed, dict):
             return parsed
-    except Exception:  # noqa: S110
-        pass
+    except _PAYLOAD_ERRORS as exc:
+        logger.warning("AI campaign prediction fell back to defaults: %s", exc)
 
     return {"confidence": 0.5, "predicted_revenue": 0.0, "predicted_ctr": 0.01}
 
@@ -468,7 +487,7 @@ def _call_openai_with_retry(
                 elapsed_ms=round((time.monotonic() - start_time) * 1000),
             )
             return text
-        except Exception as exc:  # pragma: no cover - provider edge cases
+        except _PROVIDER_ERRORS as exc:
             logger.warning(
                 "AI provider attempt %s/%s failed: %s", attempt, attempts, exc
             )
@@ -489,7 +508,7 @@ def generate_title(text: str, user: Any) -> str:
         system = _build_system_prompt(user)
         result = _call_openai_response(config, system, prompt)
         return result or _fallback_title(text)
-    except Exception:
+    except _PROVIDER_ERRORS:
         return _fallback_title(text)
 
 
@@ -500,7 +519,7 @@ def generate_excerpt(text: str, user: Any) -> str:
         system = _build_system_prompt(user)
         result = _call_openai_response(config, system, prompt)
         return result or _fallback_excerpt(text)
-    except Exception:
+    except _PROVIDER_ERRORS:
         return _fallback_excerpt(text)
 
 
@@ -511,7 +530,7 @@ def generate_seo_description(text: str, user: Any) -> str:
         system = _build_system_prompt(user)
         result = _call_openai_response(config, system, prompt)
         return result or _fallback_seo(text)
-    except Exception:
+    except _PROVIDER_ERRORS:
         return _fallback_seo(text)
 
 
@@ -524,8 +543,8 @@ def suggest_tags(text: str, user: Any) -> list[str]:
         if result:
             tags = [t.strip().lower() for t in result.split(",") if t.strip()]
             return tags[:5]
-    except Exception:  # noqa: S110
-        pass
+    except _PROVIDER_ERRORS as exc:
+        logger.warning("AI tag suggestion fell back to heuristics: %s", exc)
     return _fallback_tags(text)
 
 
@@ -536,7 +555,7 @@ def summarize_text(text: str, user: Any) -> str:
         system = _build_system_prompt(user)
         result = _call_openai_response(config, system, prompt)
         return result or _fallback_summary(text)
-    except Exception:
+    except _PROVIDER_ERRORS:
         return _fallback_summary(text)
 
 
@@ -554,8 +573,8 @@ def moderate_text(text: str, user: Any) -> dict[str, Any]:
             label = "high" if "high" in lower else "low"
             score = "0.8" if label == "high" else "0.05"
             return {"toxicity_score": float(score), "label": label}
-    except Exception:  # noqa: S110
-        pass
+    except _PROVIDER_ERRORS as exc:
+        logger.warning("AI moderation fell back to heuristics: %s", exc)
     return _fallback_moderation(text)
 
 
@@ -564,14 +583,14 @@ def moderate_text(text: str, user: Any) -> dict[str, Any]:
 # --------------------------------------------------------------------
 
 
-def _extract_text_response(response) -> str:
+def _extract_text_response(response: Any) -> str:
     try:
         for output in response.output:
             for item in getattr(output, "content", []):
                 if getattr(item, "type", "") == "output_text":
                     text = getattr(item, "text", "") or ""
                     return text.strip()
-    except Exception:
+    except (AttributeError, TypeError):
         return ""
     return ""
 
@@ -583,17 +602,13 @@ def _mock_response(user_content: str) -> str:
 
 
 def _emit_metrics(*, ok: bool, attempt: int, elapsed_ms: int) -> None:
-    try:
-        logger.info(
-            "ai.call",
-            extra={
-                "event": {
-                    "ok": ok,
-                    "attempt": attempt,
-                    "elapsed_ms": elapsed_ms,
-                }
-            },
-        )
-    except Exception:
-        # Metrics should never break the request flow
-        return
+    logger.info(
+        "ai.call",
+        extra={
+            "event": {
+                "ok": ok,
+                "attempt": attempt,
+                "elapsed_ms": elapsed_ms,
+            }
+        },
+    )

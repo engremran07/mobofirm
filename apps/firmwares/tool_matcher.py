@@ -24,7 +24,6 @@ KNOWN_CHIPSETS: dict[tuple[str, str], str] = {
     # Apple
     ("apple", "iphone 15 pro max"): "Apple A17 Pro",
     # Xiaomi
-    ("xiaomi", "technology"): "Qualcomm Snapdragon",
     # Asus
     ("asus", "rog phone 9 fe"): "Qualcomm Snapdragon 8 Gen 3",
     # Alcatel
@@ -156,14 +155,13 @@ def is_tool_compatible(tool_name: str, brand_name: str, chipset_family: str) -> 
 
     # Check brand restriction
     restricted_brands = BRAND_RESTRICTED_TOOLS.get(tool_lower)
-    if restricted_brands and brand_name not in restricted_brands:
+    if restricted_brands and brand_name.lower() not in {
+        brand.lower() for brand in restricted_brands
+    }:
         return False
 
     # Apple devices don't use standard Android flashing tools
-    if brand_name in NON_ANDROID_BRANDS:
-        return False
-
-    return True
+    return brand_name not in NON_ANDROID_BRANDS
 
 
 def get_compatible_tools_from_db(
@@ -178,6 +176,7 @@ def get_compatible_tools_from_db(
     Filters by chipset family and removes brand-incompatible tools.
     Returns tools ordered by relevance (featured first).
     """
+    from .chipsets import vendor_for
     from .models import FlashingTool
 
     family = get_chipset_family(chipset)
@@ -187,9 +186,10 @@ def get_compatible_tools_from_db(
 
     qs = FlashingTool.objects.filter(is_active=True)
 
-    # Filter by chipset family if known
-    if family:
-        qs = qs.filter(supported_chipsets__contains=family)
+    # Filter by chipset vendor if known
+    vendor = vendor_for(chipset)
+    if vendor:
+        qs = qs.filter(chipsets__vendor=vendor).distinct()
 
     tools = list(qs.order_by("-is_featured", "name")[:20])
 
@@ -211,7 +211,10 @@ def filter_tools_for_brand(
 
     Used to validate template-assigned tools against a specific device.
     """
+    from .chipsets import vendor_for
+
     family = get_chipset_family(chipset)
+    vendor = vendor_for(chipset)
 
     if brand_name in NON_ANDROID_BRANDS:
         return []
@@ -220,10 +223,10 @@ def filter_tools_for_brand(
     for tool in tools:
         if not is_tool_compatible(tool.name, brand_name, family):
             continue
-        # If we know the chipset family, also check chipset compatibility
-        if family and hasattr(tool, "supported_chipsets"):
-            tool_chipsets: list[str] = tool.supported_chipsets or []
-            if tool_chipsets and family not in tool_chipsets:
+        # If the chipset vendor is known, the tool must support it when it lists any
+        if vendor:
+            tool_vendors = {c.vendor for c in tool.chipsets.all()}
+            if tool_vendors and vendor not in tool_vendors:
                 continue
         result.append(tool)
     return result
@@ -328,11 +331,11 @@ def get_guide_tools_for_template(
         return ["TWRP (Team Win Recovery Project)"] + base
 
     if guide_type == "frp_bypass":
-        tools: list[str] = []
+        frp_tools: list[str] = []
         if brand_lower == "samsung":
-            tools.append("Samsung FRP Helper")
-        tools.extend(["UMT (Ultimate Multi Tool)", "UnlockTool"])
-        return tools
+            frp_tools.append("Samsung FRP Helper")
+        frp_tools.extend(["UMT (Ultimate Multi Tool)", "UnlockTool"])
+        return frp_tools
 
     # General fallback
     return [primary] + base

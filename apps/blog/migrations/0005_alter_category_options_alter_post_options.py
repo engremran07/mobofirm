@@ -4,11 +4,9 @@ from django.db import migrations
 
 
 class Migration(migrations.Migration):
-    dependencies = [
-        ("blog", "0004_post_ad_gate_config_post_ad_gate_enabled_and_more"),
-    ]
+    dependencies = (("blog", "0004_post_ad_gate_config_post_ad_gate_enabled_and_more"),)
 
-    operations = [
+    operations = (
         migrations.AlterModelOptions(
             name="category",
             options={
@@ -25,4 +23,4 @@ class Migration(migrations.Migration):
                 "verbose_name_plural": "Blog Posts",
             },
         ),
-    ]
+    )

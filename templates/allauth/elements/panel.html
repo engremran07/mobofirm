@@ -1,0 +1,11 @@
+{% load allauth %}
+<section class="mb-4">
+  <h2 class="h5">{% slot title %}{% endslot %}</h2>
+  {% slot body %}
+  {% endslot %}
+  {% if slots.actions %}
+    <ul class="list-inline mt-2">
+      {% for action in slots.actions %}<li class="list-inline-item">{{ action }}</li>{% endfor %}
+    </ul>
+  {% endif %}
+</section>

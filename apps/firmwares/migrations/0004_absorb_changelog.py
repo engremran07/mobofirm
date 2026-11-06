@@ -1,11 +1,13 @@
 # State-only migration registering changelog models with the firmware app.
 
+from typing import ClassVar
+
 import django.db.models.deletion
 from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-    dependencies = [
+    dependencies: ClassVar[list[tuple[str, str]]] = [
         (
             "firmwares",
             "0003_hotlinkblock_syncrun_downloadsession_adgatelog_and_more",
@@ -13,7 +15,7 @@ class Migration(migrations.Migration):
         # Existing table names are retained; the state operations do no DDL.
     ]
 
-    operations = [
+    operations: ClassVar[list[migrations.operations.base.Operation]] = [
         migrations.SeparateDatabaseAndState(
             database_operations=[],
             state_operations=[

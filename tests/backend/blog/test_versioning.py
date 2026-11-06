@@ -4,7 +4,7 @@ from django.test import TestCase
 from django.urls import reverse
 
 from apps.blog.forms import PostForm
-from apps.blog.models import Post, PostRevision, PostStatus
+from apps.blog.models import Post, PostStatus
 from apps.blog.services.history import PostHistoryService
 from apps.tags.models import Tag
 

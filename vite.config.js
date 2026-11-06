@@ -16,7 +16,15 @@ export default defineConfig({
           new URL("./frontend/src/styles/tokens.css", import.meta.url),
         ),
         site: fileURLToPath(new URL("./frontend/src/site.js", import.meta.url)),
-        admin: fileURLToPath(new URL("./frontend/src/admin.js", import.meta.url)),
+        "theme-init": fileURLToPath(
+          new URL("./frontend/src/theme-init.js", import.meta.url),
+        ),
+        seo: fileURLToPath(
+          new URL("./frontend/src/styles/seo.css", import.meta.url),
+        ),
+        "seo-sitemap": fileURLToPath(
+          new URL("./frontend/src/styles/seo-sitemap.css", import.meta.url),
+        ),
       },
       output: {
         entryFileNames: "[name].js",

@@ -11,7 +11,7 @@ User = get_user_model()
 class TaggingRegressions(TestCase):
     def setUp(self):
         self.service = TaggingService()
-        self.user = User.objects.create_user(  # type: ignore[attr-defined]
+        self.user = User.objects.create_user(
             email="r@r.com", username="r", password="pw"
         )
 

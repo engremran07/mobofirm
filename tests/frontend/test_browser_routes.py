@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import pytest
 from django.urls import get_resolver, reverse
+from playwright.sync_api import BrowserContext, Page, sync_playwright
 from playwright.sync_api import Error as PlaywrightError
-from playwright.sync_api import sync_playwright
 
 from tests.url_inventory import named_routes
+
+ROUTE_BATCH_SIZE = 20
 
 
 @pytest.mark.django_db(transaction=True)
@@ -33,9 +35,6 @@ def test_all_named_views_load_without_browser_errors(live_server):
                 f"Chromium is required for frontend route checks. "
                 f"Install it with `python -m playwright install chromium`.\n{error}"
             )
-
-        page = browser.new_page()
-        page.set_viewport_size({"width": 1365, "height": 900})
 
         def on_console(message) -> None:
             # Response events check status codes; unauthenticated API 4xxs are expected.
@@ -69,12 +68,21 @@ def test_all_named_views_load_without_browser_errors(live_server):
                     f"same-origin request failed ({request.failure}): {request.url}"
                 )
 
-        page.on("console", on_console)
-        page.on("pageerror", on_page_error)
-        page.on("response", on_response)
-        page.on("requestfailed", on_request_failed)
+        def open_context(width: int, height: int) -> tuple[BrowserContext, Page]:
+            context = browser.new_context(viewport={"width": width, "height": height})
+            page = context.new_page()
+            page.on("console", on_console)
+            page.on("pageerror", on_page_error)
+            page.on("response", on_response)
+            page.on("requestfailed", on_request_failed)
+            return context, page
 
-        def check_horizontal_overflow(viewport_width: int) -> None:
+        def is_html(response) -> bool:
+            # Sitemaps, robots.txt and JSON endpoints have no layout to measure.
+            content_type = response.headers.get("content-type", "") if response else ""
+            return content_type.startswith("text/html")
+
+        def check_horizontal_overflow(page: Page, viewport_width: int) -> None:
             dimensions = page.evaluate(
                 """() => ({
                     viewport: document.documentElement.clientWidth,
@@ -112,35 +120,44 @@ def test_all_named_views_load_without_browser_errors(live_server):
                     f"elements={overflowing_elements}"
                 )
 
-        for route_name, kwargs in routes:
-            current_route[0] = route_name
-            url = f"{live_server.url}{reverse(route_name, kwargs=kwargs or None)}"
-            try:
-                page.goto(url, wait_until="load", timeout=15_000)
-                check_horizontal_overflow(1365)
-                has_site_bundle = page.locator(
-                    'script[type="module"][src*="/static/build/site.js"]'
-                ).count()
-                if has_site_bundle:
-                    page.wait_for_function(
-                        "() => Boolean(window.htmx && window.Alpine)",
-                        timeout=5_000,
-                    )
-            except PlaywrightError as error:
-                report_failure(
-                    f"page navigation or runtime initialization failed: {error}"
-                )
+        def visit_batches(width: int, height: int, *, wait_for_runtime: bool) -> None:
+            # A fresh context per batch keeps the browser's memory bounded
+            # (a single long-lived tab exhausted Chromium's resources).
+            for start in range(0, len(routes), ROUTE_BATCH_SIZE):
+                context, page = open_context(width, height)
+                try:
+                    for route_name, kwargs in routes[start : start + ROUTE_BATCH_SIZE]:
+                        current_route[0] = f"{route_name} at {width}px"
+                        url = (
+                            f"{live_server.url}"
+                            f"{reverse(route_name, kwargs=kwargs or None)}"
+                        )
+                        try:
+                            response = page.goto(url, wait_until="load", timeout=15_000)
+                            if not is_html(response):
+                                continue
+                            check_horizontal_overflow(page, width)
+                            if (
+                                wait_for_runtime
+                                and page.locator(
+                                    'script[type="module"][src*="/static/build/site.js"]'
+                                ).count()
+                            ):
+                                page.wait_for_function(
+                                    "() => Boolean(window.htmx && window.Alpine)",
+                                    timeout=5_000,
+                                )
+                        except PlaywrightError as error:
+                            report_failure(
+                                f"navigation or runtime initialization failed: {error}"
+                            )
+                finally:
+                    context.close()
 
-        page.set_viewport_size({"width": 390, "height": 844})
-        for route_name, kwargs in routes:
-            current_route[0] = f"{route_name} at 390px"
-            url = f"{live_server.url}{reverse(route_name, kwargs=kwargs or None)}"
-            try:
-                page.goto(url, wait_until="load", timeout=15_000)
-                check_horizontal_overflow(390)
-            except PlaywrightError as error:
-                report_failure(f"mobile page navigation failed: {error}")
+        visit_batches(1365, 900, wait_for_runtime=True)
+        visit_batches(390, 844, wait_for_runtime=False)
 
+        context, page = open_context(390, 844)
         try:
             current_route[0] = "mobile navigation"
             page.goto(f"{live_server.url}/", wait_until="load", timeout=15_000)
@@ -167,6 +184,8 @@ def test_all_named_views_load_without_browser_errors(live_server):
                 report_failure("HTMX search returned an unexpected empty state")
         except PlaywrightError as error:
             report_failure(f"frontend interaction failed: {error}")
+        finally:
+            context.close()
 
         browser.close()
 

@@ -1,0 +1,26 @@
+{# Contract: item (FileItem with prefetched tags). One file in the browser grid. #}
+{% load filemanager_tags %}
+<li>
+  <article class="surface-card fm-card">
+    <a class="fm-thumb" href="{% url 'filemanager:file_detail' pk=item.pk %}" tabindex="-1" aria-hidden="true">
+      {% if item.thumbnail %}
+        <img src="{% url 'filemanager:thumbnail' pk=item.pk %}" alt="" width="320" height="240" loading="lazy">
+      {% elif item.file_type == "image" %}<i class="icon" data-lucide="image"></i>
+      {% elif item.file_type == "archive" %}<i class="icon" data-lucide="file-archive"></i>
+      {% elif item.file_type == "document" %}<i class="icon" data-lucide="file-text"></i>
+      {% else %}<i class="icon" data-lucide="file"></i>{% endif %}
+    </a>
+    <h3 class="fm-name h6"><a href="{% url 'filemanager:file_detail' pk=item.pk %}">{{ item.name }}</a></h3>
+    <p class="small muted mb-0">{{ item.size|filesize }} · {{ item.get_file_type_display }} · {{ item.created_at|date:"j M Y" }}</p>
+    {% if item.tags.all %}
+      <ul class="fm-tags">{% for tag in item.tags.all %}<li><a class="eco-pill" href="{% url 'filemanager:browser' %}?tag={{ tag.slug|urlencode }}">{{ tag.name }}</a></li>{% endfor %}</ul>
+    {% endif %}
+    <div class="fm-actions">
+      <a class="btn btn-sm btn-outline-secondary" href="{% url 'filemanager:download' pk=item.pk %}"><i class="icon" data-lucide="download" aria-hidden="true"></i> Download</a>
+      <form method="post" action="{% url 'filemanager:delete_file' pk=item.pk %}">
+        {% csrf_token %}
+        <button class="btn btn-sm btn-outline-danger" type="submit"><i class="icon" data-lucide="trash-2" aria-hidden="true"></i> Trash<span class="visually-hidden"> {{ item.name }}</span></button>
+      </form>
+    </div>
+  </article>
+</li>

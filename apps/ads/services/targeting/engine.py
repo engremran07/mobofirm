@@ -29,9 +29,7 @@ def campaign_allowed(campaign: Campaign, context: dict[str, Any]) -> bool:
     if allowed_pages and page_context and page_context not in allowed_pages:
         return False
     allowed_tags = set(rules.get("tags") or [])
-    if allowed_tags and tags and not (allowed_tags & tags):
-        return False
-    return True
+    return not (allowed_tags and tags and not (allowed_tags & tags))
 
 
 def placement_allowed(placement: AdPlacement) -> bool:

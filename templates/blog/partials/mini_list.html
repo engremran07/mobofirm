@@ -1,0 +1,17 @@
+{# Contract: title, cards (list of PostCard), heading_id; renders a compact ranked list. #}
+<section class="side-widget" aria-labelledby="{{ heading_id }}">
+  <h2 class="side-widget__title" id="{{ heading_id }}">{{ title }}</h2>
+  <ol class="mini-list">
+    {% for card in cards %}
+      <li class="mini-list__item">
+        <span class="mini-list__rank" aria-hidden="true">{{ forloop.counter }}</span>
+        <div>
+          <a class="mini-list__link" href="{{ card.url }}">{{ card.title }}</a>
+          <p class="mini-list__meta">{% if card.published %}<time datetime="{{ card.published|date:'c' }}">{{ card.published|date:"M j, Y" }}</time> · {% endif %}{{ card.reading_time }} min read</p>
+        </div>
+      </li>
+    {% empty %}
+      <li class="muted small">Nothing here yet.</li>
+    {% endfor %}
+  </ol>
+</section>

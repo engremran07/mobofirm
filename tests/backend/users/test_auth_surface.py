@@ -6,7 +6,8 @@ from unittest.mock import patch
 from allauth.account.models import EmailAddress
 from django.conf import settings
 from django.contrib.auth import get_user_model
-from django.test import Client, TestCase
+from django.forms import ChoiceField
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
 from apps.users.forms import TellUsAboutYouForm
@@ -86,7 +87,7 @@ class AuthSurfaceTests(TestCase):
             r'name="csrfmiddlewaretoken" value="([^"]+)"',
             page.content.decode(),
         )
-        self.assertIsNotNone(token)
+        assert token is not None
 
         response = csrf_client.post(
             reverse("users:account_logout"),
@@ -98,8 +99,16 @@ class AuthSurfaceTests(TestCase):
 
     def test_country_fields_have_searchable_complete_choices(self):
         form = TellUsAboutYouForm(user=self.user)
-        country_choices = dict(form.fields["country"].choices)
-        phone_choices = dict(form.fields["phone_country_code"].choices)
+        country_field = form.fields["country"]
+        phone_field = form.fields["phone_country_code"]
+        assert isinstance(country_field, ChoiceField)
+        assert isinstance(phone_field, ChoiceField)
+        country_options = country_field.choices
+        phone_options = phone_field.choices
+        assert isinstance(country_options, list)
+        assert isinstance(phone_options, list)
+        country_choices = dict(country_options)
+        phone_choices = dict(phone_options)
 
         self.assertIn("US", country_choices)
         self.assertIn("CA", country_choices)
@@ -107,15 +116,16 @@ class AuthSurfaceTests(TestCase):
         self.assertIn("United States", phone_choices["+1"])
         self.assertIn("Canada", phone_choices["+1"])
 
+    @override_settings(COUNTRY_HEADER="CF-IPCountry", TRUSTED_PROXY_COUNT=1)
     def test_profile_completion_suggests_detected_country_without_saving_it(self):
         self.client.force_login(self.user)
 
-        with patch(
-            "apps.users.services.detect_country_from_ip",
-            return_value="CA",
-        ):
-            response = self.client.get(reverse("users:tell_us_about_you"))
+        with patch("requests.get") as network:
+            response = self.client.get(
+                reverse("users:tell_us_about_you"), HTTP_CF_IPCOUNTRY="CA"
+            )
 
+        network.assert_not_called()
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["form"]["country"].value(), "CA")
         self.assertEqual(response.context["form"]["phone_country_code"].value(), "+1")
@@ -159,7 +169,7 @@ class AuthSurfaceTests(TestCase):
             r'name="csrfmiddlewaretoken" value="([^"]+)"',
             form_response.content.decode(),
         )
-        self.assertIsNotNone(token)
+        assert token is not None
 
         response = csrf_client.post(
             reverse("users:account_login"),

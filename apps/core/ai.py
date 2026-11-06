@@ -66,7 +66,7 @@ class CoreAiService:
             ok = bool(text)
             self._measure("generate_text", start, ok, mock=self.mock_mode)
             return text or ""
-        except Exception as exc:
+        except ai_client.AiClientError as exc:
             self._measure("generate_text_failed", start, False, error=str(exc))
             return ""
 
@@ -86,7 +86,7 @@ class CoreAiService:
                 "classify_text", start, ok, labels=list(labels), mock=self.mock_mode
             )
             return (result or "").strip()
-        except Exception as exc:
+        except ai_client.AiClientError as exc:
             self._measure("classify_text_failed", start, False, error=str(exc))
             return ""
 
@@ -99,7 +99,7 @@ class CoreAiService:
                 "embed_text", start, True, mock=self.mock_mode, length=len(digest)
             )
             return digest
-        except Exception as exc:
+        except UnicodeEncodeError as exc:
             self._measure("embed_text_failed", start, False, error=str(exc))
             return b""
 
@@ -169,6 +169,6 @@ def safe_generate_text(
         return core_ai.generate_text(
             prompt, context=context, constraints={"max_tokens": max_tokens}, user=user
         )
-    except Exception as exc:
+    except ai_client.AiClientError as exc:
         log_event(logger, "warning", "ai.safe_generate_text.failed", error=str(exc))
         return ""

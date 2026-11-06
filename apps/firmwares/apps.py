@@ -1,3 +1,5 @@
+from importlib import import_module
+
 from django.apps import AppConfig
 
 
@@ -13,11 +15,4 @@ class FirmwaresConfig(AppConfig):
 
     def ready(self) -> None:
         """Register firmware signal handlers when the app is ready."""
-        try:
-            from . import signal_handlers  # noqa: F401
-        except Exception as e:
-            import logging
-
-            logging.getLogger(__name__).warning(
-                f"Failed to register firmwares signal handlers: {e}"
-            )
+        import_module(f"{self.name}.signal_handlers")

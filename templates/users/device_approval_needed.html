@@ -1,9 +1,0 @@
-{% extends "base.html" %}
-{% block title %}Approve this device | {{ site_name|default:"Mobofirm" }}{% endblock %}
-{% block content %}
-<div class="site-container py-5"><section class="surface-card p-4">
-  <p class="section-eyebrow">Account security</p><h1 class="h2">Device approval required</h1>
-  <p>{{ reason|default:"This device needs approval before it can continue." }}</p>
-  {% if approval_url %}<a class="btn btn-primary" href="{{ approval_url }}">Approve this device</a>{% else %}<a href="{% url 'users:dashboard' %}">Return to account</a>{% endif %}
-</section></div>
-{% endblock %}

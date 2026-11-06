@@ -9,7 +9,7 @@
     <h1 id="home-title" class="hero-title mb-3">Find the right firmware for your device.</h1>
     <p class="hero-copy mb-4">Search by device name, model code, codename, or manufacturer. Review exact model details before choosing a file.</p>
     <form id="universal-search" class="row g-2" method="get" action="{% url 'firmwares:universal_search' %}"
-          hx-get="{% url 'firmwares:universal_search' %}" hx-trigger="input changed delay:350ms from:input, submit"
+          hx-get="{% url 'firmwares:universal_search' %}" hx-trigger="input changed delay:350ms from:find input, submit"
           hx-target="#search-results" hx-swap="innerHTML">
       <div class="col-12 col-md">
         <label class="visually-hidden" for="catalog-query">Search devices and firmware</label>
@@ -110,5 +110,31 @@
       <p class="empty-state p-4 mb-0">Device profiles will appear here as they are added to the catalogue.</p>
     {% endif %}
   </section>
+
+  {% if home_widgets %}
+    <section class="pb-5" aria-labelledby="home-widgets-title">
+      <p class="section-eyebrow mb-2">What is new</p>
+      <h2 id="home-widgets-title" class="h3 mb-0">Fresh from the library</h2>
+      {% include "pages/partials/home_widgets.html" with latest_firmwares=home_widgets.firmwares latest_posts=home_widgets.posts latest_tools=home_widgets.tools %}
+    </section>
+  {% endif %}
+
+  {% if ecosystem.shop or ecosystem.marketplace or ecosystem.pages %}
+    <section class="pb-5" aria-labelledby="home-more-title">
+      <p class="section-eyebrow mb-2">More from {{ site_name|default:"Mobofirm" }}</p>
+      <h2 id="home-more-title" class="h3 mb-3">Packages, marketplace and help</h2>
+      <div class="row g-3">
+        {% if ecosystem.shop %}
+          <div class="col-12 col-md-4"><a class="surface-card surface-card--interactive eco-tile" href="{% url 'shop:pricing' %}"><span class="eco-tile__icon"><i data-lucide="package" aria-hidden="true"></i></span><span class="fw-semibold">Download packages</span><span class="small muted">Compare download allowances. Orders are confirmed by our team.</span></a></div>
+        {% endif %}
+        {% if ecosystem.marketplace %}
+          <div class="col-12 col-md-4"><a class="surface-card surface-card--interactive eco-tile" href="{% url 'marketplace:listing_browse' %}"><span class="eco-tile__icon"><i data-lucide="store" aria-hidden="true"></i></span><span class="fw-semibold">Marketplace</span><span class="small muted">Listings from verified sellers, reviewed by staff.</span></a></div>
+        {% endif %}
+        {% if ecosystem.pages %}
+          <div class="col-12 col-md-4"><a class="surface-card surface-card--interactive eco-tile" href="{% url 'pages:index' %}"><span class="eco-tile__icon"><i data-lucide="book-open" aria-hidden="true"></i></span><span class="fw-semibold">Help and information</span><span class="small muted">How to flash, FAQ, and how firmware is reviewed.</span></a></div>
+        {% endif %}
+      </div>
+    </section>
+  {% endif %}
 </div>
 {% endblock %}

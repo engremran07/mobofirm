@@ -4,14 +4,12 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-    dependencies = [
-        ("users", "0003_add_announcement_publication_state"),
-    ]
+    dependencies = (("users", "0003_add_announcement_publication_state"),)
 
-    operations = [
+    operations = (
         migrations.AddField(
             model_name="mfadevice",
             name="last_used_counter",
             field=models.BigIntegerField(blank=True, null=True),
         ),
-    ]
+    )

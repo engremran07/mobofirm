@@ -3,9 +3,14 @@ Notification Service Implementation
 Provides notification functionality without direct model imports in core.
 """
 
+import logging
+
 from django.apps import apps
+from django.db import DatabaseError
 
 from apps.core.interfaces import NotificationService
+
+logger = logging.getLogger(__name__)
 
 
 class DjangoNotificationService(NotificationService):
@@ -19,25 +24,26 @@ class DjangoNotificationService(NotificationService):
         notification_type: str = "info",
         **kwargs,
     ) -> bool:
-        """Send a notification to a user"""
+        """Send a notification to a user; ``notification_type`` is the priority."""
+        Notification = apps.get_model("users", "Notification")
+        CustomUser = apps.get_model("users", "CustomUser")
+
+        user = CustomUser.objects.filter(id=user_id).first()
+        if not user:
+            return False
+
         try:
-            Notification = apps.get_model("users", "Notification")
-            CustomUser = apps.get_model("users", "CustomUser")
-
-            user = CustomUser.objects.filter(id=user_id).first()
-            if not user:
-                return False
-
             Notification.objects.create(
                 recipient=user,
                 title=title,
                 message=message,
-                notification_type=notification_type,
+                priority=notification_type,
                 **kwargs,
             )
-            return True
-        except Exception:
+        except DatabaseError:
+            logger.exception("Notification for user %s could not be stored", user_id)
             return False
+        return True
 
     def send_bulk(
         self,
@@ -47,24 +53,25 @@ class DjangoNotificationService(NotificationService):
         notification_type: str = "info",
     ) -> int:
         """Send notification to multiple users, returns count sent"""
-        try:
-            Notification = apps.get_model("users", "Notification")
-            CustomUser = apps.get_model("users", "CustomUser")
+        Notification = apps.get_model("users", "Notification")
+        CustomUser = apps.get_model("users", "CustomUser")
 
-            users = CustomUser.objects.filter(id__in=user_ids)
-            notifications = [
-                Notification(
-                    recipient=user,
-                    title=title,
-                    message=message,
-                    notification_type=notification_type,
-                )
-                for user in users
-            ]
+        users = CustomUser.objects.filter(id__in=user_ids)
+        notifications = [
+            Notification(
+                recipient=user,
+                title=title,
+                message=message,
+                priority=notification_type,
+            )
+            for user in users
+        ]
+        try:
             Notification.objects.bulk_create(notifications)
-            return len(notifications)
-        except Exception:
+        except DatabaseError:
+            logger.exception("Bulk notification could not be stored")
             return 0
+        return len(notifications)
 
 
 # Global instance

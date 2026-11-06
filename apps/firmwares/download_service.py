@@ -1,150 +1,219 @@
-"""
-Download gating service — server-side enforcement for firmware downloads.
+"""Download gating service — server-side enforcement for firmware downloads.
 
-Handles token creation, validation, ad-gate enforcement, rate limiting,
-and hotlink protection. All download protection is server-side; client
-countdown is cosmetic only.
+The countdown, ad gate, single-use token, daily quota and signed local links are all
+enforced here; anything the page shows (timers, labels) is informational only.
 """
 
 from __future__ import annotations
 
-import hashlib
-import hmac
 import logging
+import math
 import secrets
 from datetime import timedelta
 from typing import Any
+from urllib.parse import urlsplit
 
+from django.apps import apps as django_apps
 from django.conf import settings
+from django.contrib.contenttypes.models import ContentType
+from django.db import transaction
 from django.http import HttpRequest
+from django.urls import reverse
 from django.utils import timezone
+from django.utils.crypto import constant_time_compare, salted_hmac
 
 from apps.core.utils.ip import get_client_ip as get_request_ip
+from apps.site_settings.services import get_site_settings
 
-from .models import AdGateLog, DownloadSession, DownloadToken, HotlinkBlock
+from .models import (
+    AdGateLog,
+    DownloadSession,
+    DownloadToken,
+    HotlinkBlock,
+)
+from .tracking_models import FirmwareDownloadAttempt
 
 logger = logging.getLogger(__name__)
 
+TOKEN_SALT = "firmwares.download-token"
+LINK_SALT = "firmwares.download-link"
+
 
 def _get_download_config() -> dict[str, Any]:
-    """Load server-side download policy from Django settings."""
+    """Load the server-side download policy from the runtime site settings."""
+    policy = get_site_settings().download
     return {
-        "gate_enabled": settings.FIRMWARE_DOWNLOAD_GATE_ENABLED,
-        "countdown_seconds": settings.FIRMWARE_DOWNLOAD_COUNTDOWN_SECONDS,
-        "ad_gate_enabled": settings.FIRMWARE_DOWNLOAD_AD_GATE_ENABLED,
-        "ad_gate_seconds": settings.FIRMWARE_DOWNLOAD_AD_GATE_SECONDS,
-        "token_expiry_minutes": settings.FIRMWARE_DOWNLOAD_TOKEN_EXPIRY_MINUTES,
-        "require_login": settings.FIRMWARE_DOWNLOAD_REQUIRE_LOGIN,
-        "max_per_day": settings.FIRMWARE_DOWNLOAD_MAX_PER_DAY,
-        "hotlink_protection": settings.FIRMWARE_DOWNLOAD_HOTLINK_PROTECTION,
-        "link_encryption": settings.FIRMWARE_DOWNLOAD_LINK_ENCRYPTION,
+        "gate_enabled": policy.gate_enabled,
+        "countdown_seconds": policy.countdown_seconds,
+        "ad_gate_enabled": policy.ad_gate_enabled,
+        "ad_gate_seconds": policy.ad_gate_seconds,
+        "token_expiry_minutes": policy.token_expiry_minutes,
+        "require_login": policy.require_login,
+        "max_per_day": policy.max_per_day,
+        "hotlink_protection": policy.hotlink_protection,
+        "link_encryption": policy.link_encryption,
+        "link_ttl_seconds": policy.link_ttl_seconds,
     }
 
 
-def create_download_token(
-    firmware: Any,
-    request: HttpRequest,
-) -> DownloadToken:
-    """Create a signed download token for a firmware file."""
+def _firmware_content_type(firmware: Any) -> ContentType:
+    return ContentType.objects.get_for_model(firmware, for_concrete_model=False)
+
+
+def create_download_token(firmware: Any, request: HttpRequest) -> DownloadToken:
+    """Return the caller's live token for a firmware, creating one when needed.
+
+    Reusing an unexpired, unused token keeps repeated page loads from inflating
+    the token table and keeps the countdown anchored to the first visit.
+    """
     config = _get_download_config()
     user = request.user if request.user.is_authenticated else None
+    ip = get_request_ip(request) or None
+    now = timezone.now()
 
-    token = DownloadToken.objects.create(
+    live = DownloadToken.objects.for_firmware(firmware).filter(
+        status=DownloadToken.Status.ACTIVE, expires_at__gt=now
+    )
+    live = live.filter(user=user) if user else live.filter(user__isnull=True, ip=ip)
+    existing = live.order_by("-created_at").first()
+    if existing is not None:
+        return existing
+
+    gate_on = config["gate_enabled"]
+    ad_required = bool(gate_on and config["ad_gate_enabled"])
+    return DownloadToken.objects.create(
         firmware=firmware,
         user=user,
         token=secrets.token_urlsafe(32),
-        ad_gate_required=config["ad_gate_enabled"],
-        ad_gate_completed=not config["ad_gate_enabled"],
-        ip=get_request_ip(request) or None,
+        ad_gate_required=ad_required,
+        ad_gate_completed=not ad_required,
+        ip=ip,
         status=DownloadToken.Status.ACTIVE,
-        expires_at=timezone.now() + timedelta(minutes=config["token_expiry_minutes"]),
+        expires_at=now + timedelta(minutes=config["token_expiry_minutes"]),
     )
-    return token
 
 
 def validate_download_token(token_str: str) -> DownloadToken | None:
-    """Validate a download token. Returns the token or None if invalid.
-
-    NOTE: For atomic validate+use, call atomic_validate_and_start_session() instead.
-    This function is suitable only for read-only checks (e.g., displaying the download page).
-    """
-    try:
-        token = DownloadToken.objects.select_related("firmware").get(
-            token=token_str,
-            status=DownloadToken.Status.ACTIVE,
-        )
-    except DownloadToken.DoesNotExist:
+    """Return the active token, expiring it when stale. Read-only otherwise."""
+    token = DownloadToken.objects.filter(
+        token=token_str, status=DownloadToken.Status.ACTIVE
+    ).first()
+    if token is None:
         return None
-
     if token.expires_at < timezone.now():
         token.status = DownloadToken.Status.EXPIRED
         token.save(update_fields=["status"])
         return None
-
     return token
 
 
-def complete_ad_gate(token: DownloadToken, ad_type: str = "video") -> bool:
-    """Mark ad-gate as completed for a token.
+def seconds_until(token: DownloadToken, wait_seconds: int) -> int:
+    """Whole seconds still to wait, measured from token creation."""
+    elapsed = (timezone.now() - token.created_at).total_seconds()
+    return max(0, math.ceil(wait_seconds - elapsed))
 
-    Enforces server-side minimum watch time (FINDING-0004): the token must have
-    been created at least ``ad_gate_seconds`` ago before the gate can complete.
-    """
+
+def countdown_remaining(token: DownloadToken) -> int:
+    config = _get_download_config()
+    if not config["gate_enabled"]:
+        return 0
+    return seconds_until(token, config["countdown_seconds"])
+
+
+def complete_ad_gate(token: DownloadToken, ad_type: str = "video") -> bool:
+    """Mark the ad gate complete once its minimum watch time has really elapsed."""
     if not token.ad_gate_required:
         return True
 
-    config = _get_download_config()
-    required_seconds = config["ad_gate_seconds"]
-    elapsed = (timezone.now() - token.created_at).total_seconds()
-    if elapsed < required_seconds:
-        logger.warning(
-            "Ad-gate bypass attempt on token %s: elapsed=%.1fs required=%ss",
-            token.pk,
-            elapsed,
-            required_seconds,
-        )
+    required_seconds = _get_download_config()["ad_gate_seconds"]
+    if seconds_until(token, required_seconds) > 0:
+        logger.warning("Ad-gate completed too early for token %s", token.pk)
         return False
 
-    token.ad_gate_completed = True
-    token.save(update_fields=["ad_gate_completed"])
-
-    # Create a session for ad-gate logging
-    session = DownloadSession.objects.filter(token=token).first()
-    if session:
+    if not token.ad_gate_completed:
+        token.ad_gate_completed = True
+        token.save(update_fields=["ad_gate_completed"])
         AdGateLog.objects.create(
-            session=session,
+            token=token,
             ad_type=ad_type,
-            watched_seconds=config["ad_gate_seconds"],
-            required_seconds=config["ad_gate_seconds"],
+            watched_seconds=required_seconds,
+            required_seconds=required_seconds,
             completed=True,
         )
     return True
 
 
 def check_download_allowed(request: HttpRequest, firmware: Any) -> tuple[bool, str]:
-    """
-    Check if a download is allowed (rate limits, login requirements, etc.).
-    Returns (allowed, reason).
+    """Return ``(allowed, reason)`` for login and daily-quota policy.
+
+    The quota counts consumed tokens (actual downloads), per user or, for
+    anonymous visitors, per client IP.
     """
     config = _get_download_config()
 
     if config["require_login"] and not request.user.is_authenticated:
         return False, "Login required to download firmware."
 
-    if config["max_per_day"] > 0 and request.user.is_authenticated:
+    if config["max_per_day"] > 0:
         day_ago = timezone.now() - timedelta(hours=24)
-        daily_count = DownloadToken.objects.filter(
-            user=request.user,
-            created_at__gte=day_ago,
-            status__in=[
-                DownloadToken.Status.ACTIVE,
-                DownloadToken.Status.USED,
-            ],
-        ).count()
-        if daily_count >= config["max_per_day"]:
+        used = DownloadToken.objects.filter(
+            status=DownloadToken.Status.USED, used_at__gte=day_ago
+        )
+        if request.user.is_authenticated:
+            used = used.filter(user=request.user)
+        else:
+            ip = get_request_ip(request)
+            used = used.filter(user__isnull=True, ip=ip) if ip else used.none()
+        if used.count() >= config["max_per_day"]:
             return False, f"Daily download limit ({config['max_per_day']}) reached."
 
-    return True, ""
+    return check_entitlement(request, firmware)
+
+
+def _entitlement_context(request: HttpRequest, firmware: Any):
+    """Shop services plus the firmware type key, or ``None`` when not enforced.
+
+    Optional seam to ``apps.shop``: off unless ``SHOP_ENTITLEMENTS_ENFORCED`` is true,
+    the shop app is installed, and the visitor is signed in (anonymous visitors keep
+    the IP-based daily limit above).
+    """
+    if not getattr(settings, "SHOP_ENTITLEMENTS_ENFORCED", False):
+        return None
+    if not request.user.is_authenticated or not django_apps.is_installed("apps.shop"):
+        return None
+    from apps.shop import services as shop_services
+
+    from .catalog import TYPE_KEY_BY_CLASS
+
+    type_key = TYPE_KEY_BY_CLASS.get(type(firmware), "")
+    return shop_services, type_key
+
+
+def _size_mb(firmware: Any) -> int:
+    return math.ceil((firmware.file_size or 0) / (1024 * 1024))
+
+
+def check_entitlement(request: HttpRequest, firmware: Any) -> tuple[bool, str]:
+    """Apply the visitor's shop package (type access and quotas) when enforced."""
+    context = _entitlement_context(request, firmware)
+    if context is None:
+        return True, ""
+    shop_services, type_key = context
+    if type_key in shop_services.TIER_GATED_TYPES and (
+        not shop_services.firmware_type_allowed(request.user, type_key)
+    ):
+        return False, "Your package does not include this firmware category."
+    decision = shop_services.check_download_quota(
+        request.user, size_mb=_size_mb(firmware)
+    )
+    return decision.allowed, decision.reason
+
+
+def record_entitlement_download(request: HttpRequest, firmware: Any) -> None:
+    """Count a granted download against the visitor's package (when enforced)."""
+    context = _entitlement_context(request, firmware)
+    if context is not None:
+        context[0].record_download(request.user, size_mb=_size_mb(firmware))
 
 
 def check_hotlink(request: HttpRequest) -> bool:
@@ -158,15 +227,12 @@ def check_hotlink(request: HttpRequest) -> bool:
         return False
 
     try:
-        from urllib.parse import urlparse
-
-        domain = urlparse(referer).hostname or ""
-    except Exception:
+        domain = urlsplit(referer).hostname or ""
+    except ValueError:
         return False
 
-    # Allow our own domain
     allowed_hosts = getattr(settings, "ALLOWED_HOSTS", [])
-    if domain in allowed_hosts or domain == "localhost" or domain == "127.0.0.1":
+    if domain in allowed_hosts or domain in {"localhost", "127.0.0.1"}:
         return False
 
     blocked = HotlinkBlock.objects.filter(domain=domain, is_active=True).first()
@@ -179,114 +245,117 @@ def check_hotlink(request: HttpRequest) -> bool:
     return False
 
 
-def start_download_session(
-    token: DownloadToken, request: HttpRequest
-) -> DownloadSession:
-    """Create a download session and mark the token as used.
+class TokenError(Exception):
+    """A download token could not be consumed; ``code`` selects the user message."""
 
-    WARNING: This function does NOT atomically validate + mark-used.
-    For atomic token consumption, use atomic_validate_and_start_session().
+    def __init__(self, code: str, wait_seconds: int = 0):
+        super().__init__(code)
+        self.code = code
+        self.wait_seconds = wait_seconds
+
+
+def consume_download_token(
+    token_str: str, firmware: Any, request: HttpRequest
+) -> DownloadToken:
+    """Atomically validate and consume a token, opening a download session.
+
+    Raises :class:`TokenError` with code ``expired``, ``invalid``, ``countdown`` or
+    ``adgate``. Row locking prevents two concurrent requests from both succeeding.
     """
-    session = DownloadSession.objects.create(
-        token=token,
-        user=token.user,
-        ip=get_request_ip(request) or None,
-        user_agent=request.META.get("HTTP_USER_AGENT", "")[:255],
-        status=DownloadSession.Status.STARTED,
-    )
-    token.status = DownloadToken.Status.USED
-    token.used_at = timezone.now()
-    token.save(update_fields=["status", "used_at"])
-    return session
-
-
-def atomic_validate_and_start_session(
-    token_str: str, request: HttpRequest
-) -> DownloadSession | None:
-    """Atomically validate a token and start a download session.
-
-    Uses SELECT FOR UPDATE to prevent TOCTOU race conditions (FINDING-0001):
-    two concurrent requests with the same token can no longer both succeed.
-    Returns None if the token is invalid/expired/used.
-    """
-    from django.db import transaction as db_transaction
-
-    with db_transaction.atomic():
-        try:
-            token = (
-                DownloadToken.objects.select_for_update()
-                .select_related("firmware")
-                .get(token=token_str, status=DownloadToken.Status.ACTIVE)
-            )
-        except DownloadToken.DoesNotExist:
-            return None
-
-        if token.expires_at < timezone.now():
+    config = _get_download_config()
+    content_type = _firmware_content_type(firmware)
+    error: TokenError | None = None
+    with transaction.atomic():
+        token = (
+            DownloadToken.objects.select_for_update()
+            .filter(token=token_str, status=DownloadToken.Status.ACTIVE)
+            .first()
+        )
+        if token is None:
+            error = TokenError("expired")
+        elif token.expires_at < timezone.now():
             token.status = DownloadToken.Status.EXPIRED
             token.save(update_fields=["status"])
-            return None
-
-        session = DownloadSession.objects.create(
-            token=token,
-            user=token.user,
-            ip=get_request_ip(request) or None,
-            user_agent=request.META.get("HTTP_USER_AGENT", "")[:255],
-            status=DownloadSession.Status.STARTED,
-        )
-        token.status = DownloadToken.Status.USED
-        token.used_at = timezone.now()
-        token.save(update_fields=["status", "used_at"])
-    return session
-
-
-def generate_signed_url(firmware: Any, token: DownloadToken) -> str | None:
-    """Generate a signed/encrypted download URL for a firmware file."""
-    if not firmware.stored_file_path:
-        return None
-
-    # If already a full URL (external storage), return it directly
-    if firmware.stored_file_path.startswith(("http://", "https://")):
-        return firmware.stored_file_path
-
-    # FINDING-0019: Generate a time-limited HMAC URL for locally stored files
-    # instead of returning None (which made all local firmware inaccessible).
-    import hashlib as _hashlib
-    import hmac as _hmac
-
-    from django.urls import reverse
-
-    key = getattr(settings, "SECRET_KEY", "fallback-key").encode()
-    token_str = token.token
-    sig = _hmac.new(key, token_str.encode(), _hashlib.sha256).hexdigest()
-    # URL: /firmwares/serve/<firmware_id>/?token=<tok>&sig=<hmac>
-    path = reverse(
-        "firmwares:serve_local_file",
-        kwargs={"firmware_id": str(firmware.pk)},
-    )
-    return f"{path}?token={token_str}&sig={sig}"
+            error = TokenError("expired")
+        elif token.content_type_id != content_type.pk or token.object_id != firmware.pk:
+            error = TokenError("invalid")
+        elif (
+            config["gate_enabled"]
+            and (wait := seconds_until(token, config["countdown_seconds"])) > 0
+        ):
+            error = TokenError("countdown", wait)
+        elif token.ad_gate_required and not token.ad_gate_completed:
+            error = TokenError("adgate")
+        else:
+            ip = get_request_ip(request) or None
+            session = DownloadSession.objects.create(
+                token=token,
+                user=token.user,
+                ip=ip,
+                user_agent=request.META.get("HTTP_USER_AGENT", "")[:255],
+                status=DownloadSession.Status.STARTED,
+            )
+            AdGateLog.objects.filter(token=token, session__isnull=True).update(
+                session=session
+            )
+            FirmwareDownloadAttempt.objects.create(
+                content_type=content_type,
+                object_id=firmware.pk,
+                user=token.user,
+                status="ready",
+                ip_address=ip,
+            )
+            token.status = DownloadToken.Status.USED
+            token.used_at = timezone.now()
+            token.save(update_fields=["status", "used_at"])
+    if error is not None or token is None:
+        raise error or TokenError("expired")
+    return token
 
 
 def sign_token(token_str: str) -> str:
-    """Create an HMAC signature for a download token.
-
-    FINDING-0003 fix: use the full 64-char hexdigest (256-bit security),
-    not a truncated 16-char value (only 64-bit security, brute-forceable).
-    """
-    key = getattr(settings, "SECRET_KEY", "fallback-key").encode()
-    return hmac.new(key, token_str.encode(), hashlib.sha256).hexdigest()
+    """HMAC the token with the project secret (full SHA-256 digest)."""
+    return salted_hmac(TOKEN_SALT, token_str, algorithm="sha256").hexdigest()
 
 
 def verify_signature(token_str: str, signature: str) -> bool:
-    """Verify an HMAC signature for a download token."""
-    expected = sign_token(token_str)
-    return hmac.compare_digest(expected, signature)
+    return constant_time_compare(sign_token(token_str), signature or "")
+
+
+def _link_signature(token_str: str, firmware_id: str, expires: int) -> str:
+    return salted_hmac(
+        LINK_SALT, f"{token_str}:{firmware_id}:{expires}", algorithm="sha256"
+    ).hexdigest()
+
+
+def generate_signed_url(firmware: Any, token: DownloadToken) -> str | None:
+    """Short-lived URL bound to the token and firmware for a stored file."""
+    if firmware.is_external or not firmware.stored_file_path:
+        return None
+    ttl = _get_download_config()["link_ttl_seconds"]
+    expires = int(timezone.now().timestamp()) + ttl
+    sig = _link_signature(token.token, str(firmware.pk), expires)
+    path = reverse(
+        "firmwares:serve_local_file", kwargs={"firmware_id": str(firmware.pk)}
+    )
+    return f"{path}?token={token.token}&exp={expires}&sig={sig}"
+
+
+def verify_link(token_str: str, firmware_id: str, expires: str, sig: str) -> bool:
+    """Validate a signed serve link: signature, firmware binding and expiry."""
+    try:
+        expires_at = int(expires)
+    except (TypeError, ValueError):
+        return False
+    if expires_at < int(timezone.now().timestamp()):
+        return False
+    return constant_time_compare(
+        _link_signature(token_str, str(firmware_id), expires_at), sig or ""
+    )
 
 
 def expire_stale_tokens() -> int:
     """Expire tokens that have passed their expiry time. Returns count expired."""
-    now = timezone.now()
-    count = DownloadToken.objects.filter(
-        status=DownloadToken.Status.ACTIVE,
-        expires_at__lt=now,
+    return DownloadToken.objects.filter(
+        status=DownloadToken.Status.ACTIVE, expires_at__lt=timezone.now()
     ).update(status=DownloadToken.Status.EXPIRED)
-    return count

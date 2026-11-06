@@ -32,6 +32,7 @@ class ReleaseError(Exception):
 
 
 def project_version(root: Path) -> str:
+    """Return the validated SemVer ``[project] version`` from pyproject.toml."""
     project = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8")).get(
         "project"
     )
@@ -44,6 +45,7 @@ def project_version(root: Path) -> str:
 
 
 def changelog_text(root: Path) -> str:
+    """Read CHANGELOG.md and validate its heading and Unreleased section."""
     changelog = (root / "CHANGELOG.md").read_text(encoding="utf-8")
     if not changelog.startswith("# Changelog\n"):
         raise ReleaseError("CHANGELOG.md must start with '# Changelog'")
@@ -53,6 +55,7 @@ def changelog_text(root: Path) -> str:
 
 
 def unreleased_notes(changelog: str) -> str:
+    """Return the body of the Unreleased section."""
     match = UNRELEASED_PATTERN.search(changelog)
     if match is None:
         raise ReleaseError("CHANGELOG.md is missing its Unreleased section")
@@ -62,6 +65,7 @@ def unreleased_notes(changelog: str) -> str:
 
 
 def release_notes(changelog: str, version: str) -> str:
+    """Return the non-empty notes of the single released section for ``version``."""
     matches = [
         match
         for match in RELEASE_SECTION_PATTERN.finditer(changelog)
@@ -81,6 +85,7 @@ def release_notes(changelog: str, version: str) -> str:
 
 
 def validate_changelog(root: Path) -> None:
+    """Raise ``ReleaseError`` unless the changelog follows Keep a Changelog."""
     changelog = changelog_text(root)
     unreleased = unreleased_notes(changelog)
     if unreleased:
@@ -110,6 +115,7 @@ def validate_changelog(root: Path) -> None:
 
 
 def check_repository(root: Path) -> str:
+    """Validate release metadata and return the project version."""
     version = project_version(root)
     validate_changelog(root)
     return version
@@ -158,6 +164,7 @@ def _replace_project_version(pyproject: str, version: str) -> str:
 
 
 def prepare_release(root: Path, bump: str) -> str:
+    """Bump the version and promote the Unreleased changelog notes into a release."""
     current_version = check_repository(root)
     _require_clean_worktree(root)
 
@@ -173,7 +180,20 @@ def prepare_release(root: Path, bump: str) -> str:
         raise ReleaseError("Add at least one changelog bullet under [Unreleased]")
 
     new_version = _next_version(current_version, bump)
-    tag = f"v{new_version}"
+    _require_unused_tag(root, f"v{new_version}")
+
+    pyproject_path = root / "pyproject.toml"
+    updated_pyproject = _replace_project_version(
+        pyproject_path.read_text(encoding="utf-8"), new_version
+    )
+    updated_changelog = _promote_unreleased(changelog, new_version)
+
+    pyproject_path.write_text(updated_pyproject, encoding="utf-8")
+    (root / "CHANGELOG.md").write_text(updated_changelog, encoding="utf-8")
+    return new_version
+
+
+def _require_unused_tag(root: Path, tag: str) -> None:
     existing_tag = subprocess.run(
         ["git", "tag", "--list", tag],
         cwd=root,
@@ -184,22 +204,18 @@ def prepare_release(root: Path, bump: str) -> str:
     if existing_tag:
         raise ReleaseError(f"Git tag {tag} already exists")
 
-    pyproject_path = root / "pyproject.toml"
-    pyproject = pyproject_path.read_text(encoding="utf-8")
-    updated_pyproject = _replace_project_version(pyproject, new_version)
 
-    changelog_path = root / "CHANGELOG.md"
+def _promote_unreleased(changelog: str, new_version: str) -> str:
     unreleased_header = UNRELEASED_PATTERN.search(changelog)
     if unreleased_header is None:
         raise ReleaseError("CHANGELOG.md is missing its Unreleased section")
-    section_start = unreleased_header.start()
     next_section = SECTION_PATTERN.search(changelog, unreleased_header.end())
     section_end = next_section.start() if next_section else len(changelog)
     released_notes = changelog[unreleased_header.end() : section_end].strip()
     remaining_sections = changelog[section_end:].lstrip("\r\n")
     release_date = datetime.now(UTC).date().isoformat()
-    updated_changelog = (
-        changelog[:section_start]
+    return (
+        changelog[: unreleased_header.start()]
         + "## [Unreleased]\n\n"
         + f"## [{new_version}] - {release_date}\n\n"
         + released_notes
@@ -207,12 +223,9 @@ def prepare_release(root: Path, bump: str) -> str:
         + "\n"
     )
 
-    pyproject_path.write_text(updated_pyproject, encoding="utf-8")
-    changelog_path.write_text(updated_changelog, encoding="utf-8")
-    return new_version
-
 
 def validate_tag(root: Path, tag: str) -> str:
+    """Return the project version after checking ``tag`` matches it."""
     version = check_repository(root)
     match = re.fullmatch(r"v((?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*))", tag)
     if match is None or match.group(1) != version:
@@ -224,6 +237,7 @@ def validate_tag(root: Path, tag: str) -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Run the release command line interface."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root", type=Path, default=ROOT, help=argparse.SUPPRESS)
     subparsers = parser.add_subparsers(dest="command", required=True)

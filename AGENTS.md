@@ -3,11 +3,11 @@
 ## Repository baseline
 
 - This is a runnable Django project. `app/` contains project configuration and `apps/` contains the installed Django applications.
-- The installed local applications are `users`, `core`, `ads`, `devices`, `governance`, `blog`, `comments`, `firmwares`, and `tags`. Verify `app/settings/base.py` before changing that inventory.
+- The installed local applications are `users`, `core`, `ads`, `devices`, `blog`, `comments`, `firmwares`, and `tags` (plus the integrated `storage`, `seo`, `pages`, `shop`, `marketplace`, and `filemanager`). Verify `app/settings/base.py` before changing that inventory.
 - Profile, following, and activity functionality belongs to `users`.
-- Governance-pack policies, registers, and decisions are documentation under `docs/00-governance/`; there is no root-level governance package. `apps/governance/` is a real Django app and remains installed.
+- Governance-pack policies, registers, and decisions are documentation under `docs/00-governance/`. The former `apps.governance` Django app was removed by owner decision: moderation is app-owned (firmware pending/approved/rejected with reviewer, timestamp and reason in `firmwares`; blog post status workflow in `blog`; comment moderation status in `comments`; tag curation in `tags`), operated by staff holding the relevant model permission.
 - PostgreSQL is the configured runtime database. Tests use in-memory SQLite. Do not run migrations or cleanup commands against a non-test database without explicit authorization.
-- The product owner has approved the frontend foundation: Django templates, Bootstrap, HTMX, Alpine's CSP-safe runtime, Lucide, and Vite. Public and Django admin experiences use distinct shells over one centrally maintained token/static-asset source. The first-pass visual direction is light-first editorial with a balanced, multi-tone dark theme; final visual calibration remains a product/design review item, not a blocker to the approved functional implementation.
+- The product owner has approved the frontend foundation: Django templates, Bootstrap, HTMX, Alpine's CSP-safe runtime, Lucide, and Vite. Public and Django admin experiences use distinct shells: the public shell shares one token/static-asset source and the admin is django-unfold themed from the same brand tokens (new admin code extends `apps.core.admin_base`, never `django.contrib.admin.ModelAdmin` directly). The first-pass visual direction is light-first editorial with a balanced, multi-tone dark theme; final visual calibration remains a product/design review item, not a blocker to the approved functional implementation.
 - Do not add dependencies or documentation files unless a requirement needs them. Preserve the existing `app/` and `apps/` separation.
 
 ## Zero-drift engineering mandate
@@ -18,7 +18,7 @@ Do not ship placeholder feature implementations, success-shaped fallbacks, silen
 
 For regressions, reproduce and trace the root cause before fixing it. Avoid repeated symptom patches and blind retry/reversal loops. If a fix fails, stop and revise the causal hypothesis; add a bounded rollback or compensation only when its trigger, state effects, and recovery are defined and tested.
 
-All automated cross-app work must specify its owner, transaction/commit boundary, idempotency key, retry and terminal-failure behavior, and audit outcome. Firmware-to-blog and blog-to-tags automation must never bypass the governance review/publication boundary.
+All automated cross-app work must specify its owner, transaction/commit boundary, idempotency key, retry and terminal-failure behavior, and audit outcome. Firmware-to-blog automation owns exactly one post per brand, model and chipset (`firmwares.AutomatedBlogLink`), authored by the dedicated non-login automation user and refreshed after commit; it only lists firmware that staff have approved (`is_verified`).
 
 ## Test layout
 

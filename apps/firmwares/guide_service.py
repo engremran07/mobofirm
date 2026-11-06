@@ -10,9 +10,11 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+import markdown
 from django.db import transaction
-from django.utils import timezone
 from django.utils.text import slugify
+
+from apps.core.ai_client import AiClientError
 
 from .models import (
     Brand,
@@ -42,7 +44,7 @@ def _get_recommended_tools(
     brand_name = brand.name if brand else ""
 
     # Try template-assigned tools first, but validate them
-    raw_tools = list(template.recommended_tools.filter(is_active=True))  # type: ignore[attr-defined]
+    raw_tools = list(template.recommended_tools.filter(is_active=True))
     if raw_tools:
         tools = filter_tools_for_brand(raw_tools, brand_name, chipset)
         if tools:
@@ -59,11 +61,9 @@ def _format_tool_list(tools: list[FlashingTool]) -> str:
     lines: list[str] = []
     for tool in tools:
         risk = (
-            f" ⚠️ {tool.get_risk_level_display()}"  # type: ignore[attr-defined]
-            if tool.risk_level != "safe"
-            else ""
+            f" ⚠️ {tool.get_risk_level_display()}" if tool.risk_level != "safe" else ""
         )
-        platform = f" ({tool.get_platform_display()})"  # type: ignore[attr-defined]
+        platform = f" ({tool.get_platform_display()})"
         lines.append(f"- **{tool.name}**{platform}{risk}")
         if tool.description:
             lines.append(f"  {tool.description[:150]}")
@@ -200,7 +200,7 @@ Return the improved body text only (Markdown format). Keep it under 2000 words."
         enriched = ai_client.generate_answer(question=prompt, user=None)
         if enriched and len(enriched) > 200:
             return title, enriched
-    except Exception as e:
+    except (AiClientError, OSError, ValueError) as e:
         logger.debug("AI enrichment skipped: %s", e)
     return title, body
 
@@ -228,21 +228,14 @@ def generate_guide_for_brand_model(
     if existing:
         return None
 
-    from django.contrib.auth import get_user_model
+    from .blog_automation import get_automation_author
 
-    author = (
-        get_user_model()
-        .objects.filter(is_staff=True, is_active=True)
-        .order_by("pk")
-        .first()
-    )
-    if author is None:
-        raise ValueError("A staff author is required to generate a governed guide.")
+    author = get_automation_author()
 
     brand_name = brand.name
     model_name = model_obj.name if model_obj else ""
     chipset = (model_obj.chipset if model_obj else template.chipset_filter) or ""
-    guide_type_display = template.get_guide_type_display()  # type: ignore[attr-defined]
+    guide_type_display = template.get_guide_type_display()
 
     # Build content
     tools = _get_recommended_tools(template, brand, chipset)
@@ -277,6 +270,9 @@ def generate_guide_for_brand_model(
     # AI enrichment
     if use_ai:
         title, body = _try_ai_enrich(title, body, brand_name, template.guide_type)
+
+    # Templates are authored in Markdown; the post body is sanitised HTML
+    body = markdown.markdown(body, extensions=["sane_lists"])
 
     # Create slug
     slug_base = slugify(f"{brand_name}-{model_name}-{template.guide_type}".strip("-"))
@@ -352,8 +348,8 @@ def generate_guides_for_template(
     results: list[GeneratedFlashingGuide] = []
 
     # Get target brands
-    if template.brand_id:  # type: ignore[attr-defined]
-        brands: QuerySet[Brand] = Brand.objects.filter(pk=template.brand_id)  # type: ignore[attr-defined]
+    if template.brand_id:
+        brands: QuerySet[Brand] = Brand.objects.filter(pk=template.brand_id)
     else:
         brands = Brand.objects.filter(is_featured=True)
 

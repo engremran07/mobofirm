@@ -1,3 +1,5 @@
+from importlib import import_module
+
 from django.apps import AppConfig
 
 
@@ -7,8 +9,4 @@ class CommentsConfig(AppConfig):
     verbose_name = "Comments"
 
     def ready(self):
-        """Import signals when app is ready."""
-        try:
-            import apps.comments.signals  # noqa
-        except ImportError:
-            pass
+        import_module("apps.comments.signals")

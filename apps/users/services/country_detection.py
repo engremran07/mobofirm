@@ -2,7 +2,7 @@
 apps/users/services/country_detection.py
 
 User-related services including:
-- IP-based country detection
+- Edge-header country detection (no third-party IP lookups)
 - Phone number validation
 - Profile completion checks
 """
@@ -12,6 +12,7 @@ from __future__ import annotations
 import logging
 import re
 
+from django.conf import settings
 from django.utils import timezone
 
 logger = logging.getLogger(__name__)
@@ -230,50 +231,28 @@ def get_phone_code_for_country(country_code: str) -> str:
     return COUNTRY_PHONE_CODES.get(country_code.upper(), "")
 
 
-def detect_country_from_ip(ip_address: str) -> str | None:
+def detect_country(request) -> str | None:
     """
-    Detect country from IP address using free IP geolocation.
+    Read the visitor's country from the edge proxy/CDN header, if configured.
 
-    Returns ISO 3166-1 alpha-2 country code or None.
+    No visitor IP is sent to a third party and no network call is made. The
+    header named by ``COUNTRY_HEADER`` (for example ``CF-IPCountry``) is only
+    honoured when ``TRUSTED_PROXY_COUNT`` marks the app as sitting behind a
+    proxy that overwrites it. Returns an ISO 3166-1 alpha-2 code or None.
     """
-    if not ip_address or ip_address in ("127.0.0.1", "localhost", "::1"):
+    header = (getattr(settings, "COUNTRY_HEADER", "") or "").strip()
+    if not header or int(getattr(settings, "TRUSTED_PROXY_COUNT", 0) or 0) <= 0:
         return None
-
-    try:
-        import requests
-
-        # Use ip-api.com (free, no API key required, 45 requests/minute)
-        response = requests.get(
-            f"http://ip-api.com/json/{ip_address}",
-            timeout=3,
-            params={"fields": "countryCode,status"},
-        )
-
-        if response.status_code == 200:
-            data = response.json()
-            if data.get("status") == "success":
-                return data.get("countryCode")
-
-    except Exception as e:
-        logger.warning(f"IP geolocation failed for {ip_address}: {e}")
-
+    meta_key = "HTTP_" + header.upper().replace("-", "_")
+    code = (request.META.get(meta_key) or "").strip().upper()
+    if len(code) == 2 and code.isalpha() and code not in {"XX", "T1"}:
+        return code
     return None
-
-
-def get_client_ip(request) -> str:
-    """Extract client IP from request, handling proxies."""
-    x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
-    if x_forwarded_for:
-        # Take the first IP in the chain
-        ip = x_forwarded_for.split(",")[0].strip()
-    else:
-        ip = request.META.get("REMOTE_ADDR", "")
-    return ip
 
 
 def auto_detect_user_country(user, request) -> bool:
     """
-    Auto-detect and set user's country from their IP.
+    Auto-detect and set user's country from the trusted edge header.
 
     Returns True if country was detected and set.
     """
@@ -281,8 +260,7 @@ def auto_detect_user_country(user, request) -> bool:
         # Already detected
         return False
 
-    ip = get_client_ip(request)
-    country_code = detect_country_from_ip(ip)
+    country_code = detect_country(request)
 
     if country_code:
         user.country = country_code
@@ -295,9 +273,7 @@ def auto_detect_user_country(user, request) -> bool:
         user.save(
             update_fields=["country", "country_detected_at", "phone_country_code"]
         )
-        logger.info(
-            f"Auto-detected country {country_code} for user {user.pk} from IP {ip}"
-        )
+        logger.info("Auto-detected country %s for user %s", country_code, user.pk)
         return True
 
     return False

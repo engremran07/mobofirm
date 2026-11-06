@@ -6,6 +6,7 @@ Unified interface for sending emails with template support.
 """
 
 import logging
+import smtplib
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -25,7 +26,6 @@ class EmailBackend(ABC):
         html_message: str | None = None,
     ) -> int:
         """Send an email"""
-        pass
 
 
 class DjangoEmailBackend(EmailBackend):
@@ -50,8 +50,8 @@ class DjangoEmailBackend(EmailBackend):
                 html_message=html_message,
                 fail_silently=False,
             )
-        except Exception as e:
-            logger.error(f"Email sending failed: {e}", exc_info=True)
+        except (OSError, smtplib.SMTPException):
+            logger.exception("Email sending failed")
             return 0
 
 
@@ -140,6 +140,7 @@ class EmailService:
 
         try:
             # Render subject (remove newlines)
+            subject: str
             try:
                 subject = render_to_string(
                     f"{template_prefix}_subject.txt", context
@@ -153,6 +154,7 @@ class EmailService:
                     subject = "New message"
 
             # Render plain text message
+            text_message: str
             try:
                 text_message = render_to_string(f"{template_prefix}.txt", context)
             except TemplateDoesNotExist:
@@ -177,8 +179,8 @@ class EmailService:
                 html_message=html_message,
             )
 
-        except Exception as e:
-            logger.error(f"Templated email failed: {e}", exc_info=True)
+        except (OSError, smtplib.SMTPException):
+            logger.exception("Templated email failed")
             return 0
 
     def send_bulk_email(

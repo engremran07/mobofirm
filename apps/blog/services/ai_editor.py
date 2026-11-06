@@ -66,8 +66,8 @@ def suggest_outline(text: str, use_cache: bool = True) -> str:
 
         return result
 
-    except Exception as exc:
-        logger.error(f"Outline generation failed: {exc}", exc_info=True)
+    except Exception:
+        logger.exception("Outline generation failed")
         return ""
 
 
@@ -126,8 +126,8 @@ def rewrite_paragraph(text: str, tone: str = "concise", use_cache: bool = True) 
 
         return result
 
-    except Exception as exc:
-        logger.error(f"Paragraph rewrite failed: {exc}", exc_info=True)
+    except Exception:
+        logger.exception("Paragraph rewrite failed")
         return text
 
 
@@ -175,8 +175,8 @@ def generate_summary(text: str, max_sentences: int = 2, use_cache: bool = True) 
 
         return result
 
-    except Exception as exc:
-        logger.error(f"Summary generation failed: {exc}", exc_info=True)
+    except Exception:
+        logger.exception("Summary generation failed")
         # Fallback
         sentences = text.split(". ")
         return ". ".join(sentences[:max_sentences]) + "." if sentences else ""
@@ -225,8 +225,8 @@ def suggest_tags(
 
         return result
 
-    except Exception as exc:
-        logger.error(f"Tag suggestion failed: {exc}", exc_info=True)
+    except Exception:
+        logger.exception("Tag suggestion failed")
         return {"suggestions": []}
 
 
@@ -271,6 +271,6 @@ def generate_title(text: str, max_length: int = 100, use_cache: bool = True) -> 
 
         return result
 
-    except Exception as exc:
-        logger.error(f"Title generation failed: {exc}", exc_info=True)
+    except Exception:
+        logger.exception("Title generation failed")
         return ""

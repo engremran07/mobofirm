@@ -30,7 +30,7 @@ _BRAND_COLORS = [
 
 
 def _brand_color(name: str) -> tuple[str, str]:
-    h = int(hashlib.md5(name.lower().encode()).hexdigest()[:8], 16)  # noqa: S324
+    h = int(hashlib.md5(name.lower().encode()).hexdigest()[:8], 16)
     return _BRAND_COLORS[h % len(_BRAND_COLORS)]
 
 
@@ -67,7 +67,8 @@ class Command(BaseCommand):
     def handle(self, *args: object, **options: object) -> None:
         from apps.firmwares.models import Brand
 
-        out_dir = Path(settings.BASE_DIR) / "static" / "img" / "brands"
+        out_dir = Path(getattr(settings, "BASE_DIR", Path.cwd())) / "static" / "img"
+        out_dir = out_dir / "brands"
         out_dir.mkdir(parents=True, exist_ok=True)
 
         brands = Brand.objects.all().order_by("name")

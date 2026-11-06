@@ -1,0 +1,9 @@
+{# Context: share_links (list of ShareLink). Plain outbound links; no scripts or trackers. #}
+<section class="share" aria-labelledby="share-title">
+  <h2 class="share__title" id="share-title"><i data-lucide="share-2" class="icon" aria-hidden="true"></i> Share this article</h2>
+  <ul class="share__list">
+    {% for link in share_links %}
+      <li><a class="share__link" href="{{ link.href }}"{% if link.href|slice:":4" == "http" %} target="_blank" rel="noopener noreferrer"{% endif %}><i data-lucide="{{ link.icon }}" class="icon" aria-hidden="true"></i>{{ link.label }}{% if link.href|slice:":4" == "http" %}<span class="visually-hidden"> (opens in a new tab)</span>{% endif %}</a></li>
+    {% endfor %}
+  </ul>
+</section>

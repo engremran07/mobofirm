@@ -7,7 +7,7 @@ from allauth.account.views import LogoutView
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from . import admin_views, api, api_auth, mfa_views, views_notifications
+from . import api, api_auth, api_social, mfa_views, views_notifications
 from .views import (
     EnterpriseLoginView,
     EnterpriseSignupView,
@@ -28,7 +28,6 @@ from .views import (
     unsubscribe_push,
     verify_email_required,
     verify_email_status,
-    verify_email_view,
     verify_email_view,
 )
 
@@ -112,20 +111,7 @@ urlpatterns = [
     ),
     path("notifications/push/subscribe/", push_subscription, name="push_subscription"),
     path("notifications/push/unsubscribe/", unsubscribe_push, name="unsubscribe_push"),
-    path(
-        "admin/notification-dashboard/",
-        admin_views.notification_dashboard,
-        name="notification_dashboard",
-    ),
-    path(
-        "api/password-reset/verify/",
-        api.password_reset_verify,
-        name="password_reset_verify",
-    ),
 ]
-
-# Import social API
-from . import api_social  # noqa: E402
 
 # Admin API endpoints (add to main admin URLconf via the platform/urls.py)
 admin_api_patterns = [
@@ -133,6 +119,17 @@ admin_api_patterns = [
         "admin/users/notification/stats/",
         api.notification_stats,
         name="notification_stats_api",
+    ),
+    # Public info APIs (for login page); declared before the <provider_id> routes
+    path(
+        "api/social-providers/info/",
+        api_social.social_providers_info,
+        name="social_providers_info_api",
+    ),
+    path(
+        "api/social-platforms/info/",
+        api_social.social_platforms_info,
+        name="social_platforms_info_api",
     ),
     # Social Auth Provider APIs
     path(
@@ -183,17 +180,6 @@ admin_api_patterns = [
         "api/social-posting/<str:account_id>/send-test/",
         api_social.social_posting_send_test,
         name="social_posting_send_test_api",
-    ),
-    # Public info APIs (for login page)
-    path(
-        "api/social-providers/info/",
-        api_social.social_providers_info,
-        name="social_providers_info_api",
-    ),
-    path(
-        "api/social-platforms/info/",
-        api_social.social_platforms_info,
-        name="social_platforms_info_api",
     ),
 ]
 

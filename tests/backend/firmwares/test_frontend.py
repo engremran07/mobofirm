@@ -1,8 +1,11 @@
-from django.contrib.auth import get_user_model
-from django.test import Client
-from django.test import TestCase
-from django.urls import reverse
+from datetime import timedelta
 
+from django.contrib.auth import get_user_model
+from django.test import Client, TestCase
+from django.urls import reverse
+from django.utils import timezone
+
+from apps.blog.models import Post, PostStatus
 from apps.firmwares.models import (
     Brand,
     FirmwarePackageFormat,
@@ -61,6 +64,76 @@ class FirmwareFrontendTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, public_firmware.original_file_name)
         self.assertNotContains(response, "pending-build.zip")
+
+    def test_model_detail_links_to_model_and_brand_articles(self):
+        response = self.client.get(
+            reverse(
+                "firmwares:model_detail",
+                kwargs={
+                    "brand_slug": self.brand.slug,
+                    "model_slug": self.model.slug,
+                },
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Device guides and articles")
+        self.assertContains(
+            response,
+            reverse(
+                "blog:model_posts",
+                kwargs={
+                    "brand_slug": self.brand.slug,
+                    "model_slug": self.model.slug,
+                },
+            ),
+        )
+        self.assertContains(
+            response,
+            reverse("blog:brand_posts", kwargs={"brand_slug": self.brand.slug}),
+        )
+
+    def test_firmware_detail_shows_only_live_related_guides(self):
+        author = get_user_model().objects.create_user(
+            username="firmware-guide-author",
+            email="firmware-guide-author@example.com",
+            password="firmware-author-test-password",
+        )
+        firmware = self.create_firmware("guide-linked-build.zip", is_verified=True)
+        live_post = Post.objects.create(
+            title="Live device setup guide",
+            summary="Steps for the supported device.",
+            body="<p>Read the verified device setup instructions.</p>",
+            author=author,
+            firmware_brand=self.brand,
+            firmware_model=self.model,
+            status=PostStatus.PUBLISHED,
+            publish_at=timezone.now(),
+        )
+        future_post = Post.objects.create(
+            title="Future device guide",
+            body="<p>This guide is not public yet.</p>",
+            author=author,
+            firmware_brand=self.brand,
+            firmware_model=self.model,
+            status=PostStatus.PUBLISHED,
+            publish_at=timezone.now() + timedelta(days=1),
+        )
+
+        response = self.client.get(
+            reverse(
+                "firmwares:firmware_detail",
+                kwargs={
+                    "firmware_type": "official",
+                    "firmware_id": str(firmware.pk),
+                },
+            )
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Guides for this device")
+        self.assertContains(response, live_post.title)
+        self.assertNotContains(response, future_post.title)
 
     def test_unreviewed_firmware_cannot_be_opened_or_downloaded(self):
         firmware = self.create_firmware("pending-build.zip", is_verified=False)

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import logging
+from typing import ClassVar
 
+from cryptography.fernet import InvalidToken
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 from django.db import models
 from django.utils import timezone
 from solo.models import SingletonModel
@@ -10,6 +13,11 @@ from solo.models import SingletonModel
 from apps.core.models import AuditFieldsModel, SoftDeleteModel, TimestampedModel
 
 logger = logging.getLogger(__name__)
+
+# Failures of apps.firmwares.crypto: missing/invalid FERNET_KEY, tampered or foreign
+# ciphertext, and ciphertext that does not decode to text.
+_ENCRYPT_ERRORS = (ImproperlyConfigured,)
+_DECRYPT_ERRORS = (ImproperlyConfigured, InvalidToken, ValueError)
 
 # ==================== AD NETWORK PROVIDERS ====================
 
@@ -29,7 +37,7 @@ class AdNetwork(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
     Each network has its own configuration, credentials, and ad unit definitions.
     """
 
-    NETWORK_TYPES = [
+    NETWORK_TYPES: ClassVar[list[tuple[str, str]]] = [
         ("adsense", "Google AdSense"),
         ("admanager", "Google Ad Manager (DFP)"),
         ("medianet", "Media.net"),
@@ -77,7 +85,7 @@ class AdNetwork(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
             from apps.firmwares.crypto import encrypt_password
 
             self.api_key = encrypt_password(plaintext)
-        except Exception:
+        except _ENCRYPT_ERRORS:
             logger.warning(
                 "AdNetwork.set_api_key: encryption unavailable, storing blank"
             )
@@ -91,7 +99,7 @@ class AdNetwork(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
             from apps.firmwares.crypto import decrypt_password
 
             return decrypt_password(self.api_key)
-        except Exception:
+        except _DECRYPT_ERRORS:
             logger.warning("AdNetwork.get_api_key: decryption failed (id=%s)", self.pk)
             return ""
 
@@ -104,7 +112,7 @@ class AdNetwork(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
             from apps.firmwares.crypto import encrypt_password
 
             self.api_secret = encrypt_password(plaintext)
-        except Exception:
+        except _ENCRYPT_ERRORS:
             logger.warning(
                 "AdNetwork.set_api_secret: encryption unavailable, storing blank"
             )
@@ -118,7 +126,7 @@ class AdNetwork(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
             from apps.firmwares.crypto import decrypt_password
 
             return decrypt_password(self.api_secret)
-        except Exception:
+        except _DECRYPT_ERRORS:
             logger.warning(
                 "AdNetwork.get_api_secret: decryption failed (id=%s)", self.pk
             )
@@ -159,12 +167,12 @@ class AdNetwork(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
     sync_status = models.CharField(max_length=50, blank=True, default="")
 
     class Meta:
-        ordering = ["-priority", "name"]
+        ordering: ClassVar[list[str]] = ["-priority", "name"]
         verbose_name = "Ad Network"
         verbose_name_plural = "Ad Networks"
 
     def __str__(self) -> str:
-        return f"{self.name} ({self.get_network_type_display()})"  # type: ignore[attr-defined]
+        return f"{self.name} ({self.get_network_type_display()})"
 
 
 class AdUnit(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
@@ -176,7 +184,7 @@ class AdUnit(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
     which network ad units appear in which placements.
     """
 
-    AD_FORMATS = [
+    AD_FORMATS: ClassVar[list[tuple[str, str]]] = [
         ("display", "Display Banner"),
         ("native", "Native Ad"),
         ("video", "Video Ad"),
@@ -232,7 +240,7 @@ class AdUnit(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
 
     class Meta:
         unique_together = ("network", "unit_id")
-        ordering = ["network", "name"]
+        ordering: ClassVar[list[str]] = ["network", "name"]
 
     def __str__(self) -> str:
         return f"{self.network.name} - {self.name} ({self.size_label or 'responsive'})"
@@ -249,7 +257,7 @@ class RewardedAdConfig(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
     for some benefit (extra downloads, points, premium access, etc.).
     """
 
-    REWARD_TYPES = [
+    REWARD_TYPES: ClassVar[list[tuple[str, str]]] = [
         ("download", "Extra Download"),
         ("points", "Points/Credits"),
         ("premium", "Temporary Premium Access"),
@@ -313,7 +321,7 @@ class RewardedAdConfig(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
         verbose_name_plural = "Rewarded Ad Configs"
 
     def __str__(self) -> str:
-        return f"{self.name} ({self.get_reward_type_display()})"  # type: ignore[attr-defined]
+        return f"{self.name} ({self.get_reward_type_display()})"
 
 
 class RewardedAdView(TimestampedModel):
@@ -338,7 +346,7 @@ class RewardedAdView(TimestampedModel):
     watch_duration_seconds = models.PositiveIntegerField(default=0)
 
     # Status
-    STATUS_CHOICES = [
+    STATUS_CHOICES: ClassVar[list[tuple[str, str]]] = [
         ("started", "Started"),
         ("completed", "Completed"),
         ("skipped", "Skipped"),
@@ -357,11 +365,11 @@ class RewardedAdView(TimestampedModel):
     page_url = models.URLField(blank=True, default="")
 
     class Meta:
-        ordering = ["-created_at"]
-        indexes = [
+        ordering: ClassVar[list[str]] = ["-created_at"]
+        indexes = (
             models.Index(fields=["user", "created_at"]),
             models.Index(fields=["config", "status"]),
-        ]
+        )
 
     def __str__(self) -> str:
         return f"{self.user} - {self.config} @ {self.created_at}"
@@ -466,7 +474,7 @@ class AutoAdsScanResult(TimestampedModel):
     )
 
     class Meta:
-        ordering = ["-created_at"]
+        ordering: ClassVar[list[str]] = ["-created_at"]
         db_table = "ads_autoadsscanresult"
         verbose_name = "Auto-Ads Scan Result"
         verbose_name_plural = "Auto-Ads Scan Results"
@@ -538,13 +546,13 @@ class ScanDiscovery(TimestampedModel):
     )
 
     class Meta:
-        ordering = ["-confidence"]
+        ordering: ClassVar[list[str]] = ["-confidence"]
         db_table = "ads_scandiscovery"
         verbose_name = "Scan Discovery"
         verbose_name_plural = "Scan Discoveries"
 
     def __str__(self) -> str:
-        return f"{self.placement_code} ({self.get_status_display()})"  # type: ignore[attr-defined]
+        return f"{self.placement_code} ({self.get_status_display()})"
 
 
 class TemplateAdExclusion(TimestampedModel):
@@ -575,7 +583,7 @@ class TemplateAdExclusion(TimestampedModel):
     )
 
     class Meta:
-        ordering = ["template_path"]
+        ordering: ClassVar[list[str]] = ["template_path"]
         db_table = "ads_templateadexclusion"
         verbose_name = "Template Ad Exclusion"
         verbose_name_plural = "Template Ad Exclusions"
@@ -603,7 +611,7 @@ class AffiliateProvider(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
     - Custom/Direct partnerships
     """
 
-    PROVIDER_TYPES = [
+    PROVIDER_TYPES: ClassVar[list[tuple[str, str]]] = [
         ("amazon", "Amazon Associates"),
         ("cj", "CJ Affiliate"),
         ("shareasale", "ShareASale"),
@@ -652,7 +660,7 @@ class AffiliateProvider(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
             from apps.firmwares.crypto import encrypt_password
 
             self.api_key = encrypt_password(plaintext)
-        except Exception:
+        except _ENCRYPT_ERRORS:
             logger.warning("AffiliateProvider.set_api_key: encryption unavailable")
             self.api_key = ""
 
@@ -664,7 +672,7 @@ class AffiliateProvider(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
             from apps.firmwares.crypto import decrypt_password
 
             return decrypt_password(self.api_key)
-        except Exception:
+        except _DECRYPT_ERRORS:
             logger.warning(
                 "AffiliateProvider.get_api_key: decryption failed (id=%s)", self.pk
             )
@@ -679,7 +687,7 @@ class AffiliateProvider(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
             from apps.firmwares.crypto import encrypt_password
 
             self.api_secret = encrypt_password(plaintext)
-        except Exception:
+        except _ENCRYPT_ERRORS:
             logger.warning("AffiliateProvider.set_api_secret: encryption unavailable")
             self.api_secret = ""
 
@@ -691,7 +699,7 @@ class AffiliateProvider(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
             from apps.firmwares.crypto import decrypt_password
 
             return decrypt_password(self.api_secret)
-        except Exception:
+        except _DECRYPT_ERRORS:
             logger.warning(
                 "AffiliateProvider.get_api_secret: decryption failed (id=%s)", self.pk
             )
@@ -740,12 +748,12 @@ class AffiliateProvider(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
     products_count = models.PositiveIntegerField(default=0)
 
     class Meta:
-        ordering = ["-priority", "name"]
+        ordering: ClassVar[list[str]] = ["-priority", "name"]
         verbose_name = "Affiliate Provider"
         verbose_name_plural = "Affiliate Providers"
 
     def __str__(self) -> str:
-        return f"{self.name} ({self.get_provider_type_display()})"  # type: ignore[attr-defined]
+        return f"{self.name} ({self.get_provider_type_display()})"
 
 
 class AffiliateProductCategory(TimestampedModel):
@@ -779,7 +787,7 @@ class AffiliateProductCategory(TimestampedModel):
 
     class Meta:
         verbose_name_plural = "Affiliate Product Categories"
-        ordering = ["name"]
+        ordering: ClassVar[list[str]] = ["name"]
 
     def __str__(self) -> str:
         if self.parent:
@@ -797,7 +805,7 @@ class AffiliateProduct(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
     - Matched to brands/models for contextual display
     """
 
-    PRODUCT_TYPES = [
+    PRODUCT_TYPES: ClassVar[list[tuple[str, str]]] = [
         ("accessory", "Phone Accessory"),
         ("case", "Phone Case"),
         ("charger", "Charger/Cable"),
@@ -911,12 +919,12 @@ class AffiliateProduct(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
 
     class Meta:
         unique_together = ("provider", "external_id")
-        ordering = ["-ai_relevance_score", "-rating", "name"]
-        indexes = [
+        ordering: ClassVar[list[str]] = ["-ai_relevance_score", "-rating", "name"]
+        indexes = (
             models.Index(fields=["asin"]),
             models.Index(fields=["product_type", "is_enabled"]),
             models.Index(fields=["is_universal", "is_enabled"]),
-        ]
+        )
 
     def __str__(self) -> str:
         return f"{self.name} ({self.provider.name})"
@@ -998,7 +1006,7 @@ class AffiliateProductMatch(TimestampedModel):
     )
 
     class Meta:
-        ordering = ["-is_pinned", "position", "-relevance_score"]
+        ordering: ClassVar[list[str]] = ["-is_pinned", "position", "-relevance_score"]
 
     def __str__(self):
         target = self.brand or self.model or self.variant or self.blog_post
@@ -1046,11 +1054,11 @@ class AffiliateClick(TimestampedModel):
     region = models.CharField(max_length=100, blank=True, default="")
 
     class Meta:
-        ordering = ["-created_at"]
-        indexes = [
+        ordering: ClassVar[list[str]] = ["-created_at"]
+        indexes = (
             models.Index(fields=["product", "created_at"]),
             models.Index(fields=["provider", "created_at"]),
-        ]
+        )
 
     def __str__(self):
         return f"Click: {self.product} @ {self.created_at}"
@@ -1136,7 +1144,7 @@ class AdPlacement(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
     )
 
     class Meta:
-        ordering = ["name"]
+        ordering: ClassVar[list[str]] = ["name"]
 
     def __str__(self) -> str:
         return self.name
@@ -1215,7 +1223,7 @@ class Campaign(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
     locked = models.BooleanField(default=False)
 
     class Meta:
-        ordering = ["name"]
+        ordering: ClassVar[list[str]] = ["name"]
 
     def __str__(self) -> str:
         return self.name
@@ -1243,9 +1251,7 @@ class Campaign(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
         now = timezone.now()
         if self.start_at and self.start_at > now:
             return False
-        if self.end_at and self.end_at < now:
-            return False
-        return True
+        return not (self.end_at and self.end_at < now)
 
 
 class AdCreative(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
@@ -1305,7 +1311,7 @@ class AdCreative(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
         ... )
     """
 
-    CREATIVE_TYPES = [
+    CREATIVE_TYPES: ClassVar[list[tuple[str, str]]] = [
         ("banner", "Banner"),
         ("native", "Native"),
         ("html", "HTML/JS"),
@@ -1328,7 +1334,7 @@ class AdCreative(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
     locked = models.BooleanField(default=False)
 
     class Meta:
-        ordering = ["campaign", "name"]
+        ordering: ClassVar[list[str]] = ["campaign", "name"]
 
     def __str__(self):
         return f"{self.campaign}: {self.name}"
@@ -1603,7 +1609,7 @@ class AdEvent(TimestampedModel):
         >>> ctr = (clicks / impressions * 100) if impressions > 0 else 0
     """
 
-    EVENT_TYPES = [
+    EVENT_TYPES: ClassVar[list[tuple[str, str]]] = [
         ("impression", "Impression"),
         ("click", "Click"),
     ]
@@ -1647,10 +1653,10 @@ class AdEvent(TimestampedModel):
     )
 
     class Meta:
-        indexes = [
+        indexes = (
             models.Index(fields=["event_type", "created_at"]),
             models.Index(fields=["campaign"]),
-        ]
+        )
 
     def __str__(self):
         return f"{self.event_type} @ {self.created_at}"

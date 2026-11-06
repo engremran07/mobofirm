@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Any
 
 from django.conf import settings
+from django.db import DatabaseError
 from django.template.defaultfilters import slugify
 
 logger = logging.getLogger(__name__)
@@ -303,7 +304,7 @@ def scan_templates_for_placements() -> dict[str, Any]:
 
         try:
             text = path.read_text(encoding="utf-8", errors="ignore")
-        except Exception:  # noqa: S112
+        except OSError:
             continue
 
         scanned += 1
@@ -395,9 +396,7 @@ def scan_templates_for_placements() -> dict[str, Any]:
                 name = f"{tpl_slug} {suffix}".replace("-", " ").title()
 
                 # Skip if discovery already exists for this scan result + code
-                if scan_result.discoveries.filter(  # type: ignore[attr-defined]
-                    placement_code=code
-                ).exists():
+                if scan_result.discoveries.filter(placement_code=code).exists():
                     continue
 
                 # Adjust confidence based on traffic + negative signals
@@ -422,9 +421,7 @@ def scan_templates_for_placements() -> dict[str, Any]:
                 discoveries_created += 1
                 tpl_discoveries += 1
 
-        scan_result.total_discoveries = (
-            scan_result.discoveries.count()  # type: ignore[attr-defined]
-        )
+        scan_result.total_discoveries = scan_result.discoveries.count()
         scan_result.save(update_fields=["total_discoveries"])
 
         suggestions.append(
@@ -571,13 +568,9 @@ def _update_scan_review_status(scan: Any, user: Any) -> None:
     """Update the parent AutoAdsScanResult status based on child discovery states."""
     from django.utils import timezone
 
-    total = scan.discoveries.count()  # type: ignore[attr-defined]
-    approved = scan.discoveries.filter(  # type: ignore[attr-defined]
-        status="approved"
-    ).count()
-    rejected = scan.discoveries.filter(  # type: ignore[attr-defined]
-        status="rejected"
-    ).count()
+    total = scan.discoveries.count()
+    approved = scan.discoveries.filter(status="approved").count()
+    rejected = scan.discoveries.filter(status="rejected").count()
     reviewed = approved + rejected
 
     if reviewed == 0:
@@ -616,7 +609,7 @@ def scan_blog_post_body(post_id: int) -> dict[str, Any]:
         post = Post.objects.filter(pk=post_id).first()
         if post is None:
             return {"status": "error", "reason": "post_not_found"}
-    except Exception as exc:
+    except DatabaseError as exc:
         logger.error("Failed to load post %s: %s", post_id, exc)
         return {"status": "error", "reason": str(exc)}
 

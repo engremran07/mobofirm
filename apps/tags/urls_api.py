@@ -7,7 +7,9 @@ The basic Tag API functionality is available via apps/tags/api.py
 To restore these endpoints, reintegrate from apps/core/versions/api_enhanced.py
 """
 
+from django.urls import URLPattern, URLResolver
+
 app_name = "tags_api"
 
 # Endpoints archived - see README in apps/core/versions/ for restoration instructions
-urlpatterns = []
+urlpatterns: list[URLPattern | URLResolver] = []

@@ -18,27 +18,22 @@ class StorageBackend(ABC):
     @abstractmethod
     def save(self, name: str, content) -> str:
         """Save a file and return its path"""
-        pass
 
     @abstractmethod
     def url(self, name: str) -> str:
         """Get public URL for a file"""
-        pass
 
     @abstractmethod
     def delete(self, name: str) -> bool:
         """Delete a file"""
-        pass
 
     @abstractmethod
     def exists(self, name: str) -> bool:
         """Check if file exists"""
-        pass
 
     @abstractmethod
     def size(self, name: str) -> int:
         """Get file size in bytes"""
-        pass
 
 
 class LocalStorageBackend(StorageBackend):
@@ -78,7 +73,7 @@ class S3StorageBackend(StorageBackend):
             self.storage = S3Boto3Storage()
         except ImportError:
             logger.exception("django-storages[s3] not installed")
-            raise ImportError("Install with: pip install django-storages[boto3]")  # noqa: B904
+            raise ImportError("Install with: pip install django-storages[boto3]")
 
     def save(self, name: str, content) -> str:
         return self.storage.save(name, content)
@@ -109,7 +104,7 @@ class GCSStorageBackend(StorageBackend):
             self.storage = GoogleCloudStorage()
         except ImportError:
             logger.exception("django-storages[google] not installed")
-            raise ImportError("Install with: pip install django-storages[google]")  # noqa: B904
+            raise ImportError("Install with: pip install django-storages[google]")
 
     def save(self, name: str, content) -> str:
         return self.storage.save(name, content)
@@ -140,7 +135,7 @@ class AzureStorageBackend(StorageBackend):
             self.storage = AzureStorage()
         except ImportError:
             logger.exception("django-storages[azure] not installed")
-            raise ImportError("Install with: pip install django-storages[azure]")  # noqa: B904
+            raise ImportError("Install with: pip install django-storages[azure]")
 
     def save(self, name: str, content) -> str:
         return self.storage.save(name, content)
@@ -173,7 +168,7 @@ class StorageService:
     def __init__(self, backend: str | None = None):
         from django.conf import settings
 
-        resolved: str = backend or getattr(settings, "STORAGE_BACKEND", "local")
+        resolved = str(backend or getattr(settings, "STORAGE_BACKEND", "local"))
 
         backends: dict[str, type[StorageBackend]] = {
             "local": LocalStorageBackend,
@@ -228,8 +223,8 @@ class StorageService:
         """
         try:
             return self.backend.delete(name)
-        except Exception as e:
-            logger.exception(f"Failed to delete file {name}: {e}")
+        except Exception:
+            logger.exception("Failed to delete file %s", name)
             return False
 
     def file_exists(self, name: str) -> bool:

@@ -1,8 +1,26 @@
 {% extends "base.html" %}
-{% block title %}{{ brand.name }} articles | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block content %}
-<div class="site-container py-5"><p class="section-eyebrow">Device journal</p><h1 class="h2">{{ brand.name }}</h1>
-  <p class="muted">Articles connected with this manufacturer.</p>
-  {% include "blog/partials/post_list_items.html" %}
+<div class="site-container py-4 py-lg-5">
+  {% url 'blog:post_list' as journal_url %}
+  {% include "components/breadcrumbs.html" with current=brand.name parent_label="Journal" parent_url=journal_url %}
+  <header class="hub-header">
+    <span class="hub-header__mark" aria-hidden="true">{{ brand.name|slice:":2"|upper }}</span>
+    <div class="hub-header__text">
+      <p class="section-eyebrow mb-1">Brand journal</p>
+      <h1 class="hub-header__title">{{ brand.name }} firmware news and guides</h1>
+      {% if brand.description %}<p class="hub-header__lead">{{ brand.description|truncatewords:40 }}</p>{% endif %}
+      <div class="hub-header__actions">
+        <a class="btn btn-primary" href="{% url 'firmwares:brand_detail' slug=brand.slug %}"><i data-lucide="download" class="icon" aria-hidden="true"></i> {{ brand.name }} firmware</a>
+        <a class="btn btn-outline-secondary" href="{% url 'firmwares:brand_list' %}">All brands</a>
+      </div>
+    </div>
+  </header>
+  {% if other_brands %}
+    <nav class="hub-links" aria-label="Other brands">
+      <span class="hub-links__label">More brands</span>
+      <ul>{% for other in other_brands %}<li><a href="{% url 'blog:brand_posts' brand_slug=other.slug %}">{{ other.name }}</a></li>{% endfor %}</ul>
+    </nav>
+  {% endif %}
+  {% include "blog/partials/hub_body.html" %}
 </div>
 {% endblock %}

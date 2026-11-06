@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Download {{ firmware.build_number|default:firmware.original_file_name }} | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block extra_head %}{{ block.super }}{% if refresh_seconds %}<meta http-equiv="refresh" content="{{ refresh_seconds }}">{% endif %}{% endblock %}
 {% block content %}
 <div class="site-container py-5">
   <div class="row justify-content-center">
@@ -13,17 +13,36 @@
           <dt class="col-sm-4 muted fw-normal">File</dt><dd class="col-sm-8 build-code">{{ firmware.original_file_name }}</dd>
           <dt class="col-sm-4 muted fw-normal">Size</dt><dd class="col-sm-8">{{ file_size_display }}</dd>
           <dt class="col-sm-4 muted fw-normal">Model code</dt><dd class="col-sm-8 model-code">{{ firmware.model.model_code|default:"Not specified" }}</dd>
-          <dt class="col-sm-4 muted fw-normal">Review</dt><dd class="col-sm-8">{% if firmware.is_verified %}Verified{% else %}Governance reviewed{% endif %}</dd>
+          <dt class="col-sm-4 muted fw-normal">Hosting</dt><dd class="col-sm-8">{% if firmware.is_external %}<span class="badge text-bg-secondary">External download</span> You will be sent to {{ external_host }}.{% else %}Hosted by Mobofirm{% endif %}</dd>
+          <dt class="col-sm-4 muted fw-normal">Review</dt><dd class="col-sm-8">Verified</dd>
         </dl>
         {% if firmware.is_password_protected %}
           <p class="alert alert-warning">This archive is marked as password-protected. The password is not displayed on this page.</p>
         {% endif %}
         <p class="small muted">Use only with the exact compatible model and follow the device manufacturer's installation guidance. Mobofirm does not claim that a download has completed until the browser receives the file.</p>
+
+        {% if ad_required %}
+          <div class="alert alert-info" role="status">
+            <strong>Sponsor step.</strong>
+            {% if ad_remaining_seconds %}The confirmation unlocks in {{ ad_remaining_seconds }} second{{ ad_remaining_seconds|pluralize }}. This page refreshes automatically.{% else %}Confirm to continue.{% endif %}
+          </div>
+          <form method="post" action="{% url 'firmwares:firmware_ad_gate_complete' firmware_type=firmware_type firmware_id=firmware.pk %}" class="mb-3">
+            {% csrf_token %}
+            <input type="hidden" name="token" value="{{ download_token }}">
+            <input type="hidden" name="sig" value="{{ download_signature }}">
+            <button class="btn btn-outline-primary" type="submit"{% if ad_remaining_seconds %} disabled{% endif %}>Confirm sponsor step</button>
+          </form>
+        {% endif %}
+
+        {% if remaining_seconds %}
+          <p class="alert alert-secondary" role="status">Your download unlocks in {{ remaining_seconds }} second{{ remaining_seconds|pluralize }}. This page refreshes automatically.</p>
+        {% endif %}
+
         <form method="post" action="{% url 'firmwares:firmware_download_start' firmware_type=firmware_type firmware_id=firmware.pk %}">
           {% csrf_token %}
           <input type="hidden" name="token" value="{{ download_token }}">
           <input type="hidden" name="sig" value="{{ download_signature }}">
-          <button class="btn btn-primary btn-lg" type="submit"><i data-lucide="download" aria-hidden="true"></i><span class="ms-2">Start firmware download</span></button>
+          <button class="btn btn-primary btn-lg" type="submit"{% if not can_start %} disabled{% endif %}><i data-lucide="download" aria-hidden="true"></i><span class="ms-2">{% if firmware.is_external %}Continue to external download{% else %}Start firmware download{% endif %}</span></button>
           <a class="btn btn-outline-secondary btn-lg ms-2" href="{% url 'firmwares:firmware_detail' firmware_type=firmware_type firmware_id=firmware.pk %}">Back to details</a>
         </form>
       </section>

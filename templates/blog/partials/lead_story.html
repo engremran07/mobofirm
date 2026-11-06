@@ -1,0 +1,20 @@
+{# Contract: card (PostCard) for the featured story. #}
+<article class="lead-story">
+  <div class="lead-story__media">
+    {% if card.cover %}
+      <img src="{{ card.cover }}" alt="" width="960" height="540">
+    {% else %}
+      {% include "blog/partials/thumb.html" with card=card %}
+    {% endif %}
+  </div>
+  <div class="lead-story__body">
+    <p class="section-eyebrow mb-2">Featured story{% if card.category %} · {{ card.category.name }}{% endif %}</p>
+    <h2 class="lead-story__title"><a class="stretched-link" href="{{ card.url }}">{{ card.title }}</a></h2>
+    {% if card.excerpt %}<p class="lead-story__excerpt">{{ card.excerpt }}</p>{% endif %}
+    <p class="post-card__meta mb-0">
+      <span>{{ card.author }}</span>
+      {% if card.published %}<span aria-hidden="true">·</span><time datetime="{{ card.published|date:'c' }}">{{ card.published|date:"F j, Y" }}</time>{% endif %}
+      <span aria-hidden="true">·</span><span>{{ card.reading_time }} min read</span>
+    </p>
+  </div>
+</article>

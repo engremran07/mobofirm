@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block content %}
+{% url 'marketplace:listing_browse' as market_url %}
+<div class="site-container py-4 py-lg-5">
+  {% include "components/breadcrumbs.html" with current=listing.title parent_label="Marketplace" parent_url=market_url %}
+  {% include "components/page_header.html" with eyebrow="Listing" title=listing.title %}
+  {% if not listing.is_public %}
+    <div class="mb-4">{% include "components/notice.html" with tone="warning" icon="info" message=listing_state_note %}</div>
+  {% endif %}
+
+  <div class="row g-4">
+    <div class="col-12 col-lg-8">
+      <section class="surface-card p-4" aria-labelledby="listing-about">
+        <h2 class="h5" id="listing-about">About this listing</h2>
+        {% if listing.description %}<p>{{ listing.description|linebreaksbr }}</p>{% else %}<p class="muted">The seller has not added a description.</p>{% endif %}
+        {% if firmware %}
+          <p class="mb-0"><i class="icon" data-lucide="download" aria-hidden="true"></i> Related firmware record: <a href="{% url 'firmwares:firmware_detail' firmware_type='official' firmware_id=firmware.pk %}">{{ firmware.brand.name }} {{ firmware.model.name }}</a></p>
+        {% endif %}
+      </section>
+    </div>
+    <div class="col-12 col-lg-4 d-grid gap-3 align-content-start">
+      <section class="surface-card p-4" aria-labelledby="listing-price">
+        <h2 class="visually-hidden" id="listing-price">Price</h2>
+        <p class="eco-price mb-1">{% if listing.discount_price %}<s class="muted fw-normal">{{ listing.price }}</s> {% endif %}{{ listing.effective_price }} <small>USD</small></p>
+        <p class="small muted mb-0">Online checkout is not available; contact the seller or staff to arrange the purchase.</p>
+      </section>
+      <section class="surface-card p-4" aria-labelledby="listing-seller">
+        <h2 class="h6" id="listing-seller">Seller</h2>
+        <p class="mb-1"><a href="{{ listing.seller.get_absolute_url }}">{{ listing.seller.display_name }}</a></p>
+        {% if listing.seller.verified %}{% include "components/status_pill.html" with label="Verified by staff" tone="success" icon="badge-check" %}{% else %}{% include "components/status_pill.html" with label="Not verified" tone="warning" %}{% endif %}
+        <p class="small muted mt-2 mb-0">{{ listing.view_count }} view{{ listing.view_count|pluralize }}</p>
+      </section>
+    </div>
+  </div>
+
+  {% if related %}
+    <h2 class="h4 mt-5">More from this seller</h2>
+    <div class="row g-3">{% include "marketplace/fragments/listing_grid.html" with listings=related %}</div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% comment %}
+  Puts every django-allauth page (reset, confirm, logout, email management, social,
+  MFA, sessions) inside the Mobofirm shell. allauth page templates fill `head_title`
+  and `content`; the elements in allauth/elements/ supply Bootstrap markup.
+{% endcomment %}
+{% block title %}{% block head_title %}{% endblock %} | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block main %}
+  <div class="site-container py-5">
+    <section class="surface-card allauth-shell p-4 mx-auto">
+      {% block content %}{% endblock %}
+    </section>
+  </div>
+{% endblock %}
+{% block extra_scripts %}{% block extra_body %}{% endblock %}{% endblock %}

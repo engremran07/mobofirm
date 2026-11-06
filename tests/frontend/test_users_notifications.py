@@ -23,6 +23,9 @@ def test_notification_detail_uses_explicit_read_action_and_fits_mobile(live_serv
 
     authenticated_client = Client()
     authenticated_client.force_login(user)
+    session = authenticated_client.session
+    session.pop("device_registration_prompt", None)
+    session.save()
     session_cookie = authenticated_client.cookies[settings.SESSION_COOKIE_NAME]
     errors = []
 

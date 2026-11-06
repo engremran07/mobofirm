@@ -1,0 +1,12 @@
+{# Context: post, comment_nodes, comment_count. Threaded discussion with an add-comment form. #}
+<section id="comments" class="comments" aria-labelledby="comments-title">
+  <h2 class="section-heading" id="comments-title">Discussion <span class="muted">({{ comment_count }})</span></h2>
+  {% include "comments/form.html" with parent_id="" form_id="comment-form" %}
+  <ol class="comment-list">
+    {% for node in comment_nodes %}
+      {% include "comments/node.html" with node=node %}
+    {% empty %}
+      <li class="comment-empty">No comments yet. Start the conversation.</li>
+    {% endfor %}
+  </ol>
+</section>

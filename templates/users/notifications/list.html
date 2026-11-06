@@ -9,6 +9,6 @@
   {% for notification in notifications %}<article class="surface-card p-3 mb-3">
     <h2 class="h5"><a href="{% url 'users:notification_detail' pk=notification.pk %}">{{ notification.title }}</a>{% if not notification.is_read %} <span class="badge text-bg-primary">New</span>{% endif %}</h2>
     <p class="mb-1">{{ notification.message|truncatewords:35 }}</p><time class="small muted" datetime="{{ notification.created_at|date:'c' }}">{{ notification.created_at|date:"M j, Y H:i" }}</time>
-  </article>{% empty %}<p class="empty-state p-4">No notifications to display.</p>{% endfor %}
+  </article>{% empty %}{% include "components/empty_state.html" with title="No notifications to display" %}{% endfor %}
 </div>
 {% endblock %}

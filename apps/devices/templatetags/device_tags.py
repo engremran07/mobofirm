@@ -28,7 +28,7 @@ _BRAND_COLORS = [
 
 def _brand_color(name: str) -> tuple[str, str]:
     """Return a deterministic (bg, text) color pair for a brand name."""
-    h = int(hashlib.md5(name.lower().encode()).hexdigest()[:8], 16)  # noqa: S324
+    h = int(hashlib.md5(name.lower().encode()).hexdigest()[:8], 16)
     return _BRAND_COLORS[h % len(_BRAND_COLORS)]
 
 
@@ -54,7 +54,7 @@ def brand_logo_svg(
         {% brand_logo_svg brand.name size=56 logo_url=brand.logo_url %}
     """
     if logo_url:
-        return mark_safe(  # noqa: S308 — controlled template tag, ORM data only
+        return mark_safe(
             f'<img src="{logo_url}" alt="{brand_name}" '
             f'width="{size}" height="{size}" '
             f'class="rounded-lg object-contain {extra_class}" '
@@ -62,11 +62,11 @@ def brand_logo_svg(
             f"onerror=\"this.style.display='none';this.nextElementSibling.style.display='flex'\">"
             f"{_fallback_svg(brand_name, size, extra_class)}"
         )
-    return mark_safe(_svg_logo(brand_name, size, extra_class))  # noqa: S308
+    return mark_safe(_svg_logo(brand_name, size, extra_class))
 
 
 def _svg_logo(name: str, size: int, extra_class: str) -> str:
-    bg, fg = _brand_color(name)
+    bg = _brand_color(name)[0]
     initials = _brand_initials(name)
     fs = round(size * 0.38)
     r = round(size * 0.167)

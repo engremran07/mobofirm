@@ -86,8 +86,7 @@ class Command(BaseCommand):
                 # Strip brand prefix from marketing name
                 mkt_clean = model.marketing_name
                 brand_prefix = f"{model.brand.name} "
-                if mkt_clean.startswith(brand_prefix):
-                    mkt_clean = mkt_clean[len(brand_prefix) :]
+                mkt_clean = mkt_clean.removeprefix(brand_prefix)
                 if mkt_clean != model.name:
                     clean_name = f"{model.name} ({mkt_clean})"
 

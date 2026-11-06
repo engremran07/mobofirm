@@ -15,20 +15,37 @@ dependencies = [
     "django-allauth>=65.13,<70",
     "django-countries>=9.1,<10",
     "django-solo>=2.4,<3",
+    "django-unfold>=0.110,<0.111",
     "djangorestframework>=3.16,<4",
     "Markdown>=3.7,<4",
     "nh3>=0.3.2,<1",
     "Pillow>=11",
     "psycopg[binary]>=3.2,<4",
     "python-dotenv>=1.0,<2",
+    "redis>=5,<7",
     "requests>=2.32,<3",
 ]
 
 [project.optional-dependencies]
+# Production runtime: the WSGI server used by the Docker image.
+prod = [
+    "gunicorn>=23,<24",
+]
 dev = [
     "pytest>=9,<10",
     "pytest-django>=4.14,<5",
     "playwright>=1.55,<2",
+    "pip-audit>=2.7,<3",
+    "mypy>=2.4,<3",
+    "django-stubs>=6.1,<7",
+    "djangorestframework-stubs>=3.18,<4",
+    "celery-types>=0.26,<1",
+    "types-requests>=2.33,<3",
+    "types-Markdown>=3.11,<4",
+    "types-bleach>=6.4,<7",
+    "types-redis>=4.6,<5",
+    "pylint>=3.3,<4",
+    "pylint-django>=2.6,<3",
     "ruff>=0.12,<1",
 ]
 
@@ -48,3 +65,35 @@ target-version = "py312"
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
+
+[tool.pylint.main]
+load-plugins = ["pylint_django"]
+django-settings-module = "app.settings.test"
+
+[tool.pylint.format]
+max-line-length = 88
+
+[tool.mypy]
+python_version = "3.12"
+plugins = ["mypy_django_plugin.main", "mypy_drf_plugin.main"]
+exclude = ["^node_modules/", "^\\.venv/", "^\\.django-stub-gen/", "^static/", "^staticfiles/"]
+check_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+
+[tool.django-stubs]
+django_settings_module = "app.settings.base"
+
+
+# Third-party packages that ship neither inline types nor stubs; they cannot be
+# typed from this repository. First-party code stays fully checked.
+[[tool.mypy.overrides]]
+module = ["allauth.*", "unfold.*", "solo.*"]
+ignore_missing_imports = true
+
+# Optional metrics backends are imported lazily and are not installed here.
+[[tool.mypy.overrides]]
+module = ["prometheus_client", "statsd"]
+ignore_missing_imports = true
+

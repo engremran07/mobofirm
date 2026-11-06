@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load shop_tags storage_tags %}
 {% block title %}{{ firmware.build_number|default:firmware.original_file_name }} | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block meta_description %}Review compatibility, file size, build details, and review status for this firmware record.{% endblock %}
 {% block content %}
@@ -17,17 +18,29 @@
           <dt class="col-sm-4 muted fw-normal">File</dt><dd class="col-sm-8 build-code">{{ firmware.original_file_name }}</dd>
           <dt class="col-sm-4 muted fw-normal">Firmware classification</dt><dd class="col-sm-8">{{ firmware_type_display }}</dd>
           <dt class="col-sm-4 muted fw-normal">Package format</dt><dd class="col-sm-8">{{ firmware.get_package_format_display }}</dd>
-          <dt class="col-sm-4 muted fw-normal">Model</dt><dd class="col-sm-8">{% if firmware.model %}<a href="{% url 'firmwares:model_detail' brand_slug=firmware.brand.slug model_slug=firmware.model.slug %}">{{ firmware.model.display_name }}</a>{% else %}Not specified{% endif %}</dd>
+          <dt class="col-sm-4 muted fw-normal">Model</dt><dd class="col-sm-8">{% if firmware.model and firmware.model.brand %}<a href="{% url 'firmwares:model_detail' brand_slug=firmware.model.brand.slug model_slug=firmware.model.slug %}">{{ firmware.model.display_name }}</a>{% else %}Not specified{% endif %}</dd>
           <dt class="col-sm-4 muted fw-normal">Variant / region</dt><dd class="col-sm-8">{{ firmware.variant.name|default:"Not specified" }}{% if firmware.variant.region %} · {{ firmware.variant.region }}{% endif %}{% if firmware.variant.model_code %} · {{ firmware.variant.model_code }}{% endif %}</dd>
+          <dt class="col-sm-4 muted fw-normal">Chipset</dt><dd class="col-sm-8">{% if firmware.model.chipset_ref %}<a href="{% url 'firmwares:chipset_detail' slug=firmware.model.chipset_ref.slug %}">{{ firmware.model.chipset_ref.display_name }}</a>{% else %}{{ firmware.chipset|default:"Not specified" }}{% endif %}</dd>
           <dt class="col-sm-4 muted fw-normal">Android version</dt><dd class="col-sm-8">{{ firmware.android_version|default:"Not specified" }}</dd>
           <dt class="col-sm-4 muted fw-normal">Build number</dt><dd class="col-sm-8 build-code">{{ firmware.build_number|default:"Not specified" }}</dd>
           <dt class="col-sm-4 muted fw-normal">File size</dt><dd class="col-sm-8">{{ file_size_display }}</dd>
           <dt class="col-sm-4 muted fw-normal">Security patch</dt><dd class="col-sm-8">{{ firmware.security_patch|date:"F j, Y"|default:"Not specified" }}</dd>
-          <dt class="col-sm-4 muted fw-normal">Review status</dt><dd class="col-sm-8">{% if firmware.is_verified %}<span class="status-verified">Verified</span>{% else %}<span class="status-verified">Governance reviewed</span>{% endif %}</dd>
+          <dt class="col-sm-4 muted fw-normal">Hosting</dt><dd class="col-sm-8">{% if firmware.is_external %}<span class="badge text-bg-secondary">External download</span> hosted on {{ external_host }}{% else %}Hosted by Mobofirm{% endif %}</dd>
+          <dt class="col-sm-4 muted fw-normal">Review status</dt><dd class="col-sm-8"><span class="status-verified">Verified</span>{% if firmware.reviewed_at %} · {{ firmware.reviewed_at|date:"F j, Y" }}{% endif %}</dd>
           <dt class="col-sm-4 muted fw-normal">SHA-256</dt><dd class="col-sm-8 build-code">{% if firmware.file_hash %}{{ firmware.file_hash }}{% else %}Not provided{% endif %}</dd>
           <dt class="col-sm-4 muted fw-normal">Added</dt><dd class="col-sm-8">{{ firmware.created_at|date:"F j, Y" }}</dd>
         </dl>
       </section>
+      {% if related_firmwares %}
+        <section class="surface-card p-4 mt-4" aria-labelledby="related-firmware-title">
+          <h2 id="related-firmware-title" class="h4 mb-3">Other files for this device</h2>
+          <ul class="list-unstyled d-grid gap-2 mb-0">
+            {% for related in related_firmwares %}
+              <li><a href="{% url 'firmwares:firmware_detail' firmware_type=related.firmware_type firmware_id=related.pk %}">{{ related.build_number|default:related.original_file_name }}</a> <span class="small muted">· {{ related.firmware_type_display }}</span></li>
+            {% endfor %}
+          </ul>
+        </section>
+      {% endif %}
     </div>
     <aside class="col-12 col-lg-4">
       <section class="surface-card p-4" aria-labelledby="download-panel-title">
@@ -37,8 +50,26 @@
         <a class="btn btn-primary btn-lg w-100" href="{% url 'firmwares:firmware_download' firmware_type=firmware_type firmware_id=firmware.pk %}">
           <i data-lucide="download" aria-hidden="true"></i><span class="ms-2">Continue to download</span>
         </a>
-        <p class="small muted mt-3 mb-0">File size: {{ file_size_display }}</p>
+        <p class="small muted mt-3 mb-0">File size: {{ file_size_display }}{% if firmware.is_external %} · External download{% endif %}</p>
       </section>
+      {% shop_firmware_allowance firmware_type %}
+      {% firmware_storage_panel firmware %}
+      {% if firmware.model %}
+        <section class="surface-card p-4 mt-4" aria-labelledby="related-guides-title">
+          <p class="section-eyebrow mb-2">Editorial resources</p>
+          <h2 id="related-guides-title" class="h4">Guides for this device</h2>
+          {% if related_blog_posts %}
+            <ul class="list-unstyled d-grid gap-3 mb-3">
+              {% for post in related_blog_posts %}
+                <li><a href="{{ post.get_absolute_url }}">{{ post.title }}</a>{% if post.summary %}<span class="d-block small muted">{{ post.summary|truncatewords:18 }}</span>{% endif %}</li>
+              {% endfor %}
+            </ul>
+          {% else %}
+            <p class="muted">No published guides are linked to this device yet.</p>
+          {% endif %}
+          {% if firmware.model.brand %}<a class="btn btn-outline-secondary btn-sm" href="{% url 'blog:model_posts' brand_slug=firmware.model.brand.slug model_slug=firmware.model.slug %}">All device articles</a>{% endif %}
+        </section>
+      {% endif %}
     </aside>
   </div>
 </div>

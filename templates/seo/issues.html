@@ -1,0 +1,22 @@
+{% extends "seo/base.html" %}
+{% block seo_content %}
+<form method="get" class="mf-seo-form" hx-get="{% url 'seo:issues' %}" hx-target="#seo-issue-rows" hx-trigger="change">
+  <label for="seo-severity">Severity</label>
+  <select id="seo-severity" name="severity">
+    <option value="">All</option>
+    <option value="error"{% if severity == "error" %} selected{% endif %}>Error</option>
+    <option value="warning"{% if severity == "warning" %} selected{% endif %}>Warning</option>
+    <option value="info"{% if severity == "info" %} selected{% endif %}>Info</option>
+  </select>
+  <label for="seo-code">Check</label>
+  <select id="seo-code" name="code">
+    <option value="">All</option>
+    {% for item in codes %}<option value="{{ item }}"{% if item == code %} selected{% endif %}>{{ item }}</option>{% endfor %}
+  </select>
+  <button type="submit" class="button">Filter</button>
+</form>
+<table class="mf-seo-table">
+  <thead><tr><th scope="col">Severity</th><th scope="col">Check</th><th scope="col">URL</th><th scope="col">Evidence</th></tr></thead>
+  <tbody id="seo-issue-rows">{% include "seo/partials/issue_rows.html" %}</tbody>
+</table>
+{% endblock %}

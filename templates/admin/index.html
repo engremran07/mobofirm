@@ -1,0 +1,87 @@
+{% extends "admin/base.html" %}
+
+{% load i18n %}
+
+{% block title %}{{ title }} | {{ site_title|default:_("Operations") }}{% endblock %}
+
+{% block branding %}
+    {% include "unfold/helpers/site_branding.html" %}
+{% endblock %}
+
+{% block content %}
+    {% trans "Action needed" as action_needed %}
+    <section aria-labelledby="dashboard-kpis" class="mb-6">
+        <h2 id="dashboard-kpis" class="font-semibold mb-3 text-important text-sm uppercase">{% trans "Needs your attention" %}</h2>
+        {% if kpis %}
+            <div class="gap-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {% for kpi in kpis %}
+                    <a href="{{ kpi.url }}" id="kpi-{{ kpi.key }}" class="bg-white block border border-base-200 p-6 relative rounded-default shadow-xs transition-all dark:bg-base-900 dark:border-base-800 hover:border-base-300 dark:hover:border-base-700">
+                        <div class="flex flex-row gap-3 items-center">
+                            <span class="material-symbols-outlined text-primary-600 dark:text-primary-400" aria-hidden="true">{{ kpi.icon }}</span>
+                            <h3 class="font-semibold text-important text-sm">{{ kpi.label }}</h3>
+                        </div>
+                        <p class="font-semibold mt-3 text-3xl text-important tabular-nums" data-kpi-value="{{ kpi.value|default_if_none:'' }}">{% if kpi.value is None %}&mdash;{% else %}{{ kpi.value }}{% endif %}</p>
+                        <p class="mt-1 text-subtle text-xs">{{ kpi.hint }}</p>
+                        {% if kpi.value %}
+                            <div class="absolute right-4 top-4">
+                                {% include "unfold/helpers/label.html" with variant=kpi.variant text=action_needed %}
+                            </div>
+                        {% endif %}
+                    </a>
+                {% endfor %}
+            </div>
+        {% else %}
+            <p class="text-subtle">{% trans "No queues are assigned to your account. Use the sidebar to open the sections you can manage." %}</p>
+        {% endif %}
+    </section>
+
+    <div class="gap-6 grid grid-cols-1 lg:grid-cols-3">
+        {% if can_view_pending_firmware %}
+            <section aria-labelledby="dash-firmware" class="bg-white border border-base-200 p-6 rounded-default shadow-xs dark:bg-base-900 dark:border-base-800">
+                <h2 id="dash-firmware" class="font-semibold mb-3 text-important text-sm">{% trans "Pending firmware uploads" %}</h2>
+                <ul class="flex flex-col gap-2">
+                    {% for row in recent_pending_firmware %}
+                        <li class="flex flex-row gap-3 justify-between">
+                            <a class="min-w-0 text-primary-600 truncate dark:text-primary-400" href="{% url 'admin:firmwares_pendingfirmware_change' row.pk %}">{{ row.label }}</a>
+                            <span class="text-subtle text-xs whitespace-nowrap">{{ row.when|timesince }} {% trans "ago" %}</span>
+                        </li>
+                    {% empty %}
+                        <li class="text-subtle">{% trans "Nothing is waiting for review." %}</li>
+                    {% endfor %}
+                </ul>
+            </section>
+        {% endif %}
+
+        {% if can_view_signups %}
+            <section aria-labelledby="dash-signups" class="bg-white border border-base-200 p-6 rounded-default shadow-xs dark:bg-base-900 dark:border-base-800">
+                <h2 id="dash-signups" class="font-semibold mb-3 text-important text-sm">{% trans "Recent sign-ups" %}</h2>
+                <ul class="flex flex-col gap-2">
+                    {% for row in recent_signups %}
+                        <li class="flex flex-row gap-3 justify-between">
+                            <a class="min-w-0 text-primary-600 truncate dark:text-primary-400" href="{% url 'admin:users_customuser_change' row.pk %}">{{ row.label }}</a>
+                            <span class="text-subtle text-xs whitespace-nowrap">{{ row.when|timesince }} {% trans "ago" %}</span>
+                        </li>
+                    {% empty %}
+                        <li class="text-subtle">{% trans "No accounts yet." %}</li>
+                    {% endfor %}
+                </ul>
+            </section>
+        {% endif %}
+
+        {% if can_view_orders %}
+            <section aria-labelledby="dash-orders" class="bg-white border border-base-200 p-6 rounded-default shadow-xs dark:bg-base-900 dark:border-base-800">
+                <h2 id="dash-orders" class="font-semibold mb-3 text-important text-sm">{% trans "Recent orders" %}</h2>
+                <ul class="flex flex-col gap-2">
+                    {% for row in recent_orders %}
+                        <li class="flex flex-row gap-3 justify-between">
+                            <a class="min-w-0 text-primary-600 truncate dark:text-primary-400" href="{% url 'admin:shop_order_change' row.pk %}">{{ row.label }} &middot; {{ row.status }} &middot; {{ row.total }}</a>
+                            <span class="text-subtle text-xs whitespace-nowrap">{{ row.when|timesince }} {% trans "ago" %}</span>
+                        </li>
+                    {% empty %}
+                        <li class="text-subtle">{% trans "No orders yet." %}</li>
+                    {% endfor %}
+                </ul>
+            </section>
+        {% endif %}
+    </div>
+{% endblock %}

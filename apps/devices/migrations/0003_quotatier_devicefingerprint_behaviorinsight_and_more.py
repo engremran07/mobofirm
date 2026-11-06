@@ -6,12 +6,12 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-    dependencies = [
+    dependencies = (
         ("devices", "0002_initial"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-    ]
+    )
 
-    operations = [
+    operations = (
         migrations.CreateModel(
             name="QuotaTier",
             fields=[
@@ -257,4 +257,4 @@ class Migration(migrations.Migration):
                 "db_table": "device_registry_trustscore",
             },
         ),
-    ]
+    )

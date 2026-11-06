@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block content %}
+{% url 'shop:pricing' as shop_url %}
+{% url 'shop:product_list' as products_url %}
+<div class="site-container py-4 py-lg-5">
+  {% include "components/breadcrumbs.html" with current=product.name parent_label="Products" parent_url=products_url grandparent_label="Shop" grandparent_url=shop_url %}
+  {% include "components/page_header.html" with eyebrow=product.get_product_type_display title=product.name %}
+  {% if not online_payments_enabled %}<div class="mb-4">{% include "shop/_payment_notice.html" %}</div>{% endif %}
+  <div class="row g-4">
+    <div class="col-12 col-lg-7">
+      <section class="surface-card p-4" aria-labelledby="about-product">
+        <h2 class="h5" id="about-product">About this {{ product.get_product_type_display|lower }}</h2>
+        {% if product.description %}<p>{{ product.description|linebreaksbr }}</p>{% else %}<p class="muted">No description has been provided.</p>{% endif %}
+        {% if product.package_tier %}
+          {% with tier=product.package_tier %}
+            <ul class="eco-feature-list mt-3">
+              <li><i class="icon" data-lucide="check" aria-hidden="true"></i><span>{% if tier.daily_download_limit < 0 %}Unlimited{% else %}{{ tier.daily_download_limit }}{% endif %} downloads per day, {% if tier.monthly_download_limit < 0 %}unlimited{% else %}{{ tier.monthly_download_limit }}{% endif %} per month</span></li>
+              <li{% if not tier.ad_free %} class="is-off"{% endif %}><i class="icon" data-lucide="{% if tier.ad_free %}check{% else %}x{% endif %}" aria-hidden="true"></i><span>{% if tier.ad_free %}Ad-free downloads{% else %}Ad-supported downloads{% endif %}</span></li>
+            </ul>
+          {% endwith %}
+        {% endif %}
+      </section>
+    </div>
+    <div class="col-12 col-lg-5">
+      <section class="surface-card p-4" aria-labelledby="request-order">
+        <p class="eco-price mb-3">{{ product.price }} <small>USD</small></p>
+        <h2 class="h5" id="request-order">Request this order</h2>
+        {% if user.is_authenticated %}
+          {% if not user.is_verified %}
+            {% include "components/notice.html" with tone="warning" icon="info" message="Verify your email address before placing an order." %}
+          {% else %}
+            <form method="post" action="{% url 'shop:place_order' slug=product.slug %}" class="d-grid gap-3">
+              {% csrf_token %}
+              <div>
+                <label class="form-label" for="billing-cycle">Billing period</label>
+                <select class="form-select" id="billing-cycle" name="billing_cycle">
+                  {% for value, label in billing_cycles %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+                </select>
+              </div>
+              <button type="submit" class="btn btn-primary">Request this order</button>
+              <p class="small muted mb-0">Nothing is charged. Staff will contact you with payment instructions and activate the order once payment is confirmed.</p>
+            </form>
+          {% endif %}
+        {% else %}
+          <p class="mb-0"><a href="{% url 'account_login' %}?next={{ request.path|urlencode }}">Sign in</a> to request this order.</p>
+        {% endif %}
+      </section>
+    </div>
+  </div>
+</div>
+{% endblock %}

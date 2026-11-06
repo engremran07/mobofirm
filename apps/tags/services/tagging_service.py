@@ -337,7 +337,7 @@ class TaggingService:
 
     def get_tag_cloud_data(
         self, model_class: type | None = None, min_count: int = 1
-    ) -> list[dict]:
+    ) -> list[dict[str, Any]]:
         """
         Get data for rendering a tag cloud.
 
@@ -382,6 +382,7 @@ class TaggingService:
         min_cnt = min(counts)
         max_cnt = max(counts)
 
+        cloud: list[dict[str, Any]] = []
         for item in tags_data:
             if max_cnt == min_cnt:
                 weight = 3
@@ -389,8 +390,13 @@ class TaggingService:
                 weight = 1 + int(
                     4 * (item["computed_usage_count"] - min_cnt) / (max_cnt - min_cnt)
                 )
-            item["weight"] = weight
-            item["tag"] = item["name"]
-            item["count"] = item["computed_usage_count"]
+            cloud.append(
+                {
+                    **item,
+                    "weight": weight,
+                    "tag": item["name"],
+                    "count": item["computed_usage_count"],
+                }
+            )
 
-        return tags_data
+        return cloud

@@ -8,15 +8,15 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
     initial = True
 
-    dependencies = [
+    dependencies = (
         ("ads", "0001_initial"),
         ("blog", "0001_initial"),
         ("firmwares", "0001_initial"),
         ("tags", "0001_initial"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-    ]
+    )
 
-    operations = [
+    operations = (
         migrations.AddField(
             model_name="adcreative",
             name="created_by",
@@ -729,4 +729,4 @@ class Migration(migrations.Migration):
                 fields=["config", "status"], name="ads_rewarde_config__75bb3f_idx"
             ),
         ),
-    ]
+    )

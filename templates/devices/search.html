@@ -1,8 +1,0 @@
-{% extends "base.html" %}
-{% block title %}Search devices | {{ site_name|default:"Mobofirm" }}{% endblock %}
-{% block content %}
-<div class="site-container py-5"><h1 class="h2">Search device profiles</h1>
-  <form method="get" action="{% url 'devices:search' %}" class="d-flex gap-2 my-4"><label class="visually-hidden" for="device-search">Device search</label><input id="device-search" class="form-control" type="search" name="q" value="{{ query }}" minlength="2" required><button class="btn btn-primary">Search</button></form>
-  <div id="device-search-results">{% include "devices/fragments/search_results.html" %}</div>
-</div>
-{% endblock %}

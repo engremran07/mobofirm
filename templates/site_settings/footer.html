@@ -1,0 +1,9 @@
+{% comment %}Footer branding, contact, social links and copyright from the runtime site settings.{% endcomment %}
+{% if site_settings.site_description %}<p class="mb-0 mt-2 small">{{ site_settings.site_description }}</p>{% endif %}
+{% if site_settings.contact_email %}<p class="mb-0 mt-1 small"><a href="mailto:{{ site_settings.contact_email }}">{{ site_settings.contact_email }}</a></p>{% endif %}
+{% if site_settings.social_links %}
+<ul class="list-inline mb-0 mt-2 small" aria-label="Social profiles">
+  {% for link in site_settings.social_links %}<li class="list-inline-item"><a href="{{ link.url }}" rel="me noopener" target="_blank">{{ link.label }}</a></li>{% endfor %}
+</ul>
+{% endif %}
+<p class="mb-0 mt-2 small">{{ site_settings.copyright_text }}</p>

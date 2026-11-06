@@ -3,6 +3,8 @@ Generic tagging model using Django's ContentTypes framework.
 Allows any model to be tagged without creating hard dependencies.
 """
 
+from typing import ClassVar
+
 from django.conf import settings
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
@@ -56,13 +58,13 @@ class TaggedItem(models.Model):
     class Meta:
         verbose_name = "Tagged Item"
         verbose_name_plural = "Tagged Items"
-        unique_together = [["tag", "content_type", "object_id"]]
-        indexes = [
+        unique_together = (("tag", "content_type", "object_id"),)
+        indexes = (
             models.Index(fields=["content_type", "object_id"]),
             models.Index(fields=["tag", "content_type"]),
             models.Index(fields=["created_at"]),
-        ]
-        ordering = ["-created_at"]
+        )
+        ordering: ClassVar[list[str]] = ["-created_at"]
 
     def __str__(self):
         return f"{self.tag.name} → {self.content_object}"

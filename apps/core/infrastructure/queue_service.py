@@ -6,8 +6,10 @@ Unified interface for background task processing.
 Supports multiple backends: Celery, Django-Q, or synchronous fallback.
 """
 
+import importlib
 import logging
 from abc import ABC, abstractmethod
+from datetime import datetime, timedelta
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -19,17 +21,14 @@ class QueueBackend(ABC):
     @abstractmethod
     def enqueue(self, task: str, *args, **kwargs) -> Any:
         """Enqueue a task for async execution"""
-        pass
 
     @abstractmethod
     def enqueue_in(self, task: str, seconds: int, *args, **kwargs) -> Any:
         """Enqueue a delayed task"""
-        pass
 
     @abstractmethod
     def get_status(self, task_id: str) -> dict:
         """Get task execution status"""
-        pass
 
 
 class CeleryBackend(QueueBackend):
@@ -39,7 +38,7 @@ class CeleryBackend(QueueBackend):
         try:
             from celery import current_app
 
-            task_fn = current_app.tasks.get(task)  # type: ignore[union-attr]
+            task_fn = current_app.tasks.get(task)
             if not task_fn:
                 raise ValueError(f"Task {task} not found in Celery registry")
             result = task_fn.apply_async(args=args, kwargs=kwargs)
@@ -52,7 +51,7 @@ class CeleryBackend(QueueBackend):
         try:
             from celery import current_app
 
-            task_fn = current_app.tasks.get(task)  # type: ignore[union-attr]
+            task_fn = current_app.tasks.get(task)
             if not task_fn:
                 raise ValueError(f"Task {task} not found")
             result = task_fn.apply_async(args=args, kwargs=kwargs, countdown=seconds)
@@ -65,7 +64,7 @@ class CeleryBackend(QueueBackend):
         try:
             from celery.result import AsyncResult
 
-            result = AsyncResult(task_id)
+            result: AsyncResult[Any] = AsyncResult(task_id)
             return {
                 "status": result.status,
                 "result": result.result,
@@ -80,44 +79,35 @@ class DjangoQBackend(QueueBackend):
 
     def enqueue(self, task: str, *args, **kwargs):
         try:
-            from django_q.tasks import async_task  # type: ignore[import-not-found]
-
-            task_id = async_task(task, *args, **kwargs)
-            return task_id
+            async_task = importlib.import_module("django_q.tasks").async_task
         except ImportError:
             logger.exception("Django-Q not installed")
             raise
+        return async_task(task, *args, **kwargs)
 
     def enqueue_in(self, task: str, seconds: int, *args, **kwargs):
         try:
-            from datetime import datetime, timedelta
-
-            from django_q.tasks import schedule  # type: ignore[import-not-found]
-
-            run_at = datetime.now() + timedelta(seconds=seconds)
-            task_id = schedule(
-                task, *args, schedule_type="O", next_run=run_at, **kwargs
-            )
-            return task_id
+            schedule = importlib.import_module("django_q.tasks").schedule
         except ImportError:
             logger.exception("Django-Q not installed")
             raise
+        run_at = datetime.now() + timedelta(seconds=seconds)
+        return schedule(task, *args, schedule_type="O", next_run=run_at, **kwargs)
 
     def get_status(self, task_id: str) -> dict:
         try:
-            from django_q.models import Task  # type: ignore[import-not-found]
-
-            task = Task.objects.filter(id=task_id).first()
-            if not task:
-                return {"status": "not_found"}
-            return {
-                "status": "success" if task.success else "failed",
-                "result": task.result,
-                "started": task.started,
-                "stopped": task.stopped,
-            }
+            task_model = importlib.import_module("django_q.models").Task
         except ImportError:
             return {"status": "unknown", "error": "Django-Q not installed"}
+        task = task_model.objects.filter(id=task_id).first()
+        if not task:
+            return {"status": "not_found"}
+        return {
+            "status": "success" if task.success else "failed",
+            "result": task.result,
+            "started": task.started,
+            "stopped": task.stopped,
+        }
 
 
 class SyncBackend(QueueBackend):
@@ -129,8 +119,8 @@ class SyncBackend(QueueBackend):
             func = self._resolve_task(task)
             result = func(*args, **kwargs)
             return f"sync_{id(result)}"
-        except Exception as e:
-            logger.error(f"Sync task execution failed: {e}", exc_info=True)
+        except Exception:
+            logger.exception("Sync task execution failed")
             raise
 
     def enqueue_in(self, task: str, seconds: int, *args, **kwargs):
@@ -165,8 +155,9 @@ class QueueService:
 
     def __init__(self, backend: str | None = None):
         from django.conf import settings
+        from django.core.exceptions import ImproperlyConfigured
 
-        resolved: str = backend or getattr(settings, "QUEUE_BACKEND", "sync")
+        resolved = str(backend or getattr(settings, "QUEUE_BACKEND", "sync"))
 
         backends: dict[str, type[QueueBackend]] = {
             "celery": CeleryBackend,
@@ -174,8 +165,11 @@ class QueueService:
             "sync": SyncBackend,
         }
 
-        backend_class = backends.get(resolved, SyncBackend)
-        self.backend = backend_class()
+        if resolved not in backends:
+            raise ImproperlyConfigured(
+                f"Unknown QUEUE_BACKEND {resolved!r}; expected one of {sorted(backends)}."
+            )
+        self.backend = backends[resolved]()
         self.backend_name = resolved
         logger.info(f"QueueService initialized with {resolved} backend")
 

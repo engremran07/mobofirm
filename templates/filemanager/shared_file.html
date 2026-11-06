@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% load filemanager_tags %}
+{% block content %}
+<div class="site-container py-4 py-lg-5">
+  <div class="auth-card mx-auto">
+    <p class="section-eyebrow">Shared file</p>
+    {% if unavailable %}
+      <h1 class="h2">{% if locked %}Temporarily locked{% else %}Link not available{% endif %}</h1>
+      <p>{% if locked %}Too many wrong passwords were entered. Try again later.{% else %}This link does not exist, has expired or was revoked.{% endif %}</p>
+      <a class="btn btn-outline-secondary" href="{% url 'home' %}">Go to the home page</a>
+    {% else %}
+      <h1 class="h2 fm-name">{{ item.name }}</h1>
+      <dl class="eco-kv mb-3">
+        <dt>Size</dt><dd>{{ item.size|filesize }}</dd>
+        <dt>Type</dt><dd>{{ item.get_file_type_display }}</dd>
+        <dt>Expires</dt><dd>{% if share.expires_at %}{{ share.expires_at|date:"j M Y, H:i" }}{% else %}This link does not expire{% endif %}</dd>
+        {% if share.max_downloads %}<dt>Downloads left</dt><dd>{{ share.max_downloads }} in total, {{ share.download_count }} used</dd>{% endif %}
+      </dl>
+      {% if wrong_password %}<p class="alert alert-danger" role="alert">The password is not correct.</p>{% endif %}
+      <form method="post" class="surface-card p-4">
+        {% csrf_token %}
+        {% if needs_password %}
+          <label class="form-label" for="share-password">Password</label>
+          <input class="form-control mb-3" id="share-password" type="password" name="password" autocomplete="off" required>
+        {% endif %}
+        <button type="submit" class="btn btn-primary"><i class="icon" data-lucide="download" aria-hidden="true"></i> Download</button>
+      </form>
+      <p class="small muted mt-3">Only download files from people you trust.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

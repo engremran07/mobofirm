@@ -1,0 +1,5 @@
+{# Contract: id (required) is the hx-indicator target; label (optional). The element is hidden until its request is in flight. #}
+<span id="{{ id }}" class="htmx-indicator align-items-center gap-2 muted small" role="status">
+  <span class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+  <span>{{ label|default:"Loading" }}</span>
+</span>

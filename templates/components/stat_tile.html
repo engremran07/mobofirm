@@ -1,0 +1,6 @@
+{# Contract: label (required), value (required), hint (optional). Static tile; never lifts on hover. #}
+<div class="surface-card stat-tile p-3">
+  <span class="muted small d-block">{{ label }}</span>
+  <span class="stat-value fs-3 fw-bold d-block">{{ value }}</span>
+  {% if hint %}<span class="muted small d-block">{{ hint }}</span>{% endif %}
+</div>

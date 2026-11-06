@@ -2,31 +2,24 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from django.conf import settings
 from django.shortcuts import redirect
-from django.urls import resolve, reverse
+from django.urls import Resolver404, resolve, reverse
+
+from apps.site_settings.services import get_site_settings
 
 
 class EnforceProfileCompletionMiddleware:
     """
-    Enterprise-grade enforcement that ensures authenticated users complete their profile
-    before accessing the rest of the platform.
+    Sends social-signup users to onboarding until their profile is complete.
 
-    Features:
-    - Zero redirect loops
-    - Excludes auth, admin, logout, static, consent, and health endpoints
-    - Ultra-fast: uses path startswith + resolver_match fallback
-    - Compatible with Django 5.2+ and Allauth 0.65+
-    - No accidental blocking of AJAX/HTMX/XHR/API endpoints
-    - Compatible with non-HTML API requests (returns response unchanged)
+    Active only when the site setting ``require_profile_completion`` (default:
+    ``REQUIRE_PROFILE_COMPLETION``) is true. Auth, admin, static,
+    health, API and AJAX/HTMX requests are never intercepted, and the onboarding
+    page itself is exempt so there is no redirect loop.
     """
 
-    # ----------------------------------------------------------------------
-    # Pre-resolved URL names avoid repeated reverse() calls (micro-optimizing)
-    # ----------------------------------------------------------------------
     PROFILE_URL_NAME = "users:tell_us_about_you"
 
-    # URLs that must never be intercepted
     SAFE_URL_NAMES: Iterable[str] = {
         PROFILE_URL_NAME,
         "account_login",
@@ -38,74 +31,46 @@ class EnforceProfileCompletionMiddleware:
         "account_reset_password_from_key_done",
     }
 
-    # PATH prefixes to ignore entirely
     SAFE_PATH_PREFIXES: Iterable[str] = (
         "/admin",
         "/static",
         "/media",
         "/api",
         "/health",
-        "/consent",  # prevent blocking when consent banner loads
-        "/.well-known",  # allow ACME / verification endpoints
+        "/site",
+        "/consent",
+        "/.well-known",
     )
 
     def __init__(self, get_response):
         self.get_response = get_response
-        # compute once
-        self.profile_url = reverse(self.PROFILE_URL_NAME)
 
-    # ------------------------------------------------------------------
-    # Main middleware
-    # ------------------------------------------------------------------
     def __call__(self, request):
+        if not get_site_settings().require_profile_completion:
+            return self.get_response(request)
 
         user = getattr(request, "user", None)
-
-        if not getattr(settings, "REQUIRE_PROFILE_COMPLETION", False):
+        if not (user and user.is_authenticated) or user.profile_completed:
             return self.get_response(request)
-
-        # --- Fast exit for anonymous users ----------------------------------
-        if not (user and user.is_authenticated):
-            return self.get_response(request)
-
-        # --- Do not run for admin/staff access to Django admin -------------
         if user.is_staff and request.path.startswith("/admin"):
             return self.get_response(request)
-
-        # --- Already completed ---------------------------------------------
-        if getattr(user, "profile_completed", True):
-            return self.get_response(request)
-
-        # --- Enforce only for social signups; password users are allowed ---
-        try:
-            social_qs = getattr(user, "socialaccount_set", None)
-            if not (social_qs and social_qs.exists()):
-                return self.get_response(request)
-        except Exception:
+        # Password sign-ups complete their profile during registration.
+        if not user.socialaccount_set.exists():
             return self.get_response(request)
 
         path = request.path
-
-        # --- Safe paths (static, media, admin, consent, api...) ------------
-        for prefix in self.SAFE_PATH_PREFIXES:
-            if path.startswith(prefix):
-                return self.get_response(request)
-
-        # --- Prevent redirect loops ----------------------------------------
-        if path == self.profile_url:
+        if path.startswith(tuple(self.SAFE_PATH_PREFIXES)):
+            return self.get_response(request)
+        if path == reverse(self.PROFILE_URL_NAME):
             return self.get_response(request)
 
-        # --- Safe named routes (auth/login/signup etc.) --------------------
         try:
-            # resolver_match is cached inside request by Django 5+
             match = request.resolver_match or resolve(path)
-            if match and match.view_name in self.SAFE_URL_NAMES:
-                return self.get_response(request)
-        except Exception:
-            # Resolving failure → allow request to proceed
+        except Resolver404:
+            return self.get_response(request)
+        if match.view_name in self.SAFE_URL_NAMES:
             return self.get_response(request)
 
-        # --- Prevent blocking of AJAX/HTMX/API --------------------------------
         if request.headers.get("X-Requested-With") == "XMLHttpRequest":
             return self.get_response(request)
         if request.headers.get("HX-Request") == "true":
@@ -113,5 +78,4 @@ class EnforceProfileCompletionMiddleware:
         if request.content_type == "application/json":
             return self.get_response(request)
 
-        # --- Finally: enforce redirect -------------------------------------
         return redirect(self.PROFILE_URL_NAME)

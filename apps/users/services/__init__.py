@@ -1,19 +1,35 @@
 """Shared exports for user-owned services."""
 
 from .country_detection import (
-    COUNTRY_PHONE_CODES,  # noqa: F401
-    auto_detect_user_country,  # noqa: F401
-    detect_country_from_ip,  # noqa: F401
-    get_client_ip,  # noqa: F401
-    get_phone_code_for_country,  # noqa: F401
-    is_email_verified,  # noqa: F401
-    is_profile_complete,  # noqa: F401
-    requires_email_verification,  # noqa: F401
-    validate_phone_number,  # noqa: F401
+    COUNTRY_PHONE_CODES,
+    auto_detect_user_country,
+    detect_country,
+    get_phone_code_for_country,
+    is_email_verified,
+    is_profile_complete,
+    requires_email_verification,
+    validate_phone_number,
 )
 from .notifications import (
-    broadcast_notification,  # noqa: F401
-    notifications_enabled,  # noqa: F401
-    send_notification,  # noqa: F401
+    broadcast_notification,
+    notifications_enabled,
+    send_notification,
 )
-from .rate_limit import *  # noqa: F403
+from .rate_limit import allow_action, get_attempt_count, reset_rate_limit
+
+__all__ = [
+    "COUNTRY_PHONE_CODES",
+    "allow_action",
+    "auto_detect_user_country",
+    "broadcast_notification",
+    "detect_country",
+    "get_attempt_count",
+    "get_phone_code_for_country",
+    "is_email_verified",
+    "is_profile_complete",
+    "notifications_enabled",
+    "requires_email_verification",
+    "reset_rate_limit",
+    "send_notification",
+    "validate_phone_number",
+]

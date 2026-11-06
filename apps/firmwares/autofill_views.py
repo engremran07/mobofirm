@@ -5,12 +5,15 @@ Provides endpoints for auto-filling firmware metadata
 
 import logging
 
+from django.db import DatabaseError
+from django.http import Http404
 from django.shortcuts import get_object_or_404
 from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAdminUser
 from rest_framework.response import Response
 
+from apps.core.ai_client import AiClientError
 from apps.firmwares.admin_autofill import FirmwareAutoFill
 from apps.firmwares.models import Brand, Model, Variant
 
@@ -32,7 +35,7 @@ def autofill_brand(request, brand_id):
         # Update brand
         updated = False
         if data.get("description") and not getattr(brand, "description", ""):
-            brand.description = data["description"]  # type: ignore[attr-defined]
+            brand.description = data["description"]
             updated = True
 
         if updated:
@@ -48,8 +51,8 @@ def autofill_brand(request, brand_id):
             }
         )
 
-    except Exception as e:
-        logger.exception(f"Auto-fill brand failed: {e}")
+    except (Http404, AiClientError, DatabaseError) as e:
+        logger.exception("Auto-fill brand failed")
         return Response(
             {"success": False, "error": str(e)}, status=status.HTTP_400_BAD_REQUEST
         )
@@ -99,8 +102,8 @@ def autofill_model(request, model_id):
             }
         )
 
-    except Exception as e:
-        logger.exception(f"Auto-fill model failed: {e}")
+    except (Http404, AiClientError, DatabaseError) as e:
+        logger.exception("Auto-fill model failed")
         return Response(
             {"success": False, "error": str(e)}, status=status.HTTP_400_BAD_REQUEST
         )
@@ -154,8 +157,8 @@ def autofill_variant(request, variant_id):
             }
         )
 
-    except Exception as e:
-        logger.exception(f"Auto-fill variant failed: {e}")
+    except (Http404, AiClientError, DatabaseError) as e:
+        logger.exception("Auto-fill variant failed")
         return Response(
             {"success": False, "error": str(e)}, status=status.HTTP_400_BAD_REQUEST
         )

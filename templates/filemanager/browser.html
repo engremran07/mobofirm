@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% load filemanager_tags %}
+{% block content %}
+<div class="site-container py-4 py-lg-5">
+  <nav class="breadcrumbs mb-3" aria-label="Folder path">
+    <ol class="breadcrumb mb-0">
+      <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+      {% if folder or searching %}<li class="breadcrumb-item"><a href="{% url 'filemanager:browser' %}">My files</a></li>{% endif %}
+      {% for ancestor in breadcrumbs %}<li class="breadcrumb-item"><a href="{% url 'filemanager:browser' %}?folder={{ ancestor.pk }}">{{ ancestor.name }}</a></li>{% endfor %}
+      <li class="breadcrumb-item active" aria-current="page">{% if folder and not searching %}{{ folder.name }}{% elif searching %}Search results{% else %}My files{% endif %}</li>
+    </ol>
+  </nav>
+  {% include "components/page_header.html" with eyebrow="File manager" title=folder.name|default:"My files" %}
+
+  <div class="fm-layout">
+    {% include "filemanager/_sidebar.html" with fm_tab="files" %}
+
+    <div class="min-w-0">
+      {% if can_write and not searching %}
+        <div class="row g-3 mb-4">
+          <section class="col-12 col-xl-8" aria-labelledby="upload-heading">
+            <div x-data="fmDropzone" :class="dragClass" class="fm-dropzone"
+                 @dragenter.prevent="onDragOver" @dragover.prevent="onDragOver"
+                 @dragleave="onDragLeave" @drop.prevent="onDrop">
+              <h2 class="h5 mb-0" id="upload-heading"><i class="icon" data-lucide="upload" aria-hidden="true"></i> Upload files</h2>
+              <p class="mb-0" x-text="summary" role="status">Drag files here or choose them below.</p>
+              <form method="post" action="{% url 'filemanager:upload' %}" enctype="multipart/form-data" class="d-flex flex-wrap justify-content-center gap-2 w-100"
+                    hx-post="{% url 'filemanager:upload' %}" hx-encoding="multipart/form-data" hx-disabled-elt="find button">
+                {% csrf_token %}
+                {% if folder %}<input type="hidden" name="folder" value="{{ folder.pk }}">{% endif %}
+                <label class="visually-hidden" for="upload-files">Files to upload</label>
+                <input class="form-control w-auto" id="upload-files" type="file" name="files" multiple required @change="onPick">
+                <button type="submit" class="btn btn-primary">Upload</button>
+                <progress class="fm-dropzone__progress" max="100" value="0" :value="progress" :hidden="!busy" hidden aria-label="Upload progress"></progress>
+              </form>
+            </div>
+          </section>
+          <section class="col-12 col-xl-4" aria-labelledby="folder-heading">
+            <form method="post" action="{% url 'filemanager:create_folder' %}" class="surface-card p-3">
+              {% csrf_token %}
+              <h2 class="h5" id="folder-heading"><i class="icon" data-lucide="folder-plus" aria-hidden="true"></i> New folder</h2>
+              {% if folder %}<input type="hidden" name="parent" value="{{ folder.pk }}">{% endif %}
+              <label class="form-label" for="folder-name">Name</label>
+              <input class="form-control" id="folder-name" type="text" name="name" maxlength="255" required>
+              <button type="submit" class="btn btn-outline-primary mt-2">Create folder</button>
+            </form>
+          </section>
+        </div>
+      {% endif %}
+
+      <form class="row g-2 mb-4" method="get" action="{% url 'filemanager:browser' %}" role="search" aria-label="Search your files">
+        <div class="col-12 col-md"><label class="visually-hidden" for="file-search">Search file names</label><input class="form-control" id="file-search" type="search" name="q" value="{{ query }}" maxlength="100" placeholder="Search all your files"></div>
+        <div class="col-8 col-md-3"><label class="visually-hidden" for="file-type">File type</label>
+          <select class="form-select" id="file-type" name="type"><option value="">All types</option>{% for value, label in file_types %}<option value="{{ value }}"{% if value == type_filter %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+        </div>
+        <div class="col-4 col-md-auto"><button type="submit" class="btn btn-outline-secondary w-100">Search</button></div>
+      </form>
+      {% if tag_filter %}<p class="small">Showing files tagged <strong>{{ tag_filter }}</strong>. <a href="{% url 'filemanager:browser' %}">Clear filter</a></p>{% endif %}
+
+      {% if folder and can_write and not searching %}
+        <div class="d-flex flex-wrap gap-2 mb-4">
+          <details class="surface-card p-2 h-auto">
+            <summary class="px-2">Rename folder</summary>
+            <form method="post" action="{% url 'filemanager:rename_folder' pk=folder.pk %}" class="d-flex gap-2 p-2">
+              {% csrf_token %}
+              <label class="visually-hidden" for="rename-folder">Folder name</label>
+              <input class="form-control" id="rename-folder" name="name" value="{{ folder.name }}" maxlength="255" required>
+              <button type="submit" class="btn btn-outline-secondary">Rename</button>
+            </form>
+          </details>
+          <button type="button" class="btn btn-outline-danger" data-dialog-open="delete-folder-dialog"><i class="icon" data-lucide="trash-2" aria-hidden="true"></i> Delete folder</button>
+        </div>
+        {% url 'filemanager:delete_folder' pk=folder.pk as delete_folder_url %}
+        {% include "components/confirm_dialog.html" with dialog_id="delete-folder-dialog" title="Delete this folder?" message="Only empty folders can be deleted." action=delete_folder_url confirm_label="Delete folder" danger=True %}
+      {% endif %}
+
+      {% if folders %}
+        <h2 class="h5">Folders</h2>
+        <ul class="fm-grid mb-4">
+          {% for sub in folders %}
+            <li><a class="surface-card surface-card--interactive fm-folder" href="{% url 'filemanager:browser' %}?folder={{ sub.pk }}"><i class="icon" data-lucide="folder-open" aria-hidden="true"></i><span>{{ sub.name }}</span></a></li>
+          {% endfor %}
+        </ul>
+      {% endif %}
+
+      <h2 class="h5">{% if searching %}Results{% else %}Files{% endif %}</h2>
+      {% if page_obj.object_list %}
+        <ul class="fm-grid">
+          {% for item in page_obj.object_list %}{% include "filemanager/_file_card.html" %}{% endfor %}
+        </ul>
+        {% include "components/pagination.html" with page_obj=page_obj label="Files" %}
+      {% else %}
+        {% if searching %}
+          {% include "components/empty_state.html" with title="No files match" message="Try a different search or clear the filters." %}
+        {% else %}
+          {% include "components/empty_state.html" with title="No files here yet" message="Drag files into the upload area or choose them to get started." %}
+        {% endif %}
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

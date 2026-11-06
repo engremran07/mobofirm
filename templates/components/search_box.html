@@ -1,0 +1,15 @@
+{# Contract: action (required GET URL), input_id (required), label (required, visually hidden), value, name (default q), placeholder, hx_target (optional selector; enables debounced HTMX search with a working non-JS form), hx_get (optional URL for the fragment, defaults to action). #}
+<form class="search-box" role="search" method="get" action="{{ action }}">
+  <label class="visually-hidden" for="{{ input_id }}">{{ label }}</label>
+  <div class="input-group">
+    <input class="form-control" type="search" id="{{ input_id }}" name="{{ name|default:'q' }}" value="{{ value|default:'' }}"
+           placeholder="{{ placeholder|default:'Search' }}" autocomplete="off" enterkeyhint="search"
+           {% if hx_target %}hx-get="{{ hx_get|default:action }}" hx-trigger="input changed delay:350ms" hx-target="{{ hx_target }}" hx-push-url="true" hx-indicator="#{{ input_id }}-indicator"{% endif %}>
+    <button class="btn btn-primary" type="submit">Search</button>
+  </div>
+  {% if hx_target %}
+    <span id="{{ input_id }}-indicator" class="htmx-indicator align-items-center gap-2 muted small mt-1" role="status">
+      <span class="spinner-border spinner-border-sm" aria-hidden="true"></span><span>Searching</span>
+    </span>
+  {% endif %}
+</form>

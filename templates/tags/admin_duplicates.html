@@ -1,11 +1,18 @@
 {% extends "base.html" %}
-{% block title %}Review duplicate tags | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block content %}
-<div class="site-container py-5"><h1 class="h2">Review similar tags</h1>
-  {% for pair in pairs %}<article class="surface-card p-3 mb-3"><h2 class="h5">{{ pair.a }} ↔ {{ pair.b }}</h2><p class="muted">Similarity score: {{ pair.score }}</p>
-    <form method="post" action="{% url 'tags:merge' %}" hx-post="{% url 'tags:merge' %}" hx-target="#pair-{{ forloop.counter }}" hx-swap="innerHTML">
-      {% csrf_token %}<input type="hidden" name="source" value="{{ pair.a_slug }}"><label class="form-label" for="target-{{ forloop.counter }}">Keep</label><select class="form-select" id="target-{{ forloop.counter }}" name="target"><option value="{{ pair.a_slug }}">{{ pair.a }}</option><option value="{{ pair.b_slug }}">{{ pair.b }}</option></select><button class="btn btn-outline-primary mt-2" type="submit">Merge pair</button>
-    </form><div id="pair-{{ forloop.counter }}" role="status" aria-live="polite"></div>
-  </article>{% empty %}<p class="empty-state p-4">No similar active tags need review.</p>{% endfor %}
+<div class="site-container py-4 py-lg-5">
+  {% include "components/page_header.html" with eyebrow="Staff tools" title="Review similar tags" lead="Pairs among the most used tags with similar names. Choose a pair to review the merge." %}
+  {% for pair in pairs %}
+    <article class="surface-card p-3 mb-3">
+      <h2 class="h5">{{ pair.a }} ↔ {{ pair.b }}</h2>
+      <p class="muted mb-2">Similarity {{ pair.score }}</p>
+      <div class="d-flex flex-wrap gap-2">
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'tags:merge' %}?source={{ pair.b_slug|urlencode }}&amp;target={{ pair.a_slug|urlencode }}">Keep “{{ pair.a }}”</a>
+        <a class="btn btn-sm btn-outline-secondary" href="{% url 'tags:merge' %}?source={{ pair.a_slug|urlencode }}&amp;target={{ pair.b_slug|urlencode }}">Keep “{{ pair.b }}”</a>
+      </div>
+    </article>
+  {% empty %}
+    {% include "components/empty_state.html" with title="No similar tags need review" %}
+  {% endfor %}
 </div>
 {% endblock %}

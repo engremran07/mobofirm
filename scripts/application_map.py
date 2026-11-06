@@ -13,6 +13,11 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
 
+import django
+from django.apps import apps
+from django.conf import settings
+from django.urls import URLPattern, URLResolver, get_resolver
+
 ROOT = Path(__file__).resolve().parents[1]
 INTERACTION_ATTRIBUTES = {
     name
@@ -29,6 +34,10 @@ INTERACTION_ATTRIBUTES = {
 }
 TEMPLATE_DIRECTIVE = re.compile(
     r"{%\s*(?P<kind>extends|include)\s+[\"'](?P<template>[^\"']+)[\"']"
+)
+STATIC_REFERENCE = re.compile(
+    r"(?:\{%\s*static\s+[\"'](?P<static_path>[^\"']+)[\"']\s*%\}"
+    r"|\b(?:href|src)=[\"'](?P<path>[^\"']+)[\"'])"
 )
 
 
@@ -56,8 +65,6 @@ def _local_source(callback: Any, root: Path) -> str | None:
 
 
 def _patterns(patterns: list[Any], root: Path, prefix: str = "", namespace: str = ""):
-    from django.urls import URLPattern, URLResolver
-
     for item in patterns:
         route = getattr(item.pattern, "_route", str(item.pattern))
         full_pattern = f"{prefix}{route}"
@@ -110,6 +117,20 @@ class _TemplateParser(HTMLParser):
         )
 
 
+def _template_asset_references(path: Path) -> list[str]:
+    text = path.read_text(encoding="utf-8")
+    refs: list[str] = []
+    for match in STATIC_REFERENCE.finditer(text):
+        value = match.group("static_path") or match.group("path")
+        if not value:
+            continue
+        if value.startswith("/"):
+            value = value.lstrip("/")
+        if "." in value:
+            refs.append(value)
+    return sorted(dict.fromkeys(refs))
+
+
 def _scan_template(path: Path, root: Path) -> dict[str, Any]:
     source = path.read_text(encoding="utf-8")
     parser = _TemplateParser()
@@ -122,12 +143,11 @@ def _scan_template(path: Path, root: Path) -> dict[str, Any]:
         "path": _relative_path(path, root),
         "extends_and_includes": directives,
         "interactions": parser.interactions,
+        "asset_references": _template_asset_references(path),
     }
 
 
 def _installed_local_apps(root: Path) -> list[dict[str, Any]]:
-    from django.apps import apps
-
     app_root = (root / "apps").resolve()
     result: list[dict[str, Any]] = []
     for config in apps.get_app_configs():
@@ -205,10 +225,7 @@ def _frontend_sources(root: Path) -> dict[str, list[str]]:
         "javascript": {".js", ".mjs"},
         "stylesheets": {".css", ".scss"},
     }
-    roots = [
-        root / "frontend" / "src",
-        *sorted((root / "apps").glob("*/static")),
-    ]
+    roots = [root / "static", *sorted((root / "apps").glob("*/static"))]
     result: dict[str, list[str]] = {}
     for label, suffixes in extensions.items():
         found = {
@@ -222,17 +239,35 @@ def _frontend_sources(root: Path) -> dict[str, list[str]]:
     return result
 
 
+def _admin_template_paths(root: Path) -> list[str]:
+    admin_root = root / "templates" / "admin"
+    if not admin_root.is_dir():
+        return []
+    return sorted(
+        _relative_path(path, root)
+        for path in admin_root.rglob("*.html")
+        if path.is_file()
+    )
+
+
+def _admin_routes(routes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    matches = []
+    for route in routes:
+        name = route.get("name") or ""
+        pattern = route.get("pattern") or ""
+        if "admin" in pattern.lower() or name.startswith("admin"):
+            matches.append(route)
+    return sorted(
+        matches, key=lambda route: (route.get("name") or "", route.get("pattern") or "")
+    )
+
+
 def build_application_map(root: Path = ROOT) -> dict[str, Any]:
+    """Return the static inventory of apps, routes, templates and test files."""
     if not os.environ.get("DJANGO_SETTINGS_MODULE"):
         os.environ["DJANGO_SETTINGS_MODULE"] = "app.settings.test"
-    import django
-    from django.apps import apps
-
     if not apps.ready:
         django.setup()
-
-    from django.conf import settings
-    from django.urls import get_resolver
 
     template_files = sorted(
         {
@@ -244,6 +279,16 @@ def build_application_map(root: Path = ROOT) -> dict[str, Any]:
         key=lambda path: path.as_posix(),
     )
     routes = list(_patterns(get_resolver().url_patterns, root))
+    route_inventory = sorted(
+        routes,
+        key=lambda route: (
+            route["name"] or "",
+            route["pattern"],
+            route["view"],
+        ),
+    )
+    admin_routes = _admin_routes(route_inventory)
+    templates = [_scan_template(path, root) for path in template_files]
     return {
         "schema_version": 1,
         "interpretation": (
@@ -252,16 +297,46 @@ def build_application_map(root: Path = ROOT) -> dict[str, Any]:
         ),
         "settings_module": settings.SETTINGS_MODULE,
         "apps": _installed_local_apps(root),
-        "routes": sorted(
-            routes,
-            key=lambda route: (
-                route["name"] or "",
-                route["pattern"],
-                route["view"],
-            ),
-        ),
-        "templates": [_scan_template(path, root) for path in template_files],
+        "routes": route_inventory,
+        "admin_routes": admin_routes,
+        "admin_templates": _admin_template_paths(root),
+        "templates": templates,
+        "template_asset_usage": [
+            {
+                "path": template["path"],
+                "asset_references": template["asset_references"],
+            }
+            for template in templates
+            if template["asset_references"]
+        ],
         "frontend_sources": _frontend_sources(root),
+        "frontend_asset_inventory": {
+            "public": [
+                asset
+                for asset in _frontend_sources(root)["javascript"]
+                + _frontend_sources(root)["stylesheets"]
+                if (
+                    "/admin/" not in asset.lower()
+                    and not asset.lower().endswith("admin.js")
+                    and not asset.lower().endswith("admin.css")
+                    and not asset.lower().endswith("tokens.css")
+                )
+            ],
+            "admin": [
+                asset
+                for asset in _frontend_sources(root)["javascript"]
+                + _frontend_sources(root)["stylesheets"]
+                if "/admin/" in asset.lower()
+                or asset.lower().endswith("admin.js")
+                or asset.lower().endswith("admin.css")
+            ],
+            "shared": [
+                asset
+                for asset in _frontend_sources(root)["javascript"]
+                + _frontend_sources(root)["stylesheets"]
+                if asset.lower().endswith("tokens.css")
+            ],
+        },
         "integration_test_files": sorted(
             _relative_path(path, root)
             for path in (root / "tests" / "backend" / "integrations").glob("test_*.py")
@@ -270,6 +345,7 @@ def build_application_map(root: Path = ROOT) -> dict[str, Any]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Write the application map as JSON to a file or standard output."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--output",

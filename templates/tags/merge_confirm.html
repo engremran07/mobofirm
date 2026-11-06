@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="site-container py-4 py-lg-5">
+  {% include "components/page_header.html" with eyebrow="Staff tools" title="Confirm tag merge" %}
+  <section class="surface-card p-4 mb-4" aria-labelledby="merge-impact">
+    <h2 class="h5" id="merge-impact">This will change {{ affected }} article{{ affected|pluralize }}</h2>
+    <p>Every article tagged <strong>{{ source.name }}</strong> will be tagged <strong>{{ target.name }}</strong> instead, and <strong>{{ source.name }}</strong> will be retired. This cannot be undone from this page.</p>
+    <form method="post" action="{% url 'tags:merge' %}" class="d-flex flex-wrap gap-2">
+      {% csrf_token %}
+      <input type="hidden" name="source" value="{{ source.slug }}">
+      <input type="hidden" name="target" value="{{ target.slug }}">
+      <input type="hidden" name="confirm" value="1">
+      <button class="btn btn-primary" type="submit">Merge into {{ target.name }}</button>
+      <a class="btn btn-outline-secondary" href="{% url 'tags:manage' %}">Cancel</a>
+    </form>
+  </section>
+</div>
+{% endblock %}

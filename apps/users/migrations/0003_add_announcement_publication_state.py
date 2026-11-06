@@ -4,14 +4,14 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-    dependencies = [
+    dependencies = (
         ("users", "0002_activityfeed_following_profile_reputation_and_more"),
-    ]
+    )
 
-    operations = [
+    operations = (
         migrations.AddField(
             model_name="announcement",
             name="is_active",
             field=models.BooleanField(default=False),
         ),
-    ]
+    )

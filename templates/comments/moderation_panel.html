@@ -1,11 +1,57 @@
-{% extends "admin/base_site.html" %}
+{% extends "base.html" %}
+{% load mf_ui %}
 {% block content %}
-<div class="container-fluid"><h1>Comment moderation</h1>
-  <section><h2>Pending review</h2>
-    {% for comment in pending_comments %}<article class="card p-3 mb-3"><h3 class="h5"><a href="{{ comment.post.get_absolute_url }}">{{ comment.post.title }}</a></h3><p>{{ comment.body|linebreaksbr }}</p><p class="small">By {{ comment.user }} · {{ comment.created_at }}</p>
-      <form method="post" action="{% url 'comments:moderation_action' %}" class="d-flex gap-2">{% csrf_token %}<input type="hidden" name="comment_id" value="{{ comment.pk }}"><button class="button" name="action" value="approve" type="submit">Approve</button><button class="button" name="action" value="reject" type="submit">Reject</button></form>
-    </article>{% empty %}<p>No comments are pending review.</p>{% endfor %}
+<div class="site-container py-4 py-lg-5">
+  {% include "components/page_header.html" with eyebrow="Staff tools" title="Comment moderation" lead="Clean comments are approved automatically. These need a person: suspicious wording, reports, edits and anything the screening could not clear." %}
+  {% if not can_moderate %}<p class="alert alert-warning" role="status">You can review the queue, but deciding needs the “change comment” permission.</p>{% endif %}
+  <section aria-labelledby="queue-title" class="mb-5">
+    <h2 class="section-heading" id="queue-title">Waiting for review <span class="muted">({{ pending_comments|length }})</span></h2>
+    {% for comment in pending_comments %}
+      <article class="moderation-card">
+        <header class="moderation-card__head">
+          <a href="{{ comment.post.get_absolute_url }}#comment-{{ comment.pk }}">{{ comment.post.title }}</a>
+          <span class="muted small">by {{ comment.user.public_display_name }} · <time datetime="{{ comment.created_at|date:'c' }}">{{ comment.created_at|date:"M j, Y H:i" }}</time> · risk {{ comment.toxicity_score }}</span>
+        </header>
+        <p class="moderation-card__body">{{ comment.body|linebreaksbr }}</p>
+        {% if comment.moderation_flags.moderation.reasons %}
+          <p class="small muted mb-2">Flagged for: {{ comment.moderation_flags.moderation.reasons|join:", " }}</p>
+        {% endif %}
+        {% if comment.moderation_flags.reports %}<p class="small muted mb-2">{{ comment.moderation_flags.reports.count }} reader report{{ comment.moderation_flags.reports.count|pluralize }}</p>{% endif %}
+        {% if can_moderate %}
+          <form method="post" action="{% url 'comments:moderation_action' %}" class="moderation-card__form">
+            {% csrf_token %}
+            <input type="hidden" name="comment_id" value="{{ comment.pk }}">
+            <label class="visually-hidden" for="note-{{ comment.pk }}">Note for the record</label>
+            <input class="form-control form-control-sm" id="note-{{ comment.pk }}" name="note" maxlength="500" placeholder="Optional note for the record">
+            <button class="btn btn-sm btn-primary" name="action" value="approve" type="submit">Approve</button>
+            <button class="btn btn-sm btn-outline-secondary" name="action" value="reject" type="submit">Reject</button>
+            <button class="btn btn-sm btn-outline-secondary" name="action" value="spam" type="submit">Mark as spam</button>
+          </form>
+        {% endif %}
+      </article>
+    {% empty %}
+      {% include "components/empty_state.html" with title="The queue is clear" message="Nothing is waiting for review." %}
+    {% endfor %}
   </section>
-  <section class="mt-4"><h2>Recently reviewed</h2>{% for comment in recent_comments %}<p>{{ comment.post.title }} · {{ comment.status }} · {{ comment.created_at }}</p>{% empty %}<p>No recent moderation actions.</p>{% endfor %}</section>
+  <section aria-labelledby="recent-title">
+    <h2 class="section-heading" id="recent-title">Recently decided</h2>
+    {% table_scroll "Recently decided comments" %}
+    <table class="table align-middle">
+      <thead><tr><th scope="col">Article</th><th scope="col">Author</th><th scope="col">Status</th><th scope="col">Date</th></tr></thead>
+      <tbody>
+        {% for comment in recent_comments %}
+          <tr>
+            <th scope="row"><a href="{{ comment.post.get_absolute_url }}#comment-{{ comment.pk }}">{{ comment.post.title|truncatechars:60 }}</a></th>
+            <td>{{ comment.user.public_display_name }}</td>
+            <td>{{ comment.get_status_display }}</td>
+            <td><time datetime="{{ comment.created_at|date:'c' }}">{{ comment.created_at|date:"M j, Y" }}</time></td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="4" class="muted">No decisions yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endtable_scroll %}
+  </section>
 </div>
 {% endblock %}

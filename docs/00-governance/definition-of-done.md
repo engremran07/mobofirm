@@ -14,7 +14,7 @@ This definition applies to backend changes and governance deliverables. Product 
 - The VS Code Problems panel has been checked; no unresolved diagnostics remain for a change to be committed or pushed.
 - Every project test lives under root `tests/backend/` or `tests/frontend/`; CI collects the complete root test suite and reports zero unexpected skips.
 - Every reusable domain app has a documented standalone installation boundary. New sibling-app imports are prohibited; existing cross-app coupling is inventoried and tracked for removal through explicit integration adapters.
-- Generated content, including firmware-related blog posts and tags, follows the governance review/publication workflow and has duplicate, failure, and state-transition tests.
+- Generated content, including firmware-related blog posts and tags, is produced idempotently by its owning service and has duplicate, failure, and state-transition tests; automated posts list only staff-approved firmware.
 - Regression fixes identify the root cause. No repeated symptom-patch loop, blind retry/reversal, placeholder implementation, or untested compensating action is accepted.
 - Documentation and requirement-to-test traceability reflect the actual implementation and clearly identify gaps.
 - No unrelated user changes are removed, and no dependency or frontend stack is added without approval.

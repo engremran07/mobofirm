@@ -9,11 +9,9 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
     initial = True
 
-    dependencies = [
-        ("contenttypes", "0002_remove_content_type_name"),
-    ]
+    dependencies = (("contenttypes", "0002_remove_content_type_name"),)
 
-    operations = [
+    operations = (
         migrations.CreateModel(
             name="CommentSettings",
             fields=[
@@ -104,4 +102,4 @@ class Migration(migrations.Migration):
                 "ordering": ["-created_at"],
             },
         ),
-    ]
+    )

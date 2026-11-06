@@ -6,9 +6,9 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
     initial = True
 
-    dependencies = []
+    dependencies = ()
 
-    operations = [
+    operations = (
         migrations.CreateModel(
             name="AdCreative",
             fields=[
@@ -1623,4 +1623,4 @@ class Migration(migrations.Migration):
                 "ordering": ["-created_at"],
             },
         ),
-    ]
+    )

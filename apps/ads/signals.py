@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import logging
 
+from django.db import DatabaseError
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+
+from apps.users.services.notifications import send_notification
 
 from .models import Campaign
 
@@ -22,11 +25,6 @@ def notify_campaign_status_change(sender, instance, created, **kwargs):
     # but for now we'll just notify if it's active and has a creator)
     if instance.is_active and instance.created_by:
         try:
-            from apps.users.services.notifications import send_notification
-            # We might want to debounce this or check if it was already active
-            # For this audit, we'll assume this is a desired "Campaign Active" alert
-            # In a real app, we'd check `if instance.tracker.has_changed('is_active')`
-
             send_notification(
                 recipient=instance.created_by,
                 title="Campaign Active",
@@ -36,5 +34,5 @@ def notify_campaign_status_change(sender, instance, created, **kwargs):
                 action_type="system",
                 icon="trending-up",
             )
-        except Exception as e:
-            logger.debug(f"Failed to send campaign notification: {e}")
+        except DatabaseError:
+            logger.debug("Failed to send campaign notification", exc_info=True)

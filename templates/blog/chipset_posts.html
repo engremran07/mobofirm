@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="site-container py-4 py-lg-5">
+  {% url 'blog:post_list' as journal_url %}
+  {% include "components/breadcrumbs.html" with current=chipset.display_name parent_label="Journal" parent_url=journal_url %}
+  <header class="hub-header">
+    <span class="hub-header__mark" aria-hidden="true"><i data-lucide="cpu"></i></span>
+    <div class="hub-header__text">
+      <p class="section-eyebrow mb-1">Chipset journal</p>
+      <h1 class="hub-header__title">{{ chipset.display_name }} firmware and flashing</h1>
+      {% if chipset.description %}<p class="hub-header__lead">{{ chipset.description|truncatewords:40 }}</p>{% endif %}
+      <div class="hub-header__actions">
+        <a class="btn btn-primary" href="{% url 'firmwares:chipset_detail' slug=chipset.slug %}"><i data-lucide="cpu" class="icon" aria-hidden="true"></i> Devices and firmware</a>
+        <a class="btn btn-outline-secondary" href="{% url 'firmwares:chipset_list' %}">All chipsets</a>
+      </div>
+    </div>
+  </header>
+  {% include "blog/partials/hub_body.html" %}
+</div>
+{% endblock %}

@@ -1,8 +1,20 @@
 {% extends "base.html" %}
-{% block title %}Tags | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block content %}
-<div class="site-container py-5"><p class="section-eyebrow">Explore topics</p><h1 class="h2">Tags</h1>
-  <form method="get" action="{% url 'tags:list' %}" class="mb-4"><label class="visually-hidden" for="tag-search">Filter tags</label><input class="form-control" id="tag-search" type="search" name="q" placeholder="Find a topic"></form>
-  {% if tags %}<div class="row g-3">{% for tag in tags %}<div class="col-12 col-sm-6 col-lg-4"><article class="surface-card p-3"><h2 class="h5"><a href="{% url 'tags:detail' slug=tag.slug %}">#{{ tag.name }}</a></h2>{% if tag_settings.show_tag_usage %}<p class="small muted mb-0">{{ tag.usage_count }} uses</p>{% endif %}</article></div>{% endfor %}</div>{% else %}<p class="empty-state p-4">No tags are available.</p>{% endif %}
+<div class="site-container py-4 py-lg-5">
+  {% include "components/breadcrumbs.html" with current="Topics" %}
+  {% include "components/page_header.html" with eyebrow="Explore" title="Topics" lead="Browse the journal by device, brand, chipset and technique." %}
+  <div class="tag-search">
+    {% url 'tags:list' as list_url %}
+    {% include "components/search_box.html" with action=list_url input_id="tag-query" label="Filter topics" value=q placeholder="Find a topic" hx_target="#tag-results" %}
+  </div>
+  {% if cloud and not q %}
+    <section class="tag-cloud-card" aria-labelledby="popular-topics-title">
+      <h2 class="side-widget__title" id="popular-topics-title">Popular topics</h2>
+      <ul class="tag-cloud">
+        {% for tag in cloud %}<li><a class="tag-cloud__tag tag-cloud__tag--{{ tag.weight }}" href="{% url 'tags:detail' slug=tag.slug %}">#{{ tag.name }}</a></li>{% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+  <div id="tag-results">{% include "tags/partials/tag_results.html" %}</div>
 </div>
 {% endblock %}

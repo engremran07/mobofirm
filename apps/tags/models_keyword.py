@@ -35,10 +35,10 @@ class KeywordSuggestion(models.Model):
 
     class Meta:
         unique_together = ("provider", "normalized")
-        indexes = [
+        indexes = (
             models.Index(fields=["normalized"]),
             models.Index(fields=["locale", "category"]),
-        ]
+        )
 
     def __str__(self):
         return f"{self.keyword} ({self.provider})"

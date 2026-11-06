@@ -1,0 +1,22 @@
+{# HTMX fragment and initial render of the journal results. Context: filters, cards, lead, page_obj, total. #}
+{% if filters.is_filtered %}
+  <p class="results-summary" role="status">
+    <strong>{{ total }}</strong> article{{ total|pluralize }}
+    {% if filters.q %}for “{{ filters.q }}”{% endif %}
+    {% if active_category %}in {{ active_category.name }}{% endif %}
+    {% if filters.tag %}tagged #{{ filters.tag }}{% endif %}
+    · <a href="{% url 'blog:post_list' %}">Clear filters</a>
+  </p>
+{% endif %}
+{% if lead %}
+  {% include "blog/partials/lead_story.html" with card=lead %}
+{% endif %}
+{% if cards %}
+  <h2 class="visually-hidden">Articles</h2>
+  <div class="post-grid">
+    {% for card in cards %}{% include "blog/partials/post_card.html" with card=card %}{% endfor %}
+  </div>
+  {% include "components/pagination.html" with page_obj=page_obj label="Journal pages" hx_target="#journal-results" %}
+{% elif not lead %}
+  {% include "components/empty_state.html" with title="No articles match" message="Try a different search, or clear the filters to see everything." action_label="Clear filters" action_url=request.path %}
+{% endif %}

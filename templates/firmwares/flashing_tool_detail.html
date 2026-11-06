@@ -5,7 +5,8 @@
   <article class="mt-4"><p class="section-eyebrow">{{ tool.get_platform_display }}{% if tool.category %} · {{ tool.category.name }}{% endif %}</p><h1 class="display-6 fw-bold">{{ tool.name }}</h1><p class="lead muted">{{ tool.description }}</p>
     {% if tool.official_url %}<p><a class="btn btn-primary" href="{{ tool.official_url }}" rel="noopener noreferrer">Visit official tool source</a></p>{% endif %}
     {% if brands %}<h2 class="h4 mt-4">Supported manufacturers</h2><ul>{% for brand in brands %}<li><a href="{% url 'firmwares:brand_detail' slug=brand.slug %}">{{ brand.name }}</a></li>{% endfor %}</ul>{% endif %}
-    {% if related_guides %}<h2 class="h4 mt-4">Related guides</h2><ul>{% for guide in related_guides %}<li>{% if guide.post %}<a href="{{ guide.post.get_absolute_url }}">{{ guide.post.title }}</a>{% else %}{{ guide.brand }}{% endif %}</li>{% endfor %}</ul>{% endif %}
+    {% if chipsets %}<h2 class="h4 mt-4">Supported chipsets</h2><ul>{% for chipset in chipsets %}<li><a href="{% url 'firmwares:chipset_detail' slug=chipset.slug %}">{{ chipset.display_name }}</a></li>{% endfor %}</ul>{% endif %}
+    {% if related_guides %}<h2 class="h4 mt-4">Related guides</h2><ul>{% for guide in related_guides %}<li><a href="{{ guide.post.get_absolute_url }}">{{ guide.post.title }}</a></li>{% endfor %}</ul>{% endif %}
   </article>
 </div>
 {% endblock %}

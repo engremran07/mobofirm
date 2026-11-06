@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from typing import cast
 from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
@@ -13,17 +12,14 @@ from apps.firmwares.download_service import (
     check_hotlink,
     complete_ad_gate,
     create_download_token,
-    start_download_session,
     validate_download_token,
 )
 from apps.firmwares.models import DownloadToken, HotlinkBlock, OfficialFirmware
-from apps.users.models import CustomUserManager
 
 
 class DownloadServiceTests(TestCase):
     def setUp(self) -> None:
-        user_model = get_user_model()
-        user_manager = cast(CustomUserManager, user_model.objects)
+        user_manager = get_user_model().objects
         self.user = user_manager.create_user(
             username="download_user",
             email="download@example.com",
@@ -82,21 +78,17 @@ class DownloadServiceTests(TestCase):
             },
         ):
             token = create_download_token(self.firmware, self._request())
-            start_download_session(token, self._request())
-            session = token.sessions.first()
-            assert session is not None
             DownloadToken.objects.filter(pk=token.pk).update(
                 created_at=timezone.now() - timedelta(seconds=30)
             )
             token.refresh_from_db()
             self.assertTrue(complete_ad_gate(token, ad_type="video"))
+            self.assertTrue(complete_ad_gate(token, ad_type="video"))
 
         token.refresh_from_db()
-        session = token.sessions.first()  # type: ignore[attr-defined]
 
         self.assertTrue(token.ad_gate_completed)
-        self.assertIsNotNone(session)
-        self.assertEqual(session.ad_logs.count(), 1)
+        self.assertEqual(token.ad_logs.count(), 1)
 
     def test_complete_ad_gate_rejects_early_completion(self) -> None:
         with patch(
@@ -130,6 +122,7 @@ class DownloadServiceTests(TestCase):
             ad_gate_required=False,
             ad_gate_completed=True,
             status=DownloadToken.Status.USED,
+            used_at=timezone.now(),
             expires_at=timezone.now() + timedelta(minutes=30),
         )
 

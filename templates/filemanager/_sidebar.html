@@ -1,0 +1,24 @@
+{# Contract: fm_tab (files, shares, trash), usage, trash_count, tags (annotated with .total). Navigation and quota meter shared by the file manager pages. #}
+{% load filemanager_tags %}
+<aside class="fm-sidebar" aria-label="File manager">
+  <nav aria-label="File manager sections">
+    <ul class="fm-nav">
+      <li><a href="{% url 'filemanager:browser' %}"{% if fm_tab == "files" %} aria-current="page"{% endif %}><i class="icon" data-lucide="folder" aria-hidden="true"></i> My files</a></li>
+      <li><a href="{% url 'filemanager:shares' %}"{% if fm_tab == "shares" %} aria-current="page"{% endif %}><i class="icon" data-lucide="link" aria-hidden="true"></i> Share links</a></li>
+      <li><a href="{% url 'filemanager:trash' %}"{% if fm_tab == "trash" %} aria-current="page"{% endif %}><i class="icon" data-lucide="trash-2" aria-hidden="true"></i> Trash{% if trash_count %} <span class="eco-pill">{{ trash_count }}</span>{% endif %}</a></li>
+    </ul>
+  </nav>
+  <section class="surface-card p-3" aria-labelledby="quota-heading">
+    <h2 class="h6" id="quota-heading">Storage</h2>
+    {% include "components/meter.html" with id="storage-meter" label="Used" percent=usage.percent_used|floatformat:0 text=usage.used_bytes|filesize %}
+    <p class="small muted mt-2 mb-0">{{ usage.used_bytes|filesize }} of {{ usage.effective_quota|filesize }}</p>
+  </section>
+  {% if tags %}
+    <nav class="surface-card p-3" aria-labelledby="tags-heading">
+      <h2 class="h6" id="tags-heading">Tags</h2>
+      <ul class="fm-tags">
+        {% for tag in tags %}<li><a class="eco-pill" href="{% url 'filemanager:browser' %}?tag={{ tag.slug|urlencode }}">{{ tag.name }} · {{ tag.total }}</a></li>{% endfor %}
+      </ul>
+    </nav>
+  {% endif %}
+</aside>

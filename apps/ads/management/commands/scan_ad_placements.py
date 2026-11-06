@@ -33,7 +33,7 @@ class Command(BaseCommand):
         for path in root.rglob("*.html"):
             try:
                 text = path.read_text(encoding="utf-8", errors="ignore")
-            except Exception:  # noqa: S112
+            except OSError:
                 continue
             for match in pattern.finditer(text):
                 raw_name = match.group("name").strip()

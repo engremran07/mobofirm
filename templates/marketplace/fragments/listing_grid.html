@@ -1,0 +1,16 @@
+{% for listing in listings %}
+  <div class="col-12 col-sm-6 col-lg-4">
+    <article class="surface-card eco-listing" aria-labelledby="listing-{{ listing.pk }}">
+      <div class="d-flex flex-wrap gap-2">
+        {% if listing.is_featured %}{% include "components/status_pill.html" with label="Featured" tone="accent" icon="badge-check" %}{% endif %}
+        {% if listing.seller.verified %}{% include "components/status_pill.html" with label="Verified seller" tone="success" %}{% endif %}
+      </div>
+      <h2 class="h5 mb-0" id="listing-{{ listing.pk }}"><a href="{{ listing.get_absolute_url }}">{{ listing.title }}</a></h2>
+      <p class="small muted mb-0">by <a href="{{ listing.seller.get_absolute_url }}">{{ listing.seller.display_name }}</a></p>
+      {% if listing.description %}<p class="small mb-0">{{ listing.description|truncatechars:110 }}</p>{% endif %}
+      <p class="eco-listing__price mb-0">{% if listing.discount_price %}<s class="muted fw-normal">{{ listing.price }}</s> {% endif %}{{ listing.effective_price }} <small class="muted fw-normal">USD</small></p>
+    </article>
+  </div>
+{% empty %}
+  <div class="col-12">{% include "components/empty_state.html" with title="No listings match your search" message="Try different words or clear the filters." %}</div>
+{% endfor %}

@@ -1,0 +1,10 @@
+<!-- Expects: page (a Page object), query (extra querystring ending in "&" or empty), label -->
+{% if page.has_other_pages %}
+  <nav class="d-flex justify-content-between align-items-center gap-3 mt-4" aria-label="{{ label|default:'Result pages' }}">
+    <span class="small muted">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+    <div class="d-flex gap-2">
+      {% if page.has_previous %}<a class="btn btn-outline-secondary btn-sm" rel="prev" href="?{{ query }}page={{ page.previous_page_number }}">Previous</a>{% endif %}
+      {% if page.has_next %}<a class="btn btn-outline-secondary btn-sm" rel="next" href="?{{ query }}page={{ page.next_page_number }}">Next</a>{% endif %}
+    </div>
+  </nav>
+{% endif %}

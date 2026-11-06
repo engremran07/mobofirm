@@ -7,11 +7,8 @@ def auth_status(request):
     """
     Inject a stable auth flag used by templates/JS toggles.
     """
-    try:
-        is_auth = bool(getattr(request, "user", None) and request.user.is_authenticated)
-    except Exception:
-        is_auth = False
-    return {"auth_is_authenticated": is_auth}
+    user = getattr(request, "user", None)
+    return {"auth_is_authenticated": bool(user and user.is_authenticated)}
 
 
 # Backward compatibility for any legacy usage

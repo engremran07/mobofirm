@@ -1,0 +1,44 @@
+{# Contract: latest_firmwares, latest_posts, latest_tools (lists from apps.pages.widgets). Renders only the blocks that have content. #}
+{% if latest_firmwares or latest_posts or latest_tools %}
+  <div class="row g-4 mt-2">
+    {% if latest_firmwares %}
+      <section class="col-12 col-lg-4" aria-labelledby="widget-firmware-title">
+        <h2 id="widget-firmware-title" class="h4">Latest firmware</h2>
+        <ul class="eco-list">
+          {% for firmware in latest_firmwares %}
+            <li class="surface-card p-3">
+              <a href="{{ firmware.url }}">{{ firmware.brand }} {{ firmware.model }}</a>
+              <span class="small muted d-block">{{ firmware.type }} · {{ firmware.created_at|date:"j M Y" }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+      </section>
+    {% endif %}
+    {% if latest_posts %}
+      <section class="col-12 col-lg-4" aria-labelledby="widget-posts-title">
+        <h2 id="widget-posts-title" class="h4">Latest articles</h2>
+        <ul class="eco-list">
+          {% for post in latest_posts %}
+            <li class="surface-card p-3">
+              <a href="{{ post.url }}">{{ post.title }}</a>
+              {% if post.published_at %}<span class="small muted d-block">{{ post.published_at|date:"j M Y" }}</span>{% endif %}
+            </li>
+          {% endfor %}
+        </ul>
+      </section>
+    {% endif %}
+    {% if latest_tools %}
+      <section class="col-12 col-lg-4" aria-labelledby="widget-tools-title">
+        <h2 id="widget-tools-title" class="h4">Flashing tools</h2>
+        <ul class="eco-list">
+          {% for tool in latest_tools %}
+            <li class="surface-card p-3">
+              <a href="{{ tool.url }}">{{ tool.name }}</a>
+              <span class="small muted d-block">{{ tool.category }} · {{ tool.platform }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+      </section>
+    {% endif %}
+  </div>
+{% endif %}

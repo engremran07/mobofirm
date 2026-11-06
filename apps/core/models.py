@@ -13,10 +13,15 @@ class AppRegistry(SingletonModel):
     comments_enabled = models.BooleanField(default=True)
     devices_enabled = models.BooleanField(default=True)
     firmwares_enabled = models.BooleanField(default=True)
-    governance_enabled = models.BooleanField(default=True)
     tags_enabled = models.BooleanField(default=True)
     users_enabled = models.BooleanField(default=True)
     device_identity_enabled = models.BooleanField(default=True)
+    storage_enabled = models.BooleanField(default=True)
+    seo_enabled = models.BooleanField(default=True)
+    pages_enabled = models.BooleanField(default=True)
+    shop_enabled = models.BooleanField(default=True)
+    marketplace_enabled = models.BooleanField(default=True)
+    filemanager_enabled = models.BooleanField(default=True)
 
     class Meta:
         verbose_name = "Application Registry"
@@ -26,9 +31,9 @@ class AppRegistry(SingletonModel):
 
 
 __all__ = [
-    "TimestampedModel",
-    "SoftDeleteModel",
-    "AuditFieldsModel",
     "AppRegistry",
+    "AuditFieldsModel",
     "Metric",
+    "SoftDeleteModel",
+    "TimestampedModel",
 ]

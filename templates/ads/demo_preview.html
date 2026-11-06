@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% load ad_tags %}
+{% block title %}Ad slot preview | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block meta_description %}Review local demo creatives rendered by the Mobofirm ad-slot renderer.{% endblock %}
+{% block content %}
+<div class="site-container py-4 py-lg-5">
+  <header class="hero-panel p-4 p-md-5 mb-4">
+    <p class="hero-eyebrow mb-2">Staff-only visual tooling</p>
+    <h1 class="hero-title mb-3">Ad slot preview</h1>
+    <p class="hero-copy mb-3">Review disabled, database-backed demo creatives through the same renderer used by site slots.</p>
+    <a class="btn btn-outline-secondary" href="{% url 'ads:dashboard' %}">Back to ad management</a>
+  </header>
+
+  <p class="alert alert-info" role="note">
+    Local previews do not contact providers, record impressions or clicks, or grant rewards.
+    Demo placements, assignments, and creatives remain disabled for public serving.
+  </p>
+
+  <section class="ad-preview-grid" aria-label="Configured ad unit preview slots">
+    {% for format in formats %}
+      <article class="ad-preview-card" data-ad-format="{{ format.code }}">
+        <header class="ad-preview-card__header">
+          <h2 class="h5 mb-1">{{ format.label }}</h2>
+          <code>{{ format.code }}</code>
+        </header>
+        <div class="ad-preview__canvas ad-preview__canvas--{{ format.code }}"
+             aria-label="{{ format.label }} ad slot preview">
+          {% if format.placement %}
+            {% render_ad_slot format.placement_code preview=True %}
+          {% else %}
+            <p class="ad-preview__empty">No local demo slot is configured for this format.</p>
+          {% endif %}
+        </div>
+        {% if format.placement %}
+          <p class="ad-preview-card__description">{{ format.placement.description }}</p>
+        {% endif %}
+      </article>
+    {% empty %}
+      <p>No ad-unit formats are configured.</p>
+    {% endfor %}
+  </section>
+</div>
+{% endblock %}

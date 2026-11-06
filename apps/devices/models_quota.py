@@ -6,11 +6,11 @@ from django.utils import timezone
 
 
 class UserDeviceQuota(models.Model):
-    WINDOW_CHOICES = [
+    WINDOW_CHOICES = (
         ("3m", "3 Months"),
         ("6m", "6 Months"),
         ("12m", "12 Months"),
-    ]
+    )
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="device_quotas"
@@ -25,7 +25,7 @@ class UserDeviceQuota(models.Model):
     class Meta:
         verbose_name = "User Device Quota"
         verbose_name_plural = "User Device Quotas"
-        indexes = [models.Index(fields=["user"])]
+        indexes = (models.Index(fields=["user"]),)
 
     def __str__(self) -> str:
-        return f"Device quota for {self.user_id}"  # type: ignore[attr-defined]
+        return f"Device quota for {self.user_id}"

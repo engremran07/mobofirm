@@ -9,13 +9,13 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
     initial = True
 
-    dependencies = [
+    dependencies = (
         ("blog", "0001_initial"),
         ("tags", "0001_initial"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-    ]
+    )
 
-    operations = [
+    operations = (
         migrations.AddField(
             model_name="autotopic",
             name="created_by",
@@ -191,4 +191,4 @@ class Migration(migrations.Migration):
             name="tagtranslation",
             unique_together={("tag", "language")},
         ),
-    ]
+    )

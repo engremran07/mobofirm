@@ -1,0 +1,153 @@
+.mf-seo {
+  max-width: 76rem;
+  padding: 0.5rem 0 2rem;
+}
+
+.mf-seo-nav ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.5rem;
+  margin: 0 0 1rem;
+  padding: 0;
+  list-style: none;
+}
+
+.mf-seo-nav a {
+  display: inline-block;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid var(--mf-border, #cbd5e1);
+  border-radius: 0.5rem;
+  text-decoration: none;
+}
+
+.mf-seo-nav a[aria-current="page"] {
+  background: var(--mf-accent, #1d4ed8);
+  border-color: var(--mf-accent, #1d4ed8);
+  color: #fff;
+}
+
+.mf-seo-title {
+  margin-bottom: 1rem;
+}
+
+.mf-seo .visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.mf-seo-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.mf-seo-card {
+  padding: 1rem;
+  border: 1px solid var(--mf-border, #cbd5e1);
+  border-radius: 0.75rem;
+}
+
+.mf-seo-card h3 {
+  margin: 0 0 0.25rem;
+  font-size: 0.95rem;
+}
+
+.mf-seo-figure {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+}
+
+.mf-seo-figure span {
+  font-size: 0.9rem;
+  font-weight: 400;
+}
+
+.mf-seo-table {
+  width: 100%;
+  border-collapse: collapse;
+  overflow-wrap: anywhere;
+}
+
+.mf-seo-table th,
+.mf-seo-table td {
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid var(--mf-border, #e2e8f0);
+  text-align: left;
+  vertical-align: top;
+}
+
+.mf-seo-state {
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid currentcolor;
+  font-size: 0.8rem;
+}
+
+.mf-seo-state--ready {
+  color: #15803d;
+}
+
+.mf-seo-state--disabled,
+.mf-seo-state--unsupported {
+  color: #64748b;
+}
+
+.mf-seo-state--not_configured {
+  color: #b45309;
+}
+
+.mf-seo-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.mf-seo-dl {
+  display: grid;
+  grid-template-columns: minmax(8rem, 12rem) 1fr;
+  gap: 0.35rem 1rem;
+  overflow-wrap: anywhere;
+}
+
+.mf-seo-dl dd {
+  margin: 0;
+}
+
+.mf-seo-field {
+  margin-bottom: 0.9rem;
+}
+
+.mf-seo-field input[type="text"],
+.mf-seo-field input[type="url"],
+.mf-seo-field input[type="number"],
+.mf-seo-field select,
+.mf-seo-field textarea {
+  max-width: 100%;
+}
+
+.mf-seo-help {
+  margin: 0.2rem 0 0;
+  color: #64748b;
+  font-size: 0.85rem;
+}
+
+@media (max-width: 40rem) {
+  .mf-seo-table {
+    display: block;
+    overflow-x: auto;
+  }
+
+  .mf-seo-dl {
+    grid-template-columns: 1fr;
+  }
+}

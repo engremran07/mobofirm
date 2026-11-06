@@ -1,25 +1,19 @@
 {% extends "base.html" %}
-{% block title %}{% if editing %}Edit{% else %}Create{% endif %} journal post | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block content %}
-<div class="site-container py-5">
-  <p class="section-eyebrow">Editorial workspace</p>
-  <h1 class="h2 mb-4">{% if editing %}Edit post{% else %}Create a post{% endif %}</h1>
-  {% if editing_post %}
-    <p><a href="{% url 'blog:post_history' slug=editing_post.slug %}">View version history</a></p>
-  {% endif %}
-  <form method="post" class="surface-card p-3 p-md-4">
+<div class="site-container py-4 py-lg-5">
+  {% url 'blog:manage_posts' as manage_url %}
+  {% include "components/breadcrumbs.html" with current=editing|yesno:"Edit post,Write a post" parent_label="Editorial workspace" parent_url=manage_url %}
+  {% include "components/page_header.html" with eyebrow="Editorial workspace" title=editing|yesno:"Edit post,Write a post" %}
+  {% if editing_post %}<p><a href="{% url 'blog:post_history' slug=editing_post.slug %}">View version history</a></p>{% endif %}
+  <form method="post" class="surface-card p-3 p-md-4" novalidate>
     {% csrf_token %}
-    {% if form.non_field_errors %}<div class="alert alert-danger" role="alert">{{ form.non_field_errors }}</div>{% endif %}
-    {% for field in form %}
-      <div class="mb-3">
-        <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
-        {{ field }}
-        {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
-        {% for error in field.errors %}<div class="text-danger small" role="alert">{{ error }}</div>{% endfor %}
-      </div>
-    {% endfor %}
-    <button class="btn btn-primary" type="submit">Save post</button>
-    {% if editing_post %}<a class="btn btn-outline-secondary" href="{{ editing_post.get_absolute_url }}">Cancel</a>{% endif %}
+    {% if editing_post %}<input type="hidden" name="edit" value="{{ editing_post.slug }}">{% endif %}
+    {% include "components/form_errors.html" with form=form %}
+    {% for field in form %}{% include "components/form_field.html" with field=field %}{% endfor %}
+    <div class="d-flex flex-wrap gap-2">
+      <button class="btn btn-primary" type="submit">{% if editing %}Save changes{% else %}Save draft{% endif %}</button>
+      <a class="btn btn-outline-secondary" href="{% if editing_post %}{{ editing_post.get_absolute_url }}{% else %}{{ manage_url }}{% endif %}">Cancel</a>
+    </div>
   </form>
 </div>
 {% endblock %}

@@ -1,9 +1,9 @@
-# ADR-0000: <Decision title>
+# ADR-0000: [Decision title]
 
 - **Status:** Proposed | Accepted | Rejected | Superseded
-- **Decision owner:** <role/name>
+- **Decision owner:** [role/name]
 - **Date:** YYYY-MM-DD
-- **Related requirements:** <requirement IDs>
+- **Related requirements:** [requirement IDs]
 
 ## Context
 
@@ -16,8 +16,8 @@ Record one clear decision. If it is not approved, mark it Proposed and do not im
 ## Options considered
 
 | Option | Benefits | Costs and risks |
-|---|---|---|
-| <Option> | <Benefits> | <Costs/risks> |
+| --- | --- | --- |
+| [Option] | [Benefits] | [Costs/risks] |
 
 ## Consequences
 

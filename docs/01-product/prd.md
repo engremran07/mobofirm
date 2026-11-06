@@ -16,13 +16,14 @@ The repository contains a backend intended to organize firmware-related informat
 6. Ad placements/events and affiliate product links.
 7. Auditable review, decision, fulfillment, and correction workflows.
 8. Operational health and bounded retention utilities.
+9. Runtime site settings an operator edits without a deploy: branding, contact and social links, maintenance mode, email credentials, reCAPTCHA, download gate, analytics and search-engine verification (`site_settings`, see `../04-backend/site-settings.md`).
 
 These are a code-derived inventory, not approved feature requirements. The detailed implementation catalog and current tests are in `feature-catalog.md` and `../06-quality/requirements-traceability.md`.
 
 ## Non-goals until approved
 
 - Expanding frontend scope or changing the approved stack/architecture without a new owner decision.
-- Restoring unavailable applications or introducing placeholder app integrations.
+- Introducing placeholder app integrations. The owner decision of this release integrates `storage`, `seo`, `pages`, `shop`, `marketplace` and `filemanager` as first-class installed apps (see `docs/04-backend/django-app-boundaries.md`); online payments, wallet/credits and Stripe remain explicitly out of scope.
 - Promising particular download availability, security guarantees, revenue outcomes, or service levels not evidenced by approved requirements.
 
 ## Approval checklist

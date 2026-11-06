@@ -1,0 +1,7 @@
+{# Context: older, newer (PostCard or None). #}
+{% if older or newer %}
+  <nav class="post-nav" aria-label="More articles">
+    {% if older %}<a class="post-nav__link" rel="prev" href="{{ older.url }}"><span class="post-nav__label"><i data-lucide="arrow-left" class="icon" aria-hidden="true"></i> Previous</span><span class="post-nav__title">{{ older.title }}</span></a>{% else %}<span></span>{% endif %}
+    {% if newer %}<a class="post-nav__link post-nav__link--next" rel="next" href="{{ newer.url }}"><span class="post-nav__label">Next <i data-lucide="arrow-right" class="icon" aria-hidden="true"></i></span><span class="post-nav__title">{{ newer.title }}</span></a>{% endif %}
+  </nav>
+{% endif %}

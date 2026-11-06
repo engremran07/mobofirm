@@ -6,12 +6,12 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-    dependencies = [
+    dependencies = (
         ("ads", "0003_alter_adevent_campaign_alter_adevent_creative_and_more"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-    ]
+    )
 
-    operations = [
+    operations = (
         migrations.AlterModelOptions(
             name="autoadsscanresult",
             options={
@@ -273,4 +273,4 @@ class Migration(migrations.Migration):
                 "ordering": ["template_path"],
             },
         ),
-    ]
+    )

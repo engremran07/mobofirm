@@ -2,24 +2,31 @@ from __future__ import annotations
 
 import logging
 from datetime import timedelta
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
+from importlib import import_module
 from typing import Any
 
-try:
-    from celery import shared_task
-except Exception:  # pragma: no cover - fallback when Celery not installed
-
-    def shared_task(*dargs, **dkwargs):  # type: ignore[assignment]
-        def decorator(func):
-            return func
-
-        if dargs and callable(dargs[0]):
-            return dargs[0]
-        return decorator
-
-
+import requests
+from celery import shared_task
+from django.db import DatabaseError
 from django.db.models import Count
+from django.template.defaultfilters import slugify
 from django.utils import timezone
+
+from apps.ads.api import track_affiliate_click_sync
+from apps.ads.models import (
+    AdCreative,
+    AdEvent,
+    AdNetwork,
+    AdPlacement,
+    AdsSettings,
+    AffiliateProduct,
+    AffiliateProvider,
+    PlacementAssignment,
+    RewardedAdView,
+)
+from apps.ads.services import scanner
+from apps.ads.services.ai_optimizer import analyze_performance
 
 logger = logging.getLogger(__name__)
 
@@ -35,14 +42,12 @@ logger = logging.getLogger(__name__)
     soft_time_limit=120,
     time_limit=180,
 )
-def aggregate_events(self) -> dict:
+def aggregate_events(self) -> dict[str, Any]:
     """
     Aggregate ad events in the background.
     Runs hourly to aggregate ad impressions, clicks, and conversions.
     """
     try:
-        from apps.ads.models import AdEvent
-
         logger.info("Starting ad events aggregation")
 
         # Get events from last hour
@@ -73,9 +78,9 @@ def aggregate_events(self) -> dict:
             "period_start": one_hour_ago.isoformat(),
         }
 
-    except Exception as exc:
-        logger.error(f"Ad aggregation failed: {exc}", exc_info=True)
-        raise self.retry(exc=exc, countdown=60)  # noqa: B904
+    except DatabaseError as exc:
+        logger.exception("Ad aggregation failed")
+        raise self.retry(exc=exc, countdown=60)
 
 
 @shared_task(
@@ -84,24 +89,22 @@ def aggregate_events(self) -> dict:
     soft_time_limit=60,
     time_limit=120,
 )
-def cleanup_old_events(self):
+def cleanup_old_events(self) -> dict[str, Any]:
     """
     Cleanup ad events older than 90 days.
     Runs daily to keep database size manageable.
     """
     try:
-        from apps.ads.models import AdEvent
-
         cutoff_date = timezone.now() - timedelta(days=90)
 
         deleted_count = AdEvent.objects.filter(created_at__lt=cutoff_date).delete()[0]
 
-        logger.info(f"Deleted {deleted_count} old ad events")
+        logger.info("Deleted %d old ad events", deleted_count)
 
         return {"status": "success", "deleted": deleted_count}
 
-    except Exception as e:
-        logger.error(f"Ad cleanup failed: {e}", exc_info=True)
+    except DatabaseError as e:
+        logger.exception("Ad cleanup failed")
         return {"status": "error", "error": str(e)}
 
 
@@ -125,12 +128,10 @@ def scan_blog_post_content(self, post_id: int) -> dict[str, Any]:
     optimal insertion points for inline / in-feed ads.
     """
     try:
-        from apps.ads.services.scanner import scan_blog_post_body
-
-        return scan_blog_post_body(post_id)
-    except Exception as exc:
-        logger.error("Blog post scan failed for post %s: %s", post_id, exc)
-        raise self.retry(exc=exc, countdown=30)  # noqa: B904
+        return scanner.scan_blog_post_body(post_id)
+    except DatabaseError as exc:
+        logger.exception("Blog post scan failed for post %s", post_id)
+        raise self.retry(exc=exc, countdown=30)
 
 
 # ==================== AI OPTIMIZATION TASKS ====================
@@ -153,14 +154,6 @@ def ai_optimize_ad_placements(self) -> dict[str, Any]:
     4. Optionally auto-applies low-risk optimizations
     """
     try:
-        from apps.ads.models import (
-            AdEvent,
-            AdPlacement,
-            AdsSettings,
-            PlacementAssignment,
-        )
-        from apps.ads.services.ai_optimizer import analyze_performance
-
         settings_obj = AdsSettings.get_solo()
         if not settings_obj.ai_optimization_enabled:
             return {"status": "skipped", "reason": "ai_optimization_disabled"}
@@ -225,8 +218,6 @@ def ai_optimize_ad_placements(self) -> dict[str, Any]:
                     "creative_id"
                 ):
                     # Pause underperforming creatives (safe operation)
-                    from apps.ads.models import AdCreative
-
                     try:
                         creative = AdCreative.objects.get(
                             id=suggestion["creative_id"],
@@ -242,7 +233,9 @@ def ai_optimize_ad_placements(self) -> dict[str, Any]:
                             }
                         )
                         logger.info(
-                            f"AI paused creative {creative.pk}: {suggestion.get('reason')}"
+                            "AI paused creative %s: %s",
+                            creative.pk,
+                            suggestion.get("reason"),
                         )
                     except AdCreative.DoesNotExist:
                         pass
@@ -254,8 +247,8 @@ def ai_optimize_ad_placements(self) -> dict[str, Any]:
             "applied": applied,
         }
 
-    except Exception as e:
-        logger.error(f"AI optimization failed: {e}", exc_info=True)
+    except DatabaseError as e:
+        logger.exception("AI optimization failed")
         return {"status": "error", "error": str(e)}
 
 
@@ -279,8 +272,6 @@ def process_rewarded_ad_completion(
     Called when user finishes watching a rewarded video ad.
     """
     try:
-        from apps.ads.models import RewardedAdView
-
         view = RewardedAdView.objects.select_related("config", "user").get(id=view_id)
 
         if view.reward_granted:
@@ -335,7 +326,10 @@ def process_rewarded_ad_completion(
         view.save()
 
         logger.info(
-            f"Rewarded ad completed: user={view.user.id}, reward={reward_type}:{reward_amount}"
+            "Rewarded ad completed: user=%s, reward=%s:%s",
+            view.user.id,
+            reward_type,
+            reward_amount,
         )
 
         return {
@@ -346,8 +340,8 @@ def process_rewarded_ad_completion(
 
     except RewardedAdView.DoesNotExist:
         return {"status": "error", "reason": "view_not_found"}
-    except Exception as e:
-        logger.error(f"Rewarded ad processing failed: {e}", exc_info=True)
+    except DatabaseError as e:
+        logger.exception("Rewarded ad processing failed")
         return {"status": "error", "error": str(e)}
 
 
@@ -359,8 +353,8 @@ def _grant_download_credits(user, amount: int):
         if hasattr(profile, "download_credits"):
             profile.download_credits = (profile.download_credits or 0) + amount
             profile.save(update_fields=["download_credits"])
-    except Exception as e:
-        logger.warning(f"Could not grant download credits: {e}")
+    except DatabaseError as e:
+        logger.warning("Could not grant download credits: %s", e)
 
 
 def _grant_points(user, amount: int):
@@ -370,8 +364,8 @@ def _grant_points(user, amount: int):
         if hasattr(profile, "points"):
             profile.points = (profile.points or 0) + amount
             profile.save(update_fields=["points"])
-    except Exception as e:
-        logger.warning(f"Could not grant points: {e}")
+    except DatabaseError as e:
+        logger.warning("Could not grant points: %s", e)
 
 
 def _grant_premium_access(user, hours: int):
@@ -379,13 +373,11 @@ def _grant_premium_access(user, hours: int):
     try:
         profile = user.profile if hasattr(user, "profile") else user
         if hasattr(profile, "premium_until"):
-            current = profile.premium_until or timezone.now()
-            if current < timezone.now():
-                current = timezone.now()
+            current = max(profile.premium_until or timezone.now(), timezone.now())
             profile.premium_until = current + timedelta(hours=hours)
             profile.save(update_fields=["premium_until"])
-    except Exception as e:
-        logger.warning(f"Could not grant premium access: {e}")
+    except DatabaseError as e:
+        logger.warning("Could not grant premium access: %s", e)
 
 
 def _grant_ad_free_period(user, hours: int):
@@ -393,13 +385,11 @@ def _grant_ad_free_period(user, hours: int):
     try:
         profile = user.profile if hasattr(user, "profile") else user
         if hasattr(profile, "ad_free_until"):
-            current = profile.ad_free_until or timezone.now()
-            if current < timezone.now():
-                current = timezone.now()
+            current = max(profile.ad_free_until or timezone.now(), timezone.now())
             profile.ad_free_until = current + timedelta(hours=hours)
             profile.save(update_fields=["ad_free_until"])
-    except Exception as e:
-        logger.warning(f"Could not grant ad-free period: {e}")
+    except DatabaseError as e:
+        logger.warning("Could not grant ad-free period: %s", e)
 
 
 # ==================== AD NETWORK SYNC TASKS ====================
@@ -419,8 +409,6 @@ def sync_ad_networks(self) -> dict[str, Any]:
     the latest ad unit configurations, performance data, and settings.
     """
     try:
-        from apps.ads.models import AdNetwork
-
         synced = []
         errors = []
 
@@ -436,7 +424,7 @@ def sync_ad_networks(self) -> dict[str, Any]:
                 network.last_sync_at = timezone.now()
                 network.sync_status = result.get("status", "synced")
                 network.save(update_fields=["last_sync_at", "sync_status"])
-            except Exception as e:
+            except DatabaseError as e:
                 errors.append(
                     {
                         "network": network.name,
@@ -452,8 +440,8 @@ def sync_ad_networks(self) -> dict[str, Any]:
             "errors": errors,
         }
 
-    except Exception as e:
-        logger.error(f"Ad network sync failed: {e}", exc_info=True)
+    except DatabaseError as e:
+        logger.exception("Ad network sync failed")
         return {"status": "error", "error": str(e)}
 
 
@@ -495,18 +483,18 @@ def _sync_premium_network(network) -> dict[str, Any]:
 
 
 @shared_task(bind=True, soft_time_limit=30, time_limit=60)
-def ads_hourly_tasks(self):
+def ads_hourly_tasks(self) -> None:
     """Run all hourly ads tasks."""
-    aggregate_events.delay()  # type: ignore[attr-defined]
+    aggregate_events.delay()
 
 
 @shared_task(bind=True, soft_time_limit=30, time_limit=60)
-def ads_daily_tasks(self):
+def ads_daily_tasks(self) -> None:
     """Run all daily ads tasks."""
-    cleanup_old_events.delay()  # type: ignore[attr-defined]
-    ai_optimize_ad_placements.delay()  # type: ignore[attr-defined]
-    sync_ad_networks.delay()  # type: ignore[attr-defined]
-    sync_affiliate_products.delay()  # type: ignore[attr-defined]
+    cleanup_old_events.delay()
+    ai_optimize_ad_placements.delay()
+    sync_ad_networks.delay()
+    sync_affiliate_products.delay()
 
 
 # ==================== AFFILIATE PRODUCTS ====================
@@ -526,15 +514,13 @@ def sync_affiliate_products(self) -> dict[str, Any]:
     Fetches new products based on brand/model keywords.
     """
     try:
-        from apps.ads.models import AdsSettings, AffiliateProvider
-
         settings_obj = AdsSettings.get_solo()
 
         if not settings_obj.affiliate_products_enabled:
             logger.info("Affiliate products disabled, skipping sync")
             return {"status": "disabled"}
 
-        results = {
+        results: dict[str, Any] = {
             "providers_synced": 0,
             "products_added": 0,
             "products_updated": 0,
@@ -567,18 +553,18 @@ def sync_affiliate_products(self) -> dict[str, Any]:
                 provider.sync_status = "success"
                 provider.save(update_fields=["last_sync_at", "sync_status"])
 
-            except Exception as exc:
-                logger.exception(f"Failed to sync {provider.name}: {exc}")
+            except DatabaseError as exc:
+                logger.exception("Failed to sync %s", provider.name)
                 results["errors"].append(f"{provider.name}: {exc!s}")
                 provider.sync_status = f"error: {str(exc)[:100]}"
                 provider.save(update_fields=["sync_status"])
 
-        logger.info(f"Affiliate product sync complete: {results}")
+        logger.info("Affiliate product sync complete: %s", results)
         return results
 
-    except Exception as exc:
-        logger.error(f"Affiliate product sync failed: {exc}", exc_info=True)
-        raise self.retry(exc=exc)  # noqa: B904
+    except DatabaseError as exc:
+        logger.exception("Affiliate product sync failed")
+        raise self.retry(exc=exc)
 
 
 def _sync_amazon_products(provider, settings_obj) -> dict[str, Any]:
@@ -683,10 +669,10 @@ def _sync_amazon_products(provider, settings_obj) -> dict[str, Any]:
                             results["products_updated"] += 1
 
             except ApiException as api_exc:
-                logger.warning(f"Amazon API error for '{keyword}': {api_exc}")
+                logger.warning("Amazon API error for '%s': %s", keyword, api_exc)
                 continue
-            except Exception as exc:
-                logger.exception(f"Error searching '{keyword}': {exc}")
+            except (DatabaseError, AttributeError, TypeError, ValueError):
+                logger.exception("Error searching '%s'", keyword)
                 continue
 
     except ImportError:
@@ -698,8 +684,8 @@ def _sync_amazon_products(provider, settings_obj) -> dict[str, Any]:
             "products_added": 0,
             "products_updated": 0,
         }
-    except Exception as exc:
-        logger.exception(f"Amazon PA-API error: {exc}")
+    except (DatabaseError, AttributeError, TypeError, ValueError) as exc:
+        logger.exception("Amazon PA-API error")
         return {
             "status": f"error: {str(exc)[:100]}",
             "products_added": 0,
@@ -711,10 +697,6 @@ def _sync_amazon_products(provider, settings_obj) -> dict[str, Any]:
 
 def _save_amazon_product(item, provider, search_keyword) -> str:
     """Save or update an Amazon product from PA-API response."""
-    from django.template.defaultfilters import slugify
-
-    from apps.ads.models import AffiliateProduct
-
     try:
         asin = item.asin
 
@@ -827,8 +809,8 @@ def _save_amazon_product(item, provider, search_keyword) -> str:
             )
             return "created"
 
-    except Exception as exc:
-        logger.exception(f"Error saving Amazon product: {exc}")
+    except (DatabaseError, AttributeError, TypeError, ValueError):
+        logger.exception("Error saving Amazon product")
         return "error"
 
 
@@ -842,16 +824,6 @@ def _sync_cj_products(provider, settings_obj) -> dict[str, Any]:
     API Docs: https://developers.cj.com/en-us/docs/cj-api/docs/reference-link-search
     Endpoint: https://product-search.api.cj.com/v2/product-search
     """
-    try:
-        import requests
-    except ImportError:
-        logger.warning("requests library not available for CJ sync")
-        return {
-            "status": "requests_not_installed",
-            "products_added": 0,
-            "products_updated": 0,
-        }
-
     if not provider or not hasattr(provider, "api_key"):
         logger.warning("CJ provider missing API key")
         return {
@@ -861,9 +833,7 @@ def _sync_cj_products(provider, settings_obj) -> dict[str, Any]:
         }
 
     try:
-        from apps.ads.models import AffiliateProduct
-
-        api_key = provider.api_key
+        api_key = provider.get_api_key()
         base_url = "https://product-search.api.cj.com/v2/product-search"
         headers = {
             "Authorization": f"Bearer {api_key}",
@@ -888,7 +858,7 @@ def _sync_cj_products(provider, settings_obj) -> dict[str, Any]:
                 )
                 resp.raise_for_status()
                 data = resp.json()
-            except Exception as e:
+            except requests.RequestException as e:
                 logger.error("CJ API request failed: %s", e)
                 error_count += 1
                 if error_count > 2:
@@ -900,8 +870,8 @@ def _sync_cj_products(provider, settings_obj) -> dict[str, Any]:
                 break
 
             for product_data in products:
+                cj_id = product_data.get("advertiser_id")
                 try:
-                    cj_id = product_data.get("advertiser_id")
                     name = product_data.get("name", "")
                     url = product_data.get("click_url", "")
                     commission_percent = Decimal(
@@ -911,16 +881,18 @@ def _sync_cj_products(provider, settings_obj) -> dict[str, Any]:
                     if not name or not cj_id:
                         continue
 
-                    aff_prod, created = AffiliateProduct.objects.update_or_create(
+                    _, created = AffiliateProduct.objects.update_or_create(
                         provider=provider,
                         external_id=str(cj_id),
                         defaults={
                             "name": name,
-                            "url": url,
-                            "commission_rate": commission_percent,
+                            "slug": slugify(name)[:280],
+                            "product_url": url,
+                            "affiliate_url": url,
                             "is_enabled": True,
                             "api_data": {
                                 "cj_advertiser_id": cj_id,
+                                "commission_percent": str(commission_percent),
                                 "synced_at": timezone.now().isoformat(),
                             },
                         },
@@ -931,7 +903,7 @@ def _sync_cj_products(provider, settings_obj) -> dict[str, Any]:
                     else:
                         products_updated += 1
 
-                except Exception as e:
+                except (DatabaseError, InvalidOperation, ValueError) as e:
                     logger.error("Error processing CJ product %s: %s", cj_id, e)
                     continue
 
@@ -948,8 +920,8 @@ def _sync_cj_products(provider, settings_obj) -> dict[str, Any]:
             "products_updated": products_updated,
         }
 
-    except Exception as exc:
-        logger.exception("CJ sync failed: %s", exc)
+    except (DatabaseError, AttributeError, TypeError, ValueError) as exc:
+        logger.exception("CJ sync failed")
         return {
             "status": "error",
             "products_added": 0,
@@ -969,12 +941,9 @@ def _sync_shareasale_products(provider, settings_obj) -> dict[str, Any]:
     Endpoint: https://api.shareasale.com/w.cfm
     """
     try:
-        import defusedxml.ElementTree as ET
-        import requests
+        ET = import_module("defusedxml.ElementTree")
     except ImportError:
-        logger.warning(
-            "requests or defusedxml library not available for ShareASale sync"
-        )
+        logger.warning("defusedxml library not available for ShareASale sync")
         return {
             "status": "dependencies_not_available",
             "products_added": 0,
@@ -994,10 +963,8 @@ def _sync_shareasale_products(provider, settings_obj) -> dict[str, Any]:
         }
 
     try:
-        from apps.ads.models import AffiliateProduct
-
-        api_key = provider.api_key
-        api_secret = provider.api_secret
+        api_key = provider.get_api_key()
+        api_secret = provider.get_api_secret()
 
         products_added = 0
         products_updated = 0
@@ -1015,7 +982,7 @@ def _sync_shareasale_products(provider, settings_obj) -> dict[str, Any]:
             )
             resp.raise_for_status()
             xml_data = resp.text
-        except Exception as e:
+        except requests.RequestException as e:
             logger.error("ShareASale API request failed: %s", e)
             return {
                 "status": "api_error",
@@ -1036,32 +1003,34 @@ def _sync_shareasale_products(provider, settings_obj) -> dict[str, Any]:
 
         # Parse deals from XML
         for deal in root.findall(".//deal"):
+            deal_id = deal.findtext("dealid", "")
             try:
-                deal_id = deal.findtext("dealid", "")
                 name = deal.findtext("name", "")
                 url = deal.findtext("dealurl", "")
                 commission_str = deal.findtext("commission", "0")
 
                 try:
                     commission_percent = (
-                        Decimal(commission_str) if commission_str else Decimal("0")
+                        Decimal(commission_str) if commission_str else Decimal(0)
                     )
-                except Exception:
-                    commission_percent = Decimal("0")
+                except InvalidOperation:
+                    commission_percent = Decimal(0)
 
                 if not name or not deal_id:
                     continue
 
-                aff_prod, created = AffiliateProduct.objects.update_or_create(
+                _, created = AffiliateProduct.objects.update_or_create(
                     provider=provider,
                     external_id=str(deal_id),
                     defaults={
                         "name": name,
-                        "url": url,
-                        "commission_rate": commission_percent,
+                        "slug": slugify(name)[:280],
+                        "product_url": url,
+                        "affiliate_url": url,
                         "is_enabled": True,
                         "api_data": {
                             "shareasale_deal_id": deal_id,
+                            "commission_percent": str(commission_percent),
                             "synced_at": timezone.now().isoformat(),
                         },
                     },
@@ -1072,7 +1041,7 @@ def _sync_shareasale_products(provider, settings_obj) -> dict[str, Any]:
                 else:
                     products_updated += 1
 
-            except Exception as e:
+            except (DatabaseError, ValueError) as e:
                 logger.error("Error processing ShareASale deal %s: %s", deal_id, e)
                 continue
 
@@ -1089,8 +1058,8 @@ def _sync_shareasale_products(provider, settings_obj) -> dict[str, Any]:
             "products_updated": products_updated,
         }
 
-    except Exception as exc:
-        logger.exception("ShareASale sync failed: %s", exc)
+    except (DatabaseError, AttributeError, TypeError, ValueError) as exc:
+        logger.exception("ShareASale sync failed")
         return {
             "status": "error",
             "products_added": 0,
@@ -1122,49 +1091,19 @@ def track_affiliate_click(
     Track affiliate link click for analytics.
     Called via API endpoint when user clicks affiliate product link.
     """
-    try:
-        from django.contrib.auth import get_user_model
-
-        from apps.ads.models import AffiliateClick, AffiliateProduct
-
-        User = get_user_model()
-
-        product = AffiliateProduct.objects.filter(id=product_id).first()
-        if not product:
-            return {"status": "product_not_found"}
-
-        user = None
-        if user_id:
-            user = User.objects.filter(id=user_id).first()
-
-        # Create click record
-        click = AffiliateClick.objects.create(
-            product=product,
-            provider=product.provider,
-            user=user,
-            session_id=session_id[:100] if session_id else "",
-            ip_address=ip_address[:45] if ip_address else "",
-            user_agent=user_agent[:500] if user_agent else "",
-            page_url=page_url[:500] if page_url else "",
-            referrer_type=referrer_type[:20] if referrer_type else "",
-            referrer_id=referrer_id,
-        )
-
-        # Increment product click count
-        product.clicks += 1
-        product.save(update_fields=["clicks"])
-
-        # Update provider stats
-        product.provider.total_clicks += 1
-        product.provider.save(update_fields=["total_clicks"])
-
-        logger.info(f"Tracked click for product {product_id}")
-
-        return {"status": "success", "click_id": click.pk}
-
-    except Exception as exc:
-        logger.exception(f"Failed to track affiliate click: {exc}")
-        raise self.retry(exc=exc)  # noqa: B904
+    result = track_affiliate_click_sync(
+        product_id=product_id,
+        user_id=user_id,
+        page_url=page_url,
+        referrer_type=referrer_type,
+        referrer_id=referrer_id,
+        ip_address=ip_address,
+        user_agent=user_agent,
+        session_id=session_id,
+    )
+    if result["status"] == "error":
+        raise self.retry(exc=DatabaseError(result["error"]))
+    return result
 
 
 @shared_task(bind=True)
@@ -1174,8 +1113,6 @@ def update_affiliate_product_rankings(self) -> dict[str, Any]:
     Based on click-through rates, conversion data, and targeting accuracy.
     """
     try:
-        from apps.ads.models import AffiliateProduct
-
         products = AffiliateProduct.objects.filter(is_enabled=True)
         updated = 0
 
@@ -1224,9 +1161,9 @@ def update_affiliate_product_rankings(self) -> dict[str, Any]:
             product.save(update_fields=["ai_relevance_score"])
             updated += 1
 
-        logger.info(f"Updated relevance scores for {updated} products")
+        logger.info("Updated relevance scores for %d products", updated)
         return {"status": "success", "products_updated": updated}
 
-    except Exception as exc:
-        logger.exception(f"Failed to update product rankings: {exc}")
+    except DatabaseError as exc:
+        logger.exception("Failed to update product rankings")
         return {"status": "error", "error": str(exc)}

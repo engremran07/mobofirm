@@ -1,3 +1,5 @@
+from typing import ClassVar
+
 from django.db import migrations
 
 
@@ -19,14 +21,14 @@ def create_missing_tables(apps, schema_editor):
 
 
 class Migration(migrations.Migration):
-    dependencies = [
+    dependencies: ClassVar[list[tuple[str, str]]] = [
         (
             "firmwares",
             "0013_remove_oemsource_brand_remove_scraperconfig_source_and_more",
         ),
     ]
 
-    operations = [
+    operations: ClassVar[list[migrations.operations.base.Operation]] = [
         migrations.RunPython(
             create_missing_tables,
             # Preserve tables that may have existed before the models were absorbed.

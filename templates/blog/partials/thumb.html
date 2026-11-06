@@ -1,0 +1,5 @@
+{# Contract: card (PostCard); optional extra_class. Placeholder cover used when a post has no same-origin image. #}
+<div class="post-thumb post-thumb--{{ card.variant }} {{ extra_class }}" aria-hidden="true">
+  <span class="post-thumb__mark">{% if card.kind == "Article" %}<i data-lucide="newspaper"></i>{% else %}{{ card.initials }}{% endif %}</span>
+  <span class="post-thumb__kind"><i data-lucide="{% if card.kind == 'Chipset' %}cpu{% elif card.kind == 'Article' %}newspaper{% else %}smartphone{% endif %}"></i>{{ card.kind }}</span>
+</div>

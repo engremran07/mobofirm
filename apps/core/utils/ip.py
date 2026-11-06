@@ -1,46 +1,41 @@
 from __future__ import annotations
 
-import os
+import ipaddress
 
 from django.conf import settings
 from django.http import HttpRequest
 
 
+def _valid_ip(value: str) -> str:
+    try:
+        return str(ipaddress.ip_address(value.strip()))
+    except ValueError:
+        return ""
+
+
 def get_client_ip(request: HttpRequest) -> str:
     """
-    Centralized, proxy-aware client IP resolution.
+    Resolve the client IP without trusting client-controlled headers.
 
-    - Honors TRUSTED_PROXY_COUNT to peel trusted proxies from X-Forwarded-For.
-    - Falls back to X-Real-IP then REMOTE_ADDR.
-    - Never raises; returns empty string if unknown.
+    ``REMOTE_ADDR`` is used unless ``TRUSTED_PROXY_COUNT`` is positive and the
+    peer is an allowed proxy. In that case the address appended by the nearest
+    trusted proxy (counted from the right of ``X-Forwarded-For``) is used.
+    ``X-Real-IP`` and the left-most ``X-Forwarded-For`` entry are never trusted.
+    Returns an empty string when the address is unknown or malformed.
     """
-    remote_ip = (request.META.get("REMOTE_ADDR") or "").strip()
-
-    trusted_proxies = {
-        proxy.strip()
-        for proxy in os.environ.get("TRUSTED_PROXIES", "").split(",")
-        if proxy.strip()
-    }
-    xff = (request.META.get("HTTP_X_FORWARDED_FOR") or "").strip()
-
-    # If behind an explicitly trusted proxy, honor the client IP from XFF
-    if trusted_proxies and remote_ip in trusted_proxies and xff:
-        parts = [p.strip() for p in xff.split(",") if p.strip()]
-        if parts:
-            return parts[0]
+    remote_ip = _valid_ip(request.META.get("REMOTE_ADDR") or "")
 
     try:
         trusted_hops = int(getattr(settings, "TRUSTED_PROXY_COUNT", 0) or 0)
     except (TypeError, ValueError):
         trusted_hops = 0
+    trusted_peers = set(getattr(settings, "TRUSTED_PROXIES", ()) or ())
 
-    if xff and trusted_hops > 0:
-        parts = [p.strip() for p in xff.split(",") if p.strip()]
-        if len(parts) >= trusted_hops + 1:
-            return parts[-(trusted_hops + 1)]
+    if trusted_hops <= 0 or (trusted_peers and remote_ip not in trusted_peers):
+        return remote_ip
 
-    real_ip = (request.META.get("HTTP_X_REAL_IP") or "").strip()
-    if real_ip:
-        return real_ip
-
-    return remote_ip or ""
+    forwarded = (request.META.get("HTTP_X_FORWARDED_FOR") or "").split(",")
+    parts = [part.strip() for part in forwarded if part.strip()]
+    if len(parts) < trusted_hops:
+        return remote_ip
+    return _valid_ip(parts[-trusted_hops]) or remote_ip

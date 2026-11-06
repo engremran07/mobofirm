@@ -1,0 +1,33 @@
+{# Context: inventory (list of InventoryGroup). Live, approved firmware for posts without a generated listing. #}
+<section class="firmware-inventory" aria-labelledby="inventory-title">
+  <h2 class="section-heading" id="inventory-title">Firmware downloads</h2>
+  {% if inventory %}
+    <nav class="hub-links" aria-label="Firmware categories">
+      <span class="hub-links__label">Jump to</span>
+      <ul>{% for group in inventory %}<li><a href="#fw-{{ group.key }}">{{ group.label }} ({{ group.rows|length }})</a></li>{% endfor %}</ul>
+    </nav>
+    {% for group in inventory %}
+      <h3 class="h5 mt-4" id="fw-{{ group.key }}">{{ group.label }} firmware</h3>
+      <div class="article-table" role="region" tabindex="0" aria-label="{{ group.label }} firmware files">
+        <table class="table align-middle">
+          <thead><tr><th scope="col">File</th><th scope="col">Variant</th><th scope="col">Build</th><th scope="col">Android</th><th scope="col">Package</th><th scope="col">Size</th><th scope="col">Download</th></tr></thead>
+          <tbody>
+            {% for row in group.rows %}
+              <tr>
+                <th scope="row"><a href="{{ row.detail_url }}">{{ row.name }}</a></th>
+                <td>{{ row.variant|default:"—" }}</td>
+                <td class="build-code">{{ row.build|default:"—" }}</td>
+                <td>{{ row.android|default:"—" }}</td>
+                <td>{{ row.package }}</td>
+                <td class="numeric">{{ row.size }}</td>
+                <td><a class="btn btn-sm btn-primary" href="{{ row.download_url }}"><i data-lucide="download" class="icon" aria-hidden="true"></i> Download</a>{% if row.external %} <span class="badge text-bg-secondary">External host</span>{% endif %}</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% endfor %}
+  {% else %}
+    <p class="muted">No public firmware records are available.</p>
+  {% endif %}
+</section>

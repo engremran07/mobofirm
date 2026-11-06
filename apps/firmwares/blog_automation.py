@@ -1,890 +1,714 @@
-"""
-Firmware Blog Automation Service
-Automatically creates blog posts for firmware uploads
-Generates well-structured content with SEO optimization
+"""Automated blog posts for firmware brands, models and chipsets.
 
-TWO TYPES OF BLOG POSTS:
-1. Manual Posts: Created by admins/users through blog interface
-2. Auto-Generated Posts: Created automatically when firmware is uploaded
-   - Marked with is_ai_generated=True flag
-   - Category structure: Brand (parent) → Model (child)
-   - Auto-updates when new firmware files added
+Each brand, model and chipset owns exactly one post, tracked by an
+``AutomatedBlogLink`` row (not by slug), so syncing is idempotent. Posts are
+authored by a dedicated system account and published automatically; later firmware
+additions, approvals or removals refresh the same post with the current download
+listing grouped by every firmware category.
 """
 
+from __future__ import annotations
+
+import hashlib
 import logging
+from dataclasses import dataclass
+from typing import Any
 
 from django.apps import apps
-from django.db import transaction
+from django.conf import settings
+from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
+from django.db import DatabaseError, IntegrityError, transaction
+from django.db.models import Q
+from django.urls import reverse
 from django.utils import timezone
+from django.utils.html import format_html, format_html_join
+from django.utils.safestring import SafeString, mark_safe
 from django.utils.text import slugify
+
+from . import catalog
+from .models import AutomatedBlogLink, Brand, Chipset, FlashingTool, Model
+from .tool_matcher import get_chipset_family, get_primary_flash_tool_name
 
 logger = logging.getLogger(__name__)
 
+MODEL_FILE_CAP = 100
+AGGREGATE_FILE_CAP = 25
+AGGREGATE_MODEL_CAP = 60
+
+GUIDE_STEPS: dict[str, tuple[str, str, list[str]]] = {
+    "MediaTek": (
+        "SP Flash Tool",
+        "BROM/Preloader mode",
+        [
+            "Install MediaTek USB VCOM drivers on your PC.",
+            "Open SP Flash Tool and load the scatter file from the firmware package.",
+            "Choose Download Only (keeps data) or Firmware Upgrade (full wipe).",
+            "Power the device off and connect it by USB to enter BROM/Preloader mode.",
+            "Click Download and wait for the green confirmation.",
+        ],
+    ),
+    "Qualcomm": (
+        "QFIL (Qualcomm Flash Image Loader)",
+        "EDL mode (Qualcomm 9008)",
+        [
+            "Install the Qualcomm HS-USB QDLoader 9008 drivers.",
+            "Open QFIL and choose Flat Build.",
+            "Browse to rawprogram0.xml and patch0.xml from the firmware package.",
+            "Boot the device into EDL mode and connect it by USB.",
+            "Click Download and wait for completion.",
+        ],
+    ),
+    "Unisoc": (
+        "SPD Research Tool",
+        "download mode",
+        [
+            "Install the Spreadtrum/Unisoc USB drivers.",
+            "Open the SPD tool and load the .pac firmware file.",
+            "Power the device off, hold Volume Down and connect it by USB.",
+            "Start the download and do not disconnect until it completes.",
+        ],
+    ),
+    "Samsung Exynos": (
+        "Odin",
+        "Download mode",
+        [
+            "Load the AP, BL, CP and CSC files into their Odin slots.",
+            "Boot the device into Download mode and connect it by USB.",
+            "Wait for Odin to show Added!! and press Start.",
+            "Wait for the PASS! message before disconnecting.",
+        ],
+    ),
+}
+GENERIC_STEPS = (
+    "the manufacturer's flash tool",
+    "download or fastboot mode",
+    [
+        "Install the USB drivers for your device brand.",
+        "Load the firmware files into the flashing tool.",
+        "Boot the device into download or fastboot mode and connect it by USB.",
+        "Start flashing and wait for completion; the first boot can take several minutes.",
+    ],
+)
+
+
+@dataclass
+class Draft:
+    """Rendered content for one automated post."""
+
+    title: str
+    summary: str
+    body: str
+    slug_base: str
+    seo_title: str
+    seo_description: str
+    category: Any
+    brand: Brand | None = None
+    model: Model | None = None
+    tag_names: tuple[str, ...] = ()
+
+    @property
+    def digest(self) -> str:
+        payload = (
+            f"{self.title}\n{self.summary}\n{self.body}\n"
+            f"{self.seo_title}\n{self.seo_description}"
+        )
+        return hashlib.sha256(payload.encode()).hexdigest()
+
+
+def get_automation_author():
+    """Return the dedicated, non-login account that authors automated posts."""
+    user_model = get_user_model()
+    username = getattr(
+        settings, "FIRMWARE_BLOG_AUTOMATION_USERNAME", "mobofirm-automation"
+    )
+    author = user_model.objects.filter(username=username).first()
+    if author is None:
+        author = user_model.objects.create_user(
+            email=f"{username}@automation.invalid", username=username
+        )
+    return author
+
+
+def _category_model():
+    return apps.get_model("blog", "Category")
+
+
+def _get_or_create_category(slug: str, name: str, parent=None):
+    """Find a category by slug or name; never renames categories it did not create."""
+    Category = _category_model()
+    category = (
+        Category.objects.filter(slug=slug).first()
+        or Category.objects.filter(name=name).first()
+    )
+    if category is not None:
+        return category
+    try:
+        with transaction.atomic():
+            return Category.objects.create(slug=slug, name=name, parent=parent)
+    except IntegrityError:
+        return Category.objects.get(slug=slug)
+
+
+def _firmware_url(name: str, firmware: Any) -> str:
+    return reverse(
+        f"firmwares:{name}",
+        kwargs={
+            "firmware_type": firmware.firmware_type,
+            "firmware_id": str(firmware.pk),
+        },
+    )
+
+
+def _firmware_sections(
+    firmwares: list, *, cap: int, browse_query: str = ""
+) -> SafeString:
+    """HTML listing of public firmware grouped by category with download links."""
+    groups = catalog.group_by_category(firmwares)
+    if not groups:
+        return mark_safe("<p>No approved firmware files are listed yet.</p>")
+    parts: list[SafeString] = []
+    for key, label, items in groups:
+        shown = items[:cap]
+        rows = format_html_join(
+            "",
+            '<tr><td><a href="{}">{}</a></td><td>{}</td><td>{}</td><td>{}</td>'
+            '<td>{}</td><td>{}</td><td><a href="{}">{}</a></td></tr>',
+            (
+                (
+                    _firmware_url("firmware_detail", fw),
+                    fw.original_file_name,
+                    fw.variant.name if fw.variant_id else "—",
+                    fw.build_number or "—",
+                    fw.android_version or "—",
+                    fw.get_package_format_display(),
+                    catalog.format_file_size(fw.file_size),
+                    _firmware_url("firmware_download", fw),
+                    "Download (external host)" if fw.is_external else "Download",
+                )
+                for fw in shown
+            ),
+        )
+        more = ""
+        if len(items) > len(shown):
+            more = format_html(
+                '<p><a href="{}?type={}{}">View all {} {} files</a></p>',
+                reverse("firmwares:browse"),
+                key,
+                browse_query,
+                len(items),
+                label.lower(),
+            )
+        parts.append(
+            format_html(
+                "<h3>{} firmware ({})</h3>"
+                '<table class="table"><thead><tr><th>File</th><th>Variant</th>'
+                "<th>Build</th><th>Android</th><th>Package</th><th>Size</th>"
+                "<th>Download</th></tr></thead><tbody>{}</tbody></table>{}",
+                label,
+                len(items),
+                rows,
+                more,
+            )
+        )
+    return format_html_join("", "{}", ((part,) for part in parts))
+
+
+def _tools_section(brand: Brand | None, chipsets: list[Chipset]) -> SafeString:
+    condition = Q()
+    if brand is not None:
+        condition |= Q(supported_brands=brand)
+    if chipsets:
+        condition |= Q(chipsets__in=chipsets)
+    if not condition:
+        return mark_safe("")
+    tools = list(
+        FlashingTool.objects.filter(condition, is_active=True)
+        .select_related("category")
+        .distinct()
+        .order_by("-is_featured", "name")[:12]
+    )
+    if not tools:
+        return mark_safe("")
+    items = format_html_join(
+        "",
+        '<li><a href="{}">{}</a> — {}, {}</li>',
+        (
+            (
+                reverse("firmwares:flashing_tool_detail", kwargs={"slug": tool.slug}),
+                tool.name,
+                tool.get_platform_display(),
+                tool.get_risk_level_display(),
+            )
+            for tool in tools
+        ),
+    )
+    return format_html(
+        '<h3>Recommended flashing tools</h3><ul>{}</ul><p><a href="{}">Browse all tools and guides</a></p>',
+        items,
+        reverse("firmwares:flashing_tools"),
+    )
+
+
+def _guide_section(device: str, chipset_text: str, brand_name: str) -> SafeString:
+    family = get_chipset_family(chipset_text)
+    tool, mode, steps = GUIDE_STEPS.get(family, GENERIC_STEPS)
+    if family == "" and brand_name.lower() == "samsung":
+        tool, mode, steps = GUIDE_STEPS["Samsung Exynos"]
+    primary = get_primary_flash_tool_name(brand_name, chipset_text) or tool
+    steps_html = format_html_join("", "<li>{}</li>", ((step,) for step in steps))
+    return format_html(
+        "<h3>How to flash firmware on {}</h3>"
+        "<p>The usual tool for this device is <strong>{}</strong> in {}.</p>"
+        "<ol>{}</ol>"
+        "<p>Prerequisites: a battery above 50%, the original USB cable, installed "
+        "USB drivers and a full backup of your data.</p>",
+        device,
+        primary,
+        mode,
+        steps_html,
+    )
+
+
+SAFETY_NOTE = mark_safe(
+    "<h3>Important</h3><ul>"
+    "<li>Back up your data before flashing firmware.</li>"
+    "<li>Verify that your device variant and region match the firmware.</li>"
+    "<li>Check chipset compatibility before flashing.</li>"
+    "<li>Password-protected archives need the extraction password from the uploader.</li>"
+    "</ul>"
+)
+
+
+def _model_chipsets(model: Model) -> list[Chipset]:
+    chipsets: dict[int, Chipset] = {}
+    if model.chipset_ref is not None:
+        chipsets[model.chipset_ref.pk] = model.chipset_ref
+    for variant in model.variants.select_related("chipset_ref"):
+        if variant.chipset_ref is not None:
+            chipsets[variant.chipset_ref.pk] = variant.chipset_ref
+    return list(chipsets.values())
+
 
 class FirmwareBlogService:
-    """Handles automatic blog post generation for firmware uploads"""
+    """Builds and synchronises the single automated post per brand/model/chipset."""
+
+    # -- categories -------------------------------------------------------
 
     @classmethod
-    def get_auto_generated_posts(cls):
-        """Get all auto-generated firmware posts (vs manual posts)"""
+    def ensure_brand_category(cls, brand: Brand):
         if not apps.is_installed("apps.blog"):
             return None
-
-        try:
-            Post = apps.get_model("blog", "Post")
-            return Post.objects.filter(is_ai_generated=True, is_published=True)
-        except Exception as e:
-            logger.exception(f"Error getting auto-generated posts: {e}")
-            return None
+        return _get_or_create_category(brand.slug, brand.name)
 
     @classmethod
-    def get_manual_posts(cls):
-        """Get all manually created posts (vs auto-generated)"""
+    def ensure_model_category(cls, model: Model):
         if not apps.is_installed("apps.blog"):
             return None
-
-        try:
-            Post = apps.get_model("blog", "Post")
-            return Post.objects.filter(is_ai_generated=False, is_published=True)
-        except Exception as e:
-            logger.exception(f"Error getting manual posts: {e}")
-            return None
-
-    @classmethod
-    def ensure_brand_category(cls, brand):
-        """Create or get blog category for brand.
-
-        Name is the brand name only — no extra text like "Firmware".
-        Slug: ``<brand-slug>`` (e.g. ``samsung``, ``xiaomi``, ``acer``).
-        Migrates legacy ``brand-<slug>`` and ``<slug>-firmware`` entries.
-        """
-        if not apps.is_installed("apps.blog"):
-            return None
-
-        try:
-            Category = apps.get_model("blog", "Category")
-
-            clean_slug = brand.slug
-
-            # Try clean slug first (new canonical format)
-            category = Category.objects.filter(slug=clean_slug).first()
-            if category:
-                # Fix name if it still has "Firmware" suffix
-                if category.name != brand.name:
-                    category.name = brand.name
-                    category.save(update_fields=["name"])
-                return category
-
-            # Check for legacy slug variants and migrate
-            for legacy_slug in [f"{brand.slug}-firmware", f"brand-{brand.slug}"]:
-                legacy = Category.objects.filter(slug=legacy_slug).first()
-                if legacy:
-                    legacy.slug = clean_slug
-                    legacy.name = brand.name
-                    legacy.save(update_fields=["slug", "name"])
-                    logger.info(
-                        "Migrated brand category: %s → %s (%s)",
-                        legacy_slug,
-                        clean_slug,
-                        brand.name,
-                    )
-                    return legacy
-
-            # Create new — brand name only, no "Firmware" suffix
-            category = Category.objects.create(
-                slug=clean_slug,
-                name=brand.name,
-            )
-            logger.info("Created blog category for brand: %s", brand.name)
-            return category
-        except Exception as e:
-            logger.exception(f"Error creating brand category: {e}")
-            return None
-
-    @classmethod
-    def ensure_model_category(cls, model):
-        """Create or get blog category for model (child of brand category).
-
-        Name is the model name only — no brand prefix, no redundant text.
-        If the model has a marketing name different from its code name,
-        the display is ``Model Name (Marketing Name)``.
-        Slug: ``<brand>-<model>`` for uniqueness.
-        Migrates legacy ``model-<slug>`` entries.
-        """
-        if not apps.is_installed("apps.blog"):
-            return None
-
-        try:
-            Category = apps.get_model("blog", "Category")
-
-            # Ensure parent brand category exists first
-            parent_category = cls.ensure_brand_category(model.brand)
-
-            # Slug keeps brand prefix for global uniqueness
-            new_slug = slugify(f"{model.brand.slug}-{model.slug}")
-
-            # Name is model-only — brand is already the parent category
-            # Only add marketing name if it contributes new info beyond brand+name
-            name = model.name
-            if model.marketing_name and model.marketing_name != model.name:
-                # Strip brand prefix from marketing name to check if it's actually different
-                mkt_clean = model.marketing_name
-                brand_prefix = f"{model.brand.name} "
-                if mkt_clean.startswith(brand_prefix):
-                    mkt_clean = mkt_clean[len(brand_prefix) :]
-                if mkt_clean != model.name:
-                    name = f"{model.name} ({mkt_clean})"
-
-            # Try new slug first
-            category = Category.objects.filter(slug=new_slug).first()
-            if category:
-                changed = False
-                # Fix name if it still has brand prefix
-                if category.name != name:
-                    category.name = name
-                    changed = True
-                if category.parent != parent_category:
-                    category.parent = parent_category
-                    changed = True
-                if changed:
-                    category.save(update_fields=["name", "parent"])
-                return category
-
-            # Check for legacy slug (model-<slug>)
-            legacy = Category.objects.filter(slug=f"model-{model.slug}").first()
-            if legacy:
-                legacy.slug = new_slug
-                legacy.name = name
-                if parent_category:
-                    legacy.parent = parent_category
-                legacy.save(update_fields=["slug", "name", "parent"])
-                logger.info(
-                    "Migrated model category: model-%s → %s (%s)",
-                    model.slug,
-                    new_slug,
-                    name,
-                )
-                return legacy
-
-            # Create new — model name only, brand is the parent
-            category = Category.objects.create(
-                slug=new_slug,
-                name=name,
-                parent=parent_category,
-            )
-            logger.info(
-                "Created blog category for model: %s (slug: %s)", name, new_slug
-            )
-            return category
-        except Exception as e:
-            logger.exception(f"Error creating model category: {e}")
-            return None
-
-    @classmethod
-    def generate_firmware_post(cls, model, force_update=False):
-        """
-        Create or refresh a firmware post's editorial copy before governance review.
-
-        Args:
-            model: Model instance
-            force_update: If True, create a post even when the model has no listings.
-        """
-        if not apps.is_installed("apps.blog"):
-            logger.warning("Blog app not installed - skipping post generation")
-            return None
-        if not apps.is_installed("apps.governance"):
-            logger.error("Governance app is required for firmware blog publication")
-            return None
-
-        try:
-            Post = apps.get_model("blog", "Post")
-            apps.get_model("tags", "Tag")
-
-            # Gather all firmwares for this model across all variants
-            firmware_data = cls._collect_firmware_data(model)
-
-            if not firmware_data["total_files"] and not force_update:
-                logger.info(f"No firmware files for {model.name} - skipping post")
-                return None
-
-            # Generate post content
-            post_slug = slugify(f"{model.brand.slug}-{model.slug}-firmware-download")
-
-            # Smart title — include marketing name when it differs
-            device_label = f"{model.brand.name} {model.name}"
-            if model.marketing_name and model.marketing_name != model.name:
-                device_label = (
-                    f"{model.brand.name} {model.name} ({model.marketing_name})"
-                )
-            title = f"{device_label} Firmware Download — All Variants"
-
-            # Check if post exists
-            existing_post = Post.objects.filter(slug=post_slug).first()
-
-            if existing_post:
-                if not existing_post.is_ai_generated:
-                    logger.warning(
-                        "Firmware post slug %s belongs to a manually authored post",
-                        post_slug,
-                    )
-                    return None
-                if existing_post.status != "draft":
-                    logger.info(
-                        "Leaving non-draft firmware post %s unchanged; "
-                        "its firmware table is loaded from the live catalog",
-                        existing_post.pk,
-                    )
-                    return existing_post
-
-                with transaction.atomic():
-                    category = cls.ensure_model_category(model)
-                    existing_post.body = cls._generate_post_body(model, firmware_data)
-                    existing_post.summary = cls._generate_summary(model)
-                    existing_post.category = category
-                    existing_post.firmware_brand = model.brand
-                    existing_post.firmware_model = model
-                    existing_post.save()
-                    cls._update_post_tags(existing_post, model, firmware_data)
-                    cls._update_post_seo(existing_post, model)
-                    from apps.governance.services import submit_for_review
-
-                    submit_for_review(existing_post, actor=existing_post.author)
-
-                logger.info(
-                    "Submitted updated firmware post for review: %s", model.name
-                )
-                return existing_post
-
-            # Get system user for author (or first superuser)
-            from django.contrib.auth import get_user_model
-
-            User = get_user_model()
-            author = User.objects.filter(is_staff=True).first()
-
-            if not author:
-                logger.warning("No staff user found for blog post author")
-                return None
-
-            with transaction.atomic():
-                category = cls.ensure_model_category(model)
-                cls.ensure_brand_category(model.brand)
-                post = Post.objects.create(
-                    title=title,
-                    slug=post_slug,
-                    body=cls._generate_post_body(model, firmware_data),
-                    summary=cls._generate_summary(model),
-                    author=author,
-                    category=category,
-                    firmware_brand=model.brand,
-                    firmware_model=model,
-                    status="draft",
-                    allow_comments=True,
-                    is_ai_generated=True,
-                )
-                cls._update_post_tags(post, model, firmware_data)
-                cls._update_post_seo(post, model)
-                from apps.governance.services import submit_for_review
-
-                submit_for_review(post, actor=author)
-
-            logger.info(
-                "Created and submitted firmware post for review: %s", model.name
-            )
-            return post
-
-        except Exception as e:
-            logger.exception(f"Error generating firmware post: {e}")
-            raise
-
-    @classmethod
-    def _collect_firmware_data(cls, model):
-        """Collect public firmware data for a model, grouped by variant."""
-        data = {
-            "variants": [],
-            "total_files": 0,
-            "firmware_types": set(),
-        }
-        from .public_views import get_all_firmwares_for_model
-
-        variants = {}
-        for firmware in get_all_firmwares_for_model(model):
-            display_name = firmware.firmware_type_display
-            data["firmware_types"].add(display_name)
-            data["total_files"] += 1
-            if firmware.variant_id is None:
-                continue
-            variant_data = variants.setdefault(
-                firmware.variant_id,
-                {"variant": firmware.variant, "firmwares": []},
-            )
-            variant_data["firmwares"].append(
-                {
-                    "type": display_name,
-                    "firmware": firmware,
-                    "chipset": firmware.chipset or "N/A",
-                    "file_name": firmware.original_file_name,
-                    "is_password_protected": firmware.is_password_protected,
-                    "storage_info": cls._get_firmware_storage_info(firmware),
-                }
-            )
-        data["variants"] = list(variants.values())
-
-        return data
-
-    @classmethod
-    def _get_firmware_storage_info(cls, firmware):
-        """Return upload metadata owned by the firmware model."""
-        return {
-            "is_uploaded": bool(getattr(firmware, "stored_file_path", "")),
-            "file_size": getattr(firmware, "file_size", None),
-            "download_count": getattr(firmware, "download_count", 0),
-        }
-
-    @classmethod
-    def _generate_post_body(cls, model, firmware_data):
-        """Generate SamFW/MiFirm-inspired HTML content for firmware blog post.
-
-        Structure:
-        1. Device summary block (model name, marketing name, model codes)
-        2. Live firmware inventory supplied by the post-detail view
-        3. Device specifications summary (from GSMArena if available)
-        4. Safety notes
-        """
-        html = []
-        brand_name = model.brand.name
-        model_name = model.name
-        device_label = f"{brand_name} {model_name}"
-
-        # Marketing name / alternate names
-        alt_names = []
-        if model.marketing_name and model.marketing_name != model_name:
-            alt_names.append(model.marketing_name)
-        if model.model_code:
-            alt_names.append(model.model_code)
-
-        # --- Header ---
-        html.append(f"<h2>Download {device_label} Firmware — All Variants</h2>")
-        html.append(
-            f"<p>Complete firmware collection for <strong>{device_label}</strong>"
-        )
-        if alt_names:
-            html.append(f" (also known as: {', '.join(alt_names)})")
-        html.append(
-            ". Approved firmware files are listed below from the live catalog.</p>"
-        )
-
-        html.append(
-            '<div style="background:rgba(59,130,246,0.08);border-left:4px solid '
-            'rgba(59,130,246,0.6);padding:12px 16px;border-radius:4px;margin:16px 0">'
-            "<strong>Auto-Updated:</strong> This firmware list updates automatically "
-            "when new files are uploaded. Check back for the latest versions.</div>"
-        )
-
-        # --- GSMArena specs summary (if we can find it) ---
-        try:
-            GSMArenaDevice = apps.get_model("firmwares", "GSMArenaDevice")
-            gsm = GSMArenaDevice.objects.filter(
-                brand__iexact=brand_name,
-                model_name__iexact=model_name,
-                review_status="approved",
-            ).first()
-            if gsm and gsm.specs:
-                html.append('<h3 style="margin-top:24px">📋 Device Specifications</h3>')
-                html.append(
-                    '<table style="width:100%;border-collapse:collapse;text-align:left">'
-                    "<tbody>"
-                )
-                skip_keys = {
-                    "url",
-                    "brand",
-                    "full_name",
-                    "brand_slug",
-                    "scraped_at",
-                    "image_url",
-                    "review_url",
-                }
-                for k, v in gsm.specs.items():
-                    if k in skip_keys or not v:
-                        continue
-                    label = k.replace("_", " ").title()
-                    display = "Yes" if v is True else ("No" if v is False else str(v))
-                    html.append(
-                        f'<tr style="border-bottom:1px solid #333">'
-                        f'<td style="padding:6px 12px;font-weight:600;'
-                        f"min-width:140px;color:#999;font-size:12px;"
-                        f'text-transform:uppercase">{label}</td>'
-                        f'<td style="padding:6px 12px">{display}</td></tr>'
-                    )
-                html.append("</tbody></table>")
-        except Exception as e:
-            logger.debug(f"Skipped GSMArena specs in blog post: {e}")
-
-        # --- Recommended Flashing Tools ---
-        chipsets = cls._extract_chipsets(firmware_data)
-        tools_html = cls._generate_flashing_tools_section(model, chipsets)
-        if tools_html:
-            html.append(tools_html)
-
-        # --- Flashing Guide ---
-        guide_html = cls._generate_flashing_guide_section(model, chipsets)
-        if guide_html:
-            html.append(guide_html)
-
-        # --- Safety notes ---
-        html.append(
-            '<div style="margin-top:24px;background:rgba(245,158,11,0.08);'
-            "border-left:4px solid rgba(245,158,11,0.6);padding:12px 16px;"
-            'border-radius:4px">'
-            "<strong>⚠️ Important:</strong>"
-            "<ul style='margin:8px 0 0;padding-left:20px'>"
-            "<li>Always back up your data before flashing firmware</li>"
-            "<li>Verify your device variant and region match the firmware</li>"
-            "<li>Check chipset compatibility before flashing</li>"
-            "<li>Password-protected files require an extraction password</li>"
-            "</ul></div>"
-        )
-
-        html.append(
-            f'<p style="margin-top:16px;color:#666;font-size:12px">'
-            f"Last updated: {timezone.now().strftime('%B %d, %Y')}</p>"
-        )
-
-        return "".join(html)
-
-    @classmethod
-    def _generate_summary(cls, model):
-        """Generate post summary/excerpt with smart naming."""
-        device_label = f"{model.brand.name} {model.name}"
+        parent = cls.ensure_brand_category(model.brand)
+        name = model.name
         if model.marketing_name and model.marketing_name != model.name:
-            device_label += f" ({model.marketing_name})"
-
-        return f"Download {device_label} firmware for all variants."
-
-    @classmethod
-    def _extract_chipsets(cls, firmware_data: dict) -> list[str]:
-        """Extract unique chipset names from firmware variant data."""
-        chipsets: set[str] = set()
-        for variant_data in firmware_data.get("variants", []):
-            variant = variant_data.get("variant")
-            if variant and getattr(variant, "chipset", ""):
-                chipsets.add(variant.chipset)
-            for fw in variant_data.get("firmwares", []):
-                chipset = fw.get("chipset", "")
-                if chipset and chipset not in ("N/A", "Unknown", ""):
-                    chipsets.add(chipset)
-        return sorted(chipsets)
+            marketing = model.marketing_name.removeprefix(f"{model.brand.name} ")
+            if marketing != model.name:
+                name = f"{model.name} ({marketing})"
+        return _get_or_create_category(
+            slugify(f"{model.brand.slug}-{model.slug}"), name, parent
+        )
 
     @classmethod
-    def _generate_flashing_tools_section(cls, model, chipsets: list[str]) -> str:
-        """Generate HTML section listing recommended flashing tools for a brand/chipset.
+    def ensure_chipset_category(cls):
+        return _get_or_create_category("chipsets", "Chipsets")
 
-        Groups tools into: OEM Official → Free/Open Source → Crack/Local Market.
-        Each tool shows name, platform, risk level, and link to detail page.
-        """
-        try:
-            FlashingTool = apps.get_model("firmwares", "FlashingTool")
-        except Exception:
-            return ""
+    # -- drafts -----------------------------------------------------------
 
+    @classmethod
+    def _model_draft(cls, model: Model) -> Draft:
         brand = model.brand
+        device = f"{brand.name} {model.name}"
+        marketing = (
+            model.marketing_name
+            if model.marketing_name not in {model.name, device}
+            else ""
+        )
+        if marketing:
+            device = f"{device} ({marketing})"
+        chipsets = _model_chipsets(model)
+        firmwares = catalog.get_all_firmwares_for_model(model)
 
-        # Query tools matching this brand OR chipset
-        from django.db.models import Q
-
-        tool_q = Q(is_active=True)
-        brand_q = Q(supported_brands=brand)
-        chipset_q = Q()
-        for chip in chipsets:
-            chipset_q |= Q(supported_chipsets__contains=chip)
-
-        # Brand-specific tools + chipset-specific tools
-        tools_qs = FlashingTool.objects.filter(tool_q).filter(brand_q | chipset_q)
-        tools = list(tools_qs.distinct().select_related("category")[:20])
-
-        if not tools:
-            # Fallback: get generic popular tools
-            tools = list(
-                FlashingTool.objects.filter(
-                    is_active=True, is_featured=True
-                ).select_related("category")[:8]
+        alt_names = [
+            value
+            for value in (
+                marketing,
+                model.model_code,
             )
-        if not tools:
-            return ""
-
-        # Group by tool_type for display order
-        type_order = ["oem", "free", "open_source", "local_market", "crack"]
-        type_labels = {
-            "oem": (
-                "🏭 OEM Official Tools",
-                "Official manufacturer tools — safest option",
+            if value
+        ]
+        spec_rows = [
+            ("Model code", model.all_model_codes_display),
+            ("Codename", model.codename),
+            ("Launch OS", model.os_version),
+            ("Display", model.display_size),
+            ("Battery", model.battery),
+            (
+                "Released",
+                model.release_date.strftime("%B %Y") if model.release_date else "",
             ),
-            "free": ("🆓 Free Tools", "Freeware tools — no cost, community-supported"),
-            "open_source": (
-                "🔓 Open Source Tools",
-                "Open source — auditable and trustworthy",
-            ),
-            "local_market": (
-                "🏪 Local Market Tools",
-                "Regional service tools — use with caution",
-            ),
-            "crack": (
-                "⚠️ Crack / Patched Tools",
-                "Modified tools — advanced users only, use at your own risk",
-            ),
-        }
-        grouped: dict[str, list] = {}
-        for tool in tools:
-            tt = tool.tool_type
-            grouped.setdefault(tt, []).append(tool)
-
-        html_parts: list[str] = []
-        brand_name = brand.name
-        chipset_str = ", ".join(chipsets) if chipsets else "various chipsets"
-
-        html_parts.append(
-            f'<h3 style="margin-top:24px">🔧 Recommended Flashing Tools for {brand_name}</h3>'
+        ]
+        spec_html = format_html_join(
+            "",
+            '<tr><th scope="row">{}</th><td>{}</td></tr>',
+            ((label, value) for label, value in spec_rows if value),
         )
-        html_parts.append(
-            f"<p>These tools are compatible with <strong>{brand_name}</strong> devices"
-        )
+        chipset_html = mark_safe("")
         if chipsets:
-            html_parts.append(f" ({chipset_str} chipset)")
-        html_parts.append(
-            ". Choose the right tool based on your experience level and needs.</p>"
-        )
-
-        for tt in type_order:
-            if tt not in grouped:
-                continue
-            label, desc = type_labels.get(tt, (tt.title(), ""))
-            html_parts.append(f'<h4 style="margin-top:16px">{label}</h4>')
-            html_parts.append(f'<p style="font-size:13px;color:#999">{desc}</p>')
-            html_parts.append(
-                '<table style="width:100%;border-collapse:collapse;text-align:left">'
-                "<thead><tr>"
-                '<th style="padding:6px 12px;border-bottom:2px solid #444">Tool</th>'
-                '<th style="padding:6px 12px;border-bottom:2px solid #444">Platform</th>'
-                '<th style="padding:6px 12px;border-bottom:2px solid #444">Risk</th>'
-                '<th style="padding:6px 12px;border-bottom:2px solid #444">Price</th>'
-                '<th style="padding:6px 12px;border-bottom:2px solid #444">Action</th>'
-                "</tr></thead><tbody>"
+            chipset_html = format_html(
+                '<tr><th scope="row">Chipset</th><td>{}</td></tr>',
+                format_html_join(
+                    ", ",
+                    '<a href="{}">{}</a>',
+                    (
+                        (
+                            reverse(
+                                "firmwares:chipset_detail",
+                                kwargs={"slug": chipset.slug},
+                            ),
+                            chipset.display_name,
+                        )
+                        for chipset in chipsets
+                    ),
+                ),
             )
-            for tool in grouped[tt]:
-                risk_color = {
-                    "safe": "#10b981",
-                    "moderate": "#f59e0b",
-                    "advanced": "#f97316",
-                    "risky": "#ef4444",
-                }.get(tool.risk_level, "#64748b")
-                platform_icon = {
-                    "windows": "🪟",
-                    "macos": "🍎",
-                    "linux": "🐧",
-                    "android": "🤖",
-                    "multi": "🌐",
-                }.get(tool.platform, "💻")
-                price_text = "Free" if tool.is_free else "Paid"
-                price_color = "#10b981" if tool.is_free else "#f59e0b"
-
-                # Link to tool detail page
-                tool_url = f"/firmwares/tools/{tool.slug}/"
-
-                html_parts.append(
-                    f'<tr style="border-bottom:1px solid #333">'
-                    f'<td style="padding:6px 12px"><strong>{tool.name}</strong>'
-                )
-                if tool.version:
-                    html_parts.append(
-                        f' <span style="font-size:11px;color:#666">v{tool.version}</span>'
-                    )
-                html_parts.append("</td>")
-                html_parts.append(
-                    f'<td style="padding:6px 12px">{platform_icon} {tool.get_platform_display()}</td>'
-                )
-                html_parts.append(
-                    f'<td style="padding:6px 12px">'
-                    f'<span style="color:{risk_color};font-weight:600">'
-                    f"{tool.get_risk_level_display()}</span></td>"
-                )
-                html_parts.append(
-                    f'<td style="padding:6px 12px">'
-                    f'<span style="color:{price_color}">{price_text}</span></td>'
-                )
-                html_parts.append(
-                    f'<td style="padding:6px 12px">'
-                    f'<a href="{tool_url}" style="color:#06b6d4;text-decoration:none;'
-                    f'font-weight:600;font-size:13px">View Details →</a></td>'
-                )
-                html_parts.append("</tr>")
-            html_parts.append("</tbody></table>")
-
-        return "".join(html_parts)
+        chipset_text = chipsets[0].display_name if chipsets else model.chipset
+        body = format_html(
+            "<h2>Download {} firmware — all variants</h2>"
+            "<p>Approved firmware files for <strong>{}</strong>{}. "
+            "This list updates automatically when firmware is added, approved or removed.</p>"
+            '<h3>Device details</h3><table class="table"><tbody>{}{}</tbody></table>'
+            "<h3>Firmware downloads by category</h3>{}{}{}{}",
+            device,
+            device,
+            f" (also known as {', '.join(alt_names)})" if alt_names else "",
+            spec_html,
+            chipset_html,
+            _firmware_sections(firmwares, cap=MODEL_FILE_CAP),
+            _tools_section(brand, chipsets),
+            _guide_section(device, chipset_text, brand.name),
+            SAFETY_NOTE,
+        )
+        title = f"{device} Firmware Download — All Variants"
+        seo_title = f"{brand.name} {model.name} Firmware Download"
+        if len(seo_title) > 60:
+            seo_title = f"{brand.name} {model.name} Firmware"[:60]
+        tag_names = [brand.name, f"{brand.name} {model.name}"]
+        tag_names += [
+            f"{label} Firmware"
+            for _k, label, _i in catalog.group_by_category(firmwares)[:3]
+        ]
+        tag_names += [chipset.display_name for chipset in chipsets[:3]]
+        tag_names += ["Firmware", "Download"]
+        return Draft(
+            title=title[:200],
+            summary=f"Download {device} firmware for all variants."[:1000],
+            body=str(body),
+            slug_base=slugify(f"{brand.slug}-{model.slug}-firmware-download"),
+            seo_title=seo_title,
+            seo_description=f"Download {brand.name} {model.name} firmware files for all variants."[
+                :160
+            ],
+            category=cls.ensure_model_category(model),
+            brand=brand,
+            model=model,
+            tag_names=tuple(tag_names),
+        )
 
     @classmethod
-    def _generate_flashing_guide_section(cls, model, chipsets: list[str]) -> str:
-        """Generate a quick-start flashing guide section based on chipset/brand.
-
-        Detects the primary chipset and provides chipset-specific instructions
-        plus links to full guide pages.
-        """
-        brand_name = model.brand.name
-        model_name = model.name
-        device = f"{brand_name} {model_name}"
-
-        # Detect primary chipset family for tailored instructions
-        chipset_lower = " ".join(chipsets).lower() if chipsets else ""
-        guide_steps: list[str] = []
-        tool_name = ""
-        boot_mode = ""
-
-        if "mediatek" in chipset_lower or "mtk" in chipset_lower:
-            tool_name = "SP Flash Tool"
-            boot_mode = "BROM/Preloader mode"
-            guide_steps = [
-                f"Download the correct stock firmware for your {device}",
-                "Install MediaTek USB VCOM drivers on your PC",
-                f"Open <strong>{tool_name}</strong> and load the scatter file from the firmware package",
-                "Select <strong>Download Only</strong> (preserves data) or <strong>Firmware Upgrade</strong> (full wipe)",
-                f"Power off your device and connect via USB to boot into {boot_mode}",
-                "Click <strong>Download</strong> and wait for the green checkmark ✓",
-                "Disconnect and reboot — first boot may take 5-10 minutes",
+    def _brand_draft(cls, brand: Brand) -> Draft:
+        firmwares = catalog.get_public_firmwares(brand=brand)
+        models = list(
+            Model.objects.filter(brand=brand, is_active=True).order_by("name")[
+                :AGGREGATE_MODEL_CAP
             ]
-        elif "qualcomm" in chipset_lower or "snapdragon" in chipset_lower:
-            tool_name = "QFIL (Qualcomm Flash Image Loader)"
-            boot_mode = "EDL mode (Qualcomm 9008)"
-            guide_steps = [
-                f"Download the correct stock firmware for your {device}",
-                "Install Qualcomm HS-USB QDLoader 9008 drivers",
-                f"Open <strong>{tool_name}</strong> and select Flat Build",
-                "Browse to <code>rawprogram0.xml</code> and <code>patch0.xml</code>",
-                f"Boot your device into {boot_mode} (hold Vol Up + Vol Down while connecting USB)",
-                "Click <strong>Download</strong> and wait for completion",
-                "Device will reboot automatically when done",
-            ]
-        elif "spreadtrum" in chipset_lower or "unisoc" in chipset_lower:
-            tool_name = "SPD Research Tool"
-            boot_mode = "Download mode"
-            guide_steps = [
-                f"Download the correct .pac firmware for your {device}",
-                "Install Spreadtrum/Unisoc USB drivers",
-                f"Open <strong>{tool_name}</strong> and load the .pac file",
-                f"Power off device, hold Vol Down and connect USB ({boot_mode})",
-                "Click <strong>Start Downloading</strong>",
-                "Wait for the progress bar to complete (do not disconnect)",
-                "Device reboots automatically when flashing is done",
-            ]
-        elif "samsung" in brand_name.lower():
-            tool_name = "Odin"
-            boot_mode = "Download mode"
-            guide_steps = [
-                f"Download the correct firmware for your {device} (AP, BL, CP, CSC files)",
-                f"Open <strong>{tool_name}</strong> on your PC",
-                "Load firmware files: AP → AP slot, BL → BL slot, CP → CP slot, CSC → CSC slot",
-                f"Boot into {boot_mode}: Power Off → hold Vol Down + Home + Power (or Vol Down + Bixby + Power)",
-                "Connect device via USB — Odin should show <strong>Added!!</strong>",
-                'Click <strong>Start</strong> and wait for the <strong style="color:#10b981">PASS!</strong> message',
-                "Device reboots automatically — first boot may take several minutes",
-            ]
-        elif "xiaomi" in brand_name.lower():
-            tool_name = "MiFlash Tool"
-            boot_mode = "Fastboot mode"
-            guide_steps = [
-                f"Download the Fastboot ROM for your {device}",
-                f"Install <strong>{tool_name}</strong> and Xiaomi USB drivers",
-                f"Boot into {boot_mode}: Power Off → hold Vol Down + Power",
-                "Connect device via USB",
-                "Select firmware folder in MiFlash and click <strong>Refresh</strong>",
-                "Choose flash option: <strong>clean all</strong> or <strong>save user data</strong>",
-                "Click <strong>Flash</strong> and wait for completion",
-            ]
-        else:
-            # Generic Android flashing guide
-            tool_name = "manufacturer's flash tool"
-            boot_mode = "Download/Fastboot mode"
-            guide_steps = [
-                f"Download the correct stock firmware for your {device}",
-                "Install USB drivers for your device brand",
-                f"Open the {tool_name} on your PC",
-                "Load the firmware file(s) into the tool",
-                f"Power off device and boot into {boot_mode}",
-                "Connect device via USB and start the flashing process",
-                "Wait for completion and reboot — first boot may take several minutes",
-            ]
-
-        html_parts: list[str] = []
-        html_parts.append(
-            f'<h3 style="margin-top:24px">📖 How to Flash Firmware on {device}</h3>'
         )
-        if tool_name and tool_name != "manufacturer's flash tool":
-            html_parts.append(f"<p>The recommended tool for flashing {brand_name} ")
-            if chipsets:
-                html_parts.append(f"({', '.join(chipsets)}) ")
-            html_parts.append(
-                f"devices is <strong>{tool_name}</strong>. "
-                f"Follow these steps to flash firmware on your {device}:</p>"
-            )
-        else:
-            html_parts.append(
-                f"<p>Follow these general steps to flash firmware on your {device}:</p>"
-            )
-
-        html_parts.append('<ol style="padding-left:20px;line-height:1.8">')
-        for step in guide_steps:
-            html_parts.append(f"<li>{step}</li>")
-        html_parts.append("</ol>")
-
-        # Prerequisites box
-        html_parts.append(
-            '<div style="margin-top:12px;background:rgba(59,130,246,0.08);'
-            "border-left:4px solid rgba(59,130,246,0.6);padding:12px 16px;"
-            'border-radius:4px">'
-            "<strong>📋 Prerequisites:</strong>"
-            "<ul style='margin:8px 0 0;padding-left:20px'>"
-            "<li>Battery charged to at least 50%</li>"
-            "<li>Original USB cable (avoid cheap/third-party cables)</li>"
-            "<li>USB drivers installed for your device</li>"
-            "<li>Full data backup (flashing may erase all data)</li>"
-            "</ul></div>"
+        chipsets = list(
+            Chipset.objects.filter(models__brand=brand)
+            .distinct()
+            .order_by("vendor", "name")[:20]
         )
-
-        return "".join(html_parts)
+        model_list = format_html_join(
+            "",
+            '<li><a href="{}">{}</a></li>',
+            (
+                (
+                    reverse(
+                        "firmwares:model_detail",
+                        kwargs={"brand_slug": brand.slug, "model_slug": model.slug},
+                    ),
+                    model.display_name,
+                )
+                for model in models
+            ),
+        )
+        description = (
+            format_html("<p>{}</p>", brand.description.strip())
+            if brand.description.strip()
+            else ""
+        )
+        body = format_html(
+            "<h2>{} device and firmware catalog</h2>{}"
+            '<p><a href="{}">Browse the {} device catalog</a>.</p>'
+            "<h3>Device models</h3><ul>{}</ul>"
+            "<h3>Firmware downloads by category</h3>{}{}",
+            brand.name,
+            description,
+            reverse("firmwares:brand_detail", kwargs={"slug": brand.slug}),
+            brand.name,
+            model_list,
+            _firmware_sections(
+                firmwares, cap=AGGREGATE_FILE_CAP, browse_query=f"&brand={brand.slug}"
+            ),
+            _tools_section(brand, chipsets),
+        )
+        title = f"{brand.name} device and firmware catalog"
+        summary = (
+            f"Explore the Mobofirm device and firmware catalog for {brand.name}, "
+            "including supported models and approved firmware."
+        )
+        return Draft(
+            title=title[:200],
+            summary=summary,
+            body=str(body),
+            slug_base=slugify(f"{brand.slug}-device-firmware-catalog"),
+            seo_title=title[:240],
+            seo_description=summary[:160],
+            category=cls.ensure_brand_category(brand),
+            brand=brand,
+            tag_names=(brand.name, "Firmware"),
+        )
 
     @classmethod
-    def _update_post_tags(cls, post, model, firmware_data):
-        """
-        Auto-generate and assign tags to the firmware post.
-        """
+    def _chipset_draft(cls, chipset: Chipset) -> Draft:
+        firmwares = catalog.get_public_firmwares(catalog.chipset_filter(chipset))
+        models = list(
+            Model.objects.filter(
+                Q(chipset_ref=chipset) | Q(variants__chipset_ref=chipset),
+                is_active=True,
+            )
+            .select_related("brand")
+            .distinct()
+            .order_by("brand__name", "name")[:AGGREGATE_MODEL_CAP]
+        )
+        model_list = format_html_join(
+            "",
+            '<li><a href="{}">{} {}</a></li>',
+            (
+                (
+                    reverse(
+                        "firmwares:model_detail",
+                        kwargs={
+                            "brand_slug": model.brand.slug,
+                            "model_slug": model.slug,
+                        },
+                    ),
+                    model.brand.name,
+                    model.display_name,
+                )
+                for model in models
+            ),
+        )
+        description = (
+            format_html("<p>{}</p>", chipset.description.strip())
+            if chipset.description.strip()
+            else ""
+        )
+        body = format_html(
+            "<h2>{} firmware, tools and devices</h2>{}"
+            '<p><a href="{}">Open the {} chipset page</a>.</p>'
+            "<h3>Devices using this chipset</h3><ul>{}</ul>"
+            "<h3>Firmware downloads by category</h3>{}{}{}",
+            chipset.display_name,
+            description,
+            reverse("firmwares:chipset_detail", kwargs={"slug": chipset.slug}),
+            chipset.display_name,
+            model_list,
+            _firmware_sections(
+                firmwares,
+                cap=AGGREGATE_FILE_CAP,
+                browse_query=f"&chipset={chipset.slug}",
+            ),
+            _tools_section(None, [chipset]),
+            _guide_section(chipset.display_name, chipset.display_name, ""),
+        )
+        title = f"{chipset.display_name} firmware downloads and flashing tools"
+        summary = (
+            f"Firmware, flashing tools and supported devices for the "
+            f"{chipset.display_name} chipset."
+        )
+        return Draft(
+            title=title[:200],
+            summary=summary,
+            body=str(body),
+            slug_base=slugify(f"{chipset.slug}-chipset-firmware"),
+            seo_title=title[:60],
+            seo_description=summary[:160],
+            category=cls.ensure_chipset_category(),
+            tag_names=(chipset.display_name, "Firmware"),
+        )
+
+    # -- synchronisation --------------------------------------------------
+
+    @classmethod
+    def _unique_slug(cls, Post, base: str) -> str:
+        slug = base[:230] or "firmware"
+        candidate, index = slug, 2
+        while Post.objects.filter(slug=candidate).exists():
+            candidate = f"{slug[:225]}-{index}"
+            index += 1
+        return candidate
+
+    @classmethod
+    def _apply(cls, post, draft: Draft) -> None:
+        post.title = draft.title
+        post.summary = draft.summary
+        post.body = draft.body
+        post.seo_title = draft.seo_title
+        post.seo_description = draft.seo_description
+        post.category = draft.category
+        post.firmware_brand = draft.brand
+        post.firmware_model = draft.model
+        post.is_ai_generated = True
+
+    @classmethod
+    def _sync(cls, kind: str, target, draft: Draft):
+        Post = apps.get_model("blog", "Post")
+        from apps.blog.models import PostStatus as Status
+
+        lookup = {"kind": kind, kind: target}
+        digest = draft.digest
+        now = timezone.now()
+        link = AutomatedBlogLink.objects.select_related("post").filter(**lookup).first()
+        if link is not None:
+            if link.content_hash != digest:
+                cls._apply(link.post, draft)
+                link.post.save()
+                link.content_hash = digest
+                link.last_synced_at = now
+                link.save(
+                    update_fields=["content_hash", "last_synced_at", "updated_at"]
+                )
+                cls._update_post_tags(link.post, draft.tag_names)
+            return link.post
+        try:
+            with transaction.atomic():
+                post = Post(
+                    slug=cls._unique_slug(Post, draft.slug_base),
+                    author=get_automation_author(),
+                    status=Status.PUBLISHED,
+                    publish_at=now,
+                    published_at=now,
+                    allow_comments=True,
+                )
+                cls._apply(post, draft)
+                post.save()
+                AutomatedBlogLink.objects.create(
+                    post=post,
+                    content_hash=digest,
+                    last_synced_at=now,
+                    **lookup,
+                )
+        except IntegrityError:
+            link = (
+                AutomatedBlogLink.objects.select_related("post")
+                .filter(**lookup)
+                .first()
+            )
+            if link is None:
+                raise
+            return link.post
+        cls._update_post_tags(post, draft.tag_names)
+        logger.info("Created automated %s blog post for %s", kind, target)
+        return post
+
+    @classmethod
+    def sync_model_post(cls, model: Model):
+        if not apps.is_installed("apps.blog"):
+            return None
+        model = Model.objects.select_related("brand", "chipset_ref").get(pk=model.pk)
+        return cls._sync("model", model, cls._model_draft(model))
+
+    @classmethod
+    def sync_brand_post(cls, brand: Brand):
+        if not apps.is_installed("apps.blog"):
+            return None
+        return cls._sync("brand", brand, cls._brand_draft(brand))
+
+    @classmethod
+    def sync_chipset_post(cls, chipset: Chipset):
+        if not apps.is_installed("apps.blog"):
+            return None
+        return cls._sync("chipset", chipset, cls._chipset_draft(chipset))
+
+    @classmethod
+    def sync_for_firmware(cls, firmware) -> list:
+        """Refresh the model, brand and chipset posts a firmware record feeds."""
+        posts = []
+        if firmware.model_id:
+            posts.append(cls.sync_model_post(firmware.model))
+        brand = firmware.brand or (firmware.model.brand if firmware.model_id else None)
+        if brand is not None:
+            posts.append(cls.sync_brand_post(brand))
+        chipset_ids = set()
+        for owner in (firmware.model if firmware.model_id else None, firmware.variant):
+            if owner is not None and owner.chipset_ref_id:
+                chipset_ids.add(owner.chipset_ref_id)
+        for chipset in Chipset.objects.filter(pk__in=chipset_ids):
+            posts.append(cls.sync_chipset_post(chipset))
+        return [post for post in posts if post is not None]
+
+    @classmethod
+    def sync_all(cls, *, brand_slug: str | None = None) -> dict[str, int]:
+        """Catch-up: ensure every brand, model and chipset has a current post."""
+        counts = {"brands": 0, "models": 0, "chipsets": 0, "errors": 0}
+        brands = Brand.objects.all()
+        if brand_slug:
+            brands = brands.filter(slug=brand_slug)
+        for brand in brands:
+            cls._safe(cls.sync_brand_post, brand, counts, "brands")
+            for model in Model.objects.filter(brand=brand):
+                cls._safe(cls.sync_model_post, model, counts, "models")
+        chipsets = Chipset.objects.all()
+        if brand_slug:
+            chipsets = chipsets.filter(models__brand__slug=brand_slug).distinct()
+        for chipset in chipsets:
+            cls._safe(cls.sync_chipset_post, chipset, counts, "chipsets")
+        return counts
+
+    @classmethod
+    def _safe(cls, func, target, counts: dict[str, int], key: str) -> None:
+        try:
+            func(target)
+        except (DatabaseError, ValidationError, ValueError):
+            logger.exception("Blog sync failed for %s", target)
+            counts["errors"] += 1
+        else:
+            counts[key] += 1
+
+    # -- backwards-compatible entry points ---------------------------------
+
+    @classmethod
+    def generate_firmware_post(cls, model: Model, force_update: bool = False):
+        return cls.sync_model_post(model)
+
+    @classmethod
+    def generate_brand_post(cls, brand: Brand):
+        return cls.sync_brand_post(brand)
+
+    # -- tags -------------------------------------------------------------
+
+    @classmethod
+    def _update_post_tags(cls, post, tag_names: tuple[str, ...]) -> None:
+        """Create curated tags for the catalog names and make them the post's tags."""
         if not apps.is_installed("apps.tags"):
             return
+        from apps.tags.services import assign_catalog_tags
 
-        try:
-            Tag = apps.get_model("tags", "Tag")
-            max_auto_tags = 15
-
-            tags_to_add = []
-
-            def curated_tag(name):
-                slug = slugify(name)
-                tag = Tag.objects.filter(
-                    slug=slug,
-                    is_curated=True,
-                    is_active=True,
-                    is_deleted=False,
-                    merge_into__isnull=True,
-                ).first()
-                if tag:
-                    return tag
-                Tag.objects.get_or_create(
-                    slug=slug,
-                    defaults={
-                        "name": name,
-                        "ai_suggested": True,
-                        "is_curated": False,
-                    },
-                )
-                return None
-
-            # Brand tag (priority 1)
-            brand_tag = curated_tag(model.brand.name)
-            if brand_tag:
-                tags_to_add.append(brand_tag)
-
-            # Model tag (priority 2)
-            model_tag = curated_tag(f"{model.brand.name} {model.name}")
-            if model_tag:
-                tags_to_add.append(model_tag)
-
-            # Firmware type tags (priority 3) - limit to 3 most common types
-            firmware_types = list(firmware_data["firmware_types"])[:3]
-            for fw_type in firmware_types:
-                type_tag = curated_tag(f"{fw_type} Firmware")
-                if type_tag:
-                    tags_to_add.append(type_tag)
-
-            # Chipset tags (priority 4) - extract from firmware variants
-            chipsets = set()
-            for variant_data in firmware_data.get("variants", []):
-                for fw in variant_data.get("firmwares", []):
-                    chipset = fw.get("chipset", "")
-                    if chipset and chipset not in ("N/A", "Unknown", ""):
-                        chipsets.add(chipset)
-
-            for chipset in list(chipsets)[:3]:  # Limit to 3 chipsets
-                chipset_tag = curated_tag(chipset)
-                if chipset_tag:
-                    tags_to_add.append(chipset_tag)
-
-            # Generic tags (priority 5) - only essential ones
-            generic_tags = ["firmware", "download"]
-            for tag_name in generic_tags:
-                tag = curated_tag(tag_name.replace("-", " ").title())
-                if tag:
-                    tags_to_add.append(tag)
-
-            # Apply limit from admin settings (configurable)
-            tags_to_add = list({tag.pk: tag for tag in tags_to_add}.values())[
-                :max_auto_tags
-            ]
-
-            post.tags.set(tags_to_add)
-            logger.info(
-                "Added %s tags to post including %s chipsets (maximum %s)",
-                len(tags_to_add),
-                len(chipsets),
-                max_auto_tags,
-            )
-
-            # Sync tag usage counts
-            try:
-                from apps.tags.tasks import (
-                    sync_tag_usage_counts,  # type: ignore[attr-defined]
-                )
-
-                tag_ids = list(post.tags.values_list("id", flat=True))
-                if tag_ids:
-                    sync_tag_usage_counts.delay(tag_ids)
-            except Exception as e:
-                logger.debug(f"Tag usage sync skipped: {e}")
-
-        except Exception as e:
-            logger.exception(f"Error adding tags: {e}")
-
-    @classmethod
-    def _update_post_seo(cls, post, model):
-        """
-        Generate bounded title and description fields on the local blog post.
-        """
-        try:
-            max_seo_title = 60
-            max_seo_desc = 160
-
-            # SEO Title
-            seo_title = f"{model.brand.name} {model.name} Firmware Download"
-            if len(seo_title) > max_seo_title:
-                seo_title = f"{model.brand.name} {model.name} Firmware"
-            if len(seo_title) > max_seo_title:
-                seo_title = seo_title[: max_seo_title - 3] + "..."
-            post.seo_title = seo_title
-
-            # SEO Description
-            seo_desc = (
-                f"Download {model.brand.name} {model.name} firmware files "
-                "for all variants."
-            )
-
-            if len(seo_desc) > max_seo_desc:
-                seo_desc = seo_desc[: max_seo_desc - 3] + "..."
-
-            post.seo_description = seo_desc
-            post.save(update_fields=["seo_title", "seo_description"])
-
-            logger.info(
-                "Updated SEO (title: %s/%s, description: %s/%s)",
-                len(post.seo_title),
-                max_seo_title,
-                len(post.seo_description),
-                max_seo_desc,
-            )
-
-        except Exception as e:
-            logger.exception(f"Error updating SEO: {e}")
+        assign_catalog_tags(post, tag_names)

@@ -9,7 +9,13 @@ import json
 import logging
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
+
+from django.core.exceptions import ValidationError
+
+from apps.core.ai_client import AiClientError
+
+from .constants import MAIN_CATEGORIES
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +34,7 @@ class FirmwareAIAnalyzer:
     """
 
     # Known chipset signatures (hex patterns)
-    CHIPSET_SIGNATURES = {
+    CHIPSET_SIGNATURES: ClassVar[dict[str, bytes]] = {
         "MediaTek MT6765": b"MT6765",
         "MediaTek MT6768": b"MT6768",
         "MediaTek MT6833": b"MT6833",
@@ -44,14 +50,14 @@ class FirmwareAIAnalyzer:
     }
 
     # Android version patterns
-    ANDROID_VERSION_PATTERNS = [
+    ANDROID_VERSION_PATTERNS: ClassVar[list[tuple[bytes, str]]] = [
         (rb"Android\s+(\d+)", "Android {}"),
         (rb"android-(\d+)", "Android {}"),
         (rb"ro\.build\.version\.release=(\d+)", "Android {}"),
     ]
 
     # Partition names
-    COMMON_PARTITIONS = [
+    COMMON_PARTITIONS: ClassVar[list[str]] = [
         "boot",
         "system",
         "vendor",
@@ -100,8 +106,8 @@ class FirmwareAIAnalyzer:
 
             return result
 
-        except Exception as e:
-            logger.error(f"Firmware analysis failed: {e}", exc_info=True)
+        except (OSError, ValueError, AiClientError) as e:
+            logger.exception("Firmware analysis failed")
             return {"error": str(e), "confidence": 0.0, "method": "error"}
 
     @classmethod
@@ -110,7 +116,7 @@ class FirmwareAIAnalyzer:
         Fast pattern-based metadata extraction.
         Reads first 10MB of file and searches for known patterns.
         """
-        result = {
+        result: dict[str, Any] = {
             "chipset": None,
             "android_version": None,
             "security_patch": None,
@@ -178,8 +184,8 @@ class FirmwareAIAnalyzer:
 
             return result
 
-        except Exception as e:
-            logger.exception(f"Pattern-based analysis failed: {e}")
+        except OSError as e:
+            logger.exception("Pattern-based analysis failed")
             result["error"] = str(e)
             return result
 
@@ -241,8 +247,8 @@ Return ONLY valid JSON, no markdown formatting.
 
             return data
 
-        except Exception as e:
-            logger.error(f"AI-based analysis failed: {e}", exc_info=True)
+        except (OSError, ValueError, AiClientError) as e:
+            logger.exception("AI-based analysis failed")
             return {"error": str(e), "confidence": 0.0, "method": "ai_error"}
 
     @classmethod
@@ -265,35 +271,17 @@ Return ONLY valid JSON, no markdown formatting.
 
             # Run analysis
             result = cls.analyze_firmware(file_path)
+            if result.get("error"):
+                logger.warning(
+                    "Firmware analysis for %s failed: %s",
+                    pending_firmware.id,
+                    result["error"],
+                )
+                return False
 
-            # Update model fields
-            if result.get("chipset"):
-                pending_firmware.ai_chipset = result["chipset"]
-
-            if result.get("android_version"):
-                pending_firmware.ai_android_version = result["android_version"]
-
-            if result.get("partitions"):
-                pending_firmware.partitions = result["partitions"]
-
-            if result.get("firmware_type") and result["firmware_type"] != "unknown":
-                pending_firmware.ai_firmware_type = result["firmware_type"]
-
-            # Store full analysis in metadata
-            pending_firmware.metadata = pending_firmware.metadata or {}
-            pending_firmware.metadata["ai_analysis"] = result
-            pending_firmware.metadata["analysis_timestamp"] = str(timezone.now())  # noqa: F821  # type: ignore[name-defined]
-
-            # Update AI status based on confidence
-            confidence = result.get("confidence", 0.0)
-            if confidence >= 0.8:
-                pending_firmware.ai_status = "completed"
-            elif confidence >= 0.5:
-                pending_firmware.ai_status = "partial"
-            else:
-                pending_firmware.ai_status = "failed"
-
+            cls.apply_to_pending(pending_firmware, result)
             pending_firmware.save()
+            confidence = result.get("confidence", 0.0)
 
             logger.info(
                 f"Firmware analysis completed for {pending_firmware.id}: "
@@ -302,19 +290,46 @@ Return ONLY valid JSON, no markdown formatting.
 
             return True
 
-        except Exception as e:
-            logger.error(f"Failed to update pending firmware: {e}", exc_info=True)
+        except (OSError, ValueError, TypeError):
+            logger.exception("Failed to update pending firmware")
             return False
+
+    @classmethod
+    def apply_to_pending(cls, pending_firmware, result: dict[str, Any]) -> None:
+        """Store analysis results on a PendingFirmware as suggestions only."""
+        from django.utils import timezone
+
+        if result.get("chipset"):
+            pending_firmware.chipset = str(result["chipset"])[:128]
+        if result.get("partitions"):
+            pending_firmware.partitions = list(result["partitions"])
+        firmware_type = result.get("firmware_type")
+        if firmware_type in {key for key, _label in MAIN_CATEGORIES}:
+            pending_firmware.ai_category = firmware_type
+        pending_firmware.metadata = {
+            **(pending_firmware.metadata or {}),
+            "ai_analysis": {
+                key: result.get(key)
+                for key in (
+                    "android_version",
+                    "security_patch",
+                    "build_date",
+                    "confidence",
+                    "method",
+                )
+            },
+            "analysis_timestamp": timezone.now().isoformat(),
+        }
 
 
 # Convenience function for use in tasks/views
-def analyze_and_update_firmware(pending_firmware_id: int) -> dict[str, Any]:
+def analyze_and_update_firmware(pending_firmware_id: str) -> dict[str, Any]:
     """
     Analyze firmware and update database record.
     Can be called from Celery task or view.
 
     Args:
-        pending_firmware_id: ID of PendingFirmware instance
+        pending_firmware_id: UUID of the PendingFirmware instance
 
     Returns:
         Analysis result dictionary
@@ -324,15 +339,11 @@ def analyze_and_update_firmware(pending_firmware_id: int) -> dict[str, Any]:
 
     try:
         pf = PendingFirmware.objects.get(id=pending_firmware_id)
-        success = FirmwareAIAnalyzer.update_pending_firmware(pf)
-
-        return {
-            "success": success,
-            "firmware_id": str(pf.id),
-            "metadata": pf.metadata.get("ai_analysis", {}),
-        }
-
-    except PendingFirmware.DoesNotExist:
+    except (PendingFirmware.DoesNotExist, ValueError, ValidationError):
         return {"success": False, "error": "Firmware not found"}
-    except Exception as e:
-        return {"success": False, "error": str(e)}
+    success = FirmwareAIAnalyzer.update_pending_firmware(pf)
+    return {
+        "success": success,
+        "firmware_id": str(pf.id),
+        "metadata": pf.metadata.get("ai_analysis", {}),
+    }

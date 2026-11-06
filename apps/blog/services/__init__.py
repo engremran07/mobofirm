@@ -3,7 +3,7 @@ Blog Services
 =============
 """
 
-from .post_service import PostService
 from .history import PostHistoryService
+from .post_service import PostService
 
 __all__ = ["PostHistoryService", "PostService"]

@@ -1,0 +1,22 @@
+{# Contract: locations, status_url (from firmware_storage_panel). Empty context renders nothing. #}
+{% if status_url %}
+  <section class="surface-card p-3 mt-4" aria-labelledby="storage-panel-heading">
+    <h2 class="h6" id="storage-panel-heading"><i class="icon" data-lucide="hard-drive" aria-hidden="true"></i> Storage (staff only)</h2>
+    {% if locations %}
+      <ul class="eco-list">
+        {% for location in locations %}
+          <li>
+            {{ location.get_provider_display }}
+            {% if location.status == "available" %}{% include "components/status_pill.html" with label=location.get_status_display tone="success" %}
+            {% elif location.status == "pending" %}{% include "components/status_pill.html" with label=location.get_status_display tone="warning" %}
+            {% else %}{% include "components/status_pill.html" with label=location.get_status_display tone="danger" %}{% endif %}
+            {% if location.last_error %}<span class="small muted d-block">{{ location.last_error }}</span>{% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="small muted mb-2">No storage location is recorded for this file.</p>
+    {% endif %}
+    <a class="small" href="{{ status_url }}">Open storage status</a>
+  </section>
+{% endif %}

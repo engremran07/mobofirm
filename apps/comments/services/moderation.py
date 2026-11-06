@@ -1,187 +1,131 @@
+"""Deterministic, rule-based comment screening.
+
+Every comment is scored from explicit, explainable signals (links, spam phrases,
+abusive terms, shouting, repetition). The score decides the *initial* status only;
+staff decisions in ``decisions.py`` always override it.
+
+Policy:
+    * score < ``REVIEW_THRESHOLD``  -> ``approved`` (clean)
+    * score >= ``REVIEW_THRESHOLD`` -> ``pending`` (queued for staff)
+    * score >= ``SPAM_THRESHOLD``   -> ``spam`` (hidden, still visible to staff)
+    * abusive wording               -> ``pending`` (a person decides; never auto-published)
+    * empty                         -> ``rejected``
+"""
+
 from __future__ import annotations
 
-import hashlib
-import logging
-from dataclasses import dataclass
+import re
+from dataclasses import dataclass, field
 
-from django.core.cache import cache
+REVIEW_THRESHOLD = 0.3
+SPAM_THRESHOLD = 0.8
 
-from apps.core import ai_client
-from apps.core.utils.sanitize import sanitize_html
+_LINK = re.compile(
+    r"(?:https?://|www\.)\S+|\b[\w-]+\.(?:ru|cn|tk|top|xyz|click|loan)\b", re.IGNORECASE
+)
+_REPEATED_CHARS = re.compile(r"(.)\1{9,}")
+_WORD = re.compile(r"[a-z0-9']+")
 
-logger = logging.getLogger(__name__)
+SPAM_PHRASES = (
+    "buy now",
+    "click here",
+    "free money",
+    "limited offer",
+    "work from home",
+    "make money fast",
+    "casino",
+    "viagra",
+    "crypto giveaway",
+    "whatsapp me",
+    "telegram me",
+    "cheap loans",
+    "seo services",
+    "earn $",
+)
+ABUSIVE_TERMS = frozenset(
+    {
+        "idiot",
+        "moron",
+        "stupid",
+        "scumbag",
+        "retard",
+        "kill yourself",
+        "shut up",
+        "piece of shit",
+        "fuck",
+        "fucking",
+        "bitch",
+        "asshole",
+        "bastard",
+    }
+)
 
 
-@dataclass
+@dataclass(frozen=True)
 class ModerationResult:
     label: str
     score: float
-    rationale: str = ""
-    toxicity_score: float = 0.0
-    spam_score: float = 0.0
-    hate_score: float = 0.0
-    cached: bool = False
+    reasons: tuple[str, ...] = field(default_factory=tuple)
+
+    @property
+    def rationale(self) -> str:
+        return ", ".join(self.reasons) if self.reasons else "No risk signals"
 
 
-def _compute_cache_key(text: str, context: str | None = None) -> str:
-    """Generate cache key for moderation results."""
-    content = f"{text}:{context or ''}"
-    return f"comment_moderation:{hashlib.sha256(content.encode()).hexdigest()[:16]}"
+def _abusive(lower: str) -> bool:
+    words = set(_WORD.findall(lower))
+    return any(
+        (term in lower) if " " in term else (term in words) for term in ABUSIVE_TERMS
+    )
 
 
-def _extract_scores(raw_text: str) -> dict[str, float]:
-    """Extract numeric scores from AI response."""
-    scores = {"toxicity": 0.0, "spam": 0.0, "hate": 0.0}
-    if not raw_text:
-        return scores
-
-    lower = raw_text.lower()
-    # Look for score patterns like "toxicity: 0.8" or "spam score: 0.3"
-    import re
-
-    for key in scores.keys():
-        pattern = rf"{key}[:\s]+([0-9.]+)"
-        match = re.search(pattern, lower)
-        if match:
-            try:
-                scores[key] = min(1.0, max(0.0, float(match.group(1))))
-            except ValueError:
-                pass
-    return scores
-
-
-def classify_comment(
-    text: str,
-    context: str | None = None,
-    use_cache: bool = True,
-    cache_ttl: int = 3600,
+def assess_comment(
+    body: str, *, max_links: int = 2, duplicate_of_recent: bool = False
 ) -> ModerationResult:
-    """
-    Enhanced AI moderation with caching, toxicity scoring, and comprehensive safety checks.
+    """Score ``body``; ``duplicate_of_recent`` is true when the same user just sent it."""
+    text = (body or "").strip()
+    if not text:
+        return ModerationResult("rejected", 1.0, ("empty",))
 
-    Args:
-        text: Comment text to classify
-        context: Optional context about the comment
-        use_cache: Whether to use cached results
-        cache_ttl: Cache time-to-live in seconds
+    lower = text.lower()
+    reasons: list[str] = []
+    score = 0.0
 
-    Returns:
-        ModerationResult with classification and scores
-    """
-    if not text or not text.strip():
-        return ModerationResult(label="rejected", score=0.0, rationale="Empty comment")
+    links = len(_LINK.findall(text))
+    if links > max_links:
+        score += min(0.9, 0.35 + 0.15 * (links - max_links))
+        reasons.append(f"{links} links")
+    elif links:
+        score += 0.1
+        reasons.append("contains a link")
 
-    # Check cache first
-    cache_key = _compute_cache_key(text, context)
-    if use_cache:
-        cached = cache.get(cache_key)
-        if cached:
-            logger.debug(f"Using cached moderation result for key {cache_key[:8]}")
-            cached["cached"] = True
-            return ModerationResult(**cached)
+    phrases = [phrase for phrase in SPAM_PHRASES if phrase in lower]
+    if phrases:
+        score += min(0.9, 0.5 * len(phrases))
+        reasons.append("spam phrase: " + phrases[0])
 
-    # Sanitize input
-    safe_text = sanitize_html(text or "", allowed_tags=["p", "br", "strong", "em"])
+    if _REPEATED_CHARS.search(text):
+        score += 0.4
+        reasons.append("repeated characters")
 
-    # Use AI client if available
-    if not hasattr(ai_client, "generate_text"):
-        # No AI available, use heuristic only
-        return ModerationResult(
-            label="approved", score=0.5, rationale="AI moderation not available"
-        )
-
-    # Quick heuristic checks before AI call
-    lower_text = safe_text.lower()
-    if len(safe_text) < 3:
-        result = ModerationResult(
-            label="rejected", score=1.0, rationale="Comment too short"
-        )
-    elif any(
-        spam_word in lower_text
-        for spam_word in ["buy now", "click here", "free money", "limited offer"]
+    letters = [char for char in text if char.isalpha()]
+    if (
+        len(letters) >= 20
+        and sum(char.isupper() for char in letters) / len(letters) > 0.7
     ):
-        result = ModerationResult(
-            label="spam", score=0.9, spam_score=0.9, rationale="Spam keywords detected"
-        )
-    else:
-        # AI classification
-        try:
-            # Create a dummy user for AI client (required by interface)
-            from django.contrib.auth import get_user_model
+        score += 0.35
+        reasons.append("shouting")
 
-            User = get_user_model()
-            dummy_user = User.objects.first()  # Get any user for system calls
+    if duplicate_of_recent:
+        score += 0.6
+        reasons.append("duplicate of a recent comment")
 
-            if not dummy_user:
-                # No users yet, use heuristic
-                return ModerationResult(
-                    label="approved",
-                    score=0.5,
-                    rationale="No AI moderation available (no users)",
-                )
+    if _abusive(lower):
+        return ModerationResult("pending", 0.85, (*reasons, "abusive wording"))
 
-            # Use ai_client.moderate_text
-            moderation_result = ai_client.moderate_text(safe_text, dummy_user)
-            raw = moderation_result.get("analysis", "")
-            toxicity_score = float(moderation_result.get("score", "0.0"))
-
-            # Extract additional scores from raw text
-            scores = _extract_scores(raw)
-            if toxicity_score > 0:
-                scores["toxicity"] = toxicity_score
-
-            # Determine label based on scores
-            max_score = max(scores.values())
-            if max_score >= 0.8:
-                label = "rejected"
-            elif scores["spam"] >= 0.6:
-                label = "spam"
-            elif max_score >= 0.5:
-                label = "pending"
-            else:
-                label = "approved"
-
-            # Override with explicit label if found
-            if raw:
-                lower = raw.lower()
-                if "label: rejected" in lower or "label: abuse" in lower:
-                    label = "rejected"
-                elif "label: spam" in lower:
-                    label = "spam"
-                elif "label: approved" in lower or "label: clean" in lower:
-                    label = "approved"
-                elif "label: pending" in lower:
-                    label = "pending"
-
-            result = ModerationResult(
-                label=label,
-                score=max_score,
-                rationale=raw or "AI moderation completed",
-                toxicity_score=scores["toxicity"],
-                spam_score=scores["spam"],
-                hate_score=scores["hate"],
-            )
-
-        except Exception as exc:
-            logger.error(f"AI moderation failed: {exc}", exc_info=True)
-            # Fail-safe: require manual review on errors
-            result = ModerationResult(
-                label="pending",
-                score=0.5,
-                rationale=f"Moderation unavailable: {str(exc)[:100]}",
-            )
-
-    # Cache the result
-    if use_cache:
-        cache_data = {
-            "label": result.label,
-            "score": result.score,
-            "rationale": result.rationale,
-            "toxicity_score": result.toxicity_score,
-            "spam_score": result.spam_score,
-            "hate_score": result.hate_score,
-        }
-        cache.set(cache_key, cache_data, cache_ttl)
-        logger.debug(f"Cached moderation result for key {cache_key[:8]}")
-
-    return result
+    score = round(min(score, 1.0), 2)
+    if score >= SPAM_THRESHOLD:
+        return ModerationResult("spam", score, tuple(reasons))
+    if score >= REVIEW_THRESHOLD:
+        return ModerationResult("pending", score, tuple(reasons))
+    return ModerationResult("approved", score, tuple(reasons))

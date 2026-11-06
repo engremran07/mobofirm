@@ -1,17 +1,34 @@
 <footer class="site-footer mt-5 py-4">
-  <div class="site-container d-flex flex-column flex-md-row justify-content-between gap-3">
-    <div>
-      <a class="site-brand" href="{% url 'home' %}">{{ site_name|default:"Mobofirm" }}</a>
-      <p class="mb-0 mt-2 small">Firmware discovery with clear model and review information.</p>
-      <p class="mb-0 mt-1 small text-secondary">Version {{ release_version }}</p>
+  <div class="site-container">
+    <div class="row g-4">
+      <div class="col-12 col-md-5">
+        <a class="site-brand" href="{% url 'home' %}">{{ site_name|default:"Mobofirm" }}</a>
+        {% if not site_settings.site_description %}<p class="mb-0 mt-2 small">Firmware discovery with clear model and review information.</p>{% endif %}
+        <p class="mb-0 mt-1 small">Version {{ release_version }}</p>
+        {% include "site_settings/footer.html" %}
+      </div>
+      <nav class="col-6 col-md-3" aria-label="Footer catalogue navigation">
+        <h2 class="footer-heading">Explore</h2>
+        <ul class="list-unstyled mb-0 d-grid gap-1">
+          <li><a href="{% url 'firmwares:browse' %}">Firmware catalogue</a></li>
+          <li><a href="{% url 'firmwares:brand_list' %}">Brands</a></li>
+          <li><a href="{% url 'firmwares:chipset_list' %}">Chipsets</a></li>
+          <li><a href="{% url 'firmwares:flashing_tools' %}">Tools &amp; Guides</a></li>
+          <li><a href="{% url 'blog:post_list' %}">Blog</a></li>
+          <li><a href="{% url 'tags:list' %}">Topics</a></li>
+          {% if ecosystem.shop %}<li><a href="{% url 'shop:pricing' %}">Shop</a></li>{% endif %}
+          {% if ecosystem.marketplace %}<li><a href="{% url 'marketplace:listing_browse' %}">Marketplace</a></li>{% endif %}
+          {% if ecosystem.filemanager and user.is_authenticated %}<li><a href="{% url 'filemanager:browser' %}">My files</a></li>{% endif %}
+        </ul>
+      </nav>
+      <nav class="col-6 col-md-4" aria-label="Footer legal navigation">
+        <h2 class="footer-heading">Information and legal</h2>
+        <ul class="list-unstyled mb-0 d-grid gap-1">
+          {% for label, url in info_links %}<li><a href="{{ url }}">{{ label }}</a></li>{% endfor %}
+          {% for label, url in legal_links %}<li><a href="{{ url }}">{{ label }}</a></li>{% endfor %}
+          <li><a href="{% url 'health-live' %}" rel="nofollow" title="Machine-readable service status (JSON)">Service status</a></li>
+        </ul>
+      </nav>
     </div>
-    <nav class="d-flex flex-wrap gap-3 align-items-start" aria-label="Footer navigation">
-      <a href="{% url 'firmwares:browse' %}">Firmware catalogue</a>
-      <a href="{% url 'firmwares:brand_list' %}">Brands</a>
-      <a href="{% url 'firmwares:flashing_tools' %}">Tools</a>
-      <a href="{% url 'blog:post_list' %}">Journal</a>
-      <a href="{% url 'tags:list' %}">Topics</a>
-      <a href="{% url 'health-live' %}">Service status</a>
-    </nav>
   </div>
 </footer>

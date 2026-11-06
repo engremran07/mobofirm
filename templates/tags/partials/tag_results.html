@@ -1,0 +1,16 @@
+{# Context: tags (page of public tags with live_count), page_obj, q, tag_settings. #}
+{% if tags %}
+  <h2 class="visually-hidden">All topics</h2>
+  <ul class="tag-grid">
+    {% for tag in tags %}
+      <li class="tag-card">
+        <a class="tag-card__link stretched-link" href="{% url 'tags:detail' slug=tag.slug %}"><i data-lucide="hash" class="icon" aria-hidden="true"></i>{{ tag.name }}</a>
+        {% if tag.description %}<p class="tag-card__desc">{{ tag.description|truncatechars:90 }}</p>{% endif %}
+        {% if tag_settings.show_tag_usage %}<p class="tag-card__count numeric">{{ tag.live_count }} article{{ tag.live_count|pluralize }}</p>{% endif %}
+      </li>
+    {% endfor %}
+  </ul>
+  {% include "components/pagination.html" with page_obj=page_obj label="Topic pages" hx_target="#tag-results" %}
+{% else %}
+  {% include "components/empty_state.html" with title="No topics found" message="Try a different search term." %}
+{% endif %}

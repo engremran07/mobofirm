@@ -12,10 +12,15 @@ import functools
 import logging
 from collections.abc import Callable
 
+from allauth.account.models import EmailAddress
 from django.contrib import messages
+from django.db import DatabaseError
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
+
+from apps.users.models import CustomUser
 
 logger = logging.getLogger(__name__)
 
@@ -52,39 +57,29 @@ def email_verification_required(
             user = request.user
 
             # Must be authenticated
-            if not user.is_authenticated:
+            if not isinstance(user, CustomUser) or not user.is_authenticated:
                 return redirect("account_login")
 
             # Social login users are already verified by OAuth provider
-            signup_method = getattr(user, "signup_method", None)
-            if signup_method == "social":
+            if user.signup_method == "social":
                 return func(request, *args, **kwargs)
 
             # Check if email is verified
-            email_verified_at = getattr(user, "email_verified_at", None)
-            if email_verified_at is not None:
+            if user.email_verified_at is not None:
                 return func(request, *args, **kwargs)
 
             # Also check allauth EmailAddress model
             try:
-                from allauth.account.models import EmailAddress
-
                 email_obj = EmailAddress.objects.filter(
-                    user=user, email=getattr(user, "email", ""), verified=True
+                    user=user, email=user.email, verified=True
                 ).first()
                 if email_obj:
                     # Update user's email_verified_at if not set
-                    if (
-                        hasattr(user, "email_verified_at")
-                        and getattr(user, "email_verified_at", None) is None
-                    ):
-                        from django.utils import timezone
-
-                        user.email_verified_at = timezone.now()  # type: ignore[attr-defined]
-                        user.save(update_fields=["email_verified_at"])  # type: ignore[call-arg]
+                    user.email_verified_at = timezone.now()
+                    user.save(update_fields=["email_verified_at"])
                     return func(request, *args, **kwargs)
-            except Exception as e:
-                logger.warning(f"Failed to check EmailAddress: {e}")
+            except DatabaseError:
+                logger.warning("Failed to check EmailAddress", exc_info=True)
 
             # User needs to verify email
             msg = message or _("Please verify your email address before continuing.")

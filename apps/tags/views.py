@@ -2,235 +2,285 @@ from __future__ import annotations
 
 from difflib import SequenceMatcher
 
+from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
 from django.core.paginator import Paginator
-from django.db.models import Q
-from django.http import Http404, HttpRequest, HttpResponse, JsonResponse
-from django.shortcuts import get_object_or_404, render
-from django.template.loader import render_to_string
-from django.utils import timezone
-from django.views.decorators.http import require_GET, require_POST
+from django.db import transaction
+from django.db.models import Count, Q
+from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
-from apps.blog.models import Post, PostStatus
-from apps.core.app_service import AppService
+from apps.blog import selectors as blog_selectors
+from apps.blog.models import Post
+from apps.tags.api import get_settings as tag_settings
+from apps.tags.models import Tag
+from apps.tags.models_keyword import KeywordSuggestion
+from apps.tags.selectors import public_tags, tag_cloud, with_live_post_counts
+from apps.tags.services import automation, heuristics
+from apps.users.services.rate_limit import allow_action
 
-from . import services
-from .models import Tag
+TAGS_PER_PAGE = 36
+POSTS_PER_PAGE = 12
+MAX_DUPLICATE_SCAN = 300
 
 
-def _get_tag_settings() -> dict:
+def _require_tag_staff(user) -> None:
+    if not (
+        user.is_authenticated and user.is_staff and user.has_perm("tags.change_tag")
+    ):
+        raise PermissionDenied("Tag management permission is required.")
+
+
+def _bounded_float(raw: str | None, default: float, low: float, high: float) -> float:
     try:
-        tags_api = AppService.get("tags")
-        if tags_api and hasattr(tags_api, "get_settings"):
-            return tags_api.get_settings()
-    except Exception:  # noqa: S110
-        pass
-    return {
-        "allow_public_suggestions": True,
-        "enable_ai_suggestions": True,
-        "show_tag_usage": True,
-    }
+        return min(high, max(low, float(raw))) if raw else default
+    except ValueError:
+        return default
+
+
+def _bounded_int(raw: str | None, default: int, low: int, high: int) -> int:
+    try:
+        return min(high, max(low, int(raw))) if raw else default
+    except ValueError:
+        return default
+
+
+def similar_pairs(threshold: float, limit: int) -> list[dict]:
+    """Near-duplicate tag pairs among the most used tags (bounded O(n²) scan)."""
+    tags = list(
+        Tag.objects.filter(
+            is_active=True, is_deleted=False, merge_into__isnull=True
+        ).order_by("-usage_count", "name")[:MAX_DUPLICATE_SCAN]
+    )
+    pairs: list[dict] = []
+    for index, first in enumerate(tags):
+        for second in tags[index + 1 :]:
+            similarity = max(
+                SequenceMatcher(
+                    None, first.normalized_name, second.normalized_name
+                ).ratio(),
+                _jaccard(first.normalized_name, second.normalized_name),
+            )
+            if similarity >= threshold:
+                pairs.append(
+                    {
+                        "score": round(similarity, 2),
+                        "a": first.name,
+                        "a_slug": first.slug,
+                        "b": second.name,
+                        "b_slug": second.slug,
+                    }
+                )
+    pairs.sort(key=lambda pair: pair["score"], reverse=True)
+    return pairs[:limit]
+
+
+def _jaccard(a: str, b: str) -> float:
+    first, second = set(a.lower().split()), set(b.lower().split())
+    if not first or not second:
+        return 0.0
+    return len(first & second) / len(first | second)
 
 
 @require_GET
-def search(request):
-    """
-    Tag autocomplete/search endpoint.
-    """
-    q = request.GET.get("q", "").strip()
-    qs = Tag.objects.filter(is_active=True, is_curated=True, is_deleted=False)
-    if q:
-        qs = qs.filter(
-            Q(name__icontains=q)
-            | Q(normalized_name__icontains=q)
-            | Q(synonyms_text__icontains=q)
+def search(request: HttpRequest) -> JsonResponse:
+    """Autocomplete over public tags."""
+    query = request.GET.get("q", "").strip()[:80]
+    tags = public_tags()
+    if query:
+        tags = tags.filter(
+            Q(name__icontains=query)
+            | Q(normalized_name__icontains=query)
+            | Q(synonyms_text__icontains=query)
         )
-    qs = qs.order_by("-usage_count", "name")[:20]
     items = [
         {
-            "name": t.name,
-            "slug": t.slug,
-            "usage_count": t.usage_count,
-            "synonyms": t.synonyms,
-            "description": t.description,
-            "is_curated": t.is_curated,
+            "name": tag.name,
+            "slug": tag.slug,
+            "usage_count": tag.usage_count,
+            "synonyms": tag.synonyms,
+            "description": tag.description,
+            "is_curated": tag.is_curated,
         }
-        for t in qs
+        for tag in tags.order_by("-usage_count", "name")[:20]
     ]
     return JsonResponse({"items": items})
 
 
 @require_GET
 def tag_list(request: HttpRequest) -> HttpResponse:
-    tags = Tag.objects.filter(
-        is_active=True, is_curated=True, is_deleted=False
-    ).order_by("-usage_count", "name")
-    return render(
-        request,
-        "tags/list.html",
-        {"tags": tags, "tag_settings": _get_tag_settings()},
+    query = request.GET.get("q", "").strip()[:80]
+    tags = with_live_post_counts(public_tags())
+    if query:
+        tags = tags.filter(
+            Q(name__icontains=query)
+            | Q(normalized_name__icontains=query)
+            | Q(synonyms_text__icontains=query)
+        )
+    page_obj = Paginator(tags.order_by("-live_count", "name"), TAGS_PER_PAGE).get_page(
+        request.GET.get("page") or 1
     )
+    context = {
+        "tags": page_obj,
+        "page_obj": page_obj,
+        "q": query,
+        "cloud": tag_cloud(24),
+        "tag_settings": tag_settings(),
+    }
+    if request.headers.get("HX-Request"):
+        return render(request, "tags/partials/tag_results.html", context)
+    return render(request, "tags/list.html", context)
 
 
 @require_GET
 def tag_detail(request: HttpRequest, slug: str) -> HttpResponse:
-    tag = get_object_or_404(
-        Tag, slug=slug, is_curated=True, is_active=True, is_deleted=False
+    tag = get_object_or_404(public_tags(), slug=slug)
+    posts = blog_selectors.live_posts().filter(tags=tag).order_by("-published_at")
+    page_obj = Paginator(posts, POSTS_PER_PAGE).get_page(request.GET.get("page") or 1)
+    related_tags = list(
+        with_live_post_counts(public_tags().filter(posts__tags=tag).exclude(pk=tag.pk))
+        .filter(live_count__gt=0)
+        .order_by("-live_count", "name")[:12]
     )
-    now_ts = timezone.now()
-    posts = (
-        Post.objects.filter(
-            tags=tag, status=PostStatus.PUBLISHED, publish_at__lte=now_ts
-        )
-        .select_related("author", "category")
-        .prefetch_related("tags")
-        .order_by("-published_at")
-    )
-    paginator = Paginator(posts, 10)
-    page_obj = paginator.get_page(request.GET.get("page") or 1)
-    trending_tags = Tag.objects.filter(
-        is_active=True, is_curated=True, is_deleted=False
-    ).order_by("-usage_count")[:10]
-    latest = Post.objects.filter(
-        status=PostStatus.PUBLISHED, publish_at__lte=now_ts
-    ).order_by("-published_at")[:5]
-    trending_tags_html = render_to_string(
-        "components/tag_badges.html", {"tags": trending_tags}
-    )
-    latest_widget_html = render_to_string(
-        "blog/partials/latest_widget.html", {"posts": latest}
-    )
-    return render(
-        request,
-        "tags/detail.html",
-        {
-            "tag": tag,
-            "posts": page_obj.object_list,
-            "page_obj": page_obj,
-            "trending_tags_html": trending_tags_html,
-            "latest_widget_html": latest_widget_html,
-            "tag_settings": _get_tag_settings(),
-        },
-    )
+    context = {
+        "tag": tag,
+        "cards": blog_selectors.build_cards(page_obj.object_list),
+        "page_obj": page_obj,
+        "related_tags": related_tags,
+        "latest_posts": blog_selectors.build_cards(blog_selectors.latest_posts(4)),
+        "cloud": tag_cloud(16),
+        "live_count": page_obj.paginator.count,
+        "tag_settings": tag_settings(),
+    }
+    if request.headers.get("HX-Request"):
+        return render(request, "tags/partials/tag_posts.html", context)
+    return render(request, "tags/detail.html", context)
 
 
 @login_required
+@require_GET
 def manage_tags(request: HttpRequest) -> HttpResponse:
-    if not (
-        getattr(request.user, "is_staff", False)
-        or getattr(request.user, "is_superuser", False)
-    ):
-        raise Http404
-    top_tags = Tag.objects.filter(is_active=True, is_deleted=False).order_by(
-        "-usage_count", "name"
-    )[:50]
-    curated = Tag.objects.filter(is_curated=True, is_deleted=False).order_by("name")[
-        :50
-    ]
+    _require_tag_staff(request.user)
+    suggestions = Tag.objects.filter(
+        is_curated=False, is_deleted=False, merge_into__isnull=True, ai_suggested=True
+    ).order_by("-created_at")[:50]
+    top_tags = with_live_post_counts(
+        Tag.objects.filter(is_active=True, is_deleted=False, merge_into__isnull=True)
+    ).order_by("-live_count", "name")[:50]
+    totals = Tag.objects.filter(is_deleted=False).aggregate(
+        total=Count("pk"),
+        curated=Count("pk", filter=Q(is_curated=True)),
+        pending=Count("pk", filter=Q(is_curated=False, ai_suggested=True)),
+    )
     return render(
         request,
         "tags/manage.html",
         {
+            "suggestions": suggestions,
             "top_tags": top_tags,
-            "curated_tags": curated,
-            "tag_settings": _get_tag_settings(),
+            "totals": totals,
+            "tag_settings": tag_settings(),
         },
     )
 
 
 @login_required
 @require_POST
-def merge_tags(request: HttpRequest) -> JsonResponse:
-    """
-    Simple admin/staff merge: expects source_slug -> target_slug, reassign posts, delete source.
-    """
-    if not (
-        getattr(request.user, "is_staff", False)
-        or getattr(request.user, "is_superuser", False)
-    ):
-        return JsonResponse({"ok": False, "error": "forbidden"}, status=403)
-    source_slug = request.POST.get("source")
-    target_slug = request.POST.get("target")
-    if not source_slug or not target_slug or source_slug == target_slug:
-        return JsonResponse({"ok": False, "error": "invalid"}, status=400)
+def review_tag(request: HttpRequest) -> HttpResponse:
+    """Staff approve or reject one suggested tag; approval attaches it to matching posts."""
+    _require_tag_staff(request.user)
+    tag = get_object_or_404(Tag, pk=request.POST.get("tag_id"), is_deleted=False)
+    decision = request.POST.get("decision")
+    if decision == "approve":
+        tag.is_curated = True
+        tag.is_active = True
+        tag.ai_suggested = False
+        tag.save(
+            update_fields=["is_curated", "is_active", "ai_suggested", "updated_at"]
+        )
+        from apps.tags.tasks import reattach_curated_tag
+
+        transaction.on_commit(lambda: reattach_curated_tag.delay(tag.pk))
+        messages.success(request, f"Approved “{tag.name}”.")
+    elif decision == "reject":
+        tag.is_curated = False
+        tag.is_active = False
+        tag.save(update_fields=["is_curated", "is_active", "updated_at"])
+        messages.success(request, f"Rejected “{tag.name}”.")
+    else:
+        messages.error(request, "Choose approve or reject.")
+    return redirect("tags:manage")
+
+
+@login_required
+@require_http_methods(["GET", "POST"])
+def merge_tags(request: HttpRequest) -> HttpResponse:
+    """Two-step merge: choose the tags, review the impact, then confirm."""
+    _require_tag_staff(request.user)
+    source_slug = (request.POST or request.GET).get("source", "").strip()
+    target_slug = (request.POST or request.GET).get("target", "").strip()
+    if not source_slug or not target_slug:
+        messages.error(request, "Choose both a source and a destination tag.")
+        return redirect("tags:manage")
+    if source_slug == target_slug:
+        messages.error(request, "A tag cannot be merged into itself.")
+        return redirect("tags:manage")
     source = get_object_or_404(Tag, slug=source_slug, is_deleted=False)
-    target = get_object_or_404(Tag, slug=target_slug, is_deleted=False)
-    posts = Post.objects.filter(tags=source)
-    for p in posts:
-        p.tags.add(target)
-        p.tags.remove(source)
-    source.is_deleted = True
-    source.is_active = False
-    source.save(update_fields=["is_deleted", "is_active"])
-    target.usage_count = target.posts.count()  # type: ignore[attr-defined]
-    target.save(update_fields=["usage_count"])
-    return JsonResponse({"ok": True, "merged": source_slug, "into": target_slug})
+    target = get_object_or_404(
+        Tag, slug=target_slug, is_deleted=False, merge_into__isnull=True
+    )
+    if request.method == "POST" and request.POST.get("confirm") == "1":
+        automation.merge_tags(source, target, user=request.user)
+        messages.success(request, f"Merged “{source.name}” into “{target.name}”.")
+        return redirect("tags:manage")
+    return render(
+        request,
+        "tags/merge_confirm.html",
+        {
+            "source": source,
+            "target": target,
+            "affected": Post.objects.filter(tags=source).count(),
+        },
+    )
 
 
 @require_GET
-def tag_analytics(request: HttpRequest) -> HttpResponse:
-    tags = Tag.objects.filter(
-        is_active=True, is_curated=True, is_deleted=False
-    ).order_by("-usage_count", "name")[:50]
-    data = [{"name": t.name, "usage": t.usage_count} for t in tags]
-    return JsonResponse({"items": data})
+def tag_analytics(request: HttpRequest) -> JsonResponse:
+    rows = (
+        with_live_post_counts(public_tags())
+        .order_by("-live_count", "name")
+        .values("name", "live_count")[:50]
+    )
+    return JsonResponse(
+        {"items": [{"name": row["name"], "usage": row["live_count"]} for row in rows]}
+    )
 
 
+@staff_member_required(login_url="admin:login")
 @require_GET
 def search_duplicates(request: HttpRequest) -> JsonResponse:
-    threshold = float(request.GET.get("threshold", "0.7") or "0.7")
-    limit = int(request.GET.get("limit", "200") or "200")
-    tags = list(Tag.objects.filter(is_active=True, is_curated=True, is_deleted=False))
-    pairs = []
-    for i, t1 in enumerate(tags):
-        for t2 in tags[i + 1 :]:
-            from difflib import SequenceMatcher
-
-            sim = max(
-                SequenceMatcher(None, t1.normalized_name, t2.normalized_name).ratio(),
-                services.jaccard(t1.normalized_name, t2.normalized_name),  # type: ignore[attr-defined]
-            )
-            if sim >= threshold:
-                pairs.append({"score": round(sim, 2), "a": t1.name, "b": t2.name})
-                if len(pairs) >= limit:
-                    break
-        if len(pairs) >= limit:
-            break
-    pairs.sort(key=lambda x: x["score"], reverse=True)
-    return JsonResponse({"items": pairs})
+    _require_tag_staff(request.user)
+    threshold = _bounded_float(request.GET.get("threshold"), 0.7, 0.3, 1.0)
+    limit = _bounded_int(request.GET.get("limit"), 200, 1, 500)
+    return JsonResponse({"items": similar_pairs(threshold, limit)})
 
 
 @staff_member_required(login_url="admin:login")
+@require_GET
 def duplicates_review(request: HttpRequest) -> HttpResponse:
-    threshold = 0.7
-    tags = list(Tag.objects.filter(is_active=True, is_deleted=False))
-    pairs = []
-    for i, t1 in enumerate(tags):
-        for t2 in tags[i + 1 :]:
-            sim = max(
-                SequenceMatcher(None, t1.normalized_name, t2.normalized_name).ratio(),
-                services.jaccard(t1.normalized_name, t2.normalized_name),  # type: ignore[attr-defined]
-            )
-            if sim >= threshold:
-                pairs.append(
-                    {
-                        "score": round(sim, 2),
-                        "a": t1.name,
-                        "a_slug": t1.slug,
-                        "b": t2.name,
-                        "b_slug": t2.slug,
-                    }
-                )
-    pairs.sort(key=lambda x: x["score"], reverse=True)
-    return render(request, "tags/admin_duplicates.html", {"pairs": pairs})
+    _require_tag_staff(request.user)
+    return render(
+        request, "tags/admin_duplicates.html", {"pairs": similar_pairs(0.7, 100)}
+    )
 
 
 @staff_member_required(login_url="admin:login")
+@require_GET
 def keyword_review(request: HttpRequest) -> HttpResponse:
-    suggestions = Tag.objects.none()
-    from .models_keyword import KeywordSuggestion
-
+    _require_tag_staff(request.user)
     suggestions = KeywordSuggestion.objects.select_related("provider").order_by(
         "-score", "-created_at"
     )[:200]
@@ -242,66 +292,50 @@ def keyword_review(request: HttpRequest) -> HttpResponse:
 @staff_member_required(login_url="admin:login")
 @require_POST
 def apply_keyword(request: HttpRequest) -> HttpResponse:
-    from .models_keyword import KeywordSuggestion
-
-    kw_id = request.POST.get("id")
-    kw = KeywordSuggestion.objects.filter(pk=kw_id).select_related("provider").first()
-    if not kw:
-        return JsonResponse({"ok": False, "error": "not_found"}, status=404)
-    name = kw.keyword[:64]
-    norm = services._normalize(name)  # type: ignore[attr-defined]
-    tag, created = Tag.objects.get_or_create(
-        normalized_name=norm,
-        defaults={
-            "name": name,
-            "slug": kw.keyword[:75],
-            "description": f"Imported from provider {kw.provider.name}",
-            "ai_suggested": True,
-        },
+    _require_tag_staff(request.user)
+    keyword = get_object_or_404(
+        KeywordSuggestion.objects.select_related("provider"), pk=request.POST.get("id")
     )
-    kw.delete()
-    return JsonResponse({"ok": True, "tag": tag.name, "created": created})
+    tag = automation.ensure_curated_tag(keyword.keyword)
+    if tag is None:
+        messages.error(request, "That keyword cannot be used as a tag name.")
+        return redirect("tags:keyword_review")
+    keyword.delete()
+    messages.success(request, f"Created tag “{tag.name}” from the suggestion.")
+    return redirect("tags:keyword_review")
 
 
 @login_required
 @require_POST
 def suggest_tags(request: HttpRequest) -> JsonResponse:
-    """
-    AI tag suggestions endpoint; requires explicit acceptance on the client.
-    """
-    text = (request.POST.get("text") or "").strip()
+    """Keyword suggestions for editors; nothing is attached or created here."""
+    if not tag_settings()["allow_public_suggestions"]:
+        return JsonResponse({"ok": False, "error": "suggestions_disabled"}, status=403)
+    text = (request.POST.get("text") or "").strip()[:8000]
     if not text:
         return JsonResponse({"ok": False, "error": "empty"}, status=400)
-    # Simple server-side throttle per user
-    cache_key = f"tags:suggest:{request.user.pk}"
-    try:
-        from django.core.cache import cache
-
-        count = cache.get(cache_key, 0)
-        if count and int(count) >= 5:
-            return JsonResponse({"ok": False, "error": "rate_limited"}, status=429)
-        cache.set(cache_key, int(count) + 1, timeout=60)
-    except Exception:  # noqa: S110
-        pass
-    try:
-        suggestions = services.suggest_tags_from_text(text, limit=10)  # type: ignore[attr-defined]
-        # Enrich with curated flag when existing
-        names = [s["normalized"] for s in suggestions if s.get("normalized")]
-        existing = {
-            t.normalized_name: t for t in Tag.objects.filter(normalized_name__in=names)
-        }
-        enriched = []
-        for s in suggestions:
-            norm = s.get("normalized")
-            tag_obj = existing.get(norm)
-            enriched.append(
+    if not allow_action(f"tags:suggest:{request.user.pk}", 5, window_seconds=60):
+        return JsonResponse({"ok": False, "error": "rate_limited"}, status=429)
+    suggestions = heuristics.suggest_tags_from_text(text, limit=10)
+    existing = {
+        tag.normalized_name: tag
+        for tag in Tag.objects.filter(
+            normalized_name__in=[item["normalized"] for item in suggestions]
+        )
+    }
+    return JsonResponse(
+        {
+            "ok": True,
+            "suggestions": [
                 {
-                    "name": s["name"],
-                    "slug": getattr(tag_obj, "slug", ""),
-                    "exists": bool(tag_obj),
-                    "is_curated": bool(getattr(tag_obj, "is_curated", False)),
+                    "name": item["name"],
+                    "slug": getattr(existing.get(item["normalized"]), "slug", ""),
+                    "exists": item["normalized"] in existing,
+                    "is_curated": bool(
+                        getattr(existing.get(item["normalized"]), "is_curated", False)
+                    ),
                 }
-            )
-        return JsonResponse({"ok": True, "suggestions": enriched})
-    except Exception:
-        return JsonResponse({"ok": False, "error": "failed"}, status=500)
+                for item in suggestions
+            ],
+        }
+    )

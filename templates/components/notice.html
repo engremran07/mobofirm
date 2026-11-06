@@ -1,0 +1,5 @@
+{# Contract: message (required); tone (warning or danger; accent when empty); icon (optional Lucide name registered in icons.js); heading (optional bold lead-in). Always a status region, never a modal. #}
+<div class="eco-notice{% if tone %} eco-notice--{{ tone }}{% endif %}" role="status">
+  {% if icon %}<i class="icon flex-shrink-0 mt-1" data-lucide="{{ icon }}" aria-hidden="true"></i>{% endif %}
+  <p class="mb-0">{% if heading %}<strong>{{ heading }}</strong> {% endif %}{{ message }}</p>
+</div>

@@ -4,7 +4,7 @@ This checkout is a runnable Django project. Django project configuration is in `
 
 ## Installed applications
 
-Verify `app/settings/base.py` for the live inventory. Current installed apps are `users`, `core`, `ads`, `devices`, `governance`, `blog`, `comments`, `firmwares`, and `tags`. Profile, following, and activity functionality is owned by `users`. Do not add dependencies on apps that are not installed.
+Verify `app/settings/base.py` for the live inventory. Current installed apps are `users`, `core`, `ads`, `devices`, `blog`, `comments`, `firmwares`, and `tags` plus the integrated `storage`, `seo`, `pages`, `shop`, `marketplace`, and `filemanager`. Profile, following, and activity functionality is owned by `users`. Do not add dependencies on apps that are not installed.
 
 ## Workspace workflows
 
@@ -71,9 +71,9 @@ Python formatting uses Ruff with the repository's `pyproject.toml` configuration
 
 ## Frontend, logs, and privacy
 
-Frontend implementation is approved using Django templates, Bootstrap, HTMX, Alpine's CSP-safe runtime, Lucide, and Vite. Shared tokens and static assets are centralized, with distinct public/admin shells. Do not introduce another framework or duplicate app-local assets. The final visual identity remains subject to product/design review; this does not block the approved functional frontend foundation.
+Frontend implementation is approved using Django templates, Bootstrap, HTMX, Alpine's CSP-safe runtime, Lucide, and Vite for the public site; the admin is django-unfold (`app/settings/unfold.py`, `apps/core/admin_base.py`, `tests/backend/admin/`, `tests/frontend/test_admin_unfold_browser.py`). Shared tokens and static assets are centralized, with distinct public/admin shells. Do not introduce another framework or duplicate app-local assets. The final visual identity remains subject to product/design review; this does not block the approved functional frontend foundation.
 
-Firmware catalog changes keep provenance/classification, package format, and file extension distinct. Seed commands must be deterministic and additive, guard against non-local databases, and never represent a missing binary as a downloadable firmware record. Firmware-to-blog automation creates versioned, reviewable content; only governance fulfillment may publish it. When benchmarking public firmware catalogs, document functional patterns and source URLs without copying protected text, branding, or binaries.
+Firmware catalog changes keep provenance/classification, package format, and file extension distinct. Seed commands must be deterministic and additive, guard against non-local databases, and never represent a missing binary as a downloadable firmware record (external records must point at an allowlisted HTTPS host). Firmware-to-blog automation maintains one automated post per brand, model and chipset and lists only staff-approved firmware. When benchmarking public firmware catalogs, document functional patterns and source URLs without copying protected text, branding, or binaries.
 
 Log outcomes and correlation IDs, not credentials, tokens, raw request bodies, or unnecessary personal/device data. Retention must be bounded, scoped, testable, and safe around active writes. Do not purge global environments, arbitrary folders, or logs without explicit scope and authorization.
 

@@ -3,8 +3,8 @@ Database Maintenance Command
 Runs VACUUM, ANALYZE, and other database optimization tasks
 """
 
-from django.core.management.base import BaseCommand
-from django.db import connection
+from django.core.management.base import BaseCommand, CommandError
+from django.db import DatabaseError, connection
 
 
 class Command(BaseCommand):
@@ -64,8 +64,8 @@ class Command(BaseCommand):
                         self.style.WARNING("VACUUM only supported on PostgreSQL")
                     )
 
-        except Exception as e:
-            self.stdout.write(self.style.ERROR(f"✗ VACUUM failed: {e}"))
+        except DatabaseError as e:
+            raise CommandError(f"VACUUM failed: {e}") from e
 
     def run_reindex(self):
         """Reindex all tables"""
@@ -84,8 +84,8 @@ class Command(BaseCommand):
                         self.style.WARNING("REINDEX only supported on PostgreSQL")
                     )
 
-        except Exception as e:
-            self.stdout.write(self.style.ERROR(f"✗ Reindex failed: {e}"))
+        except DatabaseError as e:
+            raise CommandError(f"Reindex failed: {e}") from e
 
     def show_stats(self):
         """Show database statistics"""
@@ -137,5 +137,5 @@ class Command(BaseCommand):
                 db_size = cursor.fetchone()[0]
                 self.stdout.write(f"\nTotal Database Size: {db_size}")
 
-        except Exception as e:
-            self.stdout.write(self.style.ERROR(f"✗ Stats failed: {e}"))
+        except DatabaseError as e:
+            raise CommandError(f"Stats failed: {e}") from e

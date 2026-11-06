@@ -16,24 +16,30 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import logging
 import uuid
+from typing import ClassVar
 
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, InvalidToken
 from django.conf import settings
 from django.contrib.sites.models import Site
-from django.db import models
+from django.core.exceptions import ImproperlyConfigured
+from django.db import DatabaseError, models
 from django.utils import timezone
+from django.utils.encoding import force_bytes
+
+logger = logging.getLogger(__name__)
 
 
 def get_encryption_key() -> bytes:
     key = getattr(settings, "SOCIAL_CREDENTIAL_ENCRYPTION_KEY", "")
     if key:
         return key.encode("ascii") if isinstance(key, str) else key
-    if not settings.SECRET_KEY:
-        raise RuntimeError(
-            "DJANGO_SECRET_KEY is required to encrypt social credentials."
+    if not settings.DEBUG:
+        raise ImproperlyConfigured(
+            "SOCIAL_CREDENTIAL_ENCRYPTION_KEY must be configured outside DEBUG."
         )
-    digest = hashlib.sha256(settings.SECRET_KEY.encode("utf-8")).digest()
+    digest = hashlib.sha256(force_bytes(settings.SECRET_KEY)).digest()
     return base64.urlsafe_b64encode(digest)
 
 
@@ -57,7 +63,7 @@ class SocialProviderConfig(models.Model):
     - LinkedIn OAuth 2.0
     """
 
-    PROVIDER_CHOICES = [
+    PROVIDER_CHOICES = (
         ("google", "Google OAuth 2.0"),
         ("facebook", "Facebook Login"),
         ("microsoft", "Microsoft Azure AD"),
@@ -67,21 +73,21 @@ class SocialProviderConfig(models.Model):
         ("linkedin", "LinkedIn"),
         ("discord", "Discord"),
         ("slack", "Slack"),
-    ]
+    )
 
-    AUTH_FLOW_CHOICES = [
+    AUTH_FLOW_CHOICES = (
         ("api_credentials", "API Credentials Only (Client ID + Secret)"),
         ("browser_oauth", "Browser OAuth Required"),
         ("service_account", "Service Account (JSON)"),
-    ]
+    )
 
-    STATUS_CHOICES = [
+    STATUS_CHOICES = (
         ("unconfigured", "Not Configured"),
         ("pending_oauth", "Pending OAuth Flow"),
         ("active", "Active"),
         ("error", "Configuration Error"),
         ("disabled", "Disabled"),
-    ]
+    )
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     provider = models.CharField(max_length=32, choices=PROVIDER_CHOICES, unique=True)
@@ -156,12 +162,12 @@ class SocialProviderConfig(models.Model):
     )
 
     class Meta:
-        ordering = ["provider"]
+        ordering: ClassVar[list[str]] = ["provider"]
         verbose_name = "Social Auth Provider"
         verbose_name_plural = "Social Auth Providers"
 
     def __str__(self):
-        return f"{self.get_provider_display()} ({self.status})"  # type: ignore[attr-defined]
+        return f"{self.get_provider_display()} ({self.status})"
 
     def _get_cipher(self):
         """Get Fernet cipher for encryption/decryption."""
@@ -181,7 +187,7 @@ class SocialProviderConfig(models.Model):
         cipher = self._get_cipher()
         try:
             return cipher.decrypt(bytes(self._client_id_encrypted)).decode()
-        except Exception:
+        except (InvalidToken, ValueError):
             return ""
 
     def set_client_secret(self, value: str):
@@ -197,7 +203,7 @@ class SocialProviderConfig(models.Model):
         cipher = self._get_cipher()
         try:
             return cipher.decrypt(bytes(self._client_secret_encrypted)).decode()
-        except Exception:
+        except (InvalidToken, ValueError):
             return ""
 
     def set_access_token(self, value: str):
@@ -213,7 +219,7 @@ class SocialProviderConfig(models.Model):
         cipher = self._get_cipher()
         try:
             return cipher.decrypt(bytes(self._access_token_encrypted)).decode()
-        except Exception:
+        except (InvalidToken, ValueError):
             return ""
 
     def set_refresh_token(self, value: str):
@@ -229,7 +235,7 @@ class SocialProviderConfig(models.Model):
         cipher = self._get_cipher()
         try:
             return cipher.decrypt(bytes(self._refresh_token_encrypted)).decode()
-        except Exception:
+        except (InvalidToken, ValueError):
             return ""
 
     def set_additional_config(self, config: dict):
@@ -247,7 +253,7 @@ class SocialProviderConfig(models.Model):
         try:
             data = cipher.decrypt(bytes(self._additional_config_encrypted))
             return json.loads(data.decode())
-        except Exception:
+        except (InvalidToken, ValueError):
             return {}
 
     # Helper properties
@@ -279,7 +285,7 @@ class SocialProviderConfig(models.Model):
             return (
                 f"{protocol}://{site.domain}/accounts/{self.provider}/login/callback/"
             )
-        except Exception:
+        except (Site.DoesNotExist, ImproperlyConfigured, DatabaseError):
             return f"/accounts/{self.provider}/login/callback/"
 
     @property
@@ -331,7 +337,7 @@ class SocialProviderConfig(models.Model):
             social_app, _created = SocialApp.objects.update_or_create(
                 provider=self.provider,
                 defaults={
-                    "name": self.display_name or self.get_provider_display(),  # type: ignore[attr-defined]
+                    "name": self.display_name or self.get_provider_display(),
                     "client_id": client_id,
                     "secret": client_secret,
                     "settings": self.settings_json or {},
@@ -344,7 +350,7 @@ class SocialProviderConfig(models.Model):
                 social_app.sites.add(current_site)
 
             return True
-        except Exception as e:
+        except (DatabaseError, ImproperlyConfigured, Site.DoesNotExist) as e:
             self.last_error = str(e)
             self.status = "error"
             self.save(update_fields=["last_error", "status", "updated_at"])
@@ -366,23 +372,16 @@ class SocialProviderConfig(models.Model):
                 return False, "Client Secret is not configured"
 
             # Provider-specific validation
-            if self.provider == "google":
-                # Google OAuth - check if client ID has correct format
-                if not client_id.endswith(".apps.googleusercontent.com"):
-                    return (
-                        False,
-                        "Google Client ID should end with .apps.googleusercontent.com",
-                    )
+            if self.provider == "google" and not client_id.endswith(
+                ".apps.googleusercontent.com"
+            ):
+                return (
+                    False,
+                    "Google Client ID should end with .apps.googleusercontent.com",
+                )
 
-            elif self.provider == "microsoft":
-                # Microsoft - check tenant ID
-                if not self.tenant_id:
-                    # Default to 'common' if not specified
-                    pass
-
-            elif self.provider == "apple":
-                if not self.team_id or not self.key_id:
-                    return False, "Apple Sign In requires Team ID and Key ID"
+            if self.provider == "apple" and (not self.team_id or not self.key_id):
+                return False, "Apple Sign In requires Team ID and Key ID"
 
             # Update test timestamp
             self.last_tested_at = timezone.now()
@@ -391,22 +390,24 @@ class SocialProviderConfig(models.Model):
 
             return True, "Credentials look valid. Test a real login to verify."
 
-        except Exception as e:
+        except (DatabaseError, ImproperlyConfigured) as e:
             self.last_error = str(e)
             self.save(update_fields=["last_error", "updated_at"])
             return False, str(e)
 
     def update_user_count(self):
         """Update the count of users who signed up via this provider."""
-        try:
-            from allauth.socialaccount.models import SocialAccount
+        from allauth.socialaccount.models import SocialAccount
 
+        try:
             self.users_count = SocialAccount.objects.filter(
                 provider=self.provider
             ).count()
             self.save(update_fields=["users_count", "updated_at"])
-        except Exception:  # noqa: S110
-            pass
+        except DatabaseError:
+            logger.warning(
+                "Could not update the user count for %s", self.provider, exc_info=True
+            )
 
 
 class SocialPostingAccount(models.Model):
@@ -422,7 +423,7 @@ class SocialPostingAccount(models.Model):
     - Pages, Groups, Channels, Profiles
     """
 
-    PLATFORM_CHOICES = [
+    PLATFORM_CHOICES = (
         ("facebook", "Facebook (Page/Group)"),
         ("twitter", "Twitter / X"),
         ("linkedin", "LinkedIn (Company/Personal)"),
@@ -435,17 +436,17 @@ class SocialPostingAccount(models.Model):
         ("tumblr", "Tumblr"),
         ("medium", "Medium"),
         ("threads", "Threads"),
-    ]
+    )
 
-    AUTH_TYPE_CHOICES = [
+    AUTH_TYPE_CHOICES = (
         ("oauth2", "OAuth 2.0 (Browser Login)"),
         ("api_token", "API Token / Bot Token"),
         ("webhook", "Webhook URL"),
         ("api_key_secret", "API Key + Secret"),
         ("access_token", "Access Token (Long-lived)"),
-    ]
+    )
 
-    DESTINATION_TYPE_CHOICES = [
+    DESTINATION_TYPE_CHOICES = (
         ("page", "Page"),
         ("group", "Group"),
         ("channel", "Channel"),
@@ -454,23 +455,23 @@ class SocialPostingAccount(models.Model):
         ("subreddit", "Subreddit"),
         ("board", "Board"),
         ("blog", "Blog"),
-    ]
+    )
 
-    STATUS_CHOICES = [
+    STATUS_CHOICES = (
         ("unconfigured", "Not Configured"),
         ("pending_oauth", "Pending OAuth Authorization"),
         ("active", "Active"),
         ("token_expired", "Token Expired - Re-auth Required"),
         ("error", "Configuration Error"),
         ("disabled", "Disabled"),
-    ]
+    )
 
     # Auto-posting content types
-    POST_CONTENT_CHOICES = [
+    POST_CONTENT_CHOICES = (
         ("blogs", "Blog Posts"),
         ("firmwares", "Firmware Uploads"),
         ("both", "Both Blogs & Firmwares"),
-    ]
+    )
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     platform = models.CharField(max_length=32, choices=PLATFORM_CHOICES)
@@ -594,14 +595,14 @@ class SocialPostingAccount(models.Model):
     )
 
     class Meta:
-        ordering = ["platform", "account_name"]
+        ordering: ClassVar[list[str]] = ["platform", "account_name"]
         verbose_name = "Social Posting Account"
         verbose_name_plural = "Social Posting Accounts"
         # Allow multiple accounts per platform (e.g., multiple Facebook pages)
-        unique_together = []
+        unique_together = ()
 
     def __str__(self):
-        return f"{self.get_platform_display()} - {self.account_name} ({self.status})"  # type: ignore[attr-defined]
+        return f"{self.get_platform_display()} - {self.account_name} ({self.status})"
 
     def _get_cipher(self):
         return Fernet(get_encryption_key())
@@ -620,7 +621,7 @@ class SocialPostingAccount(models.Model):
         cipher = self._get_cipher()
         try:
             return cipher.decrypt(bytes(self._api_key_encrypted)).decode()
-        except Exception:
+        except (InvalidToken, ValueError):
             return ""
 
     def set_api_secret(self, value: str):
@@ -636,7 +637,7 @@ class SocialPostingAccount(models.Model):
         cipher = self._get_cipher()
         try:
             return cipher.decrypt(bytes(self._api_secret_encrypted)).decode()
-        except Exception:
+        except (InvalidToken, ValueError):
             return ""
 
     def set_access_token(self, value: str):
@@ -652,7 +653,7 @@ class SocialPostingAccount(models.Model):
         cipher = self._get_cipher()
         try:
             return cipher.decrypt(bytes(self._access_token_encrypted)).decode()
-        except Exception:
+        except (InvalidToken, ValueError):
             return ""
 
     def set_refresh_token(self, value: str):
@@ -668,7 +669,7 @@ class SocialPostingAccount(models.Model):
         cipher = self._get_cipher()
         try:
             return cipher.decrypt(bytes(self._refresh_token_encrypted)).decode()
-        except Exception:
+        except (InvalidToken, ValueError):
             return ""
 
     def set_webhook_url(self, value: str):
@@ -684,7 +685,7 @@ class SocialPostingAccount(models.Model):
         cipher = self._get_cipher()
         try:
             return cipher.decrypt(bytes(self._webhook_url_encrypted)).decode()
-        except Exception:
+        except (InvalidToken, ValueError):
             return ""
 
     def set_bot_token(self, value: str):
@@ -700,7 +701,7 @@ class SocialPostingAccount(models.Model):
         cipher = self._get_cipher()
         try:
             return cipher.decrypt(bytes(self._bot_token_encrypted)).decode()
-        except Exception:
+        except (InvalidToken, ValueError):
             return ""
 
     def set_additional_config(self, config: dict):
@@ -718,7 +719,7 @@ class SocialPostingAccount(models.Model):
         try:
             data = cipher.decrypt(bytes(self._additional_config_encrypted))
             return json.loads(data.decode())
-        except Exception:
+        except (InvalidToken, ValueError):
             return {}
 
     @property
@@ -894,7 +895,7 @@ class SocialPostingAccount(models.Model):
             site = Site.objects.get_current()
             protocol = "https" if not settings.DEBUG else "http"
             return f"{protocol}://{site.domain}/admin/distribution/social-posting/oauth/callback/{self.platform}/"
-        except Exception:
+        except (Site.DoesNotExist, ImproperlyConfigured, DatabaseError):
             return f"/admin/distribution/social-posting/oauth/callback/{self.platform}/"
 
     def get_default_template(self) -> str:
@@ -995,7 +996,7 @@ class SocialPostingAccount(models.Model):
 
             return True, "Credentials look valid. Send a test post to verify."
 
-        except Exception as e:
+        except (DatabaseError, ImproperlyConfigured) as e:
             self.last_error = str(e)
             self.save(update_fields=["last_error", "updated_at"])
             return False, str(e)

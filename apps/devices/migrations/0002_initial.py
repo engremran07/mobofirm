@@ -8,12 +8,12 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
     initial = True
 
-    dependencies = [
+    dependencies = (
         ("devices", "0001_initial"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
-    ]
+    )
 
-    operations = [
+    operations = (
         migrations.AddField(
             model_name="device",
             name="user",
@@ -103,4 +103,4 @@ class Migration(migrations.Migration):
             model_name="userdevicequota",
             index=models.Index(fields=["user"], name="devices_use_user_id_a5e3ba_idx"),
         ),
-    ]
+    )

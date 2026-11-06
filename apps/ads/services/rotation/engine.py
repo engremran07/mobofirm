@@ -4,6 +4,8 @@ import logging
 import random
 from collections.abc import Iterable
 
+from django.db import DatabaseError
+
 from apps.ads.models import AdCreative, AdPlacement, AdsSettings, PlacementAssignment
 from apps.ads.services.targeting.engine import campaign_allowed, placement_allowed
 from apps.core.utils import feature_flags
@@ -19,7 +21,7 @@ def _aggressiveness_multiplier() -> int:
     """
     try:
         level = AdsSettings.get_solo().ad_aggressiveness_level
-    except Exception:
+    except DatabaseError:
         level = "balanced"
     if level == "minimal":
         return 1
@@ -52,7 +54,7 @@ def choose_creative(
     ad_settings = None
     try:
         ad_settings = AdsSettings.get_solo()
-    except Exception:
+    except DatabaseError:
         ad_settings = None
 
     # If consent for ads is not granted, do not serve personalized / paid campaigns
@@ -63,7 +65,7 @@ def choose_creative(
         t.strip() for t in (placement.allowed_types or "").split(",") if t.strip()
     }
     enabled_networks = bool(getattr(ad_settings, "ad_networks_enabled", False))
-    qs: Iterable[PlacementAssignment] = placement.assignments.filter(  # type: ignore[attr-defined]
+    qs: Iterable[PlacementAssignment] = placement.assignments.filter(
         is_enabled=True,
         is_active=True,
         creative__is_enabled=True,
@@ -76,7 +78,7 @@ def choose_creative(
         if allowed_types and creative.creative_type not in allowed_types:
             continue
         campaign = creative.campaign
-        if campaign and not campaign.is_live() and not campaign.locked:
+        if campaign and not campaign.is_live():
             continue
         if (
             campaign
@@ -91,7 +93,7 @@ def choose_creative(
     if not pool:
         log_event(logger, "warning", "ads.rotation.no_pool", placement=placement.slug)
         return None
-    choice = random.choice(pool)  # noqa: S311
+    choice = random.choice(pool)
     log_event(
         logger,
         "info",

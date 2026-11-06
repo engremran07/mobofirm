@@ -8,7 +8,7 @@ Provide a maintainable platform for managing mobile-device firmware information 
 
 ## Current capability evidence
 
-The installed Django apps implement portions of these domains: `users`, `devices`, `firmwares`, `ads`, `blog`, `comments`, `tags`, `governance`, and `core`. The route and data inventory is in `../03-architecture/architecture-overview.md` and `../04-backend/django-app-boundaries.md`.
+The installed Django apps implement portions of these domains: `users`, `devices`, `firmwares`, `ads`, `blog`, `comments`, `tags`, and `core` (plus the integrated storage, SEO, pages, shop, marketplace and file-manager apps). The route and data inventory is in `../03-architecture/architecture-overview.md` and `../04-backend/django-app-boundaries.md`.
 
 ## Product decisions still needed
 

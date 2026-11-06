@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from django.db import DatabaseError
+
 from apps.ads.models import AdsSettings, AffiliateLink, AffiliateSource
 
 
@@ -7,7 +9,7 @@ def affiliate_enabled() -> bool:
     try:
         ss = AdsSettings.get_solo()
         return bool(getattr(ss, "affiliate_enabled", False))
-    except Exception:
+    except DatabaseError:
         return False
 
 

@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="site-container py-4 py-lg-5">
+  {% url 'blog:post_list' as journal_url %}
+  {% if month %}
+    {% url 'blog:post_archive_year' year=year as year_url %}
+    {% include "components/breadcrumbs.html" with current=month_name parent_label=year parent_url=year_url grandparent_label="Journal" grandparent_url=journal_url %}
+  {% else %}
+    {% include "components/breadcrumbs.html" with current=year parent_label="Journal" parent_url=journal_url %}
+  {% endif %}
+  {% include "components/page_header.html" with eyebrow="Archive" title=month_name|default:year lead="Everything published in this period." %}
+  <nav class="hub-links" aria-label="Archive months">
+    <span class="hub-links__label">{{ year }}</span>
+    <ul>
+      {% for entry in months %}
+        <li><a href="{% url 'blog:post_archive_month' year=year month=entry.month %}"{% if entry.month == month %} aria-current="page"{% endif %}>{{ entry.name }} ({{ entry.total }})</a></li>
+      {% endfor %}
+    </ul>
+  </nav>
+  <div class="journal-layout">
+    <div class="journal-main">
+      {% if cards %}
+        <div class="post-grid">
+          {% for card in cards %}{% include "blog/partials/post_card.html" with card=card %}{% endfor %}
+        </div>
+        {% include "components/pagination.html" with page_obj=page_obj label="Archive pages" %}
+      {% else %}
+        {% include "components/empty_state.html" with title="Nothing published in this period" action_label="Back to the journal" action_url=journal_url %}
+      {% endif %}
+    </div>
+    {% include "blog/partials/sidebar.html" %}
+  </div>
+</div>
+{% endblock %}

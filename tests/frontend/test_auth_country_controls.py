@@ -11,6 +11,8 @@ from django.urls import reverse
 from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import sync_playwright
 
+from tests.frontend.browser_support import dismiss_dialogs
+
 
 @pytest.mark.django_db(transaction=True)
 def test_profile_country_search_suggestion_and_dark_select_colors(live_server):
@@ -28,6 +30,9 @@ def test_profile_country_search_suggestion_and_dark_select_colors(live_server):
     )
     django_client = Client()
     django_client.force_login(user, backend="django.contrib.auth.backends.ModelBackend")
+    session = django_client.session
+    session.pop("device_registration_prompt", None)
+    session.save()
     session_cookie = django_client.cookies[settings.SESSION_COOKIE_NAME].value
     browser_errors: list[str] = []
 
@@ -43,10 +48,7 @@ def test_profile_country_search_suggestion_and_dark_select_colors(live_server):
         page = browser.new_page(viewport={"width": 390, "height": 844})
         page.on("pageerror", lambda error: browser_errors.append(str(error)))
         native_dialogs: list[str] = []
-        page.on(
-            "dialog",
-            lambda dialog: (native_dialogs.append(dialog.type), dialog.dismiss()),
-        )
+        dismiss_dialogs(page, native_dialogs)
         page.context.add_cookies(
             [
                 {
@@ -58,7 +60,7 @@ def test_profile_country_search_suggestion_and_dark_select_colors(live_server):
         )
 
         with patch(
-            "apps.users.services.detect_country_from_ip",
+            "apps.users.services.detect_country",
             return_value="CA",
         ):
             page.goto(

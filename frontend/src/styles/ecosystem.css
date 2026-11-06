@@ -1,0 +1,536 @@
+/* Ecosystem surfaces: CMS pages, shop, marketplace, file manager and storage.
+   Tokens come from tokens.css; nothing here sets inline styles or colours. */
+
+/* ---- Shared small parts ---- */
+.eco-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.6rem;
+  border: 1px solid var(--mf-border);
+  border-radius: 999px;
+  background: var(--mf-surface-soft);
+  color: var(--mf-text-muted);
+  font-size: 0.78rem;
+  font-weight: 650;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.eco-pill--success {
+  color: var(--mf-success);
+  border-color: currentcolor;
+}
+
+.eco-pill--warning {
+  color: var(--mf-warning);
+  border-color: currentcolor;
+}
+
+.eco-pill--danger {
+  color: var(--mf-danger);
+  border-color: currentcolor;
+}
+
+.eco-pill--accent {
+  color: var(--mf-accent-strong);
+  border-color: currentcolor;
+}
+
+.eco-pill .icon,
+.eco-notice .icon {
+  width: 1em;
+  height: 1em;
+}
+
+.eco-notice {
+  display: flex;
+  gap: 0.65rem;
+  align-items: flex-start;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--mf-border);
+  border-left: 0.3rem solid var(--mf-accent);
+  border-radius: var(--mf-radius-sm);
+  background: var(--mf-surface);
+  color: var(--mf-text);
+}
+
+.eco-notice--warning {
+  border-left-color: var(--mf-warning);
+}
+
+.eco-notice--danger {
+  border-left-color: var(--mf-danger);
+}
+
+.eco-notice > :last-child {
+  margin-bottom: 0;
+}
+
+.eco-kv {
+  display: grid;
+  grid-template-columns: minmax(7rem, max-content) minmax(0, 1fr);
+  gap: 0.35rem 1rem;
+  margin: 0;
+}
+
+.eco-kv dt {
+  color: var(--mf-text-muted);
+  font-weight: 600;
+}
+
+.eco-kv dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.eco-meter {
+  display: block;
+  width: 100%;
+  height: 0.8rem;
+}
+
+.eco-meter::-webkit-meter-bar {
+  border: 1px solid var(--mf-border);
+  border-radius: 999px;
+  background: var(--mf-surface-soft);
+}
+
+.eco-meter::-webkit-meter-optimum-value {
+  border-radius: 999px;
+  background: var(--mf-accent);
+}
+
+.eco-meter::-webkit-meter-suboptimum-value {
+  border-radius: 999px;
+  background: var(--mf-warning);
+}
+
+.eco-meter::-webkit-meter-even-less-good-value {
+  border-radius: 999px;
+  background: var(--mf-danger);
+}
+
+.eco-meter::-moz-meter-bar {
+  background: var(--mf-accent);
+}
+
+.eco-meter:-moz-meter-sub-optimum::-moz-meter-bar {
+  background: var(--mf-warning);
+}
+
+.eco-meter:-moz-meter-sub-sub-optimum::-moz-meter-bar {
+  background: var(--mf-danger);
+}
+
+.eco-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 1rem;
+  color: var(--mf-text);
+  text-decoration: none;
+}
+
+.eco-tile:hover {
+  color: var(--mf-text);
+}
+
+.eco-tile__icon {
+  display: inline-grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: var(--mf-radius-sm);
+  background: var(--mf-surface-soft);
+  color: var(--mf-accent-strong);
+}
+
+.eco-tile__value {
+  font-size: 1.5rem;
+  font-weight: 750;
+  line-height: 1.1;
+}
+
+.eco-list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.eco-list > li {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* ---- CMS pages ---- */
+.eco-article {
+  display: grid;
+  gap: 2rem;
+  align-items: start;
+}
+
+@media (min-width: 62rem) {
+  .eco-article--toc {
+    grid-template-columns: minmax(0, 1fr) 16rem;
+  }
+
+  .eco-toc {
+    position: sticky;
+    top: 1.5rem;
+  }
+}
+
+.eco-prose {
+  max-width: var(--mf-reading-width);
+  min-width: 0;
+  font-size: 1.05rem;
+  line-height: 1.75;
+  overflow-wrap: anywhere;
+}
+
+.eco-prose h2,
+.eco-prose h3,
+.eco-prose h4 {
+  margin-top: 2rem;
+  margin-bottom: 0.75rem;
+  letter-spacing: -0.02em;
+  scroll-margin-top: 1.5rem;
+}
+
+.eco-prose h2 {
+  font-size: 1.55rem;
+}
+
+.eco-prose h3 {
+  font-size: 1.25rem;
+}
+
+.eco-prose ul,
+.eco-prose ol {
+  padding-left: 1.4rem;
+}
+
+.eco-prose li + li {
+  margin-top: 0.3rem;
+}
+
+.eco-prose blockquote {
+  margin: 1.25rem 0;
+  padding: 0.5rem 1rem;
+  border-left: 0.25rem solid var(--mf-accent);
+  background: var(--mf-surface);
+  color: var(--mf-text-muted);
+}
+
+.eco-prose table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+  border-collapse: collapse;
+}
+
+.eco-prose th,
+.eco-prose td {
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--mf-border);
+}
+
+.eco-prose img {
+  max-width: 100%;
+  height: auto;
+}
+
+.eco-prose pre,
+.eco-prose code {
+  overflow-wrap: normal;
+}
+
+.eco-prose pre {
+  overflow-x: auto;
+  padding: 1rem;
+  border: 1px solid var(--mf-border);
+  border-radius: var(--mf-radius-sm);
+  background: var(--mf-surface-soft);
+}
+
+.eco-toc {
+  padding: 1rem;
+  border: 1px solid var(--mf-border);
+  border-radius: var(--mf-radius-md);
+  background: var(--mf-surface);
+}
+
+.eco-toc ol {
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+}
+
+.eco-toc li {
+  padding: 0.2rem 0;
+}
+
+.eco-toc li.is-nested {
+  padding-left: 0.9rem;
+  font-size: 0.92rem;
+}
+
+.eco-toc a {
+  text-decoration: none;
+}
+
+.eco-toc a:hover {
+  text-decoration: underline;
+}
+
+/* ---- Shop ---- */
+.eco-tier {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1.25rem;
+}
+
+.eco-tier--featured {
+  border-color: var(--mf-accent);
+  box-shadow: var(--mf-shadow);
+}
+
+.eco-price {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 760;
+  letter-spacing: -0.03em;
+}
+
+.eco-price small {
+  color: var(--mf-text-muted);
+  font-size: 0.85rem;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.eco-feature-list {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.eco-feature-list li {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-start;
+}
+
+.eco-feature-list .icon {
+  flex: none;
+  margin-top: 0.2rem;
+  color: var(--mf-success);
+}
+
+.eco-feature-list .is-off {
+  color: var(--mf-text-muted);
+}
+
+.eco-feature-list .is-off .icon {
+  color: var(--mf-text-muted);
+}
+
+/* ---- Marketplace ---- */
+.eco-listing {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1.1rem;
+}
+
+.eco-listing__price {
+  margin-top: auto;
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.min-w-0 {
+  min-width: 0;
+}
+
+.d-grid.min-w-0 {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+/* ---- File manager ---- */
+.fm-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+@media (min-width: 62rem) {
+  .fm-layout {
+    grid-template-columns: 15rem minmax(0, 1fr);
+  }
+}
+
+.fm-sidebar {
+  display: grid;
+  gap: 1rem;
+}
+
+.fm-nav {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fm-nav a {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding: 0.45rem 0.65rem;
+  border-radius: var(--mf-radius-sm);
+  color: var(--mf-text);
+  text-decoration: none;
+}
+
+.fm-nav a:hover,
+.fm-nav a[aria-current] {
+  background: var(--mf-surface-soft);
+}
+
+.fm-dropzone {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: center;
+  padding: 1.5rem 1rem;
+  border: 2px dashed var(--mf-border);
+  border-radius: var(--mf-radius-md);
+  background: var(--mf-surface);
+  text-align: center;
+  transition: border-color var(--mf-transition), background-color var(--mf-transition);
+}
+
+.fm-dropzone input[type="file"] {
+  max-width: 100%;
+}
+
+.fm-dropzone.is-dragging {
+  border-color: var(--mf-accent);
+  background: var(--mf-surface-soft);
+}
+
+.fm-dropzone__progress {
+  width: 100%;
+  max-width: 24rem;
+}
+
+.fm-dropzone__progress[hidden] {
+  display: none;
+}
+
+.fm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr));
+  gap: 1rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fm-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 0.75rem;
+}
+
+.fm-thumb {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border-radius: var(--mf-radius-sm);
+  background: var(--mf-surface-soft);
+  color: var(--mf-text-muted);
+}
+
+.fm-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.fm-thumb .icon {
+  width: 2.5rem;
+  height: 2.5rem;
+}
+
+.fm-name {
+  margin: 0;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.fm-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: auto;
+}
+
+.fm-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fm-folder {
+  display: flex;
+  gap: 0.6rem;
+  align-items: center;
+  min-width: 0;
+  padding: 0.75rem 1rem;
+  color: var(--mf-text);
+  text-decoration: none;
+}
+
+.fm-folder .icon {
+  flex: none;
+  color: var(--mf-accent-strong);
+}
+
+.fm-folder span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.fm-share-link {
+  font-family: var(--bs-font-monospace);
+  font-size: 0.85rem;
+}
+
+/* ---- Storage status ---- */
+.eco-health-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+  gap: 1rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fm-dropzone {
+    transition: none;
+  }
+}

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="site-container py-4 py-lg-5">
+  {% include "components/breadcrumbs.html" with current="Pages" %}
+  {% include "components/page_header.html" with title="Help and information" eyebrow="Resources" lead="Guides, policies and answers about using the firmware library." %}
+
+  {% if pages %}
+    <ul class="row g-3 list-unstyled">
+      {% for page in pages %}
+        <li class="col-12 col-md-6 col-xl-4">
+          <a class="surface-card surface-card--interactive p-3 d-block text-decoration-none" href="{{ page.get_absolute_url }}">
+            <h2 class="h5">{{ page.title }}</h2>
+            <p class="small muted mb-2">{{ page.effective_seo_description|truncatechars:140 }}</p>
+            <span class="small muted">Updated {{ page.updated_at|date:"j M Y" }}</span>
+          </a>
+        </li>
+      {% endfor %}
+    </ul>
+  {% else %}
+    {% include "components/empty_state.html" with title="No pages are published yet" message="Information pages appear here once they are published." %}
+  {% endif %}
+
+  {% include "pages/partials/home_widgets.html" %}
+</div>
+{% endblock %}

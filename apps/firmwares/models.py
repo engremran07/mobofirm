@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 import uuid
+from importlib import import_module
+from typing import ClassVar
 
 from django.conf import settings
+from django.contrib.contenttypes.fields import GenericForeignKey
+from django.contrib.contenttypes.models import ContentType
 from django.db import models
+from django.db.models import Q
 
-from .constants import MAIN_CATEGORIES
+from .constants import MAIN_CATEGORIES, RESERVED_BRAND_SLUGS
 
 
 class FirmwarePackageFormat(models.TextChoices):
@@ -20,6 +25,28 @@ class FirmwarePackageFormat(models.TextChoices):
     OTHER = "other", "Other package format"
 
 
+class FirmwareSourceType(models.TextChoices):
+    STORED = "stored", "Stored file"
+    EXTERNAL = "external", "External download"
+
+
+def source_constraint(name: str) -> models.CheckConstraint:
+    """Exactly one of a stored file path or an external URL describes the file."""
+    return models.CheckConstraint(
+        condition=(
+            Q(source_type=FirmwareSourceType.STORED)
+            & ~Q(stored_file_path="")
+            & Q(external_url="")
+        )
+        | (
+            Q(source_type=FirmwareSourceType.EXTERNAL)
+            & Q(stored_file_path="")
+            & ~Q(external_url="")
+        ),
+        name=name,
+    )
+
+
 class Timestamped(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -28,7 +55,26 @@ class Timestamped(models.Model):
         abstract = True
 
 
+def _validate_source_fields(instance) -> None:
+    """Admin/form validation of the stored-vs-external source fields."""
+    from django.core.exceptions import ValidationError
+
+    from .sources import validate_external_url
+
+    if instance.source_type == FirmwareSourceType.EXTERNAL:
+        if instance.stored_file_path:
+            raise ValidationError("External firmware must not have a stored file path.")
+        instance.external_url = validate_external_url(instance.external_url)
+    else:
+        if instance.external_url:
+            raise ValidationError("Stored firmware must not have an external URL.")
+        if not instance.stored_file_path:
+            raise ValidationError("Stored firmware requires a stored file path.")
+
+
 class Brand(Timestamped):
+    firmware_count: int  # public firmware total, set by catalogue listing views
+
     name = models.CharField(max_length=128, unique=True)
     slug = models.SlugField(max_length=140, unique=True)
     logo_url = models.URLField(
@@ -53,16 +99,64 @@ class Brand(Timestamped):
     )
 
     class Meta:
-        ordering = ["name"]
+        ordering: ClassVar[list[str]] = ["name"]
         verbose_name = "Brand"
         verbose_name_plural = "Brands"
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.CheckConstraint(
+                condition=~Q(slug__in=RESERVED_BRAND_SLUGS),
+                name="brand_slug_not_reserved",
+            )
+        ]
 
     def __str__(self):
         return self.name
 
 
+class Chipset(Timestamped):
+    """A system-on-chip that models and variants reference and tools support."""
+
+    vendor = models.CharField(max_length=64, help_text="e.g. MediaTek, Qualcomm")
+    family = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        help_text="Product family, e.g. Helio, Snapdragon, Dimensity",
+    )
+    name = models.CharField(max_length=128, help_text="e.g. Helio G100 Ultra")
+    slug = models.SlugField(max_length=160, unique=True)
+    aliases = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Alternate spellings that resolve to this chipset",
+    )
+    description = models.TextField(blank=True, default="")
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ["vendor", "name"]
+        verbose_name = "Chipset"
+        verbose_name_plural = "Chipsets"
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=["vendor", "name"], name="chipset_vendor_name_unique"
+            )
+        ]
+        indexes: ClassVar[list[models.Index]] = [
+            models.Index(fields=["vendor", "family"], name="chipset_vendor_idx")
+        ]
+
+    def __str__(self) -> str:
+        return self.display_name
+
+    @property
+    def display_name(self) -> str:
+        return f"{self.vendor} {self.name}".strip()
+
+
 class Model(Timestamped):
-    MODEL_STATUS_CHOICES = [
+    firmware_count: int  # public firmware total, set by catalogue listing views
+
+    MODEL_STATUS_CHOICES: ClassVar[list[tuple[str, str]]] = [
         ("available", "Available"),
         ("discontinued", "Discontinued"),
         ("upcoming", "Upcoming"),
@@ -122,6 +216,14 @@ class Model(Timestamped):
         blank=True,
         default="",
         help_text="Primary chipset (e.g., Mediatek Helio G100 Ultra (6nm))",
+    )
+    chipset_ref = models.ForeignKey(
+        Chipset,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="models",
+        help_text="Normalised chipset record resolved from the chipset text",
     )
     cpu = models.CharField(
         max_length=256,
@@ -213,7 +315,7 @@ class Model(Timestamped):
 
     class Meta:
         unique_together = ("brand", "slug")
-        indexes = [
+        indexes: ClassVar[list[models.Index]] = [
             models.Index(fields=["brand", "is_active"], name="model_brand_active_idx"),
             models.Index(fields=["model_code"], name="model_code_idx"),
             models.Index(fields=["codename"], name="model_codename_idx"),
@@ -225,6 +327,12 @@ class Model(Timestamped):
         if self.codename:
             return f"{self.brand}/{self.name} ({self.codename})"
         return f"{self.brand}/{self.name}"
+
+    def save(self, *args, **kwargs):
+        from .chipsets import sync_chipset_reference
+
+        kwargs = sync_chipset_reference(self, kwargs)
+        super().save(*args, **kwargs)
 
     @property
     def display_name(self) -> str:
@@ -274,6 +382,14 @@ class Variant(Timestamped):
         default="",
         help_text="Primary chipset (e.g., Snapdragon 8 Gen 2)",
     )
+    chipset_ref = models.ForeignKey(
+        Chipset,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="variants",
+        help_text="Normalised chipset record resolved from the chipset text",
+    )
 
     # Specifications
     ram_options = models.JSONField(
@@ -294,7 +410,7 @@ class Variant(Timestamped):
 
     class Meta:
         unique_together = ("model", "slug")
-        indexes = [
+        indexes: ClassVar[list[models.Index]] = [
             models.Index(
                 fields=["model", "is_active"], name="variant_model_active_idx"
             ),
@@ -304,6 +420,12 @@ class Variant(Timestamped):
 
     def __str__(self):
         return f"{self.model}/{self.name}"
+
+    def save(self, *args, **kwargs):
+        from .chipsets import sync_chipset_reference
+
+        kwargs = sync_chipset_reference(self, kwargs)
+        super().save(*args, **kwargs)
 
 
 class BrandSchema(Timestamped):
@@ -359,7 +481,7 @@ class SchemaUpdateProposal(Timestamped):
     class Meta:
         verbose_name = "Schema Update Proposal"
         verbose_name_plural = "Schema Update Proposals"
-        ordering = ["-created_at"]
+        ordering: ClassVar[list[str]] = ["-created_at"]
 
     def __str__(self) -> str:
         return f"Proposal #{self.pk} for {self.brand}"
@@ -396,7 +518,7 @@ class BrandCreationRequest(Timestamped):
     class Meta:
         verbose_name = "Brand Creation Request"
         verbose_name_plural = "Brand Creation Requests"
-        ordering = ["-created_at"]
+        ordering: ClassVar[list[str]] = ["-created_at"]
 
     def __str__(self) -> str:
         return f"Brand Request: {self.name}"
@@ -436,7 +558,7 @@ class ModelCreationRequest(Timestamped):
     class Meta:
         verbose_name = "Model Creation Request"
         verbose_name_plural = "Model Creation Requests"
-        ordering = ["-created_at"]
+        ordering: ClassVar[list[str]] = ["-created_at"]
 
     def __str__(self) -> str:
         return f"Model Request: {self.name}"
@@ -476,7 +598,7 @@ class VariantCreationRequest(Timestamped):
     class Meta:
         verbose_name = "Variant Creation Request"
         verbose_name_plural = "Variant Creation Requests"
-        ordering = ["-created_at"]
+        ordering: ClassVar[list[str]] = ["-created_at"]
 
     def __str__(self) -> str:
         return f"Variant Request: {self.name}"
@@ -485,7 +607,15 @@ class VariantCreationRequest(Timestamped):
 class PendingFirmware(Timestamped):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     original_file_name = models.CharField(max_length=255)
-    stored_file_path = models.CharField(max_length=500)
+    source_type = models.CharField(
+        max_length=16,
+        choices=FirmwareSourceType.choices,
+        default=FirmwareSourceType.STORED,
+    )
+    stored_file_path = models.CharField(max_length=500, blank=True, default="")
+    external_url = models.URLField(max_length=500, blank=True, default="")
+    file_size = models.BigIntegerField(null=True, blank=True)
+    file_hash = models.CharField(max_length=256, blank=True, default="")
     uploader = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -516,10 +646,10 @@ class PendingFirmware(Timestamped):
     ai_brand = models.CharField(max_length=128, blank=True, default="")
     ai_model = models.CharField(max_length=128, blank=True, default="")
     ai_variant = models.CharField(max_length=128, blank=True, default="")
-    ai_category = models.CharField(  # noqa: DJ001
+    ai_category = models.CharField(
         max_length=32, choices=MAIN_CATEGORIES, blank=True, null=True
     )
-    ai_subtype = models.CharField(max_length=64, blank=True, null=True)  # noqa: DJ001
+    ai_subtype = models.CharField(max_length=64, blank=True, null=True)
     package_format = models.CharField(
         max_length=32,
         choices=FirmwarePackageFormat.choices,
@@ -551,16 +681,58 @@ class PendingFirmware(Timestamped):
     )
     admin_notes = models.TextField(blank=True, default="")
     category_locked = models.BooleanField(default=False)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="pending_firmwares_reviewed",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    routed_category = models.CharField(max_length=32, blank=True, default="")
+    routed_object_id = models.UUIDField(null=True, blank=True)
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ["-created_at"]
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            source_constraint("pending_fw_exactly_one_source"),
+        ]
+        indexes: ClassVar[list[models.Index]] = [
+            models.Index(
+                fields=["admin_decision", "-created_at"], name="pending_fw_decision_idx"
+            )
+        ]
 
     def __str__(self):
         return f"{self.original_file_name} ({self.id})"
 
+    def clean(self):
+        super().clean()
+        _validate_source_fields(self)
+
 
 class BaseFirmware(Timestamped):
+    objects = models.Manager()
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     original_file_name = models.CharField(max_length=255, help_text="Original filename")
+    source_type = models.CharField(
+        max_length=16,
+        choices=FirmwareSourceType.choices,
+        default=FirmwareSourceType.STORED,
+        help_text="Whether the file is stored locally or hosted externally",
+    )
     stored_file_path = models.CharField(
-        max_length=500, help_text="Storage path in system"
+        max_length=500,
+        blank=True,
+        default="",
+        help_text="Storage path in system (stored files only)",
+    )
+    external_url = models.URLField(
+        max_length=500,
+        blank=True,
+        default="",
+        help_text="HTTPS download URL on an allowed host (external files only)",
     )
     uploader = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -624,8 +796,18 @@ class BaseFirmware(Timestamped):
     view_count = models.PositiveIntegerField(default=0, help_text="Total views")
 
     # Status
-    is_verified = models.BooleanField(default=False, help_text="Verified by admin")
+    is_verified = models.BooleanField(
+        default=False, help_text="Reviewed and approved for public listing"
+    )
     is_active = models.BooleanField(default=True, help_text="Available for download")
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="%(class)s_reviewed",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         abstract = True
@@ -635,10 +817,34 @@ class BaseFirmware(Timestamped):
         model = self.model.name if self.model else "Unknown"
         return f"{brand}/{model} ({self.original_file_name})"
 
+    @property
+    def is_external(self) -> bool:
+        return self.source_type == FirmwareSourceType.EXTERNAL
 
-class OfficialFirmware(BaseFirmware):  # noqa: DJ008
+    def clean(self):
+        super().clean()
+        _validate_source_fields(self)
+
+    @property
+    def download_tokens(self):
+        return DownloadToken.objects.for_firmware(self)
+
+
+def _firmware_meta_constraints(prefix: str) -> list:
+    return [
+        source_constraint(f"{prefix}_exactly_one_source"),
+        models.UniqueConstraint(
+            fields=["variant", "original_file_name", "build_number"],
+            condition=Q(variant__isnull=False),
+            name=f"{prefix}_variant_file_build_unique",
+        ),
+    ]
+
+
+class OfficialFirmware(BaseFirmware):
     class Meta:
-        indexes = [
+        constraints = _firmware_meta_constraints("off")
+        indexes: ClassVar[list[models.Index]] = [
             models.Index(
                 fields=["brand", "model", "variant"], name="off_hierarchy_idx"
             ),
@@ -649,11 +855,12 @@ class OfficialFirmware(BaseFirmware):  # noqa: DJ008
         ]
 
 
-class EngineeringFirmware(BaseFirmware):  # noqa: DJ008
+class EngineeringFirmware(BaseFirmware):
     subtype = models.CharField(max_length=128, blank=True, default="")
 
     class Meta:
-        indexes = [
+        constraints = _firmware_meta_constraints("eng")
+        indexes: ClassVar[list[models.Index]] = [
             models.Index(
                 fields=["brand", "model", "variant"], name="eng_hierarchy_idx"
             ),
@@ -664,9 +871,10 @@ class EngineeringFirmware(BaseFirmware):  # noqa: DJ008
         ]
 
 
-class ReadbackFirmware(BaseFirmware):  # noqa: DJ008
+class ReadbackFirmware(BaseFirmware):
     class Meta:
-        indexes = [
+        constraints = _firmware_meta_constraints("rb")
+        indexes: ClassVar[list[models.Index]] = [
             models.Index(fields=["brand", "model", "variant"], name="rb_hierarchy_idx"),
             models.Index(fields=["chipset"], name="rb_chipset_idx"),
             models.Index(fields=["android_version"], name="rb_android_idx"),
@@ -675,11 +883,12 @@ class ReadbackFirmware(BaseFirmware):  # noqa: DJ008
         ]
 
 
-class ModifiedFirmware(BaseFirmware):  # noqa: DJ008
+class ModifiedFirmware(BaseFirmware):
     subtype = models.CharField(max_length=64, blank=True, default="")
 
     class Meta:
-        indexes = [
+        constraints = _firmware_meta_constraints("mod")
+        indexes: ClassVar[list[models.Index]] = [
             models.Index(
                 fields=["brand", "model", "variant"], name="mod_hierarchy_idx"
             ),
@@ -690,11 +899,12 @@ class ModifiedFirmware(BaseFirmware):  # noqa: DJ008
         ]
 
 
-class OtherFirmware(BaseFirmware):  # noqa: DJ008
+class OtherFirmware(BaseFirmware):
     subtype = models.CharField(max_length=128, blank=True, default="")
 
     class Meta:
-        indexes = [
+        constraints = _firmware_meta_constraints("oth")
+        indexes: ClassVar[list[models.Index]] = [
             models.Index(
                 fields=["brand", "model", "variant"], name="oth_hierarchy_idx"
             ),
@@ -705,11 +915,12 @@ class OtherFirmware(BaseFirmware):  # noqa: DJ008
         ]
 
 
-class UnclassifiedFirmware(BaseFirmware):  # noqa: DJ008
+class UnclassifiedFirmware(BaseFirmware):
     reason = models.CharField(max_length=128, blank=True, default="")
 
     class Meta:
-        indexes = [
+        constraints = _firmware_meta_constraints("unc")
+        indexes: ClassVar[list[models.Index]] = [
             models.Index(
                 fields=["brand", "model", "variant"], name="unc_hierarchy_idx"
             ),
@@ -721,12 +932,7 @@ class UnclassifiedFirmware(BaseFirmware):  # noqa: DJ008
 
 
 # Import tracking models so Django registers them in app registry
-from .tracking_models import (  # noqa: F401, E402
-    FirmwareDownloadAttempt,
-    FirmwareRequest,
-    FirmwareStats,
-    FirmwareView,
-)
+import_module(".tracking_models", __package__)
 
 # =============================================================================
 # GSMArena device synchronization
@@ -803,7 +1009,7 @@ class GSMArenaDevice(models.Model):
         db_table = "gsmarena_sync_gsmarenadevice"
         verbose_name = "GSMArena Device"
         verbose_name_plural = "GSMArena Devices"
-        ordering = ["brand", "model_name"]
+        ordering: ClassVar[list[str]] = ["brand", "model_name"]
 
     def __str__(self) -> str:
         return f"{self.brand} {self.model_name}"
@@ -879,10 +1085,10 @@ class VerificationReport(models.Model):
         db_table = "fw_verification_verificationreport"
         verbose_name = "Verification Report"
         verbose_name_plural = "Verification Reports"
-        ordering = ["-created_at"]
+        ordering: ClassVar[list[str]] = ["-created_at"]
 
     def __str__(self) -> str:
-        return f"Report#{self.pk} {self.verdict} for FW#{self.firmware_id}"  # type: ignore[attr-defined]
+        return f"Report#{self.pk} {self.verdict} for FW#{self.firmware_id}"
 
 
 class TestResult(models.Model):
@@ -938,7 +1144,7 @@ class VerificationCredit(models.Model):
         verbose_name_plural = "Verification Credits"
 
     def __str__(self) -> str:
-        return f"{self.user} +{self.credits_earned} for FW#{self.firmware_id}"  # type: ignore[attr-defined]
+        return f"{self.user} +{self.credits_earned} for FW#{self.firmware_id}"
 
 
 # =============================================================================
@@ -952,8 +1158,16 @@ def _gen_token() -> str:
     return secrets.token_urlsafe(32)
 
 
+class DownloadTokenQuerySet(models.QuerySet):
+    def for_firmware(self, firmware):
+        content_type = ContentType.objects.get_for_model(
+            firmware, for_concrete_model=False
+        )
+        return self.filter(content_type=content_type, object_id=firmware.pk)
+
+
 class DownloadToken(models.Model):
-    """Single-use signed token that grants access to a firmware download."""
+    """Single-use signed token that grants access to one firmware download."""
 
     class Status(models.TextChoices):
         ACTIVE = "active", "Active"
@@ -961,11 +1175,11 @@ class DownloadToken(models.Model):
         EXPIRED = "expired", "Expired"
         REVOKED = "revoked", "Revoked"
 
-    firmware = models.ForeignKey(
-        OfficialFirmware,
-        on_delete=models.CASCADE,
-        related_name="download_tokens",
+    content_type = models.ForeignKey(
+        ContentType, on_delete=models.CASCADE, related_name="+"
     )
+    object_id = models.UUIDField()
+    firmware = GenericForeignKey("content_type", "object_id")
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         null=True,
@@ -986,13 +1200,19 @@ class DownloadToken(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     used_at = models.DateTimeField(null=True, blank=True)
 
+    objects = DownloadTokenQuerySet.as_manager()
+
     class Meta:
         db_table = "download_links_downloadtoken"
         verbose_name = "Download Token"
         verbose_name_plural = "Download Tokens"
-        ordering = ["-created_at"]
-        indexes = [
+        ordering: ClassVar[list[str]] = ["-created_at"]
+        indexes: ClassVar[list[models.Index]] = [
             models.Index(fields=["token", "status"], name="dl_token_status_idx"),
+            models.Index(
+                fields=["content_type", "object_id", "status"],
+                name="dl_token_firmware_idx",
+            ),
         ]
 
     def __str__(self) -> str:
@@ -1032,17 +1252,24 @@ class DownloadSession(models.Model):
         db_table = "download_links_downloadsession"
         verbose_name = "Download Session"
         verbose_name_plural = "Download Sessions"
-        ordering = ["-started_at"]
+        ordering: ClassVar[list[str]] = ["-started_at"]
 
     def __str__(self) -> str:
         return f"Session #{self.pk} [{self.status}]"
 
 
 class AdGateLog(models.Model):
-    """Records ad-gate completion for a session."""
+    """Records ad-gate completion for a download token."""
 
+    token = models.ForeignKey(
+        DownloadToken, on_delete=models.CASCADE, related_name="ad_logs"
+    )
     session = models.ForeignKey(
-        DownloadSession, on_delete=models.CASCADE, related_name="ad_logs"
+        DownloadSession,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="ad_logs",
     )
     ad_type = models.CharField(
         max_length=20,
@@ -1064,10 +1291,10 @@ class AdGateLog(models.Model):
         db_table = "download_links_adgatelog"
         verbose_name = "Ad Gate Log"
         verbose_name_plural = "Ad Gate Logs"
-        ordering = ["-created_at"]
+        ordering: ClassVar[list[str]] = ["-created_at"]
 
     def __str__(self) -> str:
-        return f"AdGate {self.ad_type} session #{self.session_id}"  # type: ignore[attr-defined]
+        return f"AdGate {self.ad_type} token #{self.token_id}"
 
 
 class HotlinkBlock(models.Model):
@@ -1084,7 +1311,7 @@ class HotlinkBlock(models.Model):
         db_table = "download_links_hotlinkblock"
         verbose_name = "Hotlink Block"
         verbose_name_plural = "Hotlink Blocks"
-        ordering = ["-blocked_count"]
+        ordering: ClassVar[list[str]] = ["-blocked_count"]
 
     def __str__(self) -> str:
         return f"{self.domain} [{'active' if self.is_active else 'inactive'}]"
@@ -1115,7 +1342,7 @@ class ChangelogEntry(models.Model):
         db_table = "changelog_changelogentry"
         verbose_name = "Changelog Entry"
         verbose_name_plural = "Changelog Entries"
-        ordering = ["-release_date"]
+        ordering: ClassVar[list[str]] = ["-release_date"]
 
     def __str__(self) -> str:
         return f"v{self.version}: {self.title}"
@@ -1143,7 +1370,7 @@ class ReleaseNote(models.Model):
         db_table = "changelog_releasenote"
         verbose_name = "Release Note"
         verbose_name_plural = "Release Notes"
-        ordering = ["-id"]
+        ordering: ClassVar[list[str]] = ["-id"]
 
     def __str__(self) -> str:
         return f"[{self.category}] {self.description[:60]}"
@@ -1170,10 +1397,12 @@ class FirmwareDiff(models.Model):
         db_table = "changelog_firmwarediff"
         verbose_name = "Firmware Diff"
         verbose_name_plural = "Firmware Diffs"
-        unique_together = [("old_firmware", "new_firmware")]
+        unique_together: ClassVar[list[tuple[str, str]]] = [
+            ("old_firmware", "new_firmware")
+        ]
 
     def __str__(self) -> str:
-        return f"Diff FW#{self.old_firmware_id} → FW#{self.new_firmware_id}"  # type: ignore[attr-defined]
+        return f"Diff FW#{self.old_firmware_id} → FW#{self.new_firmware_id}"
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1195,7 +1424,7 @@ class FlashingToolCategory(Timestamped):
         db_table = "firmwares_flashingtoolcategory"
         verbose_name = "Flashing Tool Category"
         verbose_name_plural = "Flashing Tool Categories"
-        ordering = ["sort_order", "name"]
+        ordering: ClassVar[list[str]] = ["sort_order", "name"]
 
     def __str__(self) -> str:
         return self.name
@@ -1244,10 +1473,11 @@ class FlashingTool(Timestamped):
     supported_brands = models.ManyToManyField(
         Brand, blank=True, related_name="flashing_tools"
     )
-    supported_chipsets = models.JSONField(
-        default=list,
+    chipsets = models.ManyToManyField(
+        Chipset,
         blank=True,
-        help_text='List of chipset names, e.g. ["MediaTek", "Qualcomm", "Spreadtrum"]',
+        related_name="flashing_tools",
+        help_text="Chipsets this tool can flash",
     )
     download_url = models.URLField(max_length=500, blank=True, default="")
     official_url = models.URLField(max_length=500, blank=True, default="")
@@ -1273,10 +1503,10 @@ class FlashingTool(Timestamped):
         db_table = "firmwares_flashingtool"
         verbose_name = "Flashing Tool"
         verbose_name_plural = "Flashing Tools"
-        ordering = ["-is_featured", "name"]
+        ordering: ClassVar[list[str]] = ["-is_featured", "name"]
 
     def __str__(self) -> str:
-        return f"{self.name} ({self.get_tool_type_display()})"  # type: ignore[attr-defined]
+        return f"{self.name} ({self.get_tool_type_display()})"
 
 
 class FlashingGuideTemplate(Timestamped):
@@ -1337,7 +1567,7 @@ class FlashingGuideTemplate(Timestamped):
     )
     submit_for_review = models.BooleanField(
         default=False,
-        help_text="Automatically submit generated guides for governance review; never publish directly.",
+        help_text="Automatically submit generated guides for editorial review; never publish directly.",
     )
     is_active = models.BooleanField(default=True)
     generated_count = models.PositiveIntegerField(
@@ -1348,11 +1578,11 @@ class FlashingGuideTemplate(Timestamped):
         db_table = "firmwares_flashingguidetemplate"
         verbose_name = "Flashing Guide Template"
         verbose_name_plural = "Flashing Guide Templates"
-        ordering = ["guide_type", "brand__name"]
+        ordering: ClassVar[list[str]] = ["guide_type", "brand__name"]
 
     def __str__(self) -> str:
-        brand_str = self.brand.name if self.brand_id else "Generic"  # type: ignore[attr-defined]
-        return f"{self.get_guide_type_display()} — {brand_str}"  # type: ignore[attr-defined]
+        brand_str = self.brand.name if self.brand else "Generic"
+        return f"{self.get_guide_type_display()} — {brand_str}"
 
 
 class GeneratedFlashingGuide(Timestamped):
@@ -1386,9 +1616,102 @@ class GeneratedFlashingGuide(Timestamped):
         db_table = "firmwares_generatedflashingguide"
         verbose_name = "Generated Flashing Guide"
         verbose_name_plural = "Generated Flashing Guides"
-        ordering = ["-created_at"]
-        unique_together = [("template", "brand", "model")]
+        ordering: ClassVar[list[str]] = ["-created_at"]
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=["template", "brand", "model"],
+                condition=Q(model__isnull=False),
+                name="generated_guide_unique_model",
+            ),
+            models.UniqueConstraint(
+                fields=["template", "brand"],
+                condition=Q(model__isnull=True),
+                name="generated_guide_unique_brand",
+            ),
+        ]
 
     def __str__(self) -> str:
-        model_str = self.model.name if self.model_id else "All"  # type: ignore[attr-defined]
-        return f"Guide: {self.brand.name} {model_str}"  # type: ignore[attr-defined]
+        model_str = self.model.name if self.model else "All"
+        return f"Guide: {self.brand.name} {model_str}"
+
+
+class AutomatedBlogLink(Timestamped):
+    """Maps a brand, model or chipset to its single automated blog post."""
+
+    class Kind(models.TextChoices):
+        BRAND = "brand", "Brand"
+        MODEL = "model", "Model"
+        CHIPSET = "chipset", "Chipset"
+
+    kind = models.CharField(max_length=16, choices=Kind.choices)
+    brand = models.ForeignKey(
+        Brand,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="blog_links",
+    )
+    model = models.ForeignKey(
+        Model,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="blog_links",
+    )
+    chipset = models.ForeignKey(
+        Chipset,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="blog_links",
+    )
+    post = models.OneToOneField(
+        "blog.Post",
+        on_delete=models.CASCADE,
+        related_name="firmware_automation_link",
+    )
+    content_hash = models.CharField(max_length=64, blank=True, default="")
+    last_synced_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Automated Blog Link"
+        verbose_name_plural = "Automated Blog Links"
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=["brand"], condition=Q(kind="brand"), name="auto_blog_one_brand"
+            ),
+            models.UniqueConstraint(
+                fields=["model"], condition=Q(kind="model"), name="auto_blog_one_model"
+            ),
+            models.UniqueConstraint(
+                fields=["chipset"],
+                condition=Q(kind="chipset"),
+                name="auto_blog_one_chipset",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    Q(
+                        kind="brand",
+                        brand__isnull=False,
+                        model__isnull=True,
+                        chipset__isnull=True,
+                    )
+                    | Q(
+                        kind="model",
+                        model__isnull=False,
+                        brand__isnull=True,
+                        chipset__isnull=True,
+                    )
+                    | Q(
+                        kind="chipset",
+                        chipset__isnull=False,
+                        brand__isnull=True,
+                        model__isnull=True,
+                    )
+                ),
+                name="auto_blog_target_matches_kind",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.kind} blog link → post #{self.post_id}"

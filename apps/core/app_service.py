@@ -1,16 +1,16 @@
-from __future__ import annotations
-
 """
 apps.core.app_service
 ---------------------
 Simple dynamic app registry + resolver for micro-module APIs.
 """
 
-import importlib  # noqa: E402
-import logging  # noqa: E402
-from typing import Any  # noqa: E402
+from __future__ import annotations
 
-from apps.core.models import AppRegistry  # noqa: E402
+import importlib
+import logging
+from typing import Any, ClassVar
+
+from apps.core.models import AppRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,7 @@ class AppService:
     Resolve per-app API modules dynamically, respecting AppRegistry.enable flags.
     """
 
-    _cache: dict[str, Any] = {}
+    _cache: ClassVar[dict[str, Any]] = {}
 
     @classmethod
     def get(cls, app_label: str) -> Any | None:
@@ -28,16 +28,11 @@ class AppService:
         if not key:
             return None
 
-        # Disabled in registry? return None
-        try:
-            reg = AppRegistry.get_solo()
-            enabled = getattr(reg, f"{key}_enabled", True)
-            # For device identity, prefer fail-open so device enforcement/registration still runs.
-            if key != "devices" and enabled is False:
-                return None
-        except Exception:  # noqa: S110
-            # Fail-open if registry missing
-            pass
+        # Disabled in registry? return None. Device identity stays available so
+        # registration/enforcement cannot be switched off by the generic flag.
+        enabled = getattr(AppRegistry.get_solo(), f"{key}_enabled", True)
+        if key != "devices" and enabled is False:
+            return None
 
         if key in cls._cache:
             return cls._cache[key]
@@ -53,15 +48,16 @@ class AppService:
                 return module
             except ModuleNotFoundError:
                 continue
-            except Exception as exc:
-                # Log and fail-safe to avoid crashing callers when optional apps misbehave.
-                logger.error(
-                    "AppService failed",
-                    extra={"path": mod_path, "func": "__all__", "error": str(exc)},
-                    exc_info=True,
-                )
+            except ImportError:
+                logger.exception("AppService failed to import %s", mod_path)
                 return None
         return None
 
 
-__all__ = ["AppService"]
+def app_enabled(app_label: str) -> bool:
+    """Return whether the AppRegistry flag for an installed app is switched on."""
+    registry = AppRegistry.get_solo()
+    return bool(getattr(registry, f"{app_label.strip().lower()}_enabled", True))
+
+
+__all__ = ["AppService", "app_enabled"]

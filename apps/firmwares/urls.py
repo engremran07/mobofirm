@@ -20,6 +20,8 @@ from .public_views import (
     api_search_autocomplete,
     brand_detail,
     brand_list,
+    chipset_detail,
+    chipset_list,
     firmware_ad_gate_complete,
     firmware_browse,
     firmware_detail,
@@ -32,6 +34,7 @@ from .public_views import (
 )
 from .views import (
     BrandCreationRequestViewSet,
+    ExternalFirmwareSubmitView,
     FirmwareUploadView,
     ModelCreationRequestViewSet,
     ModerationView,
@@ -39,7 +42,7 @@ from .views import (
     SchemaUpdateProposalViewSet,
     VariantCreationRequestViewSet,
 )
-from .views_flashing import flashing_tool_detail, flashing_tools
+from .views_flashing import flashing_guides, flashing_tool_detail, flashing_tools
 
 app_name = "firmwares"
 
@@ -76,11 +79,20 @@ urlpatterns = [
     path("search/", universal_search, name="universal_search"),
     path("browse/", firmware_browse, name="browse"),
     path("brands/", brand_list, name="brand_list"),
-    # Flashing tools catalog
+    # Chipset catalogue
+    path("chipsets/", chipset_list, name="chipset_list"),
+    path("chipsets/<slug:slug>/", chipset_detail, name="chipset_detail"),
+    # Flashing tools and guides hub
     path("tools/", flashing_tools, name="flashing_tools"),
     path("tools/<slug:slug>/", flashing_tool_detail, name="flashing_tool_detail"),
+    path("guides/", flashing_guides, name="flashing_guides"),
     # Admin/upload endpoints
     path("upload/", FirmwareUploadView.as_view(), name="firmware-upload"),
+    path(
+        "upload/external/",
+        ExternalFirmwareSubmitView.as_view(),
+        name="firmware-upload-external",
+    ),
     path("moderate/<uuid:pk>/", ModerationView.as_view(), name="firmware-moderate"),
     # Auto-fill endpoints (autofill/ prefix avoids brand slug collision)
     path("autofill/brand/<int:brand_id>/", autofill_brand, name="autofill-brand"),
@@ -111,8 +123,8 @@ urlpatterns = [
         firmware_ad_gate_complete,
         name="firmware_ad_gate_complete",
     ),
-    # FINDING-0019: Serve locally stored firmware files via HMAC-signed URL.
-    # URL: /firmwares/serve/<uuid:firmware_id>/?token=<tok>&sig=<hmac>
+    # Serve locally stored firmware via a short-lived, token-bound signed link.
+    # URL: /firmwares/serve/<uuid:firmware_id>/?token=<tok>&exp=<ts>&sig=<hmac>
     path(
         "serve/<uuid:firmware_id>/",
         serve_local_file,

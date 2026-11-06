@@ -1,0 +1,5 @@
+{# Contract: order. Status pill with the matching tone. #}
+{% if order.status == "paid" %}{% include "components/status_pill.html" with label=order.get_status_display tone="success" icon="check" %}
+{% elif order.status == "pending" %}{% include "components/status_pill.html" with label=order.get_status_display tone="warning" icon="clock" %}
+{% elif order.status == "cancelled" %}{% include "components/status_pill.html" with label=order.get_status_display tone="danger" icon="x" %}
+{% else %}{% include "components/status_pill.html" with label=order.get_status_display %}{% endif %}

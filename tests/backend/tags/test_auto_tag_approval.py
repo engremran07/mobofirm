@@ -6,7 +6,6 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.blog.models import Post, PostStatus
-from apps.governance.models import ReviewCase
 from apps.tags.models import Tag
 from apps.tags.services.heuristics import auto_tag_post
 
@@ -29,15 +28,14 @@ class AutomatedTagApprovalTests(TestCase):
         "apps.tags.services.heuristics.suggest_tags_from_text",
         return_value=[{"name": "Unreviewed topic", "normalized": "unreviewed topic"}],
     )
-    def test_unreviewed_tag_is_submitted_but_not_attached(self, _suggest):
+    def test_unreviewed_tag_awaits_staff_approval_and_is_not_attached(self, _suggest):
         attached = auto_tag_post(self.post, allow_create=True)
         tag = Tag.objects.get(slug="unreviewed-topic")
 
         self.assertEqual(attached, [])
         self.assertFalse(self.post.tags.exists())
         self.assertFalse(tag.is_curated)
-        case = ReviewCase.objects.get(object_id=str(tag.pk))
-        self.assertEqual(case.status, ReviewCase.Status.SUBMITTED)
+        self.assertTrue(tag.ai_suggested)
 
     @patch(
         "apps.tags.services.heuristics.suggest_tags_from_text",

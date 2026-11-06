@@ -1,0 +1,9 @@
+{# Contract: field (BoundField with a CheckboxSelectMultiple or RadioSelect widget); describedby (space-separated ids, optional). #}
+<div class="mf-choice-group" role="group" aria-labelledby="{{ field.auto_id }}_label"{% if describedby %} aria-describedby="{{ describedby }}"{% endif %}>
+  {% for choice in field.subwidgets %}
+    <div class="form-check">
+      <input class="form-check-input{% if field.errors %} is-invalid{% endif %}" type="{{ choice.data.type }}" name="{{ choice.data.name }}" value="{{ choice.data.value }}" id="{{ choice.id_for_label }}"{% if choice.data.selected %} checked{% endif %}>
+      <label class="form-check-label" for="{{ choice.id_for_label }}">{{ choice.choice_label }}</label>
+    </div>
+  {% endfor %}
+</div>

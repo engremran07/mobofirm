@@ -121,7 +121,9 @@ class Command(BaseCommand):
         self.stdout.write(self.style.SUCCESS("=== URL Smoke Test ===\n"))
 
         # Import the root URL conf
-        urlconf = __import__(settings.ROOT_URLCONF, fromlist=["urlpatterns"])
+        urlconf = __import__(
+            getattr(settings, "ROOT_URLCONF", "app.urls"), fromlist=["urlpatterns"]
+        )
         all_patterns = _extract_url_patterns(urlconf)
 
         self.stdout.write(f"Found {len(all_patterns)} total URL patterns\n")
@@ -161,8 +163,8 @@ class Command(BaseCommand):
             f"{skipped_filter} filtered)\n"
         )
 
-        # Initialize test client
-        client = Client()
+        # Collect view errors from the response instead of re-raising them
+        client = Client(raise_request_exception=False)
 
         # Results tracking
         results: dict[str, list[dict[str, Any]]] = {
@@ -179,59 +181,58 @@ class Command(BaseCommand):
             if verbose:
                 self.stdout.write(f"  Testing: {url} ... ", ending="")
 
-            try:
-                response = client.get(url, follow=False)
-                status = response.status_code
-                content = ""
+            response = client.get(url, follow=False)
+            status = response.status_code
+            content = ""
 
-                if hasattr(response, "content"):
-                    try:
-                        content = response.content.decode("utf-8", errors="replace")
-                    except Exception:
-                        content = ""
-
-                entry = {
-                    "url": url,
-                    "status": status,
-                }
-
-                if status < 300:
-                    results["success"].append(entry)
-                    # Check for missing template variables
-                    if "!!! MISSING:" in content:
-                        missing = re.findall(r"!!! MISSING: (\S+?) !!!", content)
-                        for var in missing:
-                            missing_vars.append(f"{url} -> {var}")
-                        entry["missing_vars"] = missing
-                    if verbose:
-                        self.stdout.write(self.style.SUCCESS(f"{status} OK"))
-                elif status < 400:
-                    location = response.get("Location", "?")
-                    entry["redirect_to"] = location
-                    results["redirect"].append(entry)
-                    if verbose:
-                        self.stdout.write(self.style.WARNING(f"{status} -> {location}"))
-                elif status < 500:
-                    results["client_error"].append(entry)
-                    if verbose:
-                        self.stdout.write(self.style.WARNING(f"{status}"))
-                else:
-                    results["server_error"].append(entry)
-                    if verbose:
-                        self.stdout.write(self.style.ERROR(f"{status} SERVER ERROR"))
-
-                if fail_fast and status >= 500:
-                    self.stdout.write(
-                        self.style.ERROR(f"\nFail-fast: stopping at {url} ({status})")
-                    )
-                    break
-
-            except Exception as exc:
+            exc_info = getattr(response, "exc_info", None)
+            if exc_info:
+                exc = exc_info[1]
                 results["exception"].append({"url": url, "error": str(exc)})
                 if verbose:
                     self.stdout.write(self.style.ERROR(f"EXCEPTION: {exc}"))
                 if fail_fast:
                     break
+                continue
+
+            if hasattr(response, "content"):
+                content = response.content.decode("utf-8", errors="replace")
+
+            entry = {
+                "url": url,
+                "status": status,
+            }
+
+            if status < 300:
+                results["success"].append(entry)
+                # Check for missing template variables
+                if "!!! MISSING:" in content:
+                    missing = re.findall(r"!!! MISSING: (\S+?) !!!", content)
+                    for var in missing:
+                        missing_vars.append(f"{url} -> {var}")
+                    entry["missing_vars"] = missing
+                if verbose:
+                    self.stdout.write(self.style.SUCCESS(f"{status} OK"))
+            elif status < 400:
+                location = response.get("Location", "?")
+                entry["redirect_to"] = location
+                results["redirect"].append(entry)
+                if verbose:
+                    self.stdout.write(self.style.WARNING(f"{status} -> {location}"))
+            elif status < 500:
+                results["client_error"].append(entry)
+                if verbose:
+                    self.stdout.write(self.style.WARNING(f"{status}"))
+            else:
+                results["server_error"].append(entry)
+                if verbose:
+                    self.stdout.write(self.style.ERROR(f"{status} SERVER ERROR"))
+
+            if fail_fast and status >= 500:
+                self.stdout.write(
+                    self.style.ERROR(f"\nFail-fast: stopping at {url} ({status})")
+                )
+                break
 
         elapsed = time.monotonic() - start_time
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import ClassVar
+
 from django.conf import settings
 from django.core.validators import MaxLengthValidator, MinLengthValidator
 from django.db import models
@@ -10,7 +12,7 @@ from django.utils import timezone
 from django.utils.text import slugify
 from solo.models import SingletonModel
 
-from apps.core.utils.sanitize import sanitize_html
+from apps.core.utils.sanitize import is_same_origin_path, sanitize_html
 
 
 class PostStatus(models.TextChoices):
@@ -34,7 +36,7 @@ class Category(models.Model):
     )
 
     class Meta:
-        ordering = ["name"]
+        ordering: ClassVar[list[str]] = ["name"]
         verbose_name = "Blog Category"
         verbose_name_plural = "Categories"
 
@@ -49,7 +51,18 @@ class Category(models.Model):
         super().save(*args, **kwargs)
 
 
+class PostQuerySet(models.QuerySet):
+    def live(self) -> PostQuerySet:
+        """Posts readers may see: published and not scheduled for the future."""
+        return self.filter(status=PostStatus.PUBLISHED, publish_at__lte=timezone.now())
+
+
 class Post(models.Model):
+    objects = PostQuerySet.as_manager()
+
+    # Set by the pre_save signal so the post_save hook can detect a first publication.
+    _was_published: bool = False
+
     title = models.CharField(
         max_length=200,
         validators=[MinLengthValidator(3), MaxLengthValidator(200)],
@@ -148,10 +161,10 @@ class Post(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["-published_at", "-created_at"]
+        ordering: ClassVar[list[str]] = ["-published_at", "-created_at"]
         verbose_name = "Blog Post"
         verbose_name_plural = "Blog Posts"
-        indexes = [
+        indexes = (
             models.Index(
                 fields=["status", "publish_at"], name="blog_post_status_pub_idx"
             ),
@@ -159,43 +172,32 @@ class Post(models.Model):
                 fields=["author", "status"], name="blog_post_author_status_idx"
             ),
             models.Index(Lower("slug"), name="blog_post_slug_ci_idx"),
-        ]
+        )
 
     @classmethod
     def published(cls) -> QuerySet:
-        """
-        Convenience queryset for live posts (published and not in the future).
-        """
-        now_ts = timezone.now()
-        return cls.objects.filter(status=PostStatus.PUBLISHED, publish_at__lte=now_ts)
+        """Convenience queryset for live posts (published and not in the future)."""
+        return cls.objects.live()
 
-    def __str__(self) -> str:  # noqa: DJ012
+    def __str__(self) -> str:
         return self.title
 
-    def get_absolute_url(self) -> str:  # noqa: DJ012
+    def get_absolute_url(self) -> str:
         return reverse("blog:post_detail", kwargs={"slug": self.slug})
 
     @property
     def is_live(self) -> bool:
-        if self.status == PostStatus.PUBLISHED:
-            if self.publish_at:
-                return self.publish_at <= timezone.now()
-            return True
-        if self.status == PostStatus.SCHEDULED and self.publish_at:
-            return self.publish_at <= timezone.now()
-        return False
+        if self.status != PostStatus.PUBLISHED:
+            return False
+        return self.publish_at is None or self.publish_at <= timezone.now()
 
-    def save(self, *args, **kwargs):  # noqa: DJ012
-        # Sanitize body to strip unsafe tags while allowing vetted embeds (YouTube/Vimeo)
-        self.body = sanitize_html(
-            self.body,
-            allowed_iframe_prefixes=(
-                "https://www.youtube.com/embed/",
-                "https://www.youtube-nocookie.com/embed/",
-                "https://player.vimeo.com/video/",
-                "https://player.vimeo.com/",
-            ),
-        )
+    @property
+    def cover_image_url(self) -> str:
+        """The hero image when it is served from this site (``img-src 'self'``)."""
+        return self.hero_image if is_same_origin_path(self.hero_image) else ""
+
+    def save(self, *args, **kwargs):
+        self.body = sanitize_html(self.body)
         if not self.slug:
             base = slugify(self.title)[:230]
             candidate = base
@@ -236,6 +238,26 @@ class Post(models.Model):
         return bool(self.seo_title and self.seo_description)
 
 
+class PostLike(models.Model):
+    """One like per user and post."""
+
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="likes")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="post_likes"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = (
+            models.UniqueConstraint(
+                fields=["post", "user"], name="blog_postlike_unique_user_post"
+            ),
+        )
+
+    def __str__(self) -> str:
+        return f"{self.user_id} likes {self.post_id}"
+
+
 class PostDraft(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="post_drafts"
@@ -252,7 +274,7 @@ class PostDraft(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["-updated_at"]
+        ordering: ClassVar[list[str]] = ["-updated_at"]
 
     def __str__(self) -> str:
         return f"Draft for {self.post or 'new post'} by {self.user}"
@@ -273,7 +295,7 @@ class PostRevision(models.Model):
     created_at = models.DateTimeField(default=timezone.now)
 
     class Meta:
-        ordering = ["-created_at"]
+        ordering: ClassVar[list[str]] = ["-created_at"]
 
     def __str__(self) -> str:
         return f"Revision {self.created_at} for {self.post}"
@@ -315,12 +337,16 @@ class PostTranslation(models.Model):
 
     class Meta:
         unique_together = ("post", "language")
-        indexes = [models.Index(fields=["language"], name="post_translation_lang_idx")]
+        indexes = (models.Index(fields=["language"], name="post_translation_lang_idx"),)
         verbose_name = "Post Translation"
         verbose_name_plural = "Post Translations"
 
     def __str__(self) -> str:
         return f"{self.post} [{self.language}]"
+
+    def save(self, *args, **kwargs):
+        self.body = sanitize_html(self.body)
+        super().save(*args, **kwargs)
 
 
 class CategoryTranslation(models.Model):
@@ -332,9 +358,9 @@ class CategoryTranslation(models.Model):
 
     class Meta:
         unique_together = ("category", "language")
-        indexes = [
-            models.Index(fields=["language"], name="category_translation_lang_idx")
-        ]
+        indexes = (
+            models.Index(fields=["language"], name="category_translation_lang_idx"),
+        )
         verbose_name = "Category Translation"
         verbose_name_plural = "Category Translations"
 
@@ -352,7 +378,7 @@ class TagTranslation(models.Model):
 
     class Meta:
         unique_together = ("tag", "language")
-        indexes = [models.Index(fields=["language"], name="tag_translation_lang_idx")]
+        indexes = (models.Index(fields=["language"], name="tag_translation_lang_idx"),)
         verbose_name = "Tag Translation"
         verbose_name_plural = "Tag Translations"
 
@@ -365,7 +391,7 @@ class AutoTopic(models.Model):
     Queue for AI-generated blog posts.
     """
 
-    STATUS_CHOICES = [
+    STATUS_CHOICES: ClassVar[list[tuple[str, str]]] = [
         ("queued", "Queued"),
         ("running", "Running"),
         ("succeeded", "Succeeded"),
@@ -389,10 +415,8 @@ class AutoTopic(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        ordering = ["-created_at"]
-        indexes = [
-            models.Index(fields=["status"], name="blog_autotopic_status_idx"),
-        ]
+        ordering: ClassVar[list[str]] = ["-created_at"]
+        indexes = (models.Index(fields=["status"], name="blog_autotopic_status_idx"),)
 
     def __str__(self) -> str:
         return f"{self.topic} ({self.status})"

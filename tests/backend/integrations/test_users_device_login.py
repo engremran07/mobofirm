@@ -3,6 +3,7 @@ from unittest.mock import Mock, patch
 
 from allauth.account.models import EmailAddress
 from django.contrib.auth import get_user_model
+from django.contrib.sessions.backends.signed_cookies import SessionStore
 from django.core.cache import cache
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
@@ -131,7 +132,10 @@ class UserDeviceLoginContractTests(TestCase):
 
         with patch(
             "apps.users.views.AppService.get",
-            return_value=SimpleNamespace(enforce_device_policy_for_login=enforcement),
+            return_value=SimpleNamespace(
+                DevicePolicyError=DevicePolicyError,
+                enforce_device_policy_for_login=enforcement,
+            ),
         ):
             login_response = self.client.post(
                 reverse("users:account_login"),
@@ -220,7 +224,7 @@ class UserDeviceLoginContractTests(TestCase):
             str(self.user.pk),
         )
 
-    def test_repeated_untrusted_device_attempts_remain_denied(self):
+    def test_repeated_new_device_attempts_remain_pending_until_approval(self):
         config = DeviceConfig.get_solo()
         config.strict_new_device_login = True
         config.save(update_fields=["strict_new_device_login"])
@@ -230,13 +234,19 @@ class UserDeviceLoginContractTests(TestCase):
             HTTP_USER_AGENT="Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/121.0",
         )
         request.user = self.user
-        request.session = {}
+        request.session = SessionStore()
         request.META["REMOTE_ADDR"] = "203.0.113.10"
 
-        for _ in range(2):
-            with self.assertRaises(DevicePolicyError) as error:
-                enforce_device_policy_for_login(request, self.user)
-            self.assertEqual(error.exception.reason, "untrusted_new_device")
+        first_allowed, first_result = enforce_device_policy_for_login(
+            request, self.user
+        )
+        second_allowed, second_result = enforce_device_policy_for_login(
+            request, self.user
+        )
 
+        self.assertTrue(first_allowed)
+        self.assertTrue(second_allowed)
+        self.assertTrue(first_result["is_new"])
+        self.assertFalse(second_result["is_new"])
         self.assertEqual(Device.objects.filter(user=self.user).count(), 1)
         self.assertFalse(Device.objects.get(user=self.user).is_trusted)

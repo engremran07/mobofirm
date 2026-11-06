@@ -1,9 +1,16 @@
 from __future__ import annotations
 
+from django.conf import settings
 from django.db import transaction
 
-from apps.users.mfa import TOTPService
-from apps.users.models import MFADevice
+from apps.users.models import MFADevice, UsersSettings
+
+
+def mfa_required_globally() -> bool:
+    """True when MFA is enforced by the environment flag or the users singleton."""
+    return bool(
+        getattr(settings, "REQUIRE_MFA", False) or UsersSettings.get_solo().require_mfa
+    )
 
 
 def has_active_totp(user) -> bool:

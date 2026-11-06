@@ -1,13 +1,98 @@
 {% extends "base.html" %}
-{% block title %}Manage journal posts | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% load mf_ui %}
 {% block content %}
-<div class="site-container py-5">
-  <header class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
-    <div><p class="section-eyebrow">Editorial workspace</p><h1 class="h2">Manage posts</h1></div>
-    <a class="btn btn-primary" href="{% url 'blog:post_create' %}">Write a post</a>
+<div class="site-container py-4 py-lg-5">
+  {% include "components/breadcrumbs.html" with current="Editorial workspace" %}
+  <header class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-4">
+    <div>
+      <p class="section-eyebrow mb-1">Editorial workspace</p>
+      <h1 class="page-title mb-1">Manage journal posts</h1>
+      <p class="muted mb-0">Drafts, submissions, scheduled and published articles. Automated posts refresh themselves; review them here.</p>
+    </div>
+    <div class="d-flex gap-2">
+      {% if can_manage_all %}<a class="btn btn-outline-secondary" href="{% url 'blog:category_create' %}">New category</a>{% endif %}
+      <a class="btn btn-primary" href="{% url 'blog:post_create' %}">Write a post</a>
+    </div>
   </header>
-  {% if posts %}<div class="catalog-table-wrap"><table class="table catalog-table"><thead><tr><th>Title</th><th>Status</th><th>Updated</th><th>Action</th></tr></thead><tbody>
-    {% for post in posts %}<tr><td>{{ post.title }}</td><td>{{ post.get_status_display|default:post.status }}</td><td>{{ post.updated_at|date:"M j, Y" }}</td><td><a href="{% url 'blog:post_create' %}?edit={{ post.slug }}">Edit</a>{% if post.is_live %} · <a href="{{ post.get_absolute_url }}">View</a>{% endif %}</td></tr>{% endfor %}
-  </tbody></table></div>{% else %}<p class="empty-state p-4">No posts are available to manage.</p>{% endif %}
+  <section class="surface-card p-3 p-md-4 mb-4" aria-label="Filter posts">
+    <form class="row g-3 align-items-end" method="get" action="{% url 'blog:manage_posts' %}">
+      <div class="col-12 col-md-5">
+        <label class="form-label" for="editorial-query">Search posts</label>
+        <input class="form-control" id="editorial-query" type="search" name="q" value="{{ query }}" maxlength="200">
+      </div>
+      <div class="col-6 col-md-3">
+        <label class="form-label" for="editorial-status">Status</label>
+        <select class="form-select" id="editorial-status" name="status">
+          <option value="">All statuses</option>
+          {% for value, label in status_choices %}<option value="{{ value }}"{% if status_filter == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="col-6 col-md-2">
+        <label class="form-label" for="editorial-source">Source</label>
+        <select class="form-select" id="editorial-source" name="source">
+          <option value="">All sources</option>
+          <option value="manual"{% if source_filter == "manual" %} selected{% endif %}>Manual</option>
+          <option value="automated"{% if source_filter == "automated" %} selected{% endif %}>Automated</option>
+        </select>
+      </div>
+      <div class="col-12 col-md-2"><button class="btn btn-primary w-100" type="submit">Apply filters</button></div>
+    </form>
+  </section>
+  <section aria-labelledby="editorial-posts-title">
+    <div class="d-flex flex-wrap justify-content-between align-items-baseline gap-2 mb-3">
+      <h2 class="section-heading mb-0" id="editorial-posts-title">Posts</h2>
+      <p class="small muted mb-0">{{ page_obj.paginator.count }} total</p>
+    </div>
+    {% if posts %}
+      <form method="post" action="{% url 'blog:bulk_publish' %}" id="bulk-form">{% csrf_token %}</form>
+      {% table_scroll "Journal posts" %}
+      <table class="table align-middle">
+        <thead>
+          <tr>
+            {% if can_moderate %}<th scope="col"><span class="visually-hidden">Select</span></th>{% endif %}
+            <th scope="col">Title</th>
+            {% if can_manage_all %}<th scope="col">Author</th>{% endif %}
+            <th scope="col">Status</th>
+            <th scope="col">Source</th>
+            <th scope="col">Updated</th>
+            <th scope="col"><span class="visually-hidden">Actions</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for post in posts %}
+            <tr>
+              {% if can_moderate %}<td><input class="form-check-input" type="checkbox" name="post_id" value="{{ post.pk }}" form="bulk-form" aria-label="Select {{ post.title }}"></td>{% endif %}
+              <th scope="row">{% if post.is_live %}<a href="{{ post.get_absolute_url }}">{{ post.title }}</a>{% else %}{{ post.title }}{% endif %}</th>
+              {% if can_manage_all %}<td>{{ post.author.public_display_name }}</td>{% endif %}
+              <td><span class="badge text-bg-secondary">{{ post.get_status_display }}</span></td>
+              <td>{% if post.is_ai_generated %}Automated{% else %}Manual{% endif %}</td>
+              <td><time datetime="{{ post.updated_at|date:'c' }}">{{ post.updated_at|date:"M j, Y" }}</time></td>
+              <td>
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                  <a href="{% url 'blog:post_create' %}?edit={{ post.slug }}">Edit</a>
+                  <a href="{% url 'blog:post_history' slug=post.slug %}">History</a>
+                  {% if post.status == "draft" %}
+                    <form method="post" action="{% url 'blog:post_workflow' slug=post.slug %}">{% csrf_token %}<input type="hidden" name="action" value="request_review"><button class="btn btn-sm btn-outline-secondary" type="submit">Request review</button></form>
+                  {% endif %}
+                  {% if can_moderate and post.status != "published" and post.status != "archived" %}
+                    <form method="post" action="{% url 'blog:post_workflow' slug=post.slug %}">{% csrf_token %}<input type="hidden" name="action" value="publish"><button class="btn btn-sm btn-primary" type="submit">Publish</button></form>
+                  {% endif %}
+                  {% if can_moderate and post.status != "archived" %}
+                    <form method="post" action="{% url 'blog:post_workflow' slug=post.slug %}">{% csrf_token %}<input type="hidden" name="action" value="archive"><button class="btn btn-sm btn-outline-secondary" type="submit">Archive</button></form>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endtable_scroll %}
+      {% if can_moderate %}<button class="btn btn-outline-secondary mt-3" type="submit" form="bulk-form">Publish selected</button>{% endif %}
+      {% include "components/pagination.html" with page_obj=page_obj label="Post pages" %}
+    {% else %}
+      {% url 'blog:post_create' as create_url %}
+      {% include "components/empty_state.html" with title="No posts match these filters" message="Try another status or source, or write a new post." action_label="Write a post" action_url=create_url %}
+    {% endif %}
+  </section>
 </div>
 {% endblock %}

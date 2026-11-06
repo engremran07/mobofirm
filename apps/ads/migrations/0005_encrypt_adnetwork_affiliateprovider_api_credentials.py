@@ -8,11 +8,9 @@ from django.db import migrations, models
 
 
 class Migration(migrations.Migration):
-    dependencies = [
-        ("ads", "0004_alter_autoadsscanresult_options_and_more"),
-    ]
+    dependencies = (("ads", "0004_alter_autoadsscanresult_options_and_more"),)
 
-    operations = [
+    operations = (
         migrations.AlterField(
             model_name="adnetwork",
             name="api_key",
@@ -49,4 +47,4 @@ class Migration(migrations.Migration):
                 help_text="Fernet-encrypted API secret.",
             ),
         ),
-    ]
+    )

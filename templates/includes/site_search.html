@@ -1,0 +1,14 @@
+{# Contract: search_id (required, unique per page). Global search with HTMX autocomplete (JSON from firmwares:api_search_autocomplete rendered by site.js) and a plain GET fallback to the full results page. #}
+<form class="site-search position-relative" role="search" method="get" action="{% url 'firmwares:universal_search' %}">
+  <label class="visually-hidden" for="{{ search_id }}">Search devices, brands, chipsets, tools, guides and articles</label>
+  <div class="input-group">
+    <span class="input-group-text" aria-hidden="true"><i data-lucide="search"></i></span>
+    <input id="{{ search_id }}" class="form-control" type="search" name="q" autocomplete="off" enterkeyhint="search"
+           placeholder="Search devices, guides, articles"
+           role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" aria-controls="{{ search_id }}-results"
+           data-site-search
+           hx-get="{% url 'firmwares:api_search_autocomplete' %}" hx-trigger="input changed delay:250ms" hx-target="#{{ search_id }}-results" hx-swap="innerHTML" hx-params="q,limit" hx-vals='{"limit": "12"}' hx-indicator="#{{ search_id }}-indicator">
+  </div>
+  <span id="{{ search_id }}-indicator" class="htmx-indicator site-search-indicator" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span><span class="visually-hidden">Searching</span></span>
+  <div id="{{ search_id }}-results" class="site-search-results" role="listbox" aria-label="Search suggestions" data-site-search-results hidden></div>
+</form>

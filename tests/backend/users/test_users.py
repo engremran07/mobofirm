@@ -11,15 +11,15 @@ from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-from apps.core.signals import notification_send_requested, user_registered
 from apps.comments.views import _check_comment_rate_limit
+from apps.core.signals import notification_send_requested, user_registered
 from apps.users.models import Announcement, Notification, NotificationPreferences
 from apps.users.profile_models import Following, Profile
+from apps.users.services.notifications import send_notification
 from apps.users.services.rate_limit import (
     allow_action,
     reset_rate_limit,
 )
-from apps.users.services.notifications import send_notification
 
 
 class RateLimitServiceTests(TestCase):
@@ -53,13 +53,17 @@ class CommentRateLimitTests(TestCase):
         )
 
     def test_comment_rate_limit_enforced(self):
+        from apps.comments.views import PER_MINUTE
+
         request = self._build_request(user_id=42)
-        for _ in range(10):
-            assert _check_comment_rate_limit(request)  # type: ignore[arg-type]
-        assert not _check_comment_rate_limit(request)  # type: ignore[arg-type]
+        for _ in range(PER_MINUTE):
+            assert _check_comment_rate_limit(request)
+        assert not _check_comment_rate_limit(request)
 
 
 class UserProfileApiTests(TestCase):
+    client: APIClient
+
     def setUp(self):
         user_model = get_user_model()
         self.user = user_model.objects.create_user(
@@ -166,7 +170,7 @@ class UserProfileApiTests(TestCase):
             message="Your account password was changed.",
         )
 
-        self.assertIsNotNone(notification)
+        assert notification is not None
         self.assertEqual(notification.channel, "web")
 
 

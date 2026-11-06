@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+{% url 'marketplace:listing_browse' as market_url %}
+<div class="site-container py-4 py-lg-5">
+  {% include "components/breadcrumbs.html" with current=seller.display_name parent_label="Marketplace" parent_url=market_url %}
+  {% include "components/page_header.html" with eyebrow="Verified seller" title=seller.display_name %}
+  <p class="d-flex flex-wrap gap-2 align-items-center">{% include "components/status_pill.html" with label="Verified by staff" tone="success" icon="badge-check" %} <span class="small muted">Member since {{ seller.created_at|date:"F Y" }}</span></p>
+  {% if seller.bio %}<p class="eco-prose">{{ seller.bio|linebreaksbr }}</p>{% endif %}
+  <h2 class="h4 mt-4">Listings</h2>
+  <div class="row g-3">{% include "marketplace/fragments/listing_grid.html" %}</div>
+</div>
+{% endblock %}

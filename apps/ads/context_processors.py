@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
+from django.db import DatabaseError
 from django.http import HttpRequest
+
+from apps.ads.models import AdNetwork, AdsSettings
 
 logger = logging.getLogger(__name__)
 
 
-def ads_context(request: HttpRequest) -> dict:
+def ads_context(request: HttpRequest) -> dict[str, Any]:
     """Provide ads configuration to all templates.
 
     Injects:
@@ -20,11 +24,9 @@ def ads_context(request: HttpRequest) -> dict:
       current user/page.
     """
     try:
-        from apps.ads.models import AdNetwork, AdsSettings
-
-        settings_obj = AdsSettings.objects.get_solo()  # type: ignore[attr-defined]
-    except Exception:
-        logger.debug("ads_context: AdsSettings unavailable")
+        settings_obj = AdsSettings.get_solo()
+    except DatabaseError:
+        logger.debug("ads_context: AdsSettings unavailable", exc_info=True)
         return {
             "ads_settings": None,
             "ads_enabled_networks": [],
@@ -36,7 +38,7 @@ def ads_context(request: HttpRequest) -> dict:
         page_url=request.path,
     )
 
-    networks: list = []
+    networks: list[AdNetwork] = []
     if show and settings_obj.ad_networks_enabled:
         try:
             networks = list(
@@ -45,8 +47,8 @@ def ads_context(request: HttpRequest) -> dict:
                 .only("name", "network_type", "header_script", "body_script")
                 .order_by("-priority")
             )
-        except Exception:
-            logger.debug("ads_context: AdNetwork query failed")
+        except DatabaseError:
+            logger.debug("ads_context: AdNetwork query failed", exc_info=True)
 
     return {
         "ads_settings": settings_obj,

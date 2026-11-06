@@ -5,13 +5,14 @@ import hmac
 from typing import Any
 
 from django.conf import settings
+from django.utils.encoding import force_bytes
 
 
 def _digest(value: str) -> str:
     if not value:
         return ""
     return hmac.new(
-        settings.SECRET_KEY.encode("utf-8"),
+        force_bytes(settings.SECRET_KEY),
         value.encode("utf-8"),
         hashlib.sha256,
     ).hexdigest()

@@ -8,16 +8,23 @@ from unittest.mock import Mock, patch
 from allauth.account.forms import LoginForm
 from allauth.account.models import EmailAddress
 from django.contrib.auth import get_user_model
+from django.contrib.auth.models import AnonymousUser
+from django.contrib.sessions.backends.db import SessionStore
 from django.core import mail
 from django.core.cache import cache
 from django.core.exceptions import ValidationError
+from django.http import HttpResponse
 from django.test import Client, RequestFactory, TestCase, override_settings
 from django.urls import reverse
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
 
+from apps.devices.services import DevicePolicyError
+
 
 class UserAuthenticationApiTests(TestCase):
+    client: APIClient
+
     def setUp(self):
         cache.clear()
         mail.outbox.clear()
@@ -84,6 +91,24 @@ class UserAuthenticationApiTests(TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertFalse(Token.objects.filter(user=user).exists())
+
+    def test_api_login_rejects_device_policy_denial_without_creating_a_token(self):
+        user = self.create_user()
+        enforcement = Mock(side_effect=DevicePolicyError("blocked_device"))
+
+        with patch(
+            "apps.users.api_auth.AppService.get",
+            return_value=SimpleNamespace(enforce_device_policy_for_login=enforcement),
+        ):
+            response = self.client.post(
+                reverse("users:api_login"),
+                {"identifier": user.email, "password": "A-valid-password-983!"},
+                format="json",
+            )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(Token.objects.filter(user=user).exists())
+        enforcement.assert_called_once()
 
     def test_api_login_requires_verified_email_and_completed_profile(self):
         unverified = self.create_user(
@@ -224,11 +249,11 @@ class UserAuthenticationApiTests(TestCase):
         self.assertEqual(len(mail.outbox), 1)
 
         code_match = re.search(
-            r"one-time hexadecimal verification code.*?\b([0-9A-F]{6})\b",
-            mail.outbox[0].body,
+            r"one-time verification code.*?\b([0-9A-Z]{6})\b",
+            str(mail.outbox[0].body),
             re.DOTALL,
         )
-        self.assertIsNotNone(code_match)
+        assert code_match is not None
         code = code_match.group(1)
         verification_state = self.client.session["users_email_verification"]
         self.assertNotIn(code, str(verification_state))
@@ -282,7 +307,7 @@ class UserAuthenticationApiTests(TestCase):
         )
 
         request = RequestFactory().get("/")
-        request.session = {}
+        request.session = SessionStore()
         code = issue_email_verification_code(request, email_address)
         with patch(
             "apps.users.services.email_verification.time.time",
@@ -319,7 +344,7 @@ class UserAuthenticationApiTests(TestCase):
         )
 
         request = RequestFactory().get("/")
-        request.session = {}
+        request.session = SessionStore()
         issue_email_verification_code(request, email_address)
 
         for attempt in range(MAX_CODE_ATTEMPTS):
@@ -411,9 +436,9 @@ class UserAuthenticationApiTests(TestCase):
 
         confirmation_match = re.search(
             r"/accounts/confirm-email/([^/\s?]+)",
-            mail.outbox[0].body,
+            str(mail.outbox[0].body),
         )
-        self.assertIsNotNone(confirmation_match)
+        assert confirmation_match is not None
         confirm_url = reverse(
             "account_confirm_email",
             args=[confirmation_match.group(1)],
@@ -670,12 +695,18 @@ class AllauthAdapterConfigurationTests(TestCase):
         )
         adapter = CustomAccountAdapter()
         request = RequestFactory().get("/")
-        request.session = {}
+        request.session = SessionStore()
+        request.user = user
 
         self.assertFalse(adapter.is_email_verified(request, user.email))
         address.verified = True
         address.save(update_fields=["verified"])
         self.assertTrue(adapter.is_email_verified(request, user.email))
+
+        stranger = RequestFactory().get("/")
+        stranger.session = SessionStore()
+        stranger.user = AnonymousUser()
+        self.assertFalse(adapter.is_email_verified(stranger, user.email))
 
 
 class SocialSignupOnboardingTests(TestCase):
@@ -765,7 +796,7 @@ class SocialSignupOnboardingTests(TestCase):
             password="test-password-for-social",
         )
         request = RequestFactory().get("/")
-        SessionMiddleware(lambda _: None).process_request(request)
+        SessionMiddleware(lambda _: HttpResponse()).process_request(request)
         request.session.save()
 
         handle_user_signed_up(

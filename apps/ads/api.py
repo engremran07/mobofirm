@@ -1,14 +1,14 @@
+"""Public Ads API resolved dynamically through AppService."""
+
 from __future__ import annotations
 
-"""
-Public API surface for the Ads app.
-Resolved dynamically via AppService to avoid hard imports.
-"""
+import logging
+from typing import Any
 
-import logging  # noqa: E402
-from typing import Any  # noqa: E402
+from django.db import DatabaseError, transaction
+from django.db.models import F
 
-from apps.ads.models import AdsSettings  # noqa: E402
+from apps.ads.models import AdsSettings
 
 logger = logging.getLogger(__name__)
 
@@ -16,24 +16,9 @@ logger = logging.getLogger(__name__)
 def get_settings() -> dict[str, Any]:
     """
     Return a safe snapshot of ads configuration for use via AppService.
-    Fail closed with explicit logging if settings cannot be loaded.
+    Let database failures propagate to the AppService caller.
     """
-    try:
-        s = AdsSettings.get_solo()
-    except Exception as exc:
-        logger.error(
-            "AdsSettings.get_solo failed; falling back to safe defaults",
-            exc_info=True,
-            extra={"error": str(exc)},
-        )
-        return {
-            "ads_enabled": False,
-            "affiliate_enabled": False,
-            "ad_networks_enabled": False,
-            "ad_aggressiveness_level": "balanced",
-            "auto_ads_enabled": False,
-            "rewarded_ads_enabled": False,
-        }
+    s = AdsSettings.get_solo()
 
     return {
         # Master controls
@@ -82,7 +67,8 @@ def should_show_ads(user=None, page_url: str = "") -> bool:
     try:
         s = AdsSettings.get_solo()
         return s.should_show_ads(user=user, page_url=page_url)
-    except Exception:
+    except DatabaseError:
+        logger.exception("Failed to evaluate whether ads should be shown.")
         return False
 
 
@@ -93,7 +79,8 @@ def get_enabled_networks() -> list[str]:
     try:
         s = AdsSettings.get_solo()
         return s.get_enabled_networks()
-    except Exception:
+    except DatabaseError:
+        logger.exception("Failed to load enabled ad networks.")
         return []
 
 
@@ -123,8 +110,9 @@ def get_rewarded_ad_config(config_name: str | None = None) -> dict[str, Any]:
             "cooldown_minutes": config.cooldown_minutes,
             "daily_limit": config.daily_limit_per_user,
         }
-    except Exception:
-        return {"enabled": False}
+    except DatabaseError:
+        logger.exception("Failed to load rewarded ad configuration.")
+        return {"enabled": False, "error": "configuration_unavailable"}
 
 
 def get_affiliate_products_settings() -> dict[str, Any]:
@@ -146,8 +134,9 @@ def get_affiliate_products_settings() -> dict[str, Any]:
             "show_on_blog": bool(getattr(s, "affiliate_products_show_on_blog", True)),
             "amazon_enabled": bool(getattr(s, "amazon_paapi_enabled", False)),
         }
-    except Exception:
-        return {"enabled": False}
+    except DatabaseError:
+        logger.exception("Failed to load affiliate product settings.")
+        return {"enabled": False, "error": "settings_unavailable"}
 
 
 def track_affiliate_click_sync(
@@ -179,25 +168,25 @@ def track_affiliate_click_sync(
         if user_id:
             user = User.objects.filter(id=user_id).first()
 
-        # Create click record
-        click = AffiliateClick.objects.create(
-            product=product,
-            provider=product.provider,
-            user=user,
-            session_id=session_id[:100] if session_id else "",
-            ip_address=ip_address[:45] if ip_address else "",
-            user_agent=user_agent[:500] if user_agent else "",
-            page_url=page_url[:500] if page_url else "",
-        )
-
-        # Increment product click count
-        AffiliateProduct.objects.filter(id=product_id).update(clicks=product.clicks + 1)
+        with transaction.atomic():
+            click = AffiliateClick.objects.create(
+                product=product,
+                provider=product.provider,
+                user=user,
+                session_id=session_id[:100] if session_id else "",
+                ip_address=ip_address[:45] if ip_address else None,
+                user_agent=user_agent[:500] if user_agent else "",
+                page_url=page_url[:500] if page_url else "",
+            )
+            AffiliateProduct.objects.filter(id=product_id).update(
+                clicks=F("clicks") + 1
+            )
 
         return {"status": "success", "click_id": click.pk}
 
-    except Exception as exc:
-        logger.exception(f"Failed to track affiliate click: {exc}")
-        return {"status": "error", "error": str(exc)}
+    except DatabaseError:
+        logger.exception("Failed to track affiliate click (product_id=%s).", product_id)
+        return {"status": "error", "error": "tracking_unavailable"}
 
 
 def get_contextual_products(
@@ -207,79 +196,71 @@ def get_contextual_products(
     Get contextual affiliate products for a given entity.
     Returns a list of product dictionaries.
     """
-    try:
-        from django.db.models import Q
+    from django.db.models import Q
 
-        from apps.ads.models import AdsSettings, AffiliateProduct, AffiliateProductMatch
+    from apps.ads.models import AdsSettings, AffiliateProduct, AffiliateProductMatch
 
-        settings_obj = AdsSettings.get_solo()
-        if not settings_obj.affiliate_products_enabled:
-            return []
+    settings_obj = AdsSettings.get_solo()
+    if not settings_obj.affiliate_products_enabled:
+        return []
 
-        max_products = min(max_products, settings_obj.affiliate_products_max_per_page)
+    max_products = min(max_products, settings_obj.affiliate_products_max_per_page)
 
-        products = []
-        seen_ids = set()
+    products = []
+    seen_ids = set()
 
-        # 1. Manual matches
-        match_filters = Q(is_hidden=False)
-        if brand:
-            match_filters &= Q(brand=brand)
-        elif model:
-            match_filters &= Q(model=model)
-        elif variant:
-            match_filters &= Q(variant=variant)
-        elif blog_post:
-            match_filters &= Q(blog_post=blog_post)
+    match_filters = Q(is_hidden=False)
+    if brand:
+        match_filters &= Q(brand=brand)
+    elif model:
+        match_filters &= Q(model=model)
+    elif variant:
+        match_filters &= Q(variant=variant)
+    elif blog_post:
+        match_filters &= Q(blog_post=blog_post)
 
-        matches = AffiliateProductMatch.objects.filter(
-            match_filters,
-            product__is_enabled=True,
-            product__is_in_stock=True,
-        ).select_related("product", "product__provider")[:max_products]
+    matches = AffiliateProductMatch.objects.filter(
+        match_filters,
+        product__is_enabled=True,
+        product__is_in_stock=True,
+    ).select_related("product", "product__provider")[:max_products]
 
-        for match in matches:
-            if match.product_id not in seen_ids:  # type: ignore[attr-defined]
-                products.append(_product_to_dict(match.product))
-                seen_ids.add(match.product_id)  # type: ignore[attr-defined]
+    for match in matches:
+        if match.product_id not in seen_ids:
+            products.append(_product_to_dict(match.product))
+            seen_ids.add(match.product_id)
 
-        if len(products) >= max_products:
-            return products[:max_products]
-
-        # 2. Targeted products
-        remaining = max_products - len(products)
-        targeted_filters = Q(is_enabled=True, is_in_stock=True)
-        targeted_filters &= ~Q(id__in=seen_ids)
-
-        if brand:
-            targeted_filters &= Q(target_brands=brand)
-        elif model:
-            targeted_filters &= Q(target_models=model)
-
-        targeted = AffiliateProduct.objects.filter(targeted_filters)[:remaining]
-
-        for product in targeted:
-            products.append(_product_to_dict(product))
-
-        if len(products) >= max_products:
-            return products[:max_products]
-
-        # 3. Universal products
-        remaining = max_products - len(products)
-        universal = AffiliateProduct.objects.filter(
-            is_enabled=True,
-            is_in_stock=True,
-            is_universal=True,
-        ).exclude(id__in=seen_ids)[:remaining]
-
-        for product in universal:
-            products.append(_product_to_dict(product))
-
+    if len(products) >= max_products:
         return products[:max_products]
 
-    except Exception as exc:
-        logger.exception(f"Failed to get contextual products: {exc}")
-        return []
+    remaining = max_products - len(products)
+    targeted_filters = Q(is_enabled=True, is_in_stock=True)
+    targeted_filters &= ~Q(id__in=seen_ids)
+
+    if brand:
+        targeted_filters &= Q(target_brands=brand)
+    elif model:
+        targeted_filters &= Q(target_models=model)
+
+    targeted = AffiliateProduct.objects.filter(targeted_filters)[:remaining]
+
+    for product in targeted:
+        products.append(_product_to_dict(product))
+
+    if len(products) >= max_products:
+        return products[:max_products]
+
+    remaining = max_products - len(products)
+    universal = AffiliateProduct.objects.filter(
+        is_enabled=True,
+        is_in_stock=True,
+        is_universal=True,
+    ).exclude(id__in=seen_ids)[:remaining]
+
+    for product in universal:
+        products.append(_product_to_dict(product))
+
+    return products[:max_products]
 
 
 def _product_to_dict(product) -> dict[str, Any]:

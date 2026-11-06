@@ -12,6 +12,8 @@ from django.urls import reverse
 from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import sync_playwright
 
+from tests.frontend.browser_support import dismiss_dialogs
+
 
 @pytest.mark.django_db(transaction=True)
 def test_email_code_verification_is_responsive_and_completes_signup(live_server):
@@ -26,9 +28,9 @@ def test_email_code_verification_is_responsive_and_completes_signup(live_server)
     )
     assert signup_response.status_code == 302
     assert len(mail.outbox) == 1
-    message = mail.outbox[0].body
+    message = str(mail.outbox[0].body)
     code_match = re.search(
-        r"one-time hexadecimal verification code.*?\b([0-9A-F]{6})\b",
+        r"one-time verification code.*?\b([0-9A-Z]{6})\b",
         message,
         re.DOTALL,
     )
@@ -62,10 +64,7 @@ def test_email_code_verification_is_responsive_and_completes_signup(live_server)
                 browser_diagnostics.append(f"{message.type}: {message.text}")
 
         page.on("console", capture_console_diagnostic)
-        page.on(
-            "dialog",
-            lambda dialog: (native_dialogs.append(dialog.type), dialog.dismiss()),
-        )
+        dismiss_dialogs(page, native_dialogs)
         page.context.add_cookies(
             [
                 {
