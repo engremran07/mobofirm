@@ -14,7 +14,8 @@ import shutil
 import stat
 import uuid
 import zipfile
-from datetime import date
+from datetime import date, timedelta
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
@@ -24,9 +25,13 @@ from django.db import DatabaseError, IntegrityError, transaction
 from django.utils import timezone
 
 from . import conf
+from .access import is_seller
+from .catalog_requests import fulfil_matching_requests
 from .constants import MAIN_CATEGORIES
 from .crypto import decrypt_password, encrypt_password
+from .events import announce_approval
 from .models import (
+    AccessTier,
     BaseFirmware,
     Brand,
     EngineeringFirmware,
@@ -41,6 +46,7 @@ from .models import (
     UnclassifiedFirmware,
     Variant,
 )
+from .notifications import notify_users
 from .sources import validate_external_url
 
 logger = logging.getLogger(__name__)
@@ -104,6 +110,85 @@ class FirmwareUploadError(ValueError):
     """Raised when an upload or external submission is rejected."""
 
 
+class SubmissionRateLimited(FirmwareUploadError):
+    """Raised when a user submitted too many files in the last hour."""
+
+
+MAX_PRICE = Decimal("99999999.99")
+RELEASE_INFO_LIMITS = {"build_number": 128, "android_version": 32, "changelog": 5000}
+
+
+def uploads_per_hour() -> int:
+    return int(getattr(settings, "FIRMWARE_UPLOADS_PER_HOUR", 10))
+
+
+def check_submission_rate(user) -> None:
+    """Reject a submission when ``user`` already sent the hourly maximum."""
+    recent = PendingFirmware.objects.filter(
+        uploader=user, created_at__gte=timezone.now() - timedelta(hours=1)
+    ).count()
+    if recent >= uploads_per_hour():
+        raise SubmissionRateLimited(
+            f"You can submit at most {uploads_per_hour()} files per hour. "
+            "Please try again later."
+        )
+
+
+def resolve_submission_tier(
+    uploader, access_tier: str | None, proposed_price: Any
+) -> tuple[str, Decimal | None]:
+    """Validate the tier and proposed price an uploader may ask for.
+
+    Everyone's files are free. Only approved marketplace sellers may offer paid
+    (with a proposed price) or featured files, and nobody sets the approved price
+    at submission time.
+    """
+    tier = access_tier or AccessTier.FREE
+    if tier not in AccessTier.values:
+        raise FirmwareUploadError("Unsupported access tier.")
+    has_price = proposed_price not in (None, "")
+    if tier == AccessTier.FREE:
+        if has_price:
+            raise FirmwareUploadError("Free files cannot have a price.")
+        return AccessTier.FREE, None
+    if not is_seller(uploader):
+        raise FirmwareUploadError(
+            "Only approved marketplace sellers can offer paid or featured files."
+        )
+    if tier == AccessTier.FEATURED:
+        if has_price:
+            raise FirmwareUploadError("Featured files do not take a price.")
+        return AccessTier.FEATURED, None
+    try:
+        price = Decimal(str(proposed_price)).quantize(Decimal("0.01"))
+    except (InvalidOperation, ValueError) as error:
+        raise FirmwareUploadError("Enter the proposed price as a number.") from error
+    if not has_price or price <= 0 or price > MAX_PRICE:
+        raise FirmwareUploadError(
+            "A proposed price greater than zero is required for paid files."
+        )
+    return AccessTier.PAID, price
+
+
+def submission_metadata(
+    extra_info: str | None, release_info: dict[str, str] | None
+) -> dict[str, str]:
+    """Reviewer-facing details stored with a pending submission."""
+    metadata: dict[str, str] = {}
+    for key, value in (release_info or {}).items():
+        text = (value or "").strip()
+        if not text:
+            continue
+        if len(text) > RELEASE_INFO_LIMITS.get(key, MAX_NOTES_LENGTH):
+            raise FirmwareUploadError(
+                f"{key.replace('_', ' ').capitalize()} is too long."
+            )
+        metadata[key] = text
+    if extra_info:
+        metadata["extra_info"] = extra_info
+    return metadata
+
+
 def storage_root() -> Path:
     configured = getattr(settings, "FIRMWARE_STORAGE_ROOT", None)
     return Path(configured) if configured is not None else conf.base_dir() / "storage"
@@ -155,10 +240,15 @@ def handle_upload(
     password,
     extra_info=None,
     package_format: str = FirmwarePackageFormat.UNKNOWN,
+    access_tier: str = AccessTier.FREE,
+    proposed_price: Any = None,
+    release_info: dict[str, str] | None = None,
 ):
     """Stage an uploaded file, hash it, and create its pending record."""
     if package_format not in FirmwarePackageFormat.values:
         raise ValueError("Unsupported firmware package format.")
+    tier, price = resolve_submission_tier(uploader, access_tier, proposed_price)
+    metadata = submission_metadata(extra_info, release_info)
 
     safe_name = _safe_filename(file_obj.name)
     _validate_file_name(safe_name)
@@ -205,7 +295,9 @@ def handle_upload(
             package_format=package_format,
             is_password_protected=is_password_protected,
             encrypted_password=password_token,
-            metadata={"extra_info": extra_info} if extra_info else {},
+            metadata=metadata,
+            access_tier=tier,
+            proposed_price=price,
         )
     except (FirmwareUploadError, DatabaseError, OSError):
         shutil.rmtree(tmp_dir, ignore_errors=True)
@@ -224,6 +316,9 @@ def submit_external_firmware(
     extra_info: str | None = None,
     file_size: int | None = None,
     file_hash: str = "",
+    access_tier: str = AccessTier.FREE,
+    proposed_price: Any = None,
+    release_info: dict[str, str] | None = None,
 ):
     """Create a pending record for a file hosted on an allowlisted external host.
 
@@ -231,6 +326,8 @@ def submit_external_firmware(
     """
     if package_format not in FirmwarePackageFormat.values:
         raise ValueError("Unsupported firmware package format.")
+    tier, price = resolve_submission_tier(uploader, access_tier, proposed_price)
+    metadata = submission_metadata(extra_info, release_info)
     safe_name = _safe_filename(original_file_name)
     _validate_file_name(safe_name)
     clean_url = validate_external_url(url)
@@ -262,7 +359,9 @@ def submit_external_firmware(
             uploaded_model=uploaded_model,
             uploaded_variant=uploaded_variant,
             package_format=package_format,
-            metadata={"extra_info": extra_info} if extra_info else {},
+            metadata=metadata,
+            access_tier=tier,
+            proposed_price=price,
         )
 
 
@@ -387,23 +486,14 @@ def _validate_hierarchy(brand, model, variant):
 def _notify(pf: PendingFirmware, *, title: str, message: str, priority: str) -> None:
     if pf.uploader_id is None:
         return
-    from apps.core.signals import notification_send_requested
-
-    for receiver, response in notification_send_requested.send_robust(
+    notify_users(
+        [pf.uploader_id],
         sender=PendingFirmware,
-        user_ids=[pf.uploader_id],
-        action_type="moderation",
-        priority=priority,
         title=title,
         message=message,
-    ):
-        if isinstance(response, Exception):
-            logger.error(
-                "Firmware notification receiver %r failed for %s: %s",
-                receiver,
-                pf.pk,
-                response,
-            )
+        priority=priority,
+        subject=pf.pk,
+    )
 
 
 def routed_record(pf: PendingFirmware):
@@ -424,6 +514,39 @@ def _hash_file(path: Path) -> tuple[int, str]:
     return size, digest.hexdigest()
 
 
+def _review_tier(
+    pending: PendingFirmware, reviewer, access_tier: str | None, approved_price: Any
+) -> tuple[str, Decimal | None]:
+    """The reviewer's final tier and approved price for a pending upload."""
+    tier = access_tier or pending.access_tier
+    if tier not in AccessTier.values:
+        raise ValidationError("Unsupported access tier.")
+    has_price = approved_price not in (None, "")
+    if tier == AccessTier.FREE:
+        if has_price:
+            raise ValidationError("Only paid files can have an approved price.")
+        return AccessTier.FREE, None
+    if pending.uploader_id is not None and pending.uploader_id == reviewer.pk:
+        raise PermissionDenied("You cannot approve your own paid or featured file.")
+    if not is_seller(pending.uploader):
+        raise ValidationError(
+            "Only files from approved marketplace sellers can be paid or featured."
+        )
+    if tier == AccessTier.FEATURED:
+        if has_price:
+            raise ValidationError("Featured files do not take a price.")
+        return AccessTier.FEATURED, None
+    if not has_price:
+        raise ValidationError("An approved price is required for paid files.")
+    try:
+        price = Decimal(str(approved_price)).quantize(Decimal("0.01"))
+    except (InvalidOperation, ValueError) as error:
+        raise ValidationError("Enter the approved price as a number.") from error
+    if price <= 0 or price > MAX_PRICE:
+        raise ValidationError("The approved price must be greater than zero.")
+    return AccessTier.PAID, price
+
+
 def approve_pending_firmware(
     pf: PendingFirmware,
     admin_user,
@@ -441,13 +564,18 @@ def approve_pending_firmware(
     android_version: str | None = None,
     security_patch: date | None = None,
     build_date: date | None = None,
+    access_tier: str | None = None,
+    approved_price: Any = None,
 ):
     """Approve a pending upload, route it to its typed table and make it public.
 
     Idempotent: approving an already approved upload returns its routed record.
     The reviewer must choose the category; an unspecified one is ``unclassified``.
     Build number, Android version, security patch and build date are optional
-    reviewer-confirmed release details recorded on the published record.
+    reviewer-confirmed release details recorded on the published record (the
+    uploader's build number and Android version are the defaults).
+    The reviewer also decides the final access tier: ``access_tier`` defaults to
+    the uploader's request and a paid file needs an ``approved_price``.
     """
     _require_reviewer(admin_user)
     clean_notes = _clean_notes(notes)
@@ -467,12 +595,16 @@ def approve_pending_firmware(
         if locked.admin_decision != "pending":
             raise ValidationError("This upload is no longer pending review.")
 
+        final_tier, final_price = _review_tier(
+            locked, admin_user, access_tier, approved_price
+        )
         target_brand, target_model, target_variant = _validate_hierarchy(
             brand or locked.uploaded_brand,
             model or locked.uploaded_model,
             variant or locked.uploaded_variant,
         )
         now = timezone.now()
+        price_reviewed = final_tier != AccessTier.FREE
         base_kwargs: dict[str, Any] = {
             "original_file_name": locked.original_file_name,
             "source_type": locked.source_type,
@@ -493,10 +625,24 @@ def approve_pending_firmware(
             "is_verified": True,
             "reviewed_by": admin_user,
             "reviewed_at": now,
+            "access_tier": final_tier,
+            "proposed_price": locked.proposed_price,
+            "approved_price": final_price,
+            "price_reviewed_by": admin_user if price_reviewed else None,
+            "price_reviewed_at": now if price_reviewed else None,
         }
+        uploaded_info = locked.metadata or {}
         release_details = {
-            "build_number": build_number,
-            "android_version": android_version,
+            "build_number": (
+                build_number
+                if build_number is not None
+                else uploaded_info.get("build_number")
+            ),
+            "android_version": (
+                android_version
+                if android_version is not None
+                else uploaded_info.get("android_version")
+            ),
             "security_patch": security_patch,
             "build_date": build_date,
         }
@@ -548,7 +694,14 @@ def approve_pending_firmware(
             locked.chipset = base_kwargs["chipset"]
             locked.file_size = base_kwargs["file_size"]
             locked.file_hash = base_kwargs["file_hash"]
+            locked.access_tier = final_tier
+            locked.approved_price = final_price
+            locked.price_reviewed_by = base_kwargs["price_reviewed_by"]
+            locked.price_reviewed_at = base_kwargs["price_reviewed_at"]
             locked.save()
+            fulfilled_requests = fulfil_matching_requests(
+                record, final_category, admin_user
+            )
         except (DatabaseError, ValidationError) as exc:
             if moved_here and final_path is not None and source_path is not None:
                 shutil.move(str(final_path), str(source_path))
@@ -564,6 +717,9 @@ def approve_pending_firmware(
                 message=f'Your firmware upload "{locked.original_file_name}" has been approved.',
                 priority="info",
             )
+        )
+        transaction.on_commit(
+            lambda: announce_approval(locked, record, admin_user, fulfilled_requests)
         )
     logger.info(
         "Firmware %s approved as %s by user %s",
@@ -647,6 +803,9 @@ def withdraw_firmware(pf: PendingFirmware, admin_user, *, reason: str):
         locked.reviewed_at = timezone.now()
         locked.routed_category = ""
         locked.routed_object_id = None
+        locked.approved_price = None
+        locked.price_reviewed_by = None
+        locked.price_reviewed_at = None
         locked.save()
     logger.info("Firmware %s withdrawn by user %s", locked.pk, admin_user.pk)
     return locked

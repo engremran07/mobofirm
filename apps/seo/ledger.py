@@ -15,6 +15,7 @@ from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.db import IntegrityError, models, transaction
 from django.utils import timezone
 
+from .managers import default_manager
 from .models import ChangeLedger, Metadata, Redirect, SEOSettings
 
 TARGETS: dict[str, type[models.Model]] = {
@@ -74,17 +75,17 @@ def _write(ledger: ChangeLedger, action: str, values: dict[str, Any]) -> None:
         instance.save()
         ledger.target_pk = str(instance.pk)
     elif action == ChangeLedger.Action.UPDATE:
-        instance = model._default_manager.get(pk=ledger.target_pk)
+        instance = default_manager(model).get(pk=ledger.target_pk)
         for key, value in values.items():
             setattr(instance, key, value)
         instance.save()
     else:
-        model._default_manager.filter(pk=ledger.target_pk).delete()
+        default_manager(model).filter(pk=ledger.target_pk).delete()
 
 
 def _verify(ledger: ChangeLedger, action: str, values: dict[str, Any]) -> None:
     model = _model(ledger.target_model)
-    stored = model._default_manager.filter(pk=ledger.target_pk).first()
+    stored = default_manager(model).filter(pk=ledger.target_pk).first()
     if action == ChangeLedger.Action.DELETE:
         if stored is not None:
             raise LedgerError("Row still exists after delete.")
@@ -154,7 +155,7 @@ def rollback(ledger: ChangeLedger, user: Any) -> ChangeLedger:
         ChangeLedger.Action.DELETE: ChangeLedger.Action.CREATE,
     }[ChangeLedger.Action(ledger.action)]
     if ledger.action != ChangeLedger.Action.DELETE:
-        current = model._default_manager.filter(pk=ledger.target_pk).first()
+        current = default_manager(model).filter(pk=ledger.target_pk).first()
         changed_since = ledger.action == ChangeLedger.Action.UPDATE and (
             current is not None and not _matches(current, ledger.after)
         )

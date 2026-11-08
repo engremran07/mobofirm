@@ -137,75 +137,85 @@ PIXEL_PREFIX = {12: "SQ3A", 13: "TQ3A", 14: "UQ1A", 15: "AP3A", 16: "BP2A"}
 MOTOROLA_LETTER = {11: "R", 12: "S", 13: "T", 14: "U", 15: "V"}
 
 
-def _samsung(code: str, android: int, seq: int, when: date) -> str:
-    year_letter = chr(ord("A") + when.year - 2001)
-    month_letter = chr(ord("A") + when.month - 1)
+@dataclass(frozen=True)
+class _Release:
+    """The inputs every manufacturer's build-number notation draws from."""
+
+    code: str
+    android: int
+    seq: int
+    when: date
+
+
+def _samsung(r: _Release) -> str:
+    year_letter = chr(ord("A") + r.when.year - 2001)
+    month_letter = chr(ord("A") + r.when.month - 1)
     return (
-        f"{code.removeprefix('SM-')}XXU{seq}{chr(64 + seq)}"
-        f"{year_letter}{month_letter}{2 * seq + 1}"
+        f"{r.code.removeprefix('SM-')}XXU{r.seq}{chr(64 + r.seq)}"
+        f"{year_letter}{month_letter}{2 * r.seq + 1}"
     )
 
 
-def _xiaomi(code: str, android: int, seq: int, when: date) -> str:
-    if when >= date(2024, 10, 1):
-        return f"OS2.0.{seq + 1}.0"
-    if when >= date(2023, 10, 1):
-        return f"OS1.0.{seq + 2}.0"
-    if when >= date(2022, 12, 1):
-        return f"V14.0.{seq + 1}.0"
-    if when >= date(2022, 1, 1):
-        return f"V13.0.{seq + 1}.0"
-    return f"V12.5.{seq + 1}.0"
+def _xiaomi(r: _Release) -> str:
+    if r.when >= date(2024, 10, 1):
+        return f"OS2.0.{r.seq + 1}.0"
+    if r.when >= date(2023, 10, 1):
+        return f"OS1.0.{r.seq + 2}.0"
+    if r.when >= date(2022, 12, 1):
+        return f"V14.0.{r.seq + 1}.0"
+    if r.when >= date(2022, 1, 1):
+        return f"V13.0.{r.seq + 1}.0"
+    return f"V12.5.{r.seq + 1}.0"
 
 
-def _pixel(code: str, android: int, seq: int, when: date) -> str:
-    prefix = PIXEL_PREFIX.get(android, "UQ1A")
-    return f"{prefix}.{when:%y%m}05.{seq:03d}"
+def _pixel(r: _Release) -> str:
+    prefix = PIXEL_PREFIX.get(r.android, "UQ1A")
+    return f"{prefix}.{r.when:%y%m}05.{r.seq:03d}"
 
 
-def _oplus(code: str, android: int, seq: int, when: date) -> str:
-    return f"{code}_{android}.0.0.{300 + 55 * seq}"
+def _oplus(r: _Release) -> str:
+    return f"{r.code}_{r.android}.0.0.{300 + 55 * r.seq}"
 
 
-def _vivo(code: str, android: int, seq: int, when: date) -> str:
-    return f"{code}_A_{android}.{seq}.{3 + seq}.{10 * seq}"
+def _vivo(r: _Release) -> str:
+    return f"{r.code}_A_{r.android}.{r.seq}.{3 + r.seq}.{10 * r.seq}"
 
 
-def _motorola(code: str, android: int, seq: int, when: date) -> str:
-    letter = MOTOROLA_LETTER.get(android, "T")
-    return f"{letter}{seq}SA{20 + android}.{18 + 9 * seq}-{10 + 6 * seq}"
+def _motorola(r: _Release) -> str:
+    letter = MOTOROLA_LETTER.get(r.android, "T")
+    return f"{letter}{r.seq}SA{20 + r.android}.{18 + 9 * r.seq}-{10 + 6 * r.seq}"
 
 
-def _hmd(code: str, android: int, seq: int, when: date) -> str:
-    return f"00WW_{seq}_{20 + 7 * seq}{chr(64 + when.month)}"
+def _hmd(r: _Release) -> str:
+    return f"00WW_{r.seq}_{20 + 7 * r.seq}{chr(64 + r.when.month)}"
 
 
-def _sony(code: str, android: int, seq: int, when: date) -> str:
-    return f"{50 + android}.{seq}.A.{seq + 1}.{50 + 11 * seq}"
+def _sony(r: _Release) -> str:
+    return f"{50 + r.android}.{r.seq}.A.{r.seq + 1}.{50 + 11 * r.seq}"
 
 
-def _asus(code: str, android: int, seq: int, when: date) -> str:
-    return f"WW_{30 + android}.{1004 + 10 * seq}.{when:%m}05.{90 + seq}"
+def _asus(r: _Release) -> str:
+    return f"WW_{30 + r.android}.{1004 + 10 * r.seq}.{r.when:%m}05.{90 + r.seq}"
 
 
-def _lenovo(code: str, android: int, seq: int, when: date) -> str:
-    return f"{code}_S{when:%y}{seq:02d}{when:%m}0_{when:%y%m}05_ROW"
+def _lenovo(r: _Release) -> str:
+    return f"{r.code}_S{r.when:%y}{r.seq:02d}{r.when:%m}0_{r.when:%y%m}05_ROW"
 
 
-def _transsion(code: str, android: int, seq: int, when: date) -> str:
-    return f"{code}-{android}-{when:%y%m}05V{100 * seq + 17}"
+def _transsion(r: _Release) -> str:
+    return f"{r.code}-{r.android}-{r.when:%y%m}05V{100 * r.seq + 17}"
 
 
-def _zte(code: str, android: int, seq: int, when: date) -> str:
-    return f"{code}V1.0.0B{5 + 2 * seq:02d}"
+def _zte(r: _Release) -> str:
+    return f"{r.code}V1.0.0B{5 + 2 * r.seq:02d}"
 
 
-def _nothing(code: str, android: int, seq: int, when: date) -> str:
-    return f"V{android - 11}.{seq}.{seq + 3}-{when:%y%m}05"
+def _nothing(r: _Release) -> str:
+    return f"V{r.android - 11}.{r.seq}.{r.seq + 3}-{r.when:%y%m}05"
 
 
-def _fairphone(code: str, android: int, seq: int, when: date) -> str:
-    return f"{code}.B.{100 + 20 * seq}.{when:%Y%m}05"
+def _fairphone(r: _Release) -> str:
+    return f"{r.code}.B.{100 + 20 * r.seq}.{r.when:%Y%m}05"
 
 
 def _emui_like(seed: ModelSeed, seq: int) -> str:
@@ -232,7 +242,8 @@ def build_number(scheme: BuildScheme, seed: ModelSeed, seq: int, when: date) -> 
         "nothing": _nothing,
         "fairphone": _fairphone,
     }
-    return builders[scheme.key](seed.model_code or seed.name, seed.android, seq, when)
+    release = _Release(seed.model_code or seed.name, seed.android, seq, when)
+    return builders[scheme.key](release)
 
 
 def release_dates(released: date) -> tuple[tuple[date, date], tuple[date, date]]:

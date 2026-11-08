@@ -17,14 +17,13 @@ from django.contrib import messages
 from django.contrib.admin import register
 from django.contrib.admin.utils import unquote
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db import IntegrityError, transaction
 from django.db.models import Count, QuerySet
 from django.db.models import Model as DjangoModel
 from django.http import Http404, HttpRequest, HttpResponse
+from django.urls import URLPattern, path, reverse
 from django.utils import timezone
-from django.utils.html import format_html
+from django.utils.html import format_html, format_html_join
 from django.utils.safestring import SafeString
-from django.utils.text import slugify
 from django.utils.translation import gettext_lazy as _
 from unfold.contrib.filters.admin import (
     ChoicesDropdownFilter,
@@ -33,7 +32,11 @@ from unfold.contrib.filters.admin import (
     RelatedDropdownFilter,
 )
 from unfold.forms import ActionForm, BaseDialogForm
-from unfold.widgets import UnfoldAdminSelectWidget, UnfoldAdminTextareaWidget
+from unfold.widgets import (
+    UnfoldAdminSelectWidget,
+    UnfoldAdminTextareaWidget,
+    UnfoldAdminTextInputWidget,
+)
 
 from apps.core.admin_base import (
     BADGE_APPROVAL,
@@ -51,16 +54,24 @@ from apps.core.admin_base import (
     return_url,
 )
 
-from .admin_autofill import FirmwareAutoFill
+from .catalog_requests import (
+    approve_brand_request,
+    approve_chipset_request,
+    approve_model_request,
+    approve_variant_request,
+    decide_firmware_request,
+    reject_catalog_request,
+)
 from .constants import MAIN_CATEGORIES
 from .models import (
+    AccessTier,
     AdGateLog,
     AutomatedBlogLink,
     Brand,
     BrandCreationRequest,
-    BrandSchema,
     ChangelogEntry,
     Chipset,
+    ChipsetCreationRequest,
     DownloadSession,
     DownloadToken,
     EngineeringFirmware,
@@ -69,7 +80,6 @@ from .models import (
     FlashingTool,
     FlashingToolCategory,
     GeneratedFlashingGuide,
-    GSMArenaDevice,
     HotlinkBlock,
     Model,
     ModelCreationRequest,
@@ -79,7 +89,7 @@ from .models import (
     PendingFirmware,
     ReadbackFirmware,
     ReleaseNote,
-    SchemaUpdateProposal,
+    ServedDownload,
     TestResult,
     TrustedTester,
     UnclassifiedFirmware,
@@ -96,6 +106,7 @@ from .services import (
 from .tracking_models import (
     FirmwareDownloadAttempt,
     FirmwareRequest,
+    FirmwareRequestSupport,
     FirmwareStats,
     FirmwareView,
 )
@@ -132,6 +143,23 @@ BADGE_STATE: Mapping[str, str] = {
 }
 
 ReviewHandler = Callable[..., object]
+
+# Concrete firmware category tables (each registered below with its own admin).
+FIRMWARE_CATEGORY_MODELS = (
+    OfficialFirmware,
+    EngineeringFirmware,
+    ReadbackFirmware,
+    ModifiedFirmware,
+    OtherFirmware,
+    UnclassifiedFirmware,
+)
+
+# Access tier -> Unfold badge colour.
+BADGE_TIER: Mapping[str, str] = {
+    "free": "success",
+    "paid": "warning",
+    "featured": "info",
+}
 
 
 def external_link(url: str) -> SafeString | str:
@@ -209,7 +237,7 @@ class BrandAdmin(ModelAdmin):
         "slug",
         "model_count",
         "is_featured",
-        "autofill_status",
+        "description_status",
         "created_at",
     )
     list_filter = ("is_featured", ("created_at", RangeDateTimeFilter))
@@ -218,7 +246,6 @@ class BrandAdmin(ModelAdmin):
     readonly_fields = ("created_at", "updated_at", "website_link", "logo_link")
     ordering = ("name",)
     inlines = (BrandModelInline,)
-    actions_detail = ("autofill_description",)
     fieldsets = (
         (
             _("Basic information"),
@@ -251,7 +278,7 @@ class BrandAdmin(ModelAdmin):
         description=_("Catalogue status"),
         label={"complete": "success", "incomplete": "warning"},
     )
-    def autofill_status(self, obj: Brand) -> str:
+    def description_status(self, obj: Brand) -> str:
         return "complete" if obj.description else "incomplete"
 
     @display(description=_("Website"))
@@ -264,46 +291,6 @@ class BrandAdmin(ModelAdmin):
 
     def get_queryset(self, request: HttpRequest) -> QuerySet[Brand]:
         return super().get_queryset(request).annotate(models_total=Count("models"))
-
-    @action(
-        description=_("Auto-fill description"),
-        icon="auto_fix_high",
-        permissions=["change"],
-        url_path="autofill-description",
-        dialog=confirm_dialog(
-            _("Auto-fill missing brand details"),
-            _(
-                "Looks the brand up in the synchronised GSMArena records and fills "
-                "an empty description. Existing text is never overwritten."
-            ),
-            submit=_("Auto-fill"),
-        ),
-    )
-    def autofill_description(
-        self, request: HttpRequest, form: BaseDialogForm, object_id: str
-    ) -> HttpResponse:
-        brand = self.get_object(request, unquote(object_id))
-        if brand is None:
-            raise Http404
-        if brand.description:
-            self.message_user(
-                request, _("The brand already has a description."), messages.WARNING
-            )
-        else:
-            description = FirmwareAutoFill.autofill_brand(brand.name).get(
-                "description", ""
-            )
-            if description:
-                brand.description = description
-                brand.save(update_fields=["description", "updated_at"])
-                self.message_user(request, _("Brand description filled in."))
-            else:
-                self.message_user(
-                    request,
-                    _("No description was found for this brand."),
-                    messages.WARNING,
-                )
-        return htmx_redirect(return_url(request, change_url(self, brand.pk)))
 
 
 class VariantInline(TabularInline):
@@ -335,7 +322,14 @@ class DeviceModelAdmin(ModelAdmin):
     )
     search_fields = ("name", "slug", "brand__name", "model_code", "codename")
     prepopulated_fields: ClassVar[dict[str, tuple[str, ...]]] = {"slug": ("name",)}
-    readonly_fields = ("created_at", "updated_at", "image_link")
+    readonly_fields = (
+        "created_at",
+        "updated_at",
+        "image_link",
+        "firmware_summary",
+        "pending_uploads",
+        "blog_post_link",
+    )
     autocomplete_fields = ("brand", "chipset_ref")
     ordering = ("brand__name", "name")
     inlines = (VariantInline,)
@@ -392,6 +386,13 @@ class DeviceModelAdmin(ModelAdmin):
             {"fields": ("image_url", "image_link"), "classes": ["tab"]},
         ),
         (
+            _("Related"),
+            {
+                "fields": ("firmware_summary", "pending_uploads", "blog_post_link"),
+                "classes": ["tab"],
+            },
+        ),
+        (
             _("Metadata"),
             {"fields": ("created_at", "updated_at"), "classes": ["tab"]},
         ),
@@ -400,6 +401,63 @@ class DeviceModelAdmin(ModelAdmin):
     @display(description=_("Variants"), ordering="variants_total")
     def variant_count(self, obj: Model) -> int:
         return int(getattr(obj, "variants_total", 0))
+
+    @display(description=_("Firmware by category"))
+    def firmware_summary(self, obj: Model) -> SafeString | str:
+        if not obj.pk:
+            return "—"
+        rows = []
+        for firmware_model in FIRMWARE_CATEGORY_MODELS:
+            count = firmware_model.objects.filter(model=obj).count()
+            if count:
+                opts = firmware_model._meta
+                url = reverse(f"admin:{opts.app_label}_{opts.model_name}_changelist")
+                rows.append(
+                    (f"{url}?model__id__exact={obj.pk}", opts.verbose_name, count)
+                )
+        if not rows:
+            return str(_("No firmware yet."))
+        return format_html_join(
+            " · ",
+            '<a class="text-primary-600 underline dark:text-primary-500" '
+            'href="{}">{}: {}</a>',
+            rows,
+        )
+
+    @display(description=_("Pending uploads"))
+    def pending_uploads(self, obj: Model) -> SafeString | str:
+        if not obj.pk:
+            return "—"
+        count = PendingFirmware.objects.filter(
+            uploaded_model=obj, admin_decision="pending"
+        ).count()
+        if not count:
+            return str(_("Nothing waiting for review."))
+        url = reverse("admin:firmwares_pendingfirmware_changelist")
+        return format_html(
+            '<a class="text-primary-600 underline dark:text-primary-500" '
+            'href="{}?uploaded_model__id__exact={}&admin_decision__exact=pending">'
+            "{}</a>",
+            url,
+            obj.pk,
+            _("%(count)s waiting for review") % {"count": count},
+        )
+
+    @display(description=_("Automated blog post"))
+    def blog_post_link(self, obj: Model) -> SafeString | str:
+        link = (
+            AutomatedBlogLink.objects.select_related("post").filter(model=obj).first()
+            if obj.pk
+            else None
+        )
+        if link is None:
+            return str(_("No automated blog post yet."))
+        return format_html(
+            '<a class="text-primary-600 underline dark:text-primary-500" '
+            'href="{}">{}</a>',
+            reverse("admin:blog_post_change", args=[link.post_id]),
+            link.post.title,
+        )
 
     @display(description=_("Device photo URL"))
     def image_link(self, obj: Model) -> SafeString | str:
@@ -414,8 +472,65 @@ class DeviceModelAdmin(ModelAdmin):
         )
 
 
+class VariantAdminForm(forms.ModelForm):
+    """Brand first, then only that brand's models: the model must belong to it."""
+
+    brand = forms.ModelChoiceField(
+        queryset=Brand.objects.order_by("name"),
+        label=_("Brand"),
+        help_text=_("Choose the brand first; the model list shows only its models."),
+        widget=UnfoldAdminSelectWidget,
+    )
+
+    class Meta:
+        model = Variant
+        fields = "__all__"
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        brand_id = self._selected_brand_id()
+        self.fields["brand"].widget.attrs.update(
+            {
+                "hx-get": reverse("admin:firmwares_variant_model_options"),
+                "hx-trigger": "change",
+                "hx-target": "#id_model",
+                "hx-swap": "innerHTML",
+            }
+        )
+        model_field = self.fields["model"]
+        if isinstance(model_field, forms.ModelChoiceField):
+            model_field.queryset = (
+                Model.objects.filter(brand_id=brand_id).order_by("name")
+                if brand_id
+                else Model.objects.none()
+            )
+        if brand_id and "brand" not in self.initial:
+            self.initial["brand"] = brand_id
+
+    def _selected_brand_id(self) -> int | None:
+        raw: object = self.data.get(self.add_prefix("brand")) if self.is_bound else None
+        if raw in (None, ""):
+            raw = (
+                self.instance.model.brand_id
+                if self.instance.model_id
+                else self.initial.get("brand")
+            )
+        text = str(raw or "")
+        return int(text) if text.isdigit() else None
+
+    def clean(self) -> dict[str, Any]:
+        cleaned = super().clean() or {}
+        brand, model = cleaned.get("brand"), cleaned.get("model")
+        if brand and model and model.brand_id != brand.pk:
+            self.add_error(
+                "model", _("This model does not belong to the chosen brand.")
+            )
+        return cleaned
+
+
 @register(Variant)
 class VariantAdmin(ModelAdmin):
+    form = VariantAdminForm
     list_display = (
         "name",
         "model",
@@ -442,13 +557,14 @@ class VariantAdmin(ModelAdmin):
     )
     prepopulated_fields: ClassVar[dict[str, tuple[str, ...]]] = {"slug": ("name",)}
     readonly_fields = ("created_at", "updated_at")
-    autocomplete_fields = ("model", "chipset_ref")
+    autocomplete_fields = ("chipset_ref",)
     ordering = ("model__brand__name", "model__name", "name")
     fieldsets = (
         (
             _("Identification"),
             {
                 "fields": (
+                    "brand",
                     "model",
                     "name",
                     "slug",
@@ -477,6 +593,33 @@ class VariantAdmin(ModelAdmin):
     def brand_name(self, obj: Variant) -> str:
         return obj.model.brand.name
 
+    def get_urls(self) -> list[URLPattern]:
+        custom = path(
+            "model-options/",
+            self.admin_site.admin_view(self.model_options),
+            name="firmwares_variant_model_options",
+        )
+        return [custom, *super().get_urls()]
+
+    def model_options(self, request: HttpRequest) -> HttpResponse:
+        """``<option>`` list of one brand's models for the dependent model select."""
+        if not (
+            self.has_add_permission(request) or self.has_change_permission(request)
+        ):
+            raise PermissionDenied
+        raw = request.GET.get("brand", "")
+        models = (
+            Model.objects.filter(brand_id=int(raw)).order_by("name")
+            if raw.isdigit()
+            else Model.objects.none()
+        )
+        options = format_html_join(
+            "", '<option value="{}">{}</option>', ((m.pk, m.name) for m in models)
+        )
+        return HttpResponse(
+            format_html('<option value="">---------</option>{}', options)
+        )
+
     def get_queryset(self, request: HttpRequest) -> QuerySet[Variant]:
         return (
             super().get_queryset(request).select_related("model__brand", "chipset_ref")
@@ -484,34 +627,8 @@ class VariantAdmin(ModelAdmin):
 
 
 # ---------------------------------------------------------------------------
-# Brand schemas and catalogue creation requests
+# Catalogue creation requests
 # ---------------------------------------------------------------------------
-
-
-@register(BrandSchema)
-class BrandSchemaAdmin(ModelAdmin):
-    list_display = ("brand", "approved_by", "approved_at", "created_at")
-    list_filter = (("approved_at", RangeDateTimeFilter),)
-    search_fields = ("brand__name",)
-    autocomplete_fields = ("brand",)
-    raw_id_fields = ("approved_by",)
-
-
-@register(SchemaUpdateProposal)
-class SchemaUpdateProposalAdmin(ModelAdmin):
-    list_display = ("brand", "status_badge", "proposed_by", "reviewed_by", "created_at")
-    list_filter = (
-        ("status", ChoicesDropdownFilter),
-        ("created_at", RangeDateTimeFilter),
-    )
-    search_fields = ("brand__name", "proposed_by__email")
-    readonly_fields = ("created_at", "updated_at")
-    autocomplete_fields = ("brand",)
-    raw_id_fields = ("proposed_by", "reviewed_by")
-
-    @display(description=_("Status"), ordering="status", label=BADGE_STATE)
-    def status_badge(self, obj: SchemaUpdateProposal) -> str:
-        return obj.status
 
 
 class CreationRequestForm(BaseDialogForm):
@@ -522,40 +639,106 @@ class CreationRequestForm(BaseDialogForm):
     )
 
 
-class CreationRequestAdmin(ModelAdmin):
-    """Catalogue requests: staff reject with a recorded reason."""
+class ApprovalNoteForm(BaseDialogForm):
+    reason = forms.CharField(
+        label=_("Note to the requester (optional)"),
+        required=False,
+        max_length=1000,
+        widget=UnfoldAdminTextareaWidget(attrs={"rows": 3}),
+    )
+
+
+class ReviewOnlyAdmin(NoAddModelAdmin):
+    """Requests come from end users; staff only review them, never edit or add."""
+
+    def get_readonly_fields(
+        self, request: HttpRequest, obj: DjangoModel | None = None
+    ) -> Sequence[str]:
+        return [field.name for field in self.model._meta.fields]
+
+
+class CreationRequestAdmin(ReviewOnlyAdmin):
+    """Catalogue requests: staff approve or reject with a recorded reason."""
 
     list_filter: Sequence[tuple[str, Any]] = (
         ("status", ChoicesDropdownFilter),
         ("created_at", RangeDateTimeFilter),
     )
-    readonly_fields = ("status", "reviewed_by", "reviewed_at", "created_at")
     list_select_related = ("requested_by", "reviewed_by")
-    raw_id_fields = ("requested_by", "reviewed_by")
-    actions: Sequence[str] = ("reject_requests",)
-    actions_row: Sequence[str] = ("reject_request",)
-    actions_detail: Sequence[str] = ("reject_request",)
+    actions: Sequence[str] = ("approve_requests",)
+    actions_row: Sequence[str] = ("approve_request", "reject_request")
+    actions_detail: Sequence[str] = ("approve_request", "reject_request")
 
     @display(description=_("Status"), ordering="status", label=BADGE_STATE)
     def status_badge(self, obj: Any) -> str:
         return str(obj.status)
 
-    def _reject(
-        self, request: HttpRequest, queryset: QuerySet[Any], reason: str
-    ) -> int:
-        return queryset.filter(status="pending").update(
-            status="rejected",
-            reviewed_by=request.user,
-            reviewed_at=timezone.now(),
-            notes=reason,
-        )
+    def _approve_one(self, request: HttpRequest, pending: Any, reason: str) -> bool:
+        raise NotImplementedError
 
-    @action(description=_("Reject selected requests"), permissions=["change"])
-    def reject_requests(self, request: HttpRequest, queryset: QuerySet[Any]) -> None:
-        count = self._reject(request, queryset, "")
+    def _approve_many(
+        self, request: HttpRequest, queryset: QuerySet[Any]
+    ) -> tuple[int, list[str]]:
+        done, problems = 0, []
+        for pending in queryset.filter(status="pending"):
+            try:
+                self._approve_one(request, pending, "")
+            except (PermissionDenied, ValidationError) as error:
+                detail = " ".join(getattr(error, "messages", [str(error)]))
+                problems.append(f"{pending}: {detail}")
+            else:
+                done += 1
+        return done, problems
+
+    @action(description=_("Approve selected requests"), permissions=["change"])
+    def approve_requests(self, request: HttpRequest, queryset: QuerySet[Any]) -> None:
+        done, problems = self._approve_many(request, queryset)
         self.message_user(
-            request, _("%(count)d request(s) rejected.") % {"count": count}
+            request, _("%(count)d request(s) approved.") % {"count": done}
         )
+        for problem in problems:
+            self.message_user(request, problem, messages.ERROR)
+
+    def _decide_one(
+        self,
+        request: HttpRequest,
+        object_id: str,
+        decide: Callable[[Any], str],
+    ) -> HttpResponse:
+        target = self.get_object(request, unquote(object_id))
+        if target is None:
+            raise Http404
+        try:
+            outcome = decide(target)
+        except (PermissionDenied, ValidationError) as error:
+            detail = " ".join(getattr(error, "messages", [str(error)]))
+            self.message_user(request, detail, messages.ERROR)
+        else:
+            self.message_user(request, outcome)
+        return htmx_redirect(return_url(request, change_url(self, target.pk)))
+
+    @action(
+        description=_("Approve and create"),
+        icon="check_circle",
+        permissions=["change"],
+        url_path="approve-request",
+        dialog=confirm_dialog(
+            _("Approve this request"),
+            _("Creates the catalogue record and notifies the requester."),
+            ApprovalNoteForm,
+            submit=_("Approve"),
+        ),
+    )
+    def approve_request(
+        self, request: HttpRequest, form: BaseDialogForm, object_id: str
+    ) -> HttpResponse:
+        reason = str(form.cleaned_data["reason"])
+
+        def decide(target: Any) -> str:
+            self._approve_one(request, target, reason)
+            return str(_("Request approved."))
+
+        return self._decide_one(request, object_id, decide)
 
     @action(
         description=_("Reject request"),
@@ -564,7 +747,7 @@ class CreationRequestAdmin(ModelAdmin):
         url_path="reject-request",
         dialog=confirm_dialog(
             _("Reject this request"),
-            _("The reason is stored on the request."),
+            _("The reason is stored on the request and sent to the requester."),
             CreationRequestForm,
             submit=_("Reject"),
         ),
@@ -572,90 +755,24 @@ class CreationRequestAdmin(ModelAdmin):
     def reject_request(
         self, request: HttpRequest, form: BaseDialogForm, object_id: str
     ) -> HttpResponse:
-        target = self.get_object(request, unquote(object_id))
-        if target is None:
-            raise Http404
-        changed = self._reject(
-            request,
-            self.model.objects.filter(pk=target.pk),
-            str(form.cleaned_data["reason"]),
-        )
-        if changed:
-            self.message_user(request, _("Request rejected."))
-        else:
-            self.message_user(
-                request, _("Only pending requests can be rejected."), messages.ERROR
-            )
-        return htmx_redirect(return_url(request, change_url(self, target.pk)))
+        reason = str(form.cleaned_data["reason"])
+
+        def decide(target: Any) -> str:
+            reject_catalog_request(target, request.user, reason=reason)
+            return str(_("Request rejected."))
+
+        return self._decide_one(request, object_id, decide)
 
 
 @register(BrandCreationRequest)
 class BrandCreationRequestAdmin(CreationRequestAdmin):
     list_display = ("name", "status_badge", "requested_by", "reviewed_by", "created_at")
     search_fields = ("name", "requested_by__email")
-    actions = ("approve_requests", "reject_requests")
-    actions_row = ("approve_request", "reject_request")
-    actions_detail = ("approve_request", "reject_request")
 
-    def _approve(self, request: HttpRequest, pending: BrandCreationRequest) -> bool:
-        """Create the brand and close the request in one transaction."""
-        slug = slugify(pending.name)
-        try:
-            with transaction.atomic():
-                brand, _created = Brand.objects.get_or_create(
-                    slug=slug, defaults={"name": pending.name}
-                )
-                pending.status = "approved"
-                pending.reviewed_by_id = request.user.pk
-                pending.reviewed_at = timezone.now()
-                pending.save(update_fields=["status", "reviewed_by", "reviewed_at"])
-        except IntegrityError:
-            self.message_user(
-                request,
-                _("Brand “%(name)s” conflicts with an existing brand or reserved URL.")
-                % {"name": pending.name},
-                messages.ERROR,
-            )
-            return False
+    def _approve_one(self, request: HttpRequest, pending: Any, reason: str) -> bool:
+        brand, _created = approve_brand_request(pending, request.user, reason=reason)
         logger.info("Brand request %s approved as brand %s", pending.pk, brand.pk)
         return True
-
-    @action(description=_("Approve selected requests"), permissions=["change"])
-    def approve_requests(
-        self, request: HttpRequest, queryset: QuerySet[BrandCreationRequest]
-    ) -> None:
-        count = sum(
-            self._approve(request, pending)
-            for pending in queryset.filter(status="pending")
-        )
-        self.message_user(
-            request, _("%(count)d brand(s) approved and created.") % {"count": count}
-        )
-
-    @action(
-        description=_("Approve and create brand"),
-        icon="check_circle",
-        permissions=["change"],
-        url_path="approve-request",
-        dialog=confirm_dialog(
-            _("Approve this brand request"),
-            _("Creates the brand (or reuses an existing one with the same slug)."),
-            submit=_("Approve"),
-        ),
-    )
-    def approve_request(
-        self, request: HttpRequest, form: BaseDialogForm, object_id: str
-    ) -> HttpResponse:
-        target = self.get_object(request, unquote(object_id))
-        if target is None:
-            raise Http404
-        if target.status != "pending":
-            self.message_user(
-                request, _("Only pending requests can be approved."), messages.ERROR
-            )
-        elif self._approve(request, target):
-            self.message_user(request, _("Brand created."))
-        return htmx_redirect(return_url(request, change_url(self, target.pk)))
 
 
 @register(ModelCreationRequest)
@@ -667,7 +784,10 @@ class ModelCreationRequestAdmin(CreationRequestAdmin):
         ("created_at", RangeDateTimeFilter),
     )
     search_fields = ("name", "brand__name", "requested_by__email")
-    autocomplete_fields = ("brand",)
+
+    def _approve_one(self, request: HttpRequest, pending: Any, reason: str) -> bool:
+        approve_model_request(pending, request.user, reason=reason)
+        return True
 
 
 @register(VariantCreationRequest)
@@ -679,12 +799,46 @@ class VariantCreationRequestAdmin(CreationRequestAdmin):
         ("created_at", RangeDateTimeFilter),
     )
     search_fields = ("name", "model__name", "model__brand__name", "requested_by__email")
-    autocomplete_fields = ("model",)
+
+    def _approve_one(self, request: HttpRequest, pending: Any, reason: str) -> bool:
+        approve_variant_request(pending, request.user, reason=reason)
+        return True
+
+
+@register(ChipsetCreationRequest)
+class ChipsetCreationRequestAdmin(CreationRequestAdmin):
+    list_display = (
+        "name",
+        "vendor",
+        "family",
+        "status_badge",
+        "requested_by",
+        "created_at",
+    )
+    search_fields = ("name", "vendor", "family", "requested_by__email")
+
+    def _approve_one(self, request: HttpRequest, pending: Any, reason: str) -> bool:
+        approve_chipset_request(pending, request.user, reason=reason)
+        return True
 
 
 # ---------------------------------------------------------------------------
 # Firmware moderation
 # ---------------------------------------------------------------------------
+
+
+TIER_CHOICES = [("", _("As requested by the uploader")), *AccessTier.choices]
+
+
+def _price_field(label: str) -> forms.DecimalField:
+    return forms.DecimalField(
+        label=label,
+        required=False,
+        min_value=0,
+        max_digits=10,
+        decimal_places=2,
+        widget=UnfoldAdminTextInputWidget,
+    )
 
 
 class FirmwareReviewActionForm(ActionForm):
@@ -710,12 +864,29 @@ class ApproveUploadForm(BaseDialogForm):
         label=_("Firmware category"),
         widget=UnfoldAdminSelectWidget,
     )
+    access_tier = forms.ChoiceField(
+        choices=TIER_CHOICES,
+        required=False,
+        label=_("Access tier"),
+        help_text=_("Only files from approved sellers can be paid or featured."),
+        widget=UnfoldAdminSelectWidget,
+    )
+    approved_price = _price_field(str(_("Approved price (USD, paid files only)")))
     notes = forms.CharField(
         required=False,
         max_length=1000,
         label=_("Decision notes"),
         widget=UnfoldAdminTextareaWidget(attrs={"rows": 3}),
     )
+
+    def clean(self) -> dict[str, Any]:
+        cleaned = super().clean() or {}
+        tier, price = cleaned.get("access_tier"), cleaned.get("approved_price")
+        if tier == AccessTier.PAID and not price:
+            self.add_error("approved_price", _("A paid file needs an approved price."))
+        if tier in (AccessTier.FREE, AccessTier.FEATURED) and price:
+            self.add_error("approved_price", _("Only paid files have a price."))
+        return cleaned
 
 
 @register(PendingFirmware)
@@ -733,11 +904,13 @@ class PendingFirmwareAdmin(NoAddModelAdmin):
         "ai_model",
         "ai_category",
         "package_format",
+        "tier_badge",
         "reviewed_by",
         "created_at",
     )
     list_filter = (
         ("admin_decision", ChoicesDropdownFilter),
+        ("access_tier", ChoicesDropdownFilter),
         ("source_type", ChoicesDropdownFilter),
         ("extraction_status", ChoicesDropdownFilter),
         ("ai_category", ChoicesDropdownFilter),
@@ -769,6 +942,11 @@ class PendingFirmwareAdmin(NoAddModelAdmin):
         "reviewed_at",
         "routed_category",
         "routed_object_id",
+        "access_tier",
+        "proposed_price",
+        "approved_price",
+        "price_reviewed_by",
+        "price_reviewed_at",
     )
     autocomplete_fields = ("uploaded_brand", "uploaded_model", "uploaded_variant")
     list_select_related = ("uploader", "reviewed_by")
@@ -804,6 +982,19 @@ class PendingFirmwareAdmin(NoAddModelAdmin):
                     "ai_variant",
                     "ai_category",
                     "ai_subtype",
+                ),
+                "classes": ["tab"],
+            },
+        ),
+        (
+            _("Access and price"),
+            {
+                "fields": (
+                    "access_tier",
+                    "proposed_price",
+                    "approved_price",
+                    "price_reviewed_by",
+                    "price_reviewed_at",
                 ),
                 "classes": ["tab"],
             },
@@ -848,6 +1039,10 @@ class PendingFirmwareAdmin(NoAddModelAdmin):
     def decision_badge(self, obj: PendingFirmware) -> str:
         return obj.admin_decision
 
+    @display(description=_("Tier"), ordering="access_tier", label=BADGE_TIER)
+    def tier_badge(self, obj: PendingFirmware) -> str:
+        return obj.access_tier
+
     @display(description=_("External download"))
     def external_link(self, obj: PendingFirmware) -> SafeString | str:
         return external_link(obj.external_url)
@@ -858,7 +1053,7 @@ class PendingFirmwareAdmin(NoAddModelAdmin):
         queryset: QuerySet[PendingFirmware],
         handler: ReviewHandler,
         done_label: str,
-        **kwargs: str,
+        **kwargs: Any,
     ) -> None:
         done = 0
         problems: list[str] = []
@@ -881,7 +1076,7 @@ class PendingFirmwareAdmin(NoAddModelAdmin):
         object_id: str,
         handler: ReviewHandler,
         done_label: str,
-        **kwargs: str,
+        **kwargs: Any,
     ) -> HttpResponse:
         pending = self.get_object(request, unquote(object_id))
         if pending is None:
@@ -970,6 +1165,8 @@ class PendingFirmwareAdmin(NoAddModelAdmin):
             "Approved",
             category=str(form.cleaned_data["category"]),
             notes=str(form.cleaned_data["notes"]),
+            access_tier=str(form.cleaned_data["access_tier"]) or None,
+            approved_price=form.cleaned_data["approved_price"],
         )
 
     @action(
@@ -1031,11 +1228,13 @@ class BaseFirmwareAdmin(NoAddModelAdmin):
         "chipset",
         "source_type",
         "review_state",
+        "tier_badge",
         "is_active",
         "created_at",
     )
     list_filter = (
         ("brand", RelatedDropdownFilter),
+        ("access_tier", ChoicesDropdownFilter),
         ("source_type", ChoicesDropdownFilter),
         ("package_format", ChoicesDropdownFilter),
         "is_verified",
@@ -1067,6 +1266,9 @@ class BaseFirmwareAdmin(NoAddModelAdmin):
         "encrypted_password",
         "download_count",
         "view_count",
+        "proposed_price",
+        "price_reviewed_by",
+        "price_reviewed_at",
     )
     autocomplete_fields = ("brand", "model", "variant")
     fieldsets = (
@@ -1112,6 +1314,19 @@ class BaseFirmwareAdmin(NoAddModelAdmin):
             },
         ),
         (
+            _("Access and price"),
+            {
+                "fields": (
+                    "access_tier",
+                    "proposed_price",
+                    "approved_price",
+                    "price_reviewed_by",
+                    "price_reviewed_at",
+                ),
+                "classes": ["tab"],
+            },
+        ),
+        (
             _("Technical"),
             {
                 "fields": (
@@ -1135,9 +1350,22 @@ class BaseFirmwareAdmin(NoAddModelAdmin):
     def review_state(self, obj: Any) -> str:
         return "verified" if obj.is_verified else "unreviewed"
 
+    @display(description=_("Tier"), ordering="access_tier", label=BADGE_TIER)
+    def tier_badge(self, obj: Any) -> str:
+        return str(obj.access_tier)
+
     @display(description=_("External download"))
     def external_link(self, obj: Any) -> SafeString | str:
         return external_link(obj.external_url)
+
+    def save_model(
+        self, request: HttpRequest, obj: Any, form: Any, change: bool
+    ) -> None:
+        """A staff edit of the tier or price records who reviewed it and when."""
+        if change and {"access_tier", "approved_price"} & set(form.changed_data):
+            obj.price_reviewed_by = request.user
+            obj.price_reviewed_at = timezone.now()
+        super().save_model(request, obj, form, change)
 
     def get_queryset(self, request: HttpRequest) -> QuerySet[Any]:
         return (
@@ -1222,41 +1450,6 @@ class FirmwareDiffAdmin(ModelAdmin):
     list_display = ("old_firmware", "new_firmware", "generated_at")
     readonly_fields = ("generated_at",)
     raw_id_fields = ("old_firmware", "new_firmware")
-
-
-# ---------------------------------------------------------------------------
-# GSMArena device synchronisation
-# ---------------------------------------------------------------------------
-
-
-@register(GSMArenaDevice)
-class GSMArenaDeviceAdmin(ModelAdmin):
-    list_display = (
-        "gsmarena_id",
-        "brand",
-        "model_name",
-        "review_badge",
-        "last_synced_at",
-    )
-    list_filter = (
-        ("review_status", ChoicesDropdownFilter),
-        ("last_synced_at", RangeDateTimeFilter),
-    )
-    search_fields = ("gsmarena_id", "brand", "model_name")
-    readonly_fields = ("last_synced_at", "reviewed_at", "source_link", "image_link")
-    raw_id_fields = ("local_device", "reviewed_by")
-
-    @display(description=_("Review"), ordering="review_status", label=BADGE_STATE)
-    def review_badge(self, obj: GSMArenaDevice) -> str:
-        return obj.review_status
-
-    @display(description=_("GSMArena page"))
-    def source_link(self, obj: GSMArenaDevice) -> SafeString | str:
-        return external_link(obj.url)
-
-    @display(description=_("Image URL"))
-    def image_link(self, obj: GSMArenaDevice) -> SafeString | str:
-        return external_link(obj.image_url)
 
 
 # ---------------------------------------------------------------------------
@@ -1615,11 +1808,51 @@ class FirmwareDownloadAttemptAdmin(ReadOnlyModelAdmin):
         return obj.status
 
 
+@register(ServedDownload)
+class ServedDownloadAdmin(ReadOnlyModelAdmin):
+    list_display = (
+        "user",
+        "content_type",
+        "object_id",
+        "tier_badge",
+        "paid_amount",
+        "charged_quota",
+        "served_at",
+    )
+    list_filter = (
+        ("tier", ChoicesDropdownFilter),
+        "charged_quota",
+        ("served_at", RangeDateTimeFilter),
+    )
+    search_fields = ("user__email", "user__username")
+    raw_id_fields = ("user",)
+
+    @display(description=_("Tier"), ordering="tier", label=BADGE_TIER)
+    def tier_badge(self, obj: ServedDownload) -> str:
+        return obj.tier
+
+
+class FirmwareRequestSupportInline(TabularInline):
+    model = FirmwareRequestSupport
+    fields = ("user", "created_at")
+    readonly_fields = ("user", "created_at")
+    can_delete = False
+
+    def has_add_permission(
+        self, request: HttpRequest, obj: DjangoModel | None = None
+    ) -> bool:
+        return False
+
+
 @register(FirmwareRequest)
-class FirmwareRequestAdmin(ModelAdmin):
+class FirmwareRequestAdmin(ReviewOnlyAdmin):
+    actions_row = ("start_work", "fulfil_request", "reject_firmware_request")
+    actions_detail = ("start_work", "fulfil_request", "reject_firmware_request")
+    inlines = (FirmwareRequestSupportInline,)
     list_display = (
         "brand",
         "model",
+        "variant_name",
         "firmware_type",
         "status_badge",
         "request_count",
@@ -1632,12 +1865,90 @@ class FirmwareRequestAdmin(ModelAdmin):
         ("created_at", RangeDateTimeFilter),
     )
     search_fields = ("brand__name", "model__name", "variant_name")
-    raw_id_fields = ("brand", "model", "requested_by", "fulfilled_firmware_ct")
-    readonly_fields = ("request_count", "created_at", "last_requested_at")
+    list_select_related = ("brand", "model")
 
     @display(description=_("Status"), ordering="status", label=BADGE_STATE)
     def status_badge(self, obj: FirmwareRequest) -> str:
         return obj.status
+
+    def _set_status(
+        self, request: HttpRequest, object_id: str, status: str, reason: str, done: str
+    ) -> HttpResponse:
+        target = self.get_object(request, unquote(object_id))
+        if target is None:
+            raise Http404
+        try:
+            decide_firmware_request(target, request.user, status=status, reason=reason)
+        except (PermissionDenied, ValidationError) as error:
+            detail = " ".join(getattr(error, "messages", [str(error)]))
+            self.message_user(request, detail, messages.ERROR)
+        else:
+            self.message_user(request, done)
+        return htmx_redirect(return_url(request, change_url(self, target.pk)))
+
+    @action(
+        description=_("Mark in progress"),
+        icon="pending",
+        permissions=["change"],
+        url_path="start-work",
+        dialog=confirm_dialog(
+            _("Mark this request in progress"),
+            _("Requesters see that the file is being worked on."),
+            submit=_("Mark in progress"),
+        ),
+    )
+    def start_work(
+        self, request: HttpRequest, _form: BaseDialogForm, object_id: str
+    ) -> HttpResponse:
+        return self._set_status(
+            request, object_id, "in_progress", "", str(_("Marked in progress."))
+        )
+
+    @action(
+        description=_("Mark fulfilled"),
+        icon="check_circle",
+        permissions=["change"],
+        url_path="fulfil-request",
+        dialog=confirm_dialog(
+            _("The firmware has been added"),
+            _("Everyone who asked for it is notified."),
+            ApprovalNoteForm,
+            submit=_("Mark fulfilled"),
+        ),
+    )
+    def fulfil_request(
+        self, request: HttpRequest, form: BaseDialogForm, object_id: str
+    ) -> HttpResponse:
+        return self._set_status(
+            request,
+            object_id,
+            "fulfilled",
+            str(form.cleaned_data["reason"]),
+            str(_("Request marked fulfilled.")),
+        )
+
+    @action(
+        description=_("Reject request"),
+        icon="block",
+        permissions=["change"],
+        url_path="reject-firmware-request",
+        dialog=confirm_dialog(
+            _("Reject this firmware request"),
+            _("The reason is stored and sent to everyone who asked."),
+            CreationRequestForm,
+            submit=_("Reject"),
+        ),
+    )
+    def reject_firmware_request(
+        self, request: HttpRequest, form: BaseDialogForm, object_id: str
+    ) -> HttpResponse:
+        return self._set_status(
+            request,
+            object_id,
+            "rejected",
+            str(form.cleaned_data["reason"]),
+            str(_("Request rejected.")),
+        )
 
 
 @register(FirmwareStats)

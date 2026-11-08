@@ -1,96 +1,90 @@
-{% extends "base.html" %}
-{% load mf_ui %}
-{% block content %}
-{% url 'admin:index' as admin_url %}
-<div class="site-container py-4 py-lg-5">
-  {% include "components/breadcrumbs.html" with current="Storage status" parent_label="Staff" parent_url=admin_url %}
-  {% include "components/page_header.html" with eyebrow="Staff" title="Storage status" lead="Where firmware files live, whether they can be reached, and how much room is left." %}
-
-  <section class="mb-5" aria-labelledby="capacity-heading">
-    <h2 class="h4" id="capacity-heading">Capacity and health</h2>
-    <div class="row g-3">
-      <div class="col-6 col-lg-3">{% include "components/stat_tile.html" with label="Recorded locations" value=overview.total %}</div>
-      <div class="col-6 col-lg-3">{% include "components/stat_tile.html" with label="Healthy" value=overview.healthy_text hint="share of locations that verified as available" %}</div>
-      <div class="col-6 col-lg-3">{% include "components/stat_tile.html" with label="Verified file size" value=overview.managed_bytes|filesizeformat hint="available local files" %}</div>
-      <div class="col-6 col-lg-3">
-        {% if overview.disk %}
-          {% include "components/stat_tile.html" with label="Disk free" value=overview.disk.free|filesizeformat hint="on the firmware volume" %}
-        {% else %}
-          {% include "components/stat_tile.html" with label="Disk free" value="Unknown" hint="the storage root does not exist yet" %}
-        {% endif %}
-      </div>
-    </div>
-    {% if overview.disk %}
-      <div class="surface-card p-3 mt-3">
-        {% include "components/meter.html" with id="disk-meter" label="Firmware volume used" percent=overview.disk.percent_used text=overview.disk.used|filesizeformat %}
-        <p class="small muted mt-2 mb-0">{{ overview.disk.used|filesizeformat }} of {{ overview.disk.total|filesizeformat }} in use.</p>
-      </div>
-    {% endif %}
-    <ul class="d-flex flex-wrap gap-2 list-unstyled mt-3 mb-0" aria-label="Locations by status">
-      {% for entry in overview.by_status %}
-        <li>{% if entry.value == "available" %}{% include "components/status_pill.html" with label=entry.text tone="success" %}{% elif entry.value == "pending" %}{% include "components/status_pill.html" with label=entry.text tone="warning" %}{% elif entry.total %}{% include "components/status_pill.html" with label=entry.text tone="danger" %}{% else %}{% include "components/status_pill.html" with label=entry.text %}{% endif %}</li>
-      {% endfor %}
-    </ul>
-  </section>
-
-  <section class="mb-5" aria-labelledby="providers-heading">
-    <h2 class="h4" id="providers-heading">Storage providers</h2>
-    <div class="eco-health-grid">
-      {% for provider in providers %}
-        <article class="surface-card p-3 d-grid gap-2 align-content-start">
-          <div class="d-flex flex-wrap align-items-center gap-2">
-            <h3 class="h6 mb-0">{{ provider.label }}</h3>
-            {% if provider.usable %}{% include "components/status_pill.html" with label="Available" tone="success" icon="check" %}{% else %}{% include "components/status_pill.html" with label="Disabled" tone="warning" icon="x" %}{% endif %}
-          </div>
-          <p class="small muted mb-0">{{ provider.detail }}</p>
-        </article>
-      {% endfor %}
-    </div>
-    <p class="small muted mt-2 mb-0">Local filesystem storage is the default. Google Drive and Amazon S3 stay disabled until their packages and an approved credential store exist.</p>
-  </section>
-
-  <section aria-labelledby="locations-heading">
-    <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
-      <h2 class="h4 mb-0" id="locations-heading">Locations</h2>
-      {% if pending_count %}
-        <form method="post" action="{% url 'storage:verify_pending' %}">
-          {% csrf_token %}
-          <button type="submit" class="btn btn-outline-primary">Verify {% if pending_count > verify_batch %}the oldest {{ verify_batch }} of {{ pending_count }}{% else %}{{ pending_count }}{% endif %} pending</button>
-        </form>
+{% extends "admin/staff_page.html" %}
+{% block mf_body %}
+<section class="mf-ui-section" aria-labelledby="capacity-heading">
+  <h2 class="mf-ui-section__title" id="capacity-heading">Capacity and health</h2>
+  <div class="mf-ui-grid">
+    <div class="mf-ui-card mf-ui-stat"><span class="mf-ui-stat__label">Recorded locations</span><span class="mf-ui-stat__value">{{ overview.total }}</span></div>
+    <div class="mf-ui-card mf-ui-stat"><span class="mf-ui-stat__label">Healthy</span><span class="mf-ui-stat__value">{{ overview.healthy_text }}</span><span class="mf-ui-stat__hint">share of locations that verified as available</span></div>
+    <div class="mf-ui-card mf-ui-stat"><span class="mf-ui-stat__label">Verified file size</span><span class="mf-ui-stat__value">{{ overview.managed_bytes|filesizeformat }}</span><span class="mf-ui-stat__hint">available local files</span></div>
+    <div class="mf-ui-card mf-ui-stat">
+      <span class="mf-ui-stat__label">Disk free</span>
+      {% if overview.disk %}
+        <span class="mf-ui-stat__value">{{ overview.disk.free|filesizeformat }}</span><span class="mf-ui-stat__hint">on the firmware volume</span>
+      {% else %}
+        <span class="mf-ui-stat__value">Unknown</span><span class="mf-ui-stat__hint">the storage root does not exist yet</span>
       {% endif %}
     </div>
-    <form method="get" class="row g-2 mb-3" role="search" aria-label="Filter locations">
-      <div class="col-12 col-md-4"><label class="visually-hidden" for="loc-q">Firmware id</label><input class="form-control" id="loc-q" type="search" name="q" value="{{ query }}" placeholder="Firmware id" maxlength="64"></div>
-      <div class="col-6 col-md-3"><label class="visually-hidden" for="loc-status">Status</label><select class="form-select" id="loc-status" name="status"><option value="">All statuses</option>{% for value, label in statuses %}<option value="{{ value }}"{% if value == status_filter %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
-      <div class="col-6 col-md-3"><label class="visually-hidden" for="loc-provider">Provider</label><select class="form-select" id="loc-provider" name="provider"><option value="">All providers</option>{% for value, label in provider_choices %}<option value="{{ value }}"{% if value == provider_filter %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
-      <div class="col-12 col-md-2"><button type="submit" class="btn btn-outline-secondary w-100">Filter</button></div>
-    </form>
+  </div>
+  {% if overview.disk %}
+    <div class="mf-ui-card">
+      <div class="mf-ui-meter-group">
+        <div><label for="disk-meter">Firmware volume used</label><span>{{ overview.disk.used|filesizeformat }}</span></div>
+        <meter class="mf-ui-meter" id="disk-meter" min="0" max="100" low="70" high="90" optimum="0" value="{{ overview.disk.percent_used }}">{{ overview.disk.percent_used }}%</meter>
+      </div>
+      <p class="mf-ui-help">{{ overview.disk.used|filesizeformat }} of {{ overview.disk.total|filesizeformat }} in use.</p>
+    </div>
+  {% endif %}
+  <ul class="mf-ui-pills" aria-label="Locations by status">
+    {% for entry in overview.by_status %}
+      <li><span class="mf-ui-badge{% if entry.value == 'available' %} mf-ui-badge--success{% elif entry.value == 'pending' %} mf-ui-badge--warning{% elif entry.total %} mf-ui-badge--danger{% endif %}">{{ entry.text }}</span></li>
+    {% endfor %}
+  </ul>
+</section>
 
-    {% if rows %}
-      {% table_scroll "Firmware storage locations" %}
-      <table class="table align-middle mb-0">
-        <thead><tr><th scope="col">Firmware</th><th scope="col">Provider</th><th scope="col">Status</th><th scope="col">Size</th><th scope="col">Last verified</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+<section class="mf-ui-section" aria-labelledby="providers-heading">
+  <h2 class="mf-ui-section__title" id="providers-heading">Storage providers</h2>
+  <div class="mf-ui-grid">
+    {% for provider in providers %}
+      <article class="mf-ui-card">
+        <h3 class="mf-ui-card__title">{{ provider.label }}</h3>
+        {% if provider.usable %}<span class="mf-ui-badge mf-ui-badge--success">Available</span>{% else %}<span class="mf-ui-badge mf-ui-badge--warning">Disabled</span>{% endif %}
+        <p class="mf-ui-help">{{ provider.detail }}</p>
+      </article>
+    {% endfor %}
+  </div>
+  <p class="mf-ui-help">Local filesystem storage is the default. Google Drive and Amazon S3 stay disabled until their packages and an approved credential store exist.</p>
+</section>
+
+<section class="mf-ui-section" aria-labelledby="locations-heading">
+  <div class="mf-ui-row">
+    <h2 class="mf-ui-section__title" id="locations-heading">Locations</h2>
+    {% if pending_count %}
+      <form method="post" action="{% url 'storage:verify_pending' %}">
+        {% csrf_token %}
+        <button type="submit" class="mf-ui-btn">Verify {% if pending_count > verify_batch %}the oldest {{ verify_batch }} of {{ pending_count }}{% else %}{{ pending_count }}{% endif %} pending</button>
+      </form>
+    {% endif %}
+  </div>
+  <form method="get" class="mf-ui-filter" role="search" aria-label="Filter locations">
+    <div class="mf-ui-field"><label class="mf-ui-sr" for="loc-q">Firmware id</label><input type="search" id="loc-q" name="q" value="{{ query }}" placeholder="Firmware id" maxlength="64"></div>
+    <div class="mf-ui-field"><label class="mf-ui-sr" for="loc-status">Status</label><select id="loc-status" name="status"><option value="">All statuses</option>{% for value, label in statuses %}<option value="{{ value }}"{% if value == status_filter %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+    <div class="mf-ui-field"><label class="mf-ui-sr" for="loc-provider">Provider</label><select id="loc-provider" name="provider"><option value="">All providers</option>{% for value, label in provider_choices %}<option value="{{ value }}"{% if value == provider_filter %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+    <button type="submit" class="mf-ui-btn">Filter</button>
+  </form>
+
+  {% if rows %}
+    <div class="mf-ui-table-wrap" role="region" aria-label="Firmware storage locations" tabindex="0">
+      <table class="mf-ui-table">
+        <thead><tr><th scope="col">Firmware</th><th scope="col">Provider</th><th scope="col">Status</th><th scope="col">Size</th><th scope="col">Last verified</th><th scope="col"><span class="mf-ui-sr">Actions</span></th></tr></thead>
         <tbody>
           {% for row in rows %}
             {% with location=row.location %}
               <tr>
                 <td>
                   {% if row.public_url %}<a href="{{ row.public_url }}">{{ row.label }}</a>{% else %}{{ row.label }}{% endif %}
-                  <span class="small muted d-block">{{ row.type_label }}{% if row.file_name %} · {{ row.file_name }}{% endif %}{% if row.admin_url %} · <a href="{{ row.admin_url }}">Edit in admin</a>{% endif %}</span>
+                  <span class="mf-ui-table-meta">{{ row.type_label }}{% if row.file_name %} · {{ row.file_name }}{% endif %}{% if row.admin_url %} · <a href="{{ row.admin_url }}">Edit in admin</a>{% endif %}</span>
                 </td>
                 <td>{{ location.get_provider_display }}</td>
                 <td>
-                  {% if location.status == "available" %}{% include "components/status_pill.html" with label=location.get_status_display tone="success" %}
-                  {% elif location.status == "pending" %}{% include "components/status_pill.html" with label=location.get_status_display tone="warning" %}
-                  {% else %}{% include "components/status_pill.html" with label=location.get_status_display tone="danger" %}{% endif %}
-                  {% if location.last_error %}<span class="small muted d-block">{{ location.last_error }}</span>{% endif %}
+                  <span class="mf-ui-badge{% if location.status == 'available' %} mf-ui-badge--success{% elif location.status == 'pending' %} mf-ui-badge--warning{% else %} mf-ui-badge--danger{% endif %}">{{ location.get_status_display }}</span>
+                  {% if location.last_error %}<span class="mf-ui-table-meta">{{ location.last_error }}</span>{% endif %}
                 </td>
                 <td>{% if location.size_bytes is not None %}{{ location.size_bytes|filesizeformat }}{% else %}—{% endif %}</td>
                 <td>{% if location.last_verified_at %}{{ location.last_verified_at|date:"j M Y, H:i" }}{% else %}Never{% endif %}</td>
-                <td>
+                <td class="is-actions">
                   <form method="post" action="{% url 'storage:verify' location_id=location.pk %}">
                     {% csrf_token %}
-                    <button type="submit" class="btn btn-sm btn-outline-secondary">Verify<span class="visually-hidden"> {{ row.label }}</span></button>
+                    <button type="submit" class="mf-ui-btn mf-ui-btn--small">Verify<span class="mf-ui-sr"> {{ row.label }}</span></button>
                   </form>
                 </td>
               </tr>
@@ -98,11 +92,16 @@
           {% endfor %}
         </tbody>
       </table>
-      {% endtable_scroll %}
-      {% include "components/pagination.html" with page_obj=page_obj label="Locations" %}
-    {% else %}
-      {% include "components/empty_state.html" with title="No locations match" message="Locations are recorded when firmware files are saved. Run sync_storage_locations to back-fill existing firmware." %}
+    </div>
+    {% if page_obj.has_other_pages %}
+      <nav class="mf-ui-pager" aria-label="Locations pages">
+        {% if page_obj.has_previous %}<a class="mf-ui-btn mf-ui-btn--small" rel="prev" href="{% querystring page=page_obj.previous_page_number %}">Previous</a>{% else %}<span class="mf-ui-btn mf-ui-btn--small" aria-disabled="true">Previous</span>{% endif %}
+        <span>Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+        {% if page_obj.has_next %}<a class="mf-ui-btn mf-ui-btn--small" rel="next" href="{% querystring page=page_obj.next_page_number %}">Next</a>{% else %}<span class="mf-ui-btn mf-ui-btn--small" aria-disabled="true">Next</span>{% endif %}
+      </nav>
     {% endif %}
-  </section>
-</div>
+  {% else %}
+    <p class="mf-ui-empty">No locations match. Locations are recorded when firmware files are saved. Run sync_storage_locations to back-fill existing firmware.</p>
+  {% endif %}
+</section>
 {% endblock %}

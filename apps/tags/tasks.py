@@ -15,7 +15,6 @@ RETRYABLE = (DatabaseError,)
 
 
 @shared_task(
-    bind=True,
     autoretry_for=RETRYABLE,
     retry_backoff=True,
     max_retries=3,
@@ -23,7 +22,7 @@ RETRYABLE = (DatabaseError,)
     soft_time_limit=60,
     time_limit=120,
 )
-def sync_post_tags(self, post_id: int) -> int:
+def sync_post_tags(post_id: int) -> int:
     """Create, curate and attach tags for one post; returns how many tags apply."""
     from apps.blog.models import Post
     from apps.tags.services.automation import sync_post_tags as run
@@ -40,7 +39,6 @@ def sync_post_tags(self, post_id: int) -> int:
 
 
 @shared_task(
-    bind=True,
     autoretry_for=RETRYABLE,
     retry_backoff=True,
     max_retries=3,
@@ -48,7 +46,7 @@ def sync_post_tags(self, post_id: int) -> int:
     soft_time_limit=60,
     time_limit=120,
 )
-def reattach_curated_tag(self, tag_id: int) -> int:
+def reattach_curated_tag(tag_id: int) -> int:
     """After a tag is approved, attach it to the live posts that mention it."""
     from apps.tags.services.automation import reattach_curated_tag as run
 

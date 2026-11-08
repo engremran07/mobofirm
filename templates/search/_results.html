@@ -1,0 +1,45 @@
+{# Context: query, groups, total, kind_filters, selected. Swapped into #search-results by HTMX. #}
+<nav class="d-flex flex-wrap gap-2 mb-4" aria-label="Filter results by type">
+  <a class="btn btn-sm {% if not selected %}btn-primary{% else %}btn-outline-secondary{% endif %}"{% if not selected %} aria-current="true"{% endif %} href="{% url 'search:results' %}?q={{ query|urlencode }}">All</a>
+  {% for item in kind_filters %}
+    <a class="btn btn-sm {% if item.kind in selected %}btn-primary{% else %}btn-outline-secondary{% endif %}"{% if item.kind in selected %} aria-current="true"{% endif %} href="{% url 'search:results' %}?q={{ query|urlencode }}&amp;kinds={{ item.kind }}">{{ item.label }}</a>
+  {% endfor %}
+</nav>
+{% if not query %}
+  <p class="muted">Enter a device, brand, chipset, tool, firmware build, article, tag or page to search.</p>
+{% elif not groups %}
+  {% include "components/empty_state.html" with title="No results" message="Nothing matched. Try fewer words, a model code or a brand name." %}
+{% else %}
+  <p class="muted" role="status">{{ total }} result{{ total|pluralize }} for “{{ query }}”.</p>
+  {% for group in groups %}
+    <section class="search-group mb-4" aria-labelledby="search-group-{{ group.kind }}">
+      <h2 id="search-group-{{ group.kind }}" class="h5 d-flex align-items-center gap-2">
+        <i data-lucide="{{ group.icon }}" aria-hidden="true"></i>{{ group.label_plural }}
+        <span class="muted small">({{ group.hits|length }})</span>
+      </h2>
+      <ul class="list-group">
+        {% for hit in group.hits %}
+          <li class="list-group-item search-hit">
+            {% if hit.url %}<a class="fw-semibold" href="{{ hit.url }}">{{ hit.title }}</a>{% else %}<span class="fw-semibold">{{ hit.title }}</span>{% endif %}
+            {% if hit.subtitle %}<span class="muted d-block small">{{ hit.subtitle }}</span>{% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+      {% if selected|length != 1 and group.hits|length >= 10 %}
+        <a class="small d-inline-block mt-2" href="{% url 'search:results' %}?q={{ query|urlencode }}&amp;kinds={{ group.kind }}">Show more {{ group.label_plural|lower }}</a>
+      {% endif %}
+    </section>
+  {% endfor %}
+{% endif %}
+{% if query %}
+  <section id="request-missing" class="mt-5" aria-labelledby="request-missing-title">
+    <h2 id="request-missing-title" class="h5">Can’t find it?</h2>
+    <div class="d-grid gap-2">
+      {% include "components/request_cta.html" with kind="brand" query=query %}
+      {% include "components/request_cta.html" with kind="model" query=query %}
+      {% include "components/request_cta.html" with kind="variant" query=query %}
+      {% include "components/request_cta.html" with kind="chipset" query=query %}
+      {% include "components/request_cta.html" with kind="firmware" query=query %}
+    </div>
+  </section>
+{% endif %}

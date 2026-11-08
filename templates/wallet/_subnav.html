@@ -1,0 +1,9 @@
+{# Contract: wallet_tab (overview, ledger, earn, spend, topup, payouts). Sub-navigation shared by every wallet page. #}
+<nav class="d-flex flex-wrap gap-2 mb-4" aria-label="Wallet sections">
+  <a class="btn btn-sm {% if wallet_tab == 'overview' %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="{% url 'wallet:dashboard' %}"{% if wallet_tab == 'overview' %} aria-current="page"{% endif %}>Overview</a>
+  <a class="btn btn-sm {% if wallet_tab == 'ledger' %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="{% url 'wallet:ledger' %}"{% if wallet_tab == 'ledger' %} aria-current="page"{% endif %}>History</a>
+  <a class="btn btn-sm {% if wallet_tab == 'earn' %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="{% url 'wallet:earn' %}"{% if wallet_tab == 'earn' %} aria-current="page"{% endif %}>Ways to earn</a>
+  <a class="btn btn-sm {% if wallet_tab == 'spend' %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="{% url 'wallet:spend' %}"{% if wallet_tab == 'spend' %} aria-current="page"{% endif %}>Ways to spend</a>
+  {% if cfg.topups_enabled %}<a class="btn btn-sm {% if wallet_tab == 'topup' %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="{% url 'wallet:topup' %}"{% if wallet_tab == 'topup' %} aria-current="page"{% endif %}>Top up</a>{% endif %}
+  {% if cfg.payouts_enabled %}<a class="btn btn-sm {% if wallet_tab == 'payouts' %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="{% url 'wallet:payouts' %}"{% if wallet_tab == 'payouts' %} aria-current="page"{% endif %}>Payouts</a>{% endif %}
+</nav>

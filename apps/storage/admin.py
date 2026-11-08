@@ -128,7 +128,7 @@ class FirmwareStorageLocationAdmin(ModelAdmin):
         ),
     )
     def verify_now(
-        self, request: HttpRequest, form: BaseDialogForm, object_id: str
+        self, request: HttpRequest, _form: BaseDialogForm, object_id: str
     ) -> HttpResponse:
         location = self.get_object(request, unquote(object_id))
         if location is None:
@@ -161,7 +161,7 @@ class FirmwareStorageLocationAdmin(ModelAdmin):
         ),
     )
     def sync_catalogue(
-        self, request: HttpRequest, form: BaseDialogForm
+        self, request: HttpRequest, _form: BaseDialogForm
     ) -> HttpResponse:
         report = sync_all_firmware()
         self.message_user(

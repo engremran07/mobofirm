@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from apps.ads.models import AdPlacement, Campaign
+from django.utils import timezone
+
+from apps.ads.models import AdEvent, AdPlacement, Campaign
 from apps.core.utils import feature_flags
 
 
@@ -34,3 +36,21 @@ def campaign_allowed(campaign: Campaign, context: dict[str, Any]) -> bool:
 
 def placement_allowed(placement: AdPlacement) -> bool:
     return placement.is_enabled and placement.is_active and not placement.is_deleted
+
+
+def campaign_within_caps(campaign: Campaign) -> bool:
+    """Whether the campaign's daily and lifetime impression caps still have room.
+
+    A cap of 0 means unlimited. Only counted impressions matter: consent-less views
+    are never recorded, so they cannot exhaust a cap.
+    """
+    if not campaign.daily_cap and not campaign.total_cap:
+        return True
+    served = AdEvent.objects.filter(campaign=campaign, event_type="impression")
+    if campaign.total_cap and served.count() >= campaign.total_cap:
+        return False
+    if campaign.daily_cap:
+        today = timezone.localtime().replace(hour=0, minute=0, second=0, microsecond=0)
+        if served.filter(created_at__gte=today).count() >= campaign.daily_cap:
+            return False
+    return True

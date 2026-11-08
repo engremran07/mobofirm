@@ -23,7 +23,7 @@ These are a code-derived inventory, not approved feature requirements. The detai
 ## Non-goals until approved
 
 - Expanding frontend scope or changing the approved stack/architecture without a new owner decision.
-- Introducing placeholder app integrations. The owner decision of this release integrates `storage`, `seo`, `pages`, `shop`, `marketplace` and `filemanager` as first-class installed apps (see `docs/04-backend/django-app-boundaries.md`); online payments, wallet/credits and Stripe remain explicitly out of scope.
+- Introducing placeholder app integrations. The owner decision of this release integrates `storage`, `seo`, `pages`, `shop`, `marketplace`, `wallet` and `referral` as first-class installed apps (see `docs/04-backend/django-app-boundaries.md`), together with `consent`, `gamification`, `bounty` and `distribution`. `consent` is the only source of cookie/tracker consent (analytics and advertising load only after opt-in); `bounty` pays from wallet escrow; `distribution` shares through plain HTTPS channels that are off by default. `wallet` is an internal credits ledger (earn by contributing, spend on packages and files; offline staff-confirmed top-ups and payouts); online payments, payment gateways and Stripe remain explicitly out of scope. Personal file storage (folders, user uploads, share links) is out of scope by owner decision.
 - Promising particular download availability, security guarantees, revenue outcomes, or service levels not evidenced by approved requirements.
 
 ## Approval checklist

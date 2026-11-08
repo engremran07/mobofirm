@@ -1,14 +1,14 @@
 from unittest.mock import patch
 
+from django.apps import apps as django_apps
 from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.contrib.auth.signals import user_logged_in
 from django.contrib.sessions.backends.db import SessionStore
-from django.test import RequestFactory, TestCase
+from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 
 from apps.devices.models import Device, DeviceConfig, DeviceEvent
-from apps.devices.models_quota import UserDeviceQuota
 from apps.devices.services import (
     DevicePolicyError,
     approve_current_device,
@@ -216,9 +216,6 @@ class DevicePolicyIntegrationTests(TestCase):
         self.assertContains(response, "Approved browsers")
 
     def test_approval_is_bound_to_the_current_browser_key_and_respects_capacity(self):
-        config = DeviceConfig.get_solo()
-        config.max_devices_default = 1
-        config.save(update_fields=["max_devices_default"])
         Device.objects.create(
             user=self.user,
             browser_key_hash=hash_browser_key("d" * 43),
@@ -230,15 +227,25 @@ class DevicePolicyIntegrationTests(TestCase):
         pending, _, _ = resolve_or_create_device(request, self.user)
         assert pending is not None
 
-        with self.assertRaises(DevicePolicyError) as error:
+        with (
+            override_settings(SHOP_FREE_DEVICE_LIMIT=1),
+            self.assertRaises(DevicePolicyError) as error,
+        ):
             approve_current_device(request, self.user)
 
         self.assertEqual(error.exception.reason, "limit_reached")
         pending.refresh_from_db()
         self.assertFalse(pending.is_trusted)
 
-    def test_device_quota_is_registered_in_django_admin(self):
-        self.assertTrue(admin.site.is_registered(UserDeviceQuota))
+    def test_retired_quota_models_are_gone_from_django_admin(self):
+        registered = {
+            model.__name__
+            for model in django_apps.get_models()
+            if admin.site.is_registered(model)
+        }
+
+        self.assertNotIn("UserDeviceQuota", registered)
+        self.assertNotIn("QuotaTier", registered)
 
     def test_owner_cannot_trust_another_users_device(self):
         other_user = get_user_model().objects.create_user(

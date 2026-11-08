@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Method and guide requests | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block meta_description %}Requested flashing methods, unlock patterns, tricks and guides, with credit bounties for writers.{% endblock %}
+{% block content %}
+{% url 'blog:post_list' as journal_url %}
+<div class="site-container py-5">
+  {% include "components/breadcrumbs.html" with current="Requests" parent_label="Journal" parent_url=journal_url %}
+  {% include "components/page_header.html" with eyebrow="Guide requests" title="Methods and guides people need" lead="Staff approve every request. Writers answer them as free, featured or paid articles; a credit bounty is paid when staff publish the answer." %}
+  <div class="d-flex flex-wrap gap-2 mb-3">
+    {% if requests_enabled %}<a class="btn btn-primary" href="{% url 'blog:request_create' %}">Request a method or guide</a>{% endif %}
+    {% if user.is_authenticated %}<a class="btn btn-outline-secondary" href="{% url 'blog:request_mine' %}">My requests</a>{% endif %}
+  </div>
+  <form method="get" class="d-flex flex-wrap gap-2 mb-4" role="search">
+    <label class="visually-hidden" for="rq-q">Search requests</label>
+    <input id="rq-q" class="form-control w-auto" type="search" name="q" value="{{ query }}" placeholder="Search requests">
+    <label class="visually-hidden" for="rq-kind">Type</label>
+    <select id="rq-kind" class="form-select w-auto" name="kind">
+      <option value="">Every type</option>
+      {% for value, label in kind_filters %}<option value="{{ value }}"{% if value == kind %} selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+    <label class="visually-hidden" for="rq-status">Status</label>
+    <select id="rq-status" class="form-select w-auto" name="status">
+      {% for value, label in status_filters %}<option value="{{ value }}"{% if value == status %} selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+    <button class="btn btn-outline-secondary" type="submit">Filter</button>
+  </form>
+  {% if page_obj.object_list %}
+    <ul class="list-unstyled d-grid gap-3">
+      {% for item in page_obj.object_list %}
+        <li class="surface-card p-3">
+          <div class="d-flex flex-wrap justify-content-between gap-2">
+            <h2 class="h6 mb-1"><a href="{{ item.get_absolute_url }}">{{ item.title }}</a></h2>
+            <span class="badge text-bg-{% if item.status == 'fulfilled' %}success{% else %}primary{% endif %}">{{ item.get_status_display }}</span>
+          </div>
+          <p class="muted small mb-0">{{ item.get_kind_display }}{% if item.label %} · {{ item.label }}{% endif %} · {{ item.solution_count }} published solution{{ item.solution_count|pluralize }}</p>
+        </li>
+      {% endfor %}
+    </ul>
+    {% include "components/pagination.html" with page_obj=page_obj %}
+  {% else %}
+    <p class="muted">No requests match yet.</p>
+  {% endif %}
+</div>
+{% endblock %}

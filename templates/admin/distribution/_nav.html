@@ -1,0 +1,5 @@
+<nav aria-label="Distribution sections">
+  <ul class="mf-ui-tabs">
+    {% for tab in tabs %}<li><a href="{{ tab.url }}"{% if tab.active %} aria-current="page"{% endif %}>{{ tab.label }}</a></li>{% endfor %}
+  </ul>
+</nav>

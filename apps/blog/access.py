@@ -5,7 +5,7 @@ from __future__ import annotations
 from django.db import DatabaseError
 
 from apps.blog.models import BlogSettings, Post, PostStatus
-from apps.core.app_service import app_enabled
+from apps.core.app_service import AppService, app_enabled
 from apps.users.models import CustomUser
 
 
@@ -80,3 +80,24 @@ def can_edit_post(user, post: Post) -> bool:
     if can_manage_all_posts(user):
         return True
     return can_manage_post(user, post) and post.status == PostStatus.DRAFT
+
+
+def is_approved_seller(user) -> bool:
+    """Marketplace seller approval, reached only through the marketplace contract."""
+    check = AppService.export("marketplace", "is_active_seller")
+    return bool(callable(check) and check(user))
+
+
+def can_set_premium_access(user) -> bool:
+    """Who may mark a post featured or paid.
+
+    Same trust rule as marketplace sellers: staff, editors, authors with the author
+    role and approved sellers. Everyone else submits free posts.
+    """
+    if not getattr(user, "is_authenticated", False):
+        return False
+    return (
+        can_manage_all_posts(user)
+        or user.has_role(CustomUser.Roles.AUTHOR)
+        or is_approved_seller(user)
+    )

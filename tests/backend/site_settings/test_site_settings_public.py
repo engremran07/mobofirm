@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import tempfile
+import uuid
 from typing import Any
 
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.test import TestCase, override_settings
+from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
+from apps.consent.constants import ANALYTICS
+from apps.consent.services import active_policy, cookie_name, encode_cookie
 from apps.pages.models import Page
 from apps.site_settings.models import (
     SiteSettings,
@@ -17,6 +20,13 @@ from apps.site_settings.models import (
 
 GOOGLE_NAME = "google1234abcd.html"
 GOOGLE_BODY = b"google-site-verification: google1234abcd.html"
+
+
+def grant_analytics_consent(client: Client) -> None:
+    """Give the test client the consent cookie a visitor gets by accepting analytics."""
+    policy = active_policy()
+    value = encode_cookie(policy.version, {ANALYTICS}, uuid.uuid4())
+    client.cookies[cookie_name()] = value
 
 
 def stored(**fields: Any) -> SiteSettings:
@@ -235,6 +245,7 @@ class PageContextTests(TestCase):
 
     def test_analytics_loads_only_through_the_same_origin_script(self):
         stored(google_analytics_id="G-TEST12345")
+        grant_analytics_consent(self.client)
 
         response = self.client.get("/")
         html = response.content.decode()
@@ -243,7 +254,17 @@ class PageContextTests(TestCase):
         self.assertIn('data-ga4-id="G-TEST12345"', html)
         self.assertNotIn("googletagmanager.com/gtag", html)
 
+    def test_analytics_never_loads_without_the_visitors_consent(self):
+        stored(google_analytics_id="G-TEST12345")
+
+        html = self.client.get("/").content.decode()
+
+        self.assertNotIn("site_settings/analytics.js", html)
+        self.assertNotIn("G-TEST12345", html)
+
     def test_no_analytics_markup_without_an_id(self):
+        grant_analytics_consent(self.client)
+
         html = self.client.get("/").content.decode()
 
         self.assertNotIn("site_settings/analytics.js", html)
@@ -265,6 +286,7 @@ class AnalyticsCspTests(TestCase):
         return str(response.headers.get("Content-Security-Policy", ""))
 
     def test_hosts_are_added_only_when_an_id_is_configured(self):
+        grant_analytics_consent(self.client)
         self.assertNotIn("googletagmanager", self.policy(self.client.get("/")))
 
         stored(google_tag_manager_id="GTM-ABC123")
@@ -274,8 +296,14 @@ class AnalyticsCspTests(TestCase):
         self.assertIn("script-src", policy)
         self.assertNotIn("'unsafe-inline'", policy.split("script-src")[1].split(";")[0])
 
+    def test_hosts_are_never_added_without_consent(self):
+        stored(google_tag_manager_id="GTM-ABC123")
+
+        self.assertNotIn("googletagmanager", self.policy(self.client.get("/")))
+
     def test_non_html_and_admin_responses_are_untouched(self):
         stored(google_analytics_id="G-TEST12345")
+        grant_analytics_consent(self.client)
 
         self.assertNotIn(
             "googletagmanager", self.policy(self.client.get("/site/info/"))
@@ -286,6 +314,7 @@ class AnalyticsCspTests(TestCase):
 
     def test_removing_the_id_removes_the_hosts(self):
         stored(google_analytics_id="G-TEST12345")
+        grant_analytics_consent(self.client)
         self.assertIn("googletagmanager", self.policy(self.client.get("/")))
 
         stored(google_analytics_id="")

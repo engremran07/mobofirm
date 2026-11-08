@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -19,7 +20,7 @@ from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
-from . import autonomy, indexnow
+from . import autonomy, indexnow, scan
 from .ledger import LedgerError
 from .models import ChangeLedger, SEOJob, SEOSettings
 from .siteurls import absolute_url
@@ -133,6 +134,9 @@ def _content_changed(job: SEOJob) -> Outcome:
     else:
         result["indexnow"] = "not submitted: disabled or mode does not allow it"
 
+    if public and url:
+        result["rescan"] = scan.rescan_paths([url], duplicates=False)
+
     if failure:
         return Outcome(SEOJob.Status.FAILED, result, failure)
     status = SEOJob.Status.SUCCEEDED if acted else SEOJob.Status.SKIPPED
@@ -209,6 +213,33 @@ def process_pending(limit: int = 25, now: datetime | None = None) -> dict[str, i
         finished = run_job(job, moment)
         counts[finished.status] = counts.get(finished.status, 0) + 1
     return counts
+
+
+def process_queue_now(
+    *,
+    limit: int = 2000,
+    budget_seconds: float = 20.0,
+    clock: Callable[[], float] = time.monotonic,
+) -> dict[str, int]:
+    """Drain the outbox synchronously (no Celery needed) within a time budget.
+
+    ``remaining`` reports the jobs still waiting when the budget ran out.
+    """
+    deadline = clock() + budget_seconds
+    totals: dict[str, int] = {}
+    handled = 0
+    while handled < limit and clock() < deadline:
+        batch = process_pending(limit=min(50, limit - handled))
+        done = sum(total for name, total in batch.items() if name != "reclaimed")
+        for name, total in batch.items():
+            totals[name] = totals.get(name, 0) + total
+        if not done:
+            break
+        handled += done
+    totals["remaining"] = SEOJob.objects.filter(
+        status=SEOJob.Status.PENDING, available_at__lte=timezone.now()
+    ).count()
+    return totals
 
 
 def pending_approvals() -> int:

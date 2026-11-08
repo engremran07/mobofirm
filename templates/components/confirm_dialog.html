@@ -1,13 +1,18 @@
-{# Contract: dialog_id, title, message, action (POST URL), confirm_label (all required); hidden_name/hidden_value (optional single hidden field); danger (truthy for destructive styling). Open with <button type="button" data-dialog-open="<dialog_id>">. The POST is still validated server-side. #}
-<dialog class="app-dialog" id="{{ dialog_id }}" aria-labelledby="{{ dialog_id }}-title" aria-describedby="{{ dialog_id }}-message" data-app-dialog>
-  <form method="post" action="{{ action }}" class="app-dialog__body">
-    {% csrf_token %}
-    {% if hidden_name %}<input type="hidden" name="{{ hidden_name }}" value="{{ hidden_value }}">{% endif %}
-    <h2 id="{{ dialog_id }}-title" class="h4">{{ title }}</h2>
-    <p id="{{ dialog_id }}-message">{{ message }}</p>
-    <div class="d-flex flex-wrap justify-content-end gap-2">
-      <button type="button" class="btn btn-outline-secondary" data-dialog-close autofocus>Cancel</button>
-      <button type="submit" class="btn {% if danger %}btn-danger{% else %}btn-primary{% endif %}">{{ confirm_label }}</button>
+{% extends "components/dialog.html" %}
+{# Standard confirm. Contract: dialog_id, dialog_title (alias title), dialog_message (alias message), dialog_action (alias action; POST URL), confirm_label (required); hidden_name/hidden_value (one hidden field); danger (destructive style, backdrop does not close); reason_label + reason_required (adds a `reason` textarea); confirm_phrase (user must type it; `confirmation` field); static_backdrop; dialog_size. #}
+{# Open with <button type="button" data-dialog-open="<dialog_id>">. The POST is still validated server-side (DialogForm enforces reason/phrase). #}
+{% block dialog_body %}
+  {% if hidden_name %}<input type="hidden" name="{{ hidden_name }}" value="{{ hidden_value }}">{% endif %}
+  {% if reason_label %}
+    <div class="mb-3">
+      <label class="form-label" for="{{ dialog_id }}-reason">{{ reason_label }}</label>
+      <textarea class="form-control" id="{{ dialog_id }}-reason" name="reason" rows="3" maxlength="1000"{% if reason_required %} required{% endif %}></textarea>
     </div>
-  </form>
-</dialog>
+  {% endif %}
+  {% if confirm_phrase %}
+    <div class="mb-3">
+      <label class="form-label" for="{{ dialog_id }}-phrase">Type “{{ confirm_phrase }}” to confirm</label>
+      <input class="form-control" id="{{ dialog_id }}-phrase" name="confirmation" autocomplete="off" autocapitalize="off">
+    </div>
+  {% endif %}
+{% endblock %}

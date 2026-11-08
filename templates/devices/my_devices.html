@@ -2,6 +2,9 @@
 {% block title %}Registered browsers | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block content %}
 <section class="site-container py-5">
+  {% url 'users:dashboard' as account_url %}
+  {% include "components/breadcrumbs.html" with current="Registered browsers" parent_label="Account" parent_url=account_url %}
+  
   <p class="section-eyebrow">Account security</p>
   <h1 class="h2">Registered browsers</h1>
   <p class="muted">
@@ -24,8 +27,18 @@
   </div>
 
   <p class="small muted">
-    Clearing browser data, reinstalling a browser, or using another browser profile may create a new registration. A browser cookie cannot reliably detect an operating-system reinstall or identify hardware. You cannot remove an approved browser yourself; contact an administrator for a reset or revocation.
+    Clearing browser data, reinstalling a browser, or using another browser profile may create a new registration. A browser cookie cannot reliably detect an operating-system reinstall or identify hardware. You cannot remove an approved browser yourself; when your allowance is full you can free slots by asking staff, paying credits or watching a rewarded ad.
   </p>
+  {% if can_approve_current %}
+    <form method="post" action="{% url 'devices:acknowledge_new_device' %}" class="surface-card p-3 my-3 d-flex flex-wrap align-items-center gap-3">
+      {% csrf_token %}
+      <input type="hidden" name="decision" value="approve">
+      <input type="hidden" name="next" value="{% url 'devices:my_devices' %}">
+      <p class="mb-0 flex-grow-1">This browser is not approved yet and you have a free slot.</p>
+      <button type="submit" class="btn btn-primary">Approve this browser</button>
+    </form>
+  {% endif %}
+  {% if options %}{% include "devices/includes/slot_options.html" %}{% endif %}
 
   <div class="d-grid gap-3 mt-4">
     {% for device in devices %}

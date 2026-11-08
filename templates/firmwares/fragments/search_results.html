@@ -12,4 +12,8 @@
   </div>
 {% else %}
   <p class="empty-state p-3 mb-0">No matching devices were found. Try a model code, codename, or manufacturer.</p>
+  {% include "components/request_cta.html" with kind="model" query=query %}
+{% endif %}
+{% if query|length >= 2 and results and results|length < 3 %}
+  {% include "components/request_cta.html" with kind="model" query=query heading="Not the device you were looking for?" %}
 {% endif %}

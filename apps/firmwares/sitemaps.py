@@ -29,8 +29,8 @@ class FirmwareBrandsSitemap(_FirmwareSitemap):
     def lastmod(self, obj: Brand):
         return getattr(obj, "updated_at", None)
 
-    def location(self, obj: Brand) -> str:
-        return reverse("firmwares:brand_detail", kwargs={"slug": obj.slug})
+    def location(self, item: Brand) -> str:
+        return reverse("firmwares:brand_detail", kwargs={"slug": item.slug})
 
 
 class FirmwareChipsetsSitemap(_FirmwareSitemap):
@@ -45,8 +45,8 @@ class FirmwareChipsetsSitemap(_FirmwareSitemap):
     def lastmod(self, obj: Chipset):
         return getattr(obj, "updated_at", None)
 
-    def location(self, obj: Chipset) -> str:
-        return reverse("firmwares:chipset_detail", kwargs={"slug": obj.slug})
+    def location(self, item: Chipset) -> str:
+        return reverse("firmwares:chipset_detail", kwargs={"slug": item.slug})
 
 
 class FirmwareToolsSitemap(_FirmwareSitemap):
@@ -61,8 +61,8 @@ class FirmwareToolsSitemap(_FirmwareSitemap):
     def lastmod(self, obj: FlashingTool):
         return getattr(obj, "updated_at", None)
 
-    def location(self, obj: FlashingTool) -> str:
-        return reverse("firmwares:flashing_tool_detail", kwargs={"slug": obj.slug})
+    def location(self, item: FlashingTool) -> str:
+        return reverse("firmwares:flashing_tool_detail", kwargs={"slug": item.slug})
 
 
 class FirmwareModelsSitemap(_FirmwareSitemap):
@@ -81,10 +81,10 @@ class FirmwareModelsSitemap(_FirmwareSitemap):
     def lastmod(self, obj: Model):
         return getattr(obj, "updated_at", None)
 
-    def location(self, obj: Model) -> str:
+    def location(self, item: Model) -> str:
         return reverse(
             "firmwares:model_detail",
-            kwargs={"brand_slug": obj.brand.slug, "model_slug": obj.slug},
+            kwargs={"brand_slug": item.brand.slug, "model_slug": item.slug},
         )
 
 
@@ -106,11 +106,11 @@ class FirmwareFileSitemap(_FirmwareSitemap):
     def lastmod(self, obj):
         return getattr(obj, "updated_at", None) or getattr(obj, "created_at", None)
 
-    def location(self, obj) -> str:
+    def location(self, item) -> str:
         return reverse(
             "firmwares:firmware_detail",
             kwargs={
-                "firmware_type": obj.firmware_type,
-                "firmware_id": str(obj.id),
+                "firmware_type": item.firmware_type,
+                "firmware_id": str(item.id),
             },
         )

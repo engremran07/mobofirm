@@ -90,13 +90,12 @@ def update_firmware_request_priorities():
 
 
 @shared_task(
-    bind=True,
     max_retries=3,
     default_retry_delay=60,
     soft_time_limit=300,
     time_limit=600,
 )
-def analyze_firmware_ai(self, pending_firmware_id: str):
+def analyze_firmware_ai(pending_firmware_id: str):
     """Analyse a pending upload's content and store metadata suggestions."""
     from .ai_analysis import analyze_and_update_firmware
 
@@ -150,7 +149,7 @@ def sync_automated_blogs(self, model_ids=(), brand_ids=(), chipset_ids=()):
     soft_time_limit=300,
     time_limit=600,
 )
-def generate_firmware_blog_post(self, model_id: int, force_update: bool = False):
+def generate_firmware_blog_post(self, model_id: int):
     """Sync the single automated post for one device model."""
     from .blog_automation import FirmwareBlogService
     from .models import Model
@@ -196,13 +195,12 @@ def generate_firmware_brand_blog_post(self, brand_id: int):
 
 
 @shared_task(
-    bind=True,
     max_retries=1,
     default_retry_delay=60,
     soft_time_limit=1800,
     time_limit=3600,
 )
-def catchup_missing_blog_posts(self, brand_slug: str | None = None):
+def catchup_missing_blog_posts(brand_slug: str | None = None):
     """Periodic catch-up: every brand, model and chipset gets a current post.
 
     Recovers from missed signals or queue outages; unchanged posts are skipped via

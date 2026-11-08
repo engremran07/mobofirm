@@ -6,3 +6,8 @@ class MarketplaceConfig(AppConfig):
     name = "apps.marketplace"
     label = "marketplace"
     verbose_name = "Marketplace"
+
+    def ready(self) -> None:
+        from . import earnings
+
+        earnings.connect()

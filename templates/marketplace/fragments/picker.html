@@ -1,0 +1,10 @@
+{# Contract: picker (kind, label, noun, url, query, selected, results, limit). Search-as-you-type multi-select; works without JavaScript as a plain checkbox list. #}
+<fieldset class="mkt-section" id="picker-{{ picker.kind }}">
+  <legend class="form-label fs-6">{{ picker.label }}</legend>
+  <label class="visually-hidden" for="picker-{{ picker.kind }}-q">Search {{ picker.noun }}s</label>
+  <input class="form-control" id="picker-{{ picker.kind }}-q" type="search" name="q" form="" value="{{ picker.query }}" maxlength="60" autocomplete="off"
+         placeholder="Search {{ picker.noun }}s" aria-controls="picker-{{ picker.kind }}-body"
+         hx-get="{{ picker.url }}" hx-trigger="input changed delay:150ms, search" hx-target="#picker-{{ picker.kind }}-body" hx-swap="outerHTML"
+         hx-include="#picker-{{ picker.kind }}-body" hx-sync="this:replace">
+  {% include "marketplace/fragments/picker_body.html" with kind=picker.kind noun=picker.noun query=picker.query selected=picker.selected results=picker.results limit=picker.limit %}
+</fieldset>

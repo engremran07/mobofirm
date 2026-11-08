@@ -5,12 +5,12 @@ from django.conf import settings
 from django.db import migrations, models
 
 
-def set_existing_default_device_limit(apps, schema_editor):
+def set_existing_default_device_limit(apps, _schema_editor):
     DeviceConfig = apps.get_model("devices", "DeviceConfig")
     DeviceConfig.objects.filter(max_devices_default=5).update(max_devices_default=3)
 
 
-def restore_existing_default_device_limit(apps, schema_editor):
+def restore_existing_default_device_limit(apps, _schema_editor):
     DeviceConfig = apps.get_model("devices", "DeviceConfig")
     DeviceConfig.objects.filter(max_devices_default=3).update(max_devices_default=5)
 

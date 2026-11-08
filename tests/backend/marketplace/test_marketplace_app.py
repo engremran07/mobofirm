@@ -14,6 +14,7 @@ from apps.marketplace import services
 from apps.marketplace import urls as marketplace_urls
 from apps.marketplace.models import (
     Listing,
+    SellerEarning,
     SellerProfile,
     SellerVerification,
 )
@@ -120,7 +121,7 @@ class VisibilityTests(MarketplaceTestCase):
         self.listing.refresh_from_db()
         self.assertEqual(self.listing.view_count, 1)
 
-    def test_seller_profile_is_public_only_for_verified_sellers(self):
+    def test_seller_profile_is_public_only_for_approved_sellers(self):
         self.assertEqual(
             self.client.get(self.seller.get_absolute_url()).status_code, 200
         )
@@ -136,36 +137,7 @@ class VisibilityTests(MarketplaceTestCase):
         self.assertContains(response, "Online checkout is not available")
 
 
-class SellerFlowTests(MarketplaceTestCase):
-    def test_become_seller_requires_login_verified_email_and_valid_input(self):
-        url = reverse("marketplace:become_seller")
-        self.assertEqual(self.client.get(url).status_code, 302)
-
-        unverified = get_user_model().objects.create_user(
-            username="unverified_seller",
-            email="unverified-seller@example.com",
-            password=PASSWORD,
-        )
-        self.client.force_login(unverified)
-        self.client.post(url, {"display_name": "Nope"})
-        self.assertFalse(SellerProfile.objects.filter(user=unverified).exists())
-
-        newcomer = get_user_model().objects.create_user(
-            username="newcomer",
-            email="newcomer@example.com",
-            password=PASSWORD,
-            email_verified_at=timezone.now(),
-        )
-        self.client.force_login(newcomer)
-        too_long = self.client.post(url, {"display_name": "x" * 101, "bio": "b"})
-        self.assertEqual(too_long.status_code, 200)
-        self.assertFalse(SellerProfile.objects.filter(user=newcomer).exists())
-
-        response = self.client.post(url, {"display_name": "Newcomer", "bio": "Hi"})
-        self.assertRedirects(response, reverse("marketplace:my_listings"))
-        profile = SellerProfile.objects.get(user=newcomer)
-        self.assertFalse(profile.verified)
-
+class SellerListingTests(MarketplaceTestCase):
     def test_new_listings_start_pending_and_validate_discount(self):
         self.client.force_login(self.seller_user)
         url = reverse("marketplace:my_listings")
@@ -184,9 +156,31 @@ class SellerFlowTests(MarketplaceTestCase):
     def test_user_without_a_profile_is_sent_to_onboarding(self):
         self.client.force_login(self.other_user)
 
-        response = self.client.get(reverse("marketplace:my_listings"))
+        for name in ("marketplace:my_listings", "marketplace:dashboard"):
+            with self.subTest(route=name):
+                response = self.client.get(reverse(name))
+                self.assertRedirects(
+                    response,
+                    reverse("marketplace:become_seller"),
+                    fetch_redirect_response=False,
+                )
 
-        self.assertRedirects(response, reverse("marketplace:become_seller"))
+    def test_unapproved_seller_cannot_manage_listings_and_sees_the_status_page(self):
+        SellerProfile.objects.create(user=self.other_user, display_name="Other")
+        self.client.force_login(self.other_user)
+
+        for name in ("marketplace:my_listings", "marketplace:dashboard"):
+            with self.subTest(route=name):
+                self.assertRedirects(
+                    self.client.get(reverse(name)),
+                    reverse("marketplace:application_status"),
+                    fetch_redirect_response=False,
+                )
+        denied = self.client.post(
+            reverse("marketplace:my_listings"), {"title": "X", "price": "1"}
+        )
+        self.assertEqual(denied.status_code, 302)
+        self.assertFalse(Listing.objects.filter(title="X").exists())
 
     def test_only_the_owner_can_toggle_a_listing(self):
         url = reverse("marketplace:toggle_listing", kwargs={"pk": self.listing.pk})
@@ -205,66 +199,69 @@ class SellerFlowTests(MarketplaceTestCase):
     def test_state_changing_routes_enforce_csrf_and_post(self):
         csrf_client = Client(enforce_csrf_checks=True)
         csrf_client.force_login(self.seller_user)
-        for name, kwargs in (
-            ("marketplace:toggle_listing", {"pk": self.listing.pk}),
-            ("marketplace:request_verification", {}),
-        ):
-            with self.subTest(route=name):
-                url = reverse(name, kwargs=kwargs)
-                self.assertEqual(csrf_client.post(url).status_code, 403)
-                self.assertEqual(self.client.get(url).status_code, 405)
+        url = reverse("marketplace:toggle_listing", kwargs={"pk": self.listing.pk})
+
+        self.assertEqual(csrf_client.post(url).status_code, 403)
+        self.assertEqual(self.client.get(url).status_code, 405)
 
     def test_no_api_routes_are_exposed(self):
         names = {route.name for route in marketplace_urls.urlpatterns}
 
         self.assertFalse({name for name in names if name and "api" in name})
 
+    def test_the_removed_verification_route_is_gone(self):
+        names = {route.name for route in marketplace_urls.urlpatterns}
 
-class VerificationAndModerationTests(MarketplaceTestCase):
+        self.assertNotIn("request_verification", names)
+
+
+class ModerationTests(MarketplaceTestCase):
     def setUp(self):
         super().setUp()
         self.pending_seller = SellerProfile.objects.create(
             user=self.other_user, display_name="Applicant"
         )
+        self.verification = SellerVerification.objects.create(
+            seller=self.pending_seller, evidence="My site"
+        )
 
-    def test_verification_request_rules(self):
-        verification = services.request_verification(self.pending_seller, "My site")
-        self.assertEqual(verification.status, SellerVerification.Status.PENDING)
-        with self.assertRaises(services.MarketplaceError):
-            services.request_verification(self.pending_seller, "again")
-        with self.assertRaises(services.MarketplaceError):
-            services.request_verification(self.seller, "already verified")
+    def test_only_one_pending_verification_per_seller(self):
         with self.assertRaises(IntegrityError), transaction.atomic():
             SellerVerification.objects.create(
                 seller=self.pending_seller, evidence="duplicate pending"
             )
 
     def test_approval_verifies_the_seller_once(self):
-        verification = services.request_verification(self.pending_seller, "My site")
-
         services.review_verification(
-            verification.pk, reviewer=self.staff, approve=True, reason="ok"
+            self.verification.pk, reviewer=self.staff, approve=True, reason="ok"
         )
 
         self.pending_seller.refresh_from_db()
-        verification.refresh_from_db()
+        self.verification.refresh_from_db()
         self.assertTrue(self.pending_seller.verified)
-        self.assertEqual(verification.reviewer, self.staff)
-        self.assertIsNotNone(verification.reviewed_at)
+        self.assertEqual(self.verification.reviewer, self.staff)
+        self.assertIsNotNone(self.verification.reviewed_at)
         with self.assertRaises(services.MarketplaceError):
             services.review_verification(
-                verification.pk, reviewer=self.staff, approve=False
+                self.verification.pk, reviewer=self.staff, approve=False, reason="x"
             )
 
-    def test_rejection_keeps_the_seller_unverified(self):
-        verification = services.request_verification(self.pending_seller, "x")
+    def test_rejection_requires_a_reason_and_keeps_the_seller_unverified(self):
+        with self.assertRaises(services.MarketplaceError):
+            services.review_verification(
+                self.verification.pk, reviewer=self.staff, approve=False, reason="  "
+            )
+        self.verification.refresh_from_db()
+        self.assertEqual(self.verification.status, SellerVerification.Status.PENDING)
 
         services.review_verification(
-            verification.pk, reviewer=self.staff, approve=False, reason="no proof"
+            self.verification.pk, reviewer=self.staff, approve=False, reason="no proof"
         )
 
         self.pending_seller.refresh_from_db()
+        self.verification.refresh_from_db()
         self.assertFalse(self.pending_seller.verified)
+        self.assertEqual(self.verification.review_reason, "no proof")
 
     def test_listing_review_stamps_the_reviewer_and_cannot_repeat(self):
         listing = Listing.objects.create(seller=self.seller, title="Review me", price=3)
@@ -298,9 +295,9 @@ class VerificationAndModerationTests(MarketplaceTestCase):
         self.assertEqual(listing.status, Listing.Status.APPROVED)
 
     def test_every_model_is_registered_in_the_admin(self):
-        for model in (SellerProfile, SellerVerification, Listing):
+        for model in (SellerProfile, SellerVerification, SellerEarning, Listing):
             with self.subTest(model=model.__name__):
-                self.assertIn(model, admin.site._registry)
+                self.assertTrue(admin.site.is_registered(model))
 
 
 class FeatureFlagTests(MarketplaceTestCase):
@@ -309,6 +306,11 @@ class FeatureFlagTests(MarketplaceTestCase):
         registry.marketplace_enabled = False
         registry.save()
 
-        self.assertEqual(
-            self.client.get(reverse("marketplace:listing_browse")).status_code, 404
-        )
+        for name in (
+            "marketplace:listing_browse",
+            "marketplace:become_seller",
+            "marketplace:dashboard",
+        ):
+            with self.subTest(route=name):
+                self.client.force_login(self.seller_user)
+                self.assertEqual(self.client.get(reverse(name)).status_code, 404)

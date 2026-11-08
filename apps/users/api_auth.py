@@ -14,11 +14,13 @@ from django.conf import settings
 from django.contrib.auth import logout
 from django.core.exceptions import ValidationError
 from django.db import DatabaseError, transaction
+from django.http import HttpRequest
 from django.urls import reverse
 from rest_framework import permissions, serializers, status
 from rest_framework.authentication import SessionAuthentication
 from rest_framework.authtoken.models import Token
 from rest_framework.exceptions import AuthenticationFailed
+from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
@@ -47,13 +49,15 @@ _MFA_ATTEMPT_LIMIT = 5
 _MFA_ATTEMPT_WINDOW_SECONDS = 300
 
 
-def _check_second_factor(request, user: Any, code: str) -> Response | None:
+def _check_second_factor(
+    django_request: HttpRequest, user: Any, code: str
+) -> Response | None:
     """
     Verify a TOTP/recovery code behind the same limiter the web flow uses.
 
     Returns an error response, or None when the code is valid.
     """
-    key = f"users:mfa:verify:{user.pk}:{get_client_ip(request._request) or 'unknown'}"
+    key = f"users:mfa:verify:{user.pk}:{get_client_ip(django_request) or 'unknown'}"
     try:
         allowed = allow_action(
             key,
@@ -78,16 +82,15 @@ def _check_second_factor(request, user: Any, code: str) -> Response | None:
 
 
 def _enforce_device_policy(
-    request, user: Any, *, mfa_verified: bool, has_totp: bool
+    django_request: HttpRequest, user: Any, *, mfa_verified: bool, has_totp: bool
 ) -> Response | None:
     """Apply the shared device login policy; return an error response if denied."""
     try:
         devices_api = AppService.get("devices")
-        enforce_policy = getattr(devices_api, "enforce_device_policy_for_login", None)
-        if not callable(enforce_policy):
+        if devices_api is None:
             raise TypeError("Device login policy service is unavailable")
-        allowed, _ = enforce_policy(
-            request._request,
+        allowed, _ = devices_api.enforce_device_policy_for_login(
+            django_request,
             user,
             mfa_verified=mfa_verified,
         )
@@ -123,7 +126,17 @@ def _enforce_device_policy(
     return None
 
 
-class LoginSerializer(serializers.Serializer):
+class _InputSerializer(serializers.Serializer):
+    """Validates a request payload; nothing is persisted through these serializers."""
+
+    def create(self, validated_data):
+        raise TypeError("Input serializers validate payloads and never create rows.")
+
+    def update(self, instance, validated_data):
+        raise TypeError("Input serializers validate payloads and never update rows.")
+
+
+class LoginSerializer(_InputSerializer):
     identifier = serializers.CharField(max_length=254, trim_whitespace=False)
     password = serializers.CharField(
         max_length=128, trim_whitespace=False, write_only=True
@@ -136,7 +149,7 @@ class LoginSerializer(serializers.Serializer):
     )
 
 
-class SignupSerializer(serializers.Serializer):
+class SignupSerializer(_InputSerializer):
     email = serializers.EmailField(max_length=254)
     password1 = serializers.CharField(
         max_length=128, trim_whitespace=False, write_only=True
@@ -146,11 +159,11 @@ class SignupSerializer(serializers.Serializer):
     )
 
 
-class PasswordResetSerializer(serializers.Serializer):
+class PasswordResetSerializer(_InputSerializer):
     email = serializers.EmailField(max_length=254)
 
 
-class GoogleTokenSerializer(serializers.Serializer):
+class GoogleTokenSerializer(_InputSerializer):
     id_token = serializers.CharField(max_length=8192, trim_whitespace=False)
     totp_code = serializers.CharField(
         max_length=8,
@@ -160,14 +173,26 @@ class GoogleTokenSerializer(serializers.Serializer):
     )
 
 
-class ApiSignupView(APIView):
+class _DjangoRequestAPIView(APIView):
+    """Keeps the Django request that DRF wraps, for allauth and device-policy calls."""
+
+    django_request: HttpRequest
+
+    def initialize_request(
+        self, request: HttpRequest, *args: Any, **kwargs: Any
+    ) -> Request:
+        self.django_request = request
+        return super().initialize_request(request, *args, **kwargs)
+
+
+class ApiSignupView(_DjangoRequestAPIView):
     authentication_classes = ()
     permission_classes = (permissions.AllowAny,)
     throttle_classes = (ScopedRateThrottle,)
     throttle_scope = "auth_signup"
 
     def post(self, request):
-        django_request = request._request
+        django_request = self.django_request
         adapter = get_account_adapter(django_request)
         if not adapter.is_open_for_signup(django_request):
             return Response(
@@ -210,7 +235,7 @@ class ApiSignupView(APIView):
         return _email_confirmation_pending_response()
 
 
-class ApiLoginView(APIView):
+class ApiLoginView(_DjangoRequestAPIView):
     authentication_classes = ()
     permission_classes = (permissions.AllowAny,)
     throttle_classes = (ScopedRateThrottle,)
@@ -222,7 +247,7 @@ class ApiLoginView(APIView):
             return Response(payload.errors, status=status.HTTP_400_BAD_REQUEST)
 
         form = LoginForm(
-            request=request._request,
+            request=self.django_request,
             data={
                 "login": payload.validated_data["identifier"],
                 "password": payload.validated_data["password"],
@@ -285,13 +310,13 @@ class ApiLoginView(APIView):
                     },
                     status=status.HTTP_403_FORBIDDEN,
                 )
-            failure = _check_second_factor(request, user, code)
+            failure = _check_second_factor(self.django_request, user, code)
             if failure is not None:
                 return failure
             mfa_verified = True
 
         failure = _enforce_device_policy(
-            request, user, mfa_verified=mfa_verified, has_totp=has_totp
+            self.django_request, user, mfa_verified=mfa_verified, has_totp=has_totp
         )
         if failure is not None:
             return failure
@@ -300,7 +325,7 @@ class ApiLoginView(APIView):
         return Response({"token": token.key, "token_type": "Token"})
 
 
-class ApiGoogleLoginView(APIView):
+class ApiGoogleLoginView(_DjangoRequestAPIView):
     authentication_classes = ()
     permission_classes = (permissions.AllowAny,)
     throttle_classes = (ScopedRateThrottle,)
@@ -321,7 +346,7 @@ class ApiGoogleLoginView(APIView):
         if not payload.is_valid():
             return Response(payload.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        django_request = request._request
+        django_request = self.django_request
         provider = get_social_adapter(django_request).get_provider(
             django_request,
             "google",
@@ -402,13 +427,13 @@ class ApiGoogleLoginView(APIView):
                     },
                     status=status.HTTP_403_FORBIDDEN,
                 )
-            failure = _check_second_factor(request, user, code)
+            failure = _check_second_factor(self.django_request, user, code)
             if failure is not None:
                 return failure
             mfa_verified = True
 
         failure = _enforce_device_policy(
-            request, user, mfa_verified=mfa_verified, has_totp=has_totp
+            self.django_request, user, mfa_verified=mfa_verified, has_totp=has_totp
         )
         if failure is not None:
             return failure
@@ -417,7 +442,7 @@ class ApiGoogleLoginView(APIView):
         return Response({"token": token.key, "token_type": "Token"})
 
 
-class ApiPasswordResetView(APIView):
+class ApiPasswordResetView(_DjangoRequestAPIView):
     authentication_classes = ()
     permission_classes = (permissions.AllowAny,)
     throttle_classes = (ScopedRateThrottle,)
@@ -433,7 +458,7 @@ class ApiPasswordResetView(APIView):
         )
         if not form.is_valid():
             return Response(form.errors, status=status.HTTP_400_BAD_REQUEST)
-        form.save(request=request._request)
+        form.save(request=self.django_request)
         return Response(
             {
                 "detail": (

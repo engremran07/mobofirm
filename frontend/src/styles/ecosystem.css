@@ -1,4 +1,4 @@
-/* Ecosystem surfaces: CMS pages, shop, marketplace, file manager and storage.
+/* Ecosystem surfaces: CMS pages, shop, marketplace and storage status.
    Tokens come from tokens.css; nothing here sets inline styles or colours. */
 
 /* ---- Shared small parts ---- */
@@ -364,164 +364,6 @@
   grid-template-columns: minmax(0, 1fr);
 }
 
-/* ---- File manager ---- */
-.fm-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 1.5rem;
-  align-items: start;
-}
-
-@media (min-width: 62rem) {
-  .fm-layout {
-    grid-template-columns: 15rem minmax(0, 1fr);
-  }
-}
-
-.fm-sidebar {
-  display: grid;
-  gap: 1rem;
-}
-
-.fm-nav {
-  display: grid;
-  gap: 0.25rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.fm-nav a {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-  padding: 0.45rem 0.65rem;
-  border-radius: var(--mf-radius-sm);
-  color: var(--mf-text);
-  text-decoration: none;
-}
-
-.fm-nav a:hover,
-.fm-nav a[aria-current] {
-  background: var(--mf-surface-soft);
-}
-
-.fm-dropzone {
-  display: grid;
-  gap: 0.5rem;
-  justify-items: center;
-  padding: 1.5rem 1rem;
-  border: 2px dashed var(--mf-border);
-  border-radius: var(--mf-radius-md);
-  background: var(--mf-surface);
-  text-align: center;
-  transition: border-color var(--mf-transition), background-color var(--mf-transition);
-}
-
-.fm-dropzone input[type="file"] {
-  max-width: 100%;
-}
-
-.fm-dropzone.is-dragging {
-  border-color: var(--mf-accent);
-  background: var(--mf-surface-soft);
-}
-
-.fm-dropzone__progress {
-  width: 100%;
-  max-width: 24rem;
-}
-
-.fm-dropzone__progress[hidden] {
-  display: none;
-}
-
-.fm-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr));
-  gap: 1rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.fm-card {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  min-width: 0;
-  padding: 0.75rem;
-}
-
-.fm-thumb {
-  display: grid;
-  place-items: center;
-  width: 100%;
-  aspect-ratio: 4 / 3;
-  overflow: hidden;
-  border-radius: var(--mf-radius-sm);
-  background: var(--mf-surface-soft);
-  color: var(--mf-text-muted);
-}
-
-.fm-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.fm-thumb .icon {
-  width: 2.5rem;
-  height: 2.5rem;
-}
-
-.fm-name {
-  margin: 0;
-  font-weight: 650;
-  overflow-wrap: anywhere;
-}
-
-.fm-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  margin-top: auto;
-}
-
-.fm-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.3rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.fm-folder {
-  display: flex;
-  gap: 0.6rem;
-  align-items: center;
-  min-width: 0;
-  padding: 0.75rem 1rem;
-  color: var(--mf-text);
-  text-decoration: none;
-}
-
-.fm-folder .icon {
-  flex: none;
-  color: var(--mf-accent-strong);
-}
-
-.fm-folder span {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.fm-share-link {
-  font-family: var(--bs-font-monospace);
-  font-size: 0.85rem;
-}
-
 /* ---- Storage status ---- */
 .eco-health-grid {
   display: grid;
@@ -529,8 +371,11 @@
   gap: 1rem;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .fm-dropzone {
-    transition: none;
-  }
+/* ---- My files library ---- */
+.library-file-name {
+  overflow-wrap: anywhere;
+}
+
+.library-table td:first-child {
+  min-width: 12rem;
 }

@@ -27,6 +27,10 @@
     {% include "firmwares/includes/pagination.html" with page=chipsets label="Chipset pages" query=pagination_query %}
   {% else %}
     <p class="empty-state p-4">No chipsets match this search.</p>
+    {% include "components/request_cta.html" with kind="chipset" query=search_query %}
+  {% endif %}
+  {% if search_query and chipsets and chipsets|length < 3 %}
+    {% include "components/request_cta.html" with kind="chipset" query=search_query heading="Not the chipset you were looking for?" %}
   {% endif %}
 </div>
 {% endblock %}

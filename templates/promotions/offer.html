@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}{{ promotion.name }}{% endblock %}
+{% block content %}
+{% url 'promotions:index' as offers_url %}
+<div class="site-container py-4 py-lg-5">
+  {% include "components/breadcrumbs.html" with current=promotion.name parent_label="Offers" parent_url=offers_url %}
+  {% include "components/page_header.html" with eyebrow="Offer" title=promotion.name lead=promotion.headline %}
+  {% if is_preview %}{% include "components/notice.html" with tone="warning" icon="info" message="Staff preview: this offer is not live yet, so visitors cannot see it." %}{% endif %}
+  <div class="row g-4">
+    <div class="col-12 col-lg-7">
+      <section class="surface-card p-4 mb-4" aria-labelledby="offer-gives">
+        <h2 class="h5" id="offer-gives">What you get</h2>
+        <p class="promo-effect fw-semibold">{{ effect }}</p>
+        {% if promotion.description %}<p>{{ promotion.description|linebreaksbr }}</p>{% endif %}
+        <dl class="eco-kv mb-0">
+          <dt>Who can take it</dt><dd>{{ audience_text }}</dd>
+          {% if promotion.ends_at %}<dt>{% if state.code == "ended" %}Ended{% else %}Ends{% endif %}</dt><dd>{{ promotion.ends_at|date:"j M Y, H:i" }}</dd>{% endif %}
+          {% if promotion.trial_days %}<dt>Lasts</dt><dd>{{ promotion.trial_days }} days from the moment you take it</dd>{% endif %}
+        </dl>
+      </section>
+      <section class="surface-card p-4" aria-labelledby="offer-terms">
+        <h2 class="h5" id="offer-terms">Terms</h2>
+        <ul class="mb-0">
+          {% for line in terms %}<li>{{ line }}</li>{% endfor %}
+          <li>Verified email is required. Offers are checked on the server and cannot be combined to exceed their limits.</li>
+          {% if promotion.max_claims_per_user == 1 %}<li>One per account.</li>{% else %}<li>Up to {{ promotion.max_claims_per_user }} per account.</li>{% endif %}
+          {% if promotion.max_claims_total %}<li>Limited to {{ promotion.max_claims_total }} places in total.</li>{% endif %}
+        </ul>
+      </section>
+    </div>
+    <div class="col-12 col-lg-5">
+      <section class="surface-card p-4" aria-labelledby="offer-status" data-offer-state="{{ state.code }}">
+        <h2 class="h5" id="offer-status">Your status</h2>
+        <p class="mb-2">{% include "components/status_pill.html" with label=state.label %}</p>
+        {% if state.progress %}
+          {% include "components/meter.html" with id="offer-progress" label="Progress" percent=state.progress.percent text=state.progress.text %}
+        {% endif %}
+        <p class="mt-3 mb-3" id="offer-state-message">{{ state.message }}</p>
+        {% if state.can_claim %}
+          <a class="btn btn-primary" href="{% url 'promotions:claim' slug=promotion.slug %}" hx-get="{% url 'promotions:claim' slug=promotion.slug %}" hx-target="#dialog-slot" hx-swap="innerHTML">{% if state.code == "ready" %}Take your reward{% else %}Claim this offer{% endif %}</a>
+        {% elif state.code == "sign_in" %}
+          <a class="btn btn-primary" href="{% url 'account_login' %}?next={{ request.path|urlencode }}">Sign in to take this offer</a>
+        {% elif state.code == "in_progress" %}
+          <a class="btn btn-outline-secondary" href="{% url 'firmwares:library_hub' %}">Find something to contribute</a>
+        {% endif %}
+      </section>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,26 @@
+{% if show %}
+<section class="consent-banner" role="region" aria-labelledby="consent-banner-title" x-data="consentBanner">
+  <h2 id="consent-banner-title" class="h6 mb-1">{{ policy.title }}</h2>
+  <p class="small mb-2">{{ policy.banner_text }}{% if policy.privacy_url %}{% for label, url in legal_links %}{% if url == policy.privacy_url %} <a href="{{ url }}">Privacy policy</a>.{% endif %}{% endfor %}{% endif %}</p>
+  <form method="post" action="{% url 'consent:save' %}">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ next }}">
+    <input type="hidden" name="source" value="banner">
+    <div class="consent-banner__custom" id="consent-banner-custom" :hidden="panelHidden" hidden>
+      {% for category in policy.optional %}
+        <div class="form-check mb-2">
+          <input class="form-check-input" type="checkbox" name="categories" value="{{ category.slug }}" id="consent-banner-{{ category.slug }}" aria-describedby="consent-banner-{{ category.slug }}-help">
+          <label class="form-check-label fw-semibold" for="consent-banner-{{ category.slug }}">{{ category.name }}</label>
+          <div class="form-text mt-0" id="consent-banner-{{ category.slug }}-help">{{ category.description }}</div>
+        </div>
+      {% endfor %}
+      <button type="submit" name="action" value="custom" class="btn btn-sm btn-primary mb-2">Save my choices</button>
+    </div>
+    <div class="d-flex flex-wrap gap-2 align-items-center">
+      <button type="submit" name="action" value="accept_all" class="btn btn-sm btn-primary">Accept all</button>
+      <button type="submit" name="action" value="reject_all" class="btn btn-sm btn-outline-secondary">Reject optional</button>
+      <a class="btn btn-sm btn-link" href="{% url 'consent:privacy_centre' %}" aria-controls="consent-banner-custom" :aria-expanded="expandedAttr" @click.prevent="toggle">Customise</a>
+    </div>
+  </form>
+</section>
+{% endif %}

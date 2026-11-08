@@ -4,10 +4,18 @@ import hashlib
 import logging
 
 from django.core.cache import cache
+from redis.exceptions import RedisError
 
 from apps.core import ai, ai_client
 
 logger = logging.getLogger(__name__)
+
+# Provider/payload failures plus a cache backend that is unreachable.
+_EXPECTED_ERRORS: tuple[type[Exception], ...] = (
+    *ai_client.AI_ERRORS,
+    RedisError,
+    OSError,
+)
 
 # AI Generation limits
 MAX_INPUT_TOKENS = 4000
@@ -66,7 +74,7 @@ def suggest_outline(text: str, use_cache: bool = True) -> str:
 
         return result
 
-    except Exception:
+    except _EXPECTED_ERRORS:
         logger.exception("Outline generation failed")
         return ""
 
@@ -126,7 +134,7 @@ def rewrite_paragraph(text: str, tone: str = "concise", use_cache: bool = True) 
 
         return result
 
-    except Exception:
+    except _EXPECTED_ERRORS:
         logger.exception("Paragraph rewrite failed")
         return text
 
@@ -175,7 +183,7 @@ def generate_summary(text: str, max_sentences: int = 2, use_cache: bool = True) 
 
         return result
 
-    except Exception:
+    except _EXPECTED_ERRORS:
         logger.exception("Summary generation failed")
         # Fallback
         sentences = text.split(". ")
@@ -225,7 +233,7 @@ def suggest_tags(
 
         return result
 
-    except Exception:
+    except _EXPECTED_ERRORS:
         logger.exception("Tag suggestion failed")
         return {"suggestions": []}
 
@@ -271,6 +279,6 @@ def generate_title(text: str, max_length: int = 100, use_cache: bool = True) -> 
 
         return result
 
-    except Exception:
+    except _EXPECTED_ERRORS:
         logger.exception("Title generation failed")
         return ""

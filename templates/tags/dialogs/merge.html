@@ -1,0 +1,6 @@
+{% extends "admin/staff_dialog.html" %}
+{# Tags-owned content for the staff dialog shell: the impact of a merge. #}
+{% block dialog_body %}
+  <p>This will change <strong>{{ affected }} article{{ affected|pluralize }}</strong>. Every article tagged <strong>{{ source.name }}</strong> will be tagged <strong>{{ target.name }}</strong> instead, and <strong>{{ source.name }}</strong> will be retired.</p>
+  <p class="mf-ui-help">This cannot be undone from the tag manager.</p>
+{% endblock %}

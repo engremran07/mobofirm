@@ -41,8 +41,8 @@ def stage_firmware(root: Path, name: str, payload: bytes | None) -> OfficialFirm
     return firmware
 
 
-@pytest.fixture
-def firmware_root(settings, tmp_path: Path) -> Path:
+@pytest.fixture(name="firmware_root")
+def firmware_root_fixture(settings, tmp_path: Path) -> Path:
     settings.FIRMWARE_STORAGE_ROOT = tmp_path.resolve()
     return settings.FIRMWARE_STORAGE_ROOT
 

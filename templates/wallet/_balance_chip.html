@@ -1,0 +1,7 @@
+{# Contract: balance (int or None), url. Compact credit balance for the account menu; see wallet_tags.wallet_balance_chip. #}
+{% if balance is not None %}
+<a class="eco-pill text-decoration-none" href="{{ url }}" aria-label="Wallet: {{ balance }} credits available">
+  <i class="icon" data-lucide="receipt" aria-hidden="true"></i>
+  <span>{{ balance }} credits</span>
+</a>
+{% endif %}

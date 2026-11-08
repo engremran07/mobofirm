@@ -21,8 +21,9 @@ from xml.etree import ElementTree
 from django.db import DatabaseError
 from django.utils import timezone
 
-from . import audit, autonomy
+from . import audit, autonomy, interlinking
 from .fetcher import FetchError, FetchResult, SafeFetcher, default_fetcher
+from .inprocess import InProcessFetcher, choose_fetcher
 from .models import CrawlRun, PageObservation, SEOSettings
 from .siteurls import site_origin
 
@@ -212,16 +213,18 @@ def run_crawl(
         ),
     )
     completed = False
+    chosen = fetcher or choose_fetcher(origin)
     try:
         Crawler(
             origin,
             max_pages=row.crawl_max_pages,
-            delay_ms=row.crawl_delay_ms,
-            fetcher=fetcher or default_fetcher(),
+            delay_ms=0 if isinstance(chosen, InProcessFetcher) else row.crawl_delay_ms,
+            fetcher=chosen,
             sleep=sleep,
         ).run(run)
         audit.run_audit(run)
         autonomy.plan_from_issues()
+        interlinking.record_link_counts(run)
         completed = True
     except (FetchError, DatabaseError, OSError, ValueError) as error:
         run.error = str(error)[:2000]

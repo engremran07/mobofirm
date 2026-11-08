@@ -14,7 +14,7 @@ from apps.devices.services import (
 )
 
 
-def audit_device_event(event_type: str = "login") -> Callable:
+def audit_device_event() -> Callable:
     """
     Decorator for login success handlers to enforce device policy and attach request.device.
     """

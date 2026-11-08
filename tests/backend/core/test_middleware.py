@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from urllib.parse import urlencode
+
 from allauth.account.models import EmailAddress
 from allauth.socialaccount.models import SocialAccount
 from django.contrib.auth import get_user_model
@@ -102,8 +104,11 @@ class ProfileCompletionMiddlewareTests(TestCase):
 
         response = self.client.get(reverse("users:dashboard"))
 
+        # The page is reached again after onboarding, so the target travels along.
+        onboarding = reverse("users:tell_us_about_you")
+        query = urlencode({"next": reverse("users:dashboard")})
         self.assertRedirects(
-            response, reverse("users:tell_us_about_you"), fetch_redirect_response=False
+            response, f"{onboarding}?{query}", fetch_redirect_response=False
         )
 
     def test_onboarding_page_and_health_are_exempt(self):

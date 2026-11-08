@@ -2,6 +2,8 @@
 {% block title %}Verify your email | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block content %}
 <div class="site-container py-5">
+  {% include "components/breadcrumbs.html" with current="Verify email" %}
+  
   <section class="surface-card p-4">
     <p class="section-eyebrow">Account security</p>
     <h1 class="h2">Check your email</h1>

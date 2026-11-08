@@ -21,7 +21,13 @@ class AppRegistry(SingletonModel):
     pages_enabled = models.BooleanField(default=True)
     shop_enabled = models.BooleanField(default=True)
     marketplace_enabled = models.BooleanField(default=True)
-    filemanager_enabled = models.BooleanField(default=True)
+    wallet_enabled = models.BooleanField(default=True)
+    referral_enabled = models.BooleanField(default=True)
+    consent_enabled = models.BooleanField(default=True)
+    gamification_enabled = models.BooleanField(default=True)
+    bounty_enabled = models.BooleanField(default=True)
+    distribution_enabled = models.BooleanField(default=True)
+    promotions_enabled = models.BooleanField(default=True)
 
     class Meta:
         verbose_name = "Application Registry"

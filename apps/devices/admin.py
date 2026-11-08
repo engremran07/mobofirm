@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable
+from urllib.parse import unquote
 
 from django.contrib import admin, messages
 from django.db.models import QuerySet
@@ -16,6 +17,7 @@ from unfold.contrib.filters.admin import (
     RangeNumericFilter,
 )
 from unfold.enums import ActionVariant
+from unfold.forms import BaseDialogForm
 
 from apps.core.admin_base import (
     ConfirmForm,
@@ -31,6 +33,8 @@ from apps.core.admin_base import (
     htmx_redirect,
     return_url,
 )
+from apps.devices import slots
+from apps.devices.dialogs import DeclineSlotRequestForm, ResetSlotsForm
 from apps.devices.models import (
     AppPolicy,
     BehaviorInsight,
@@ -38,11 +42,12 @@ from apps.devices.models import (
     DeviceConfig,
     DeviceEvent,
     DeviceFingerprint,
-    QuotaTier,
+    DeviceResetAllowance,
+    DeviceSlotRequest,
+    DeviceSlotReset,
     RegistryEvent,
     TrustScore,
 )
-from apps.devices.models_quota import UserDeviceQuota
 from apps.devices.services import mark_device_trusted
 
 BADGE_DEVICE_STATE: dict[str, str] = {
@@ -128,8 +133,8 @@ class DeviceAdmin(ModelAdmin):
     list_select_related = ("user",)
     inlines = (DeviceEventInline,)
     actions = ("mark_trusted", "block_devices", "unblock_devices", "revoke_devices")
-    actions_row = ("trust", "block", "unblock", "revoke")
-    actions_detail = ("trust", "block", "unblock", "revoke")
+    actions_row = ("trust", "block", "unblock", "revoke", "reset_slots")
+    actions_detail = ("trust", "block", "unblock", "revoke", "reset_slots")
 
     @display(description=_("State"), label=BADGE_DEVICE_STATE)
     def state(self, obj: Device) -> tuple[str, str]:
@@ -257,7 +262,7 @@ class DeviceAdmin(ModelAdmin):
         ),
     )
     def trust(
-        self, request: HttpRequest, form: ConfirmForm, object_id: str
+        self, request: HttpRequest, _form: ConfirmForm, object_id: str
     ) -> HttpResponse:
         return self._single(request, object_id, self._trust)
 
@@ -273,7 +278,7 @@ class DeviceAdmin(ModelAdmin):
         ),
     )
     def block(
-        self, request: HttpRequest, form: ConfirmForm, object_id: str
+        self, request: HttpRequest, _form: ConfirmForm, object_id: str
     ) -> HttpResponse:
         return self._single(request, object_id, self._block)
 
@@ -284,7 +289,7 @@ class DeviceAdmin(ModelAdmin):
         dialog=confirm_dialog(_("Unblock this device?"), submit=_("Unblock")),
     )
     def unblock(
-        self, request: HttpRequest, form: ConfirmForm, object_id: str
+        self, request: HttpRequest, _form: ConfirmForm, object_id: str
     ) -> HttpResponse:
         return self._single(request, object_id, self._unblock)
 
@@ -300,9 +305,52 @@ class DeviceAdmin(ModelAdmin):
         ),
     )
     def revoke(
-        self, request: HttpRequest, form: ConfirmForm, object_id: str
+        self, request: HttpRequest, _form: ConfirmForm, object_id: str
     ) -> HttpResponse:
         return self._single(request, object_id, self._revoke)
+
+    def has_reset_device_slots_permission(
+        self, request: HttpRequest, _object_id: str | None = None
+    ) -> bool:
+        return bool(request.user.has_perm(slots.STAFF_PERMISSION))
+
+    @action(
+        description=_("Reset account slots"),
+        icon="restart_alt",
+        variant=ActionVariant.WARNING,
+        permissions=["reset_device_slots"],
+        url_path="reset-account-slots",
+        dialog=confirm_dialog(
+            _("Reset this account's browser slots?"),
+            _(
+                "Every approved browser of the account goes back to “awaiting "
+                "approval” and can be approved again within its limit. Nothing is "
+                "deleted; the reset is recorded with your name and reason."
+            ),
+            ResetSlotsForm,
+            submit=_("Reset slots"),
+        ),
+    )
+    def reset_slots(
+        self, request: HttpRequest, form: BaseDialogForm, object_id: str
+    ) -> HttpResponse:
+        device = self.get_object(request, unquote(object_id))
+        if device is None:
+            raise Http404
+        try:
+            reset = slots.reset_slots_as_staff(
+                device.user, actor=request.user, reason=str(form.cleaned_data["reason"])
+            )
+        except slots.SlotResetError as exc:
+            self.message_user(request, exc.message, messages.ERROR)
+        else:
+            self.log_change(request, device, f"Slot reset #{reset.pk}")
+            self.message_user(
+                request,
+                _("%(count)d approved browser(s) released.")
+                % {"count": reset.devices_released},
+            )
+        return htmx_redirect(return_url(request, change_url(self, device.pk)))
 
 
 @admin.register(DeviceConfig)
@@ -312,15 +360,20 @@ class DeviceConfigAdmin(SingletonModelAdmin):
             _("Browser registration"),
             {
                 "fields": (
-                    "max_devices_default",
+                    "slot_reset_monthly_cap",
                     "monthly_device_quota",
                     "yearly_device_quota",
                     "device_expiry_days",
                 ),
                 "description": _(
-                    "Only approved first-party browser profiles count against this "
-                    "allowance. Quotas limit new registrations per rolling 30 days / "
-                    "365 days. Old machine-fingerprint records remain historical."
+                    "How many browsers an account may approve is part of its download "
+                    "package (Shop → Packages → Basic info → Limit devices), including "
+                    "staff overrides and campaign bonuses. Quotas here limit new "
+                    "registrations per rolling 30 days / 365 days. The price of a paid "
+                    "slot reset is under Credits economy → Credit prices (“Reset "
+                    "registered-browser slots”); a package can override it "
+                    "(Shop → Packages → Basic info). Old "
+                    "machine-fingerprint records remain historical."
                 ),
             },
         ),
@@ -353,7 +406,6 @@ class AppPolicyAdmin(ModelAdmin):
         "ai_risk_scoring",
         "monthly_device_quota",
         "yearly_device_quota",
-        "ad_unlock_enabled",
     )
     search_fields = ("name",)
 
@@ -406,28 +458,148 @@ class DeviceEventAdmin(NoAddModelAdmin):
         return "failed", str(_("Failed"))
 
 
-@admin.register(UserDeviceQuota)
-class UserDeviceQuotaAdmin(ModelAdmin):
-    list_display = ("user", "max_devices", "window", "last_reset_at")
-    search_fields = ("user__email", "user__username")
-    list_filter = (
-        ("window", ChoicesDropdownFilter),
-        ("last_reset_at", RangeDateTimeFilter),
+BADGE_SLOT_METHOD: dict[str, str] = {
+    DeviceSlotReset.Method.STAFF: "info",
+    DeviceSlotReset.Method.CREDITS: "success",
+    DeviceSlotReset.Method.REWARDED_AD: "warning",
+}
+BADGE_SLOT_REQUEST: dict[str, str] = {
+    DeviceSlotRequest.Status.OPEN: "warning",
+    DeviceSlotRequest.Status.RESOLVED: "success",
+    DeviceSlotRequest.Status.DECLINED: "danger",
+}
+
+
+@admin.register(DeviceSlotReset)
+class DeviceSlotResetAdmin(ReadOnlyModelAdmin):
+    """Permanent record of every slot reset (events are purged after retention)."""
+
+    list_display = (
+        "created_at",
+        "user",
+        "method_badge",
+        "devices_released",
+        "credits_spent",
+        "actor",
+        "reason",
     )
+    list_filter = (
+        ("method", ChoicesDropdownFilter),
+        ("created_at", RangeDateTimeFilter),
+    )
+    search_fields = ("user__email", "user__username", "key", "reason")
+    raw_id_fields = ("user", "actor")
+    date_hierarchy = "created_at"
+    list_select_related = ("user", "actor")
+
+    @display(description=_("Method"), ordering="method", label=BADGE_SLOT_METHOD)
+    def method_badge(self, obj: DeviceSlotReset) -> tuple[str, str]:
+        return obj.method, obj.get_method_display()
+
+
+@admin.register(DeviceSlotRequest)
+class DeviceSlotRequestAdmin(ReadOnlyModelAdmin):
+    """Users at their device limit who asked staff to free a slot."""
+
+    list_display = (
+        "created_at",
+        "user",
+        "status_badge",
+        "message",
+        "resolved_by",
+        "resolved_at",
+    )
+    list_filter = (
+        ("status", ChoicesDropdownFilter),
+        ("created_at", RangeDateTimeFilter),
+    )
+    search_fields = ("user__email", "user__username", "message")
+    raw_id_fields = ("user", "resolved_by", "reset")
+    list_select_related = ("user", "resolved_by")
+    actions_row = ("reset_and_close", "decline")
+    actions_detail = ("reset_and_close", "decline")
+
+    @display(description=_("Status"), ordering="status", label=BADGE_SLOT_REQUEST)
+    def status_badge(self, obj: DeviceSlotRequest) -> tuple[str, str]:
+        return obj.status, obj.get_status_display()
+
+    def has_reset_device_slots_permission(
+        self, request: HttpRequest, _object_id: str | None = None
+    ) -> bool:
+        return bool(request.user.has_perm(slots.STAFF_PERMISSION))
+
+    def _answer(
+        self, request: HttpRequest, object_id: str, form: BaseDialogForm, *, reset: bool
+    ) -> HttpResponse:
+        slot_request = self.get_object(request, unquote(object_id))
+        if slot_request is None:
+            raise Http404
+        try:
+            slots.resolve_slot_request(
+                slot_request,
+                actor=request.user,
+                reset=reset,
+                note=str(form.cleaned_data["reason"]),
+            )
+        except slots.SlotResetError as exc:
+            self.message_user(request, exc.message, messages.ERROR)
+        else:
+            self.message_user(request, _("Request answered."))
+        return htmx_redirect(return_url(request, change_url(self, slot_request.pk)))
+
+    @action(
+        description=_("Reset slots"),
+        icon="restart_alt",
+        variant=ActionVariant.SUCCESS,
+        permissions=["reset_device_slots"],
+        url_path="reset-and-close",
+        dialog=confirm_dialog(
+            _("Reset this account's browser slots?"),
+            _(
+                "Releases every approved browser of the user, closes the request and "
+                "notifies them. Recorded with your name and the note below."
+            ),
+            ResetSlotsForm,
+            submit=_("Reset slots"),
+        ),
+    )
+    def reset_and_close(
+        self, request: HttpRequest, form: BaseDialogForm, object_id: str
+    ) -> HttpResponse:
+        return self._answer(request, object_id, form, reset=True)
+
+    @action(
+        description=_("Decline"),
+        icon="block",
+        variant=ActionVariant.DANGER,
+        permissions=["reset_device_slots"],
+        url_path="decline-request",
+        dialog=confirm_dialog(
+            _("Decline this request?"),
+            _("The user is notified with your answer."),
+            DeclineSlotRequestForm,
+            submit=_("Decline"),
+        ),
+    )
+    def decline(
+        self, request: HttpRequest, form: BaseDialogForm, object_id: str
+    ) -> HttpResponse:
+        return self._answer(request, object_id, form, reset=False)
+
+
+@admin.register(DeviceResetAllowance)
+class DeviceResetAllowanceAdmin(ReadOnlyModelAdmin):
+    """Resets earned by completing a rewarded ad, spent from the user's browsers page."""
+
+    list_display = ("created_at", "user", "source", "expires_at", "consumed_at")
+    list_filter = (
+        "source",
+        ("consumed_at", RangeDateTimeFilter),
+        ("expires_at", RangeDateTimeFilter),
+    )
+    search_fields = ("user__email", "user__username", "key")
     raw_id_fields = ("user",)
-
-    def has_add_permission(self, request: HttpRequest) -> bool:
-        return _is_superuser(request)
-
-    def has_change_permission(
-        self, request: HttpRequest, obj: UserDeviceQuota | None = None
-    ) -> bool:
-        return _is_superuser(request)
-
-    def has_delete_permission(
-        self, request: HttpRequest, obj: UserDeviceQuota | None = None
-    ) -> bool:
-        return _is_superuser(request)
+    list_select_related = ("user",)
 
 
 @admin.register(DeviceFingerprint)
@@ -480,19 +652,6 @@ class TrustScoreAdmin(ModelAdmin):
     )
     raw_id_fields = ("fingerprint",)
     readonly_fields = ("last_updated",)
-
-
-@admin.register(QuotaTier)
-class QuotaTierAdmin(ModelAdmin):
-    list_display = (
-        "name",
-        "min_trust_score",
-        "max_trust_score",
-        "daily_download_limit",
-        "hourly_download_limit",
-        "requires_ad",
-        "can_bypass_captcha",
-    )
 
 
 @admin.register(RegistryEvent)

@@ -2,6 +2,18 @@
 Lightweight user context processors.
 """
 
+from django.http import HttpRequest
+from django.utils.functional import SimpleLazyObject
+
+from apps.users.services.announcements import banner_announcements
+
+
+def announcement_banners(request: HttpRequest) -> dict[str, object]:
+    """Live site banners for this visitor; evaluated only if a template reads them."""
+    return {
+        "announcement_banners": SimpleLazyObject(lambda: banner_announcements(request))
+    }
+
 
 def auth_status(request):
     """

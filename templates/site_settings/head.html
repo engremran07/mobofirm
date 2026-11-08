@@ -1,8 +1,9 @@
-{% load static %}{% comment %}
+{% load static consent_tags %}{% comment %}
 Runtime site settings for the document head: favicon, verification meta tags, the light-theme
-accent stylesheet and the same-origin analytics loader. Included once from base.html.
-{% endcomment %}{% if site_settings.favicon_url %}<link rel="icon" href="{{ site_settings.favicon_url }}">
+accent stylesheet and the same-origin analytics loader. The loader is rendered only after the
+visitor allows the "analytics" consent category (apps.consent). Included once from base.html.
+{% endcomment %}{% consent_allows "analytics" as analytics_allowed %}{% if site_settings.favicon_url %}<link rel="icon" href="{{ site_settings.favicon_url }}">
 {% endif %}{% for name, content in site_settings.meta_tags %}<meta name="{{ name }}" content="{{ content }}">
 {% endfor %}{% if site_settings.has_custom_theme %}<link rel="stylesheet" href="{% url 'site_settings:theme_css' %}?v={{ site_settings.version }}">
-{% endif %}{% if site_settings.analytics.enabled %}<script src="{% static 'site_settings/analytics.js' %}" defer data-ga4-id="{{ site_settings.analytics.ga4_id }}" data-gtm-id="{{ site_settings.analytics.gtm_id }}"></script>
+{% endif %}{% if analytics_allowed and site_settings.analytics.enabled %}<script src="{% static 'site_settings/analytics.js' %}" defer data-ga4-id="{{ site_settings.analytics.ga4_id }}" data-gtm-id="{{ site_settings.analytics.gtm_id }}"></script>
 {% endif %}

@@ -1,0 +1,7 @@
+{# Contract: field (hidden BoundField), input_id, label, kinds (brand|model|chipset), display, optional depends_on/depends_param, placeholder. Wraps components/combobox.html. #}
+<div class="mb-3 catalog-field">
+  <label class="form-label" for="{{ input_id }}">{{ label }} <span class="muted fw-normal">(optional)</span></label>
+  {% include "components/combobox.html" with name=field.html_name value=field.value display=display kinds=kinds depends_on=depends_on depends_param=depends_param placeholder=placeholder invalid=field.errors name_label=label describedby=input_id|add:"_help" %}
+  {% if field.errors %}<div class="invalid-feedback d-block" role="alert">{% for error in field.errors %}<p class="mb-0">{{ error }}</p>{% endfor %}</div>{% endif %}
+  {% if help %}<div class="form-text" id="{{ input_id }}_help">{{ help }}</div>{% endif %}
+</div>

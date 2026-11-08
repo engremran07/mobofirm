@@ -93,6 +93,7 @@ class Command(BaseCommand):
         with eager_background_tasks():
             call_command("bootstrap_site", stdout=self.stdout)
             self._seed_pages()
+            self._seed_packages()
             call_command("seed_people", stdout=self.stdout, **confirm)
             self._disable_ads()
             call_command(
@@ -104,6 +105,7 @@ class Command(BaseCommand):
             )
             call_command("seed_editorial", stdout=self.stdout, **confirm)
             call_command("seed_comments", stdout=self.stdout, **confirm)
+            self._seed_launch_offers()
             if not options["skip_seo"]:
                 self._seo(options["crawl_base_url"])
 
@@ -132,6 +134,20 @@ class Command(BaseCommand):
             return
         self.stdout.write("== Pages")
         call_command("seed_pages", stdout=self.stdout)
+
+    def _seed_packages(self) -> None:
+        if not django_apps.is_installed("apps.shop"):
+            self.stdout.write("== Packages: apps.shop is not installed; skipped.")
+            return
+        self.stdout.write("== Download packages (Free, Premium, Gold)")
+        call_command("seed_packages", stdout=self.stdout)
+
+    def _seed_launch_offers(self) -> None:
+        if not django_apps.is_installed("apps.promotions"):
+            self.stdout.write("== Offers: apps.promotions is not installed; skipped.")
+            return
+        self.stdout.write("== Launch offers (drafts for staff to review and schedule)")
+        call_command("seed_launch_offers", stdout=self.stdout)
 
     def _disable_ads(self) -> None:
         if not django_apps.is_installed("apps.ads"):

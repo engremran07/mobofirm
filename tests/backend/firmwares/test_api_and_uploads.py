@@ -276,6 +276,26 @@ class UploadApiTests(StorageTestCase):
 
         self.assertIn(response.status_code, (401, 403))
 
+    def test_browser_visit_to_the_api_is_sent_to_the_upload_page(self):
+        self.api.force_authenticate(self.user)
+
+        for name in ("firmwares:firmware-upload", "firmwares:firmware-upload-external"):
+            response = self.api.get(reverse(name), HTTP_ACCEPT="text/html")
+
+            self.assertEqual(response.status_code, 302, name)
+            self.assertEqual(response["Location"], reverse("firmwares:upload"), name)
+
+    def test_api_clients_get_json_never_the_browsable_form(self):
+        self.api.force_authenticate(self.user)
+
+        response = self.api.get(
+            reverse("firmwares:firmware-upload"), HTTP_ACCEPT="application/json"
+        )
+
+        self.assertEqual(response.status_code, 405)
+        self.assertEqual(response["Content-Type"], "application/json")
+        self.assertNotIn(b"Django REST framework", response.content)
+
     def test_external_submission_endpoint(self):
         self.api.force_authenticate(self.user)
         url = reverse("firmwares:firmware-upload-external")
@@ -370,10 +390,28 @@ class ModerationApiTests(StorageTestCase):
 
 
 class CreationRequestApiTests(StorageTestCase):
+    def setUp(self):
+        super().setUp()
+        self.user.mark_email_verified()
+
+    def test_unverified_accounts_cannot_submit_requests(self):
+        stranger = get_user_model().objects.create_user(
+            username="unverified-requester", email="unverified-requester@example.test"
+        )
+        self.api.force_authenticate(stranger)
+
+        response = self.api.post(
+            reverse("firmwares:brand-requests-list"), {"name": "Nope"}, format="json"
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(BrandCreationRequest.objects.exists())
+
     def test_users_create_and_see_only_their_own_requests(self):
         other = get_user_model().objects.create_user(
             username="other-requester", email="other-requester@example.test"
         )
+        other.mark_email_verified()
         url = reverse("firmwares:brand-requests-list")
 
         self.api.force_authenticate(self.user)
@@ -395,7 +433,9 @@ class CreationRequestApiTests(StorageTestCase):
         self.assertEqual(request.status, "pending")
         self.assertEqual(len(mine.json()), 1)
         self.assertEqual(theirs.json(), [])
-        self.assertEqual(patched.status_code, 403)
+        self.assertEqual(patched.status_code, 405)
+        request.refresh_from_db()
+        self.assertEqual(request.name, "New Brand")
 
     def test_model_and_variant_requests_do_not_error_for_regular_users(self):
         brand = Brand.objects.create(name="Req Brand", slug="req-brand")
@@ -409,7 +449,7 @@ class CreationRequestApiTests(StorageTestCase):
         )
         variants_response = self.api.post(
             reverse("firmwares:variant-requests-list"),
-            {"model": model.pk, "name": "Requested Variant"},
+            {"brand": brand.pk, "model": model.pk, "name": "Requested Variant"},
             format="json",
         )
         listing = self.api.get(reverse("firmwares:model-requests-list"))

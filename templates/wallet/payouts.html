@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% load mf_ui %}
+{% block title %}Payouts{% endblock %}
+{% block content %}
+{% url 'wallet:dashboard' as wallet_url %}
+<div class="site-container py-4 py-lg-5">
+  {% include "components/breadcrumbs.html" with current="Payouts" parent_label="Wallet" parent_url=wallet_url %}
+  {% include "components/page_header.html" with eyebrow="Account" title="Request a payout" lead="Credits earned from sales and bounties can be paid out. Staff review every request." %}
+  {% include "wallet/_subnav.html" %}
+  <div class="mb-4">{% include "wallet/_payment_notice.html" %}</div>
+  {% if cfg.payouts_enabled %}
+    <div class="row g-3 mb-4">
+      <div class="col-6 col-md-4">{% include "components/stat_tile.html" with label="Withdrawable" value=snapshot.withdrawable hint="Earned and unpaid" %}</div>
+      <div class="col-6 col-md-4">{% include "components/stat_tile.html" with label="Minimum payout" value=cfg.min_payout_credits hint="Credits" %}</div>
+      <div class="col-12 col-md-4">{% include "components/stat_tile.html" with label="Handling fee" value=cfg.payout_fee_percent hint="Percent withheld" %}</div>
+    </div>
+    <form method="post" class="surface-card p-4 mb-5" novalidate>
+      {% csrf_token %}
+      {% include "components/form_errors.html" with form=form %}
+      {% include "components/form_field.html" with field=form.credits %}
+      {% include "components/form_field.html" with field=form.method %}
+      {% include "components/form_field.html" with field=form.destination %}
+      <p class="form-text">{{ cfg.credits_per_currency }} credits equal 1 {{ cfg.currency_label }} before the fee. The credits are held as soon as you ask and returned if the request is rejected.</p>
+      <button type="submit" class="btn btn-primary">Request payout</button>
+    </form>
+  {% else %}
+    <div class="mb-5">{% include "components/notice.html" with tone="warning" message="Payouts are switched off right now." %}</div>
+  {% endif %}
+
+  <h2 class="h5">Your requests</h2>
+  {% if payouts %}
+    {% table_scroll "Your payout requests" %}
+    <table class="table align-middle">
+      <thead><tr><th scope="col">Request</th><th scope="col" class="text-end">Credits</th><th scope="col" class="text-end">Cash value</th><th scope="col">Status</th></tr></thead>
+      <tbody>
+        {% for item in payouts %}
+          <tr>
+            <td>#{{ item.pk }} <span class="muted small d-block">{{ item.created_at|date:"j M Y" }} &middot; {{ item.get_method_display }}</span></td>
+            <td class="text-end">{{ item.credits }}</td>
+            <td class="text-end">{{ item.payout_amount }} {{ item.currency_label }}</td>
+            <td>
+              {% if item.status == "paid" %}{% include "components/status_pill.html" with label="Paid" tone="success" %}
+              {% elif item.status == "rejected" %}{% include "components/status_pill.html" with label="Rejected" tone="danger" %}
+              {% else %}{% include "components/status_pill.html" with label=item.get_status_display tone="warning" %}{% endif %}
+              {% if item.decision_reason %}<span class="muted small d-block">{{ item.decision_reason }}</span>{% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endtable_scroll %}
+  {% else %}
+    {% include "components/empty_state.html" with title="No payout requests yet" message="Earn credits from sales or bounties, then request a payout here." %}
+  {% endif %}
+</div>
+{% endblock %}

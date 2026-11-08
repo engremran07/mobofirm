@@ -133,8 +133,13 @@ class LinkableEntity(TimestampedModel):
 
 class LinkSuggestion(TimestampedModel):
     """
-    Stable suggestions for internal linking. Not auto-applied unless requested.
+    Stable suggestions for internal linking. Not rendered until a reviewer accepts.
     """
+
+    class Status(models.TextChoices):
+        PROPOSED = "proposed", "Proposed"
+        ACCEPTED = "accepted", "Accepted"
+        REJECTED = "rejected", "Rejected"
 
     source = models.ForeignKey(
         LinkableEntity, on_delete=models.CASCADE, related_name="suggestions_from"
@@ -146,6 +151,25 @@ class LinkSuggestion(TimestampedModel):
     is_applied = models.BooleanField(default=False)
     locked = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
+    status = models.CharField(
+        max_length=10, choices=Status.choices, default=Status.PROPOSED, db_index=True
+    )
+    relation = models.CharField(
+        max_length=40,
+        blank=True,
+        default="",
+        help_text="The real relation that justifies the link (e.g. model_to_chipset).",
+    )
+    anchor = models.CharField(max_length=160, blank=True, default="")
+    reason = models.CharField(max_length=255, blank=True, default="")
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    decided_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         unique_together = ("source", "target")
@@ -350,6 +374,23 @@ class CrawlRun(TimestampedModel):
         MANUAL = "manual", "Manual"
         SCHEDULED = "scheduled", "Scheduled"
 
+    class Kind(models.TextChoices):
+        CRAWL = "crawl", "Render crawl"
+        SCAN = "scan", "Content scan"
+
+    kind = models.CharField(
+        max_length=8, choices=Kind.choices, default=Kind.CRAWL, db_index=True
+    )
+    urls_total = models.PositiveIntegerField(
+        default=0, help_text="Public URLs found by a content scan."
+    )
+    cursor = models.PositiveIntegerField(
+        default=0, help_text="Next URL offset when a scan stopped on its time budget."
+    )
+    partial = models.BooleanField(
+        default=False, help_text="The scan stopped before covering every URL."
+    )
+    summary = models.JSONField(default=dict, blank=True)
     base_url = models.URLField(max_length=500)
     status = models.CharField(
         max_length=16, choices=Status.choices, default=Status.RUNNING
@@ -458,15 +499,95 @@ class Issue(TimestampedModel):
     last_seen_run = models.ForeignKey(
         CrawlRun, on_delete=models.SET_NULL, null=True, related_name="issues"
     )
+    group = models.CharField(
+        max_length=16,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text="Review bucket: posts, firmware, models, brands, chipsets, tools, "
+        "pages or site.",
+    )
+    object_label = models.CharField(max_length=100, blank=True, default="")
+    object_pk = models.CharField(max_length=64, blank=True, default="")
+    object_title = models.CharField(max_length=255, blank=True, default="")
+    seo_field = models.CharField(
+        max_length=40,
+        blank=True,
+        default="",
+        help_text="SEO field the issue is about (meta_title, meta_description, ...).",
+    )
+    measured = models.CharField(max_length=500, blank=True, default="")
+    expected = models.CharField(max_length=500, blank=True, default="")
+    suggestion = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Standards-based proposal: {'field': ..., 'value': ...}.",
+    )
+    fixable = models.BooleanField(default=False)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    fix_ledger = models.ForeignKey(
+        "seo.ChangeLedger",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+        help_text="The ledger entry that last applied a fix for this issue.",
+    )
+    ignored_reason = models.CharField(max_length=255, blank=True, default="")
+    ignored_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    ignored_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering: ClassVar[list[str]] = ["severity", "code", "url"]
         indexes = (
             models.Index(fields=["status", "severity"], name="seo_issue_open_idx"),
+            models.Index(fields=["status", "group"], name="seo_issue_group_idx"),
         )
 
     def __str__(self) -> str:
         return f"{self.code}: {self.url}"
+
+
+class PageSnapshot(TimestampedModel):
+    """What the last scan found for one public URL: the inventory behind the board."""
+
+    path = models.CharField(max_length=500, unique=True)
+    group = models.CharField(max_length=16, db_index=True)
+    page_type = models.CharField(max_length=32, blank=True, default="")
+    object_label = models.CharField(max_length=100, blank=True, default="")
+    object_pk = models.CharField(max_length=64, blank=True, default="")
+    object_title = models.CharField(max_length=255, blank=True, default="")
+    title = models.CharField(max_length=500, blank=True, default="")
+    title_source = models.CharField(max_length=16, blank=True, default="")
+    description = models.CharField(max_length=500, blank=True, default="")
+    description_source = models.CharField(max_length=16, blank=True, default="")
+    canonical = models.CharField(max_length=500, blank=True, default="")
+    indexable = models.BooleanField(default=True)
+    noindex_reason = models.CharField(max_length=255, blank=True, default="")
+    in_sitemap = models.BooleanField(default=False)
+    word_count = models.PositiveIntegerField(default=0)
+    links_out = models.PositiveIntegerField(default=0)
+    links_in = models.PositiveIntegerField(default=0)
+    last_run = models.ForeignKey(
+        CrawlRun, on_delete=models.SET_NULL, null=True, related_name="snapshots"
+    )
+    scanned_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ["path"]
+        indexes = (
+            models.Index(fields=["group", "indexable"], name="seo_snap_group_idx"),
+            models.Index(fields=["object_label", "object_pk"], name="seo_snap_obj_idx"),
+        )
+
+    def __str__(self) -> str:
+        return self.path
 
 
 class ChangeLedger(TimestampedModel):

@@ -95,9 +95,8 @@ class EnterpriseExceptionHandler:
     @staticmethod
     def handle_api_exception(
         exc: Exception,
-        context: dict[str, Any] | None = None,
+        _context: dict[str, Any] | None = None,
     ) -> JsonResponse:
-        context.get("request") if context else None
         status_code: int
         response_data: dict[str, Any]
 

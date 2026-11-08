@@ -1,0 +1,20 @@
+{# Overrides Unfold's header user links to add the visible theme switcher and the release stamp. Keep in sync with unfold/helpers/userlinks.html when upgrading django-unfold. #}
+{% load i18n static unfold %}
+
+{% if not is_popup %}
+    <div class="flex flex-row gap-3 items-center ml-auto">
+        <span class="admin-release-stamp" data-app-version="{{ release_version }}" title="{% trans 'Application version' %}">v{{ release_version }}{% if release_build.git_sha %}<span class="admin-release-stamp__build"> &middot; {{ release_build.git_sha }}</span>{% endif %}</span>
+
+        {% if environment %}
+            {% include "unfold/helpers/label.html" with text=environment.0 type=environment.1 %}
+        {% endif %}
+
+        {% include "unfold/helpers/theme_toggle.html" %}
+
+        {% action_list %}
+
+        {% if nav_global_side %}
+            {{ nav_global_side }}
+        {% endif %}
+    </div>
+{% endif %}

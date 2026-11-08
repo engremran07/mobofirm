@@ -1,0 +1,13 @@
+from django.apps import AppConfig
+
+
+class PromotionsConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.promotions"
+    label = "promotions"
+    verbose_name = "Promotions"
+
+    def ready(self) -> None:
+        from .receivers import connect_receivers
+
+        connect_receivers()

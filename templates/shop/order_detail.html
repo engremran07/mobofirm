@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load mf_ui %}
+{% load mf_ui shop_tags %}
 {% block content %}
 {% url 'shop:pricing' as shop_url %}
 {% url 'shop:order_history' as orders_url %}
@@ -13,18 +13,17 @@
     <div class="col-12 col-lg-8">
       {% table_scroll "Order items" %}
       <table class="table align-middle mb-0">
-        <thead><tr><th scope="col">Item</th><th scope="col">Billing</th><th scope="col">Qty</th><th scope="col">Price</th></tr></thead>
+        <thead><tr><th scope="col">Item</th><th scope="col">Kind</th><th scope="col">Price</th></tr></thead>
         <tbody>
           {% for item in order.items.all %}
             <tr>
-              <td><a href="{% url 'shop:product_detail' slug=item.product.slug %}">{{ item.product.name }}</a></td>
-              <td>{{ item.get_billing_cycle_display }}</td>
-              <td>{{ item.quantity }}</td>
+              <td>{% if item.is_file %}{% with url=item|file_detail_url %}{% if url %}<a href="{{ url }}">{{ item.label }}</a>{% else %}{{ item.label }}{% endif %}{% endwith %}{% elif item.package %}<a href="{% url 'shop:package_detail' slug=item.package.slug %}">{{ item.label }}</a>{% else %}{{ item.label }}{% endif %}</td>
+              <td>{% if item.is_file %}Paid file{% elif item.is_topup %}Credit top-up{% else %}Package · {% if item.duration_days %}{{ item.duration_days }} days{% else %}lifetime{% endif %}{% endif %}</td>
               <td>{{ item.line_total }} {{ order.currency }}</td>
             </tr>
           {% endfor %}
         </tbody>
-        <tfoot><tr><th scope="row" colspan="3" class="text-end">Total</th><td><strong>{{ order.total }} {{ order.currency }}</strong></td></tr></tfoot>
+        <tfoot><tr><th scope="row" colspan="2" class="text-end">Total</th><td><strong>{{ order.total }} {{ order.currency }}</strong>{% if order.credits_spent %} <span class="small muted">({{ order.credits_spent }} credits)</span>{% endif %}</td></tr></tfoot>
       </table>
       {% endtable_scroll %}
     </div>
@@ -39,9 +38,9 @@
         </dl>
         <p class="small muted mt-3 mb-0">
           {% if order.status == "pending" %}Waiting for staff to confirm your payment.
-          {% elif order.status == "paid" %}Payment confirmed and the order has been fulfilled.
+          {% elif order.status == "paid" %}{% if order.credits_spent %}Paid with {{ order.credits_spent }} credits and fulfilled immediately.{% else %}Payment confirmed and the order has been fulfilled.{% endif %} Bought files are listed in <a href="{% url 'library:my_files' %}">My files</a>.
           {% elif order.status == "cancelled" %}This order was cancelled.
-          {% else %}This order was refunded.{% endif %}
+          {% else %}This order was refunded; anything it unlocked has been withdrawn.{% endif %}
         </p>
       </section>
     </div>

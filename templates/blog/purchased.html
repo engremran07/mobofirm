@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}My purchased articles | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block content %}
+{% url 'blog:post_list' as journal_url %}
+<div class="site-container py-4 py-lg-5">
+  {% include "components/breadcrumbs.html" with current="My purchased articles" parent_label="Journal" parent_url=journal_url %}
+  {% include "components/page_header.html" with eyebrow="Journal" title="My purchased articles" lead="Featured and paid articles you unlocked with credits stay available for good." %}
+  {% if cards %}
+    <div class="post-grid">
+      {% for item in cards %}{% include "blog/partials/post_card.html" with card=item %}{% endfor %}
+    </div>
+  {% elif shop_lists_purchases %}
+    <p class="muted">You have not bought an article yet. Featured and paid articles show an unlock button.</p>
+  {% else %}
+    <p class="muted">Purchases cannot be listed right now.</p>
+  {% endif %}
+</div>
+{% endblock %}

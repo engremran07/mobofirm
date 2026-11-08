@@ -14,6 +14,14 @@ from apps.site_settings.services import get_site_settings
 register = template.Library()
 
 
+@register.inclusion_tag("seo/related_links.html")
+def related_links(obj: object, limit: int = 8) -> dict[str, object]:
+    """``{% related_links object %}``: reviewed internal links out of ``object``."""
+    from apps.seo import api
+
+    return {"links": api.related_links(obj, limit)}
+
+
 @register.simple_tag(takes_context=True)
 def seo_head(context: template.Context) -> SafeString:
     """Title, description, robots, canonical, hreflang, Open Graph, Twitter, JSON-LD.

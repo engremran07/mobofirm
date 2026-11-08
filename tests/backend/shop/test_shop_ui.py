@@ -1,366 +1,291 @@
+"""Public shop pages: pricing summary and comparison, package page, orders, seams."""
+
 from __future__ import annotations
 
-from datetime import timedelta
 from decimal import Decimal
 
-from django.contrib.auth import get_user_model
-from django.core.cache import cache
-from django.test import Client, RequestFactory, TestCase, override_settings
+import pytest
+from django.test import Client
 from django.urls import reverse
-from django.utils import timezone
 
-from apps.firmwares import download_service
-from apps.firmwares.models import (
-    Brand,
-    EngineeringFirmware,
-    Model,
-    OfficialFirmware,
-)
 from apps.shop import services
-from apps.shop.models import (
-    Order,
-    PackageQuotaOverride,
-    PackageTier,
-    Product,
-    UserPackage,
-)
+from apps.shop.models import PackageTier, SizeUnit, WindowKind
 
-PASSWORD = "Pass-12345!"
+pytestmark = pytest.mark.django_db
 
 
-class EntitlementTestCase(TestCase):
-    def setUp(self):
-        cache.clear()
-        user_model = get_user_model()
-        self.user = user_model.objects.create_user(
-            username="buyer",
-            email="buyer@example.com",
-            password=PASSWORD,
-            email_verified_at=timezone.now(),
+@pytest.fixture
+def pricing_catalog(db) -> dict[str, PackageTier]:
+    free = PackageTier.objects.create(
+        name="Free",
+        slug="free",
+        is_default=True,
+        duration_days=0,
+        window=WindowKind.DAY,
+        limit_files=10,
+        limit_size=3,
+        device_limit=3,
+    )
+    premium = PackageTier.objects.create(
+        name="Premium",
+        slug="premium",
+        price=Decimal(9),
+        credit_price_override=300,
+        duration_days=30,
+        window=WindowKind.PACKAGE,
+        limit_files=30,
+        limit_size=20,
+        size_unit=SizeUnit.GB,
+        device_limit=5,
+        applies_to_featured=True,
+        ad_free=True,
+        is_popular=True,
+        sort_order=1,
+    )
+    gold = PackageTier.objects.create(
+        name="Gold",
+        slug="gold",
+        price=Decimal(29),
+        duration_days=365,
+        bandwidth_enabled=False,
+        limit_devices=False,
+        applies_to_featured=True,
+        applies_to_paid=True,
+        paid_discount_percent=25,
+        sort_order=2,
+    )
+    return {"free": free, "premium": premium, "gold": gold}
+
+
+class TestPricingPage:
+    def test_cards_use_the_package_summary(self, client, pricing_catalog):
+        text = client.get(reverse("shop:pricing")).content.decode()
+
+        for package in pricing_catalog.values():
+            assert package.summary() in text
+        assert (
+            "30 files / 20 GB per 30 days · free + featured · 5 devices · $9/mo" in text
         )
-        self.other = user_model.objects.create_user(
-            username="other_buyer",
-            email="other-buyer@example.com",
-            password=PASSWORD,
-            email_verified_at=timezone.now(),
-        )
-        self.free = PackageTier.objects.create(
-            name="Free",
-            slug="free",
-            is_default=True,
-            daily_download_limit=2,
-            monthly_download_limit=5,
-            daily_bandwidth_mb=100,
-            monthly_bandwidth_mb=-1,
-        )
-        self.pro = PackageTier.objects.create(
-            name="Pro",
-            slug="pro",
-            tier_level="pro",
-            price_monthly=Decimal("9.00"),
-            price_yearly=Decimal("90.00"),
-            access_engineering=True,
-            ad_free=True,
-            is_featured=True,
-        )
-        self.product = Product.objects.create(
-            name="Pro package",
-            slug="pro-package",
-            product_type="package",
-            price=Decimal("9.00"),
-            package_tier=self.pro,
-        )
+        assert "Popular" in text
 
-    def login(self, user=None) -> Client:
-        client = Client()
-        client.force_login(user or self.user)
-        return client
+    def test_comparison_table_compares_quota_devices_and_featured_access(
+        self, client, pricing_catalog
+    ):
+        response = client.get(reverse("shop:pricing"))
 
+        text = response.content.decode()
+        assert "Compare packages" in text
+        for label in ("Download quota", "Devices", "Featured files", "Paid files"):
+            assert label in text
+        rows = dict(response.context["rows"])
+        assert rows["Featured files"] == [False, True, True]
+        assert rows["Devices"] == ["3 devices", "5 devices", "unlimited devices"]
+        assert rows["Paid files"] == [False, False, "25% off"]
+        assert rows["Ad-free downloads"] == [False, True, False]
 
-class EntitlementSummaryTests(EntitlementTestCase):
-    def test_summary_uses_the_default_tier_without_writing_rows(self):
-        summary = services.entitlement_summary(self.user)
+    def test_current_plan_is_marked_for_the_holder(self, client, user, pricing_catalog):
+        services.activate_package(user, pricing_catalog["premium"])
+        client.force_login(user)
 
-        self.assertEqual(summary.tier, self.free)
-        self.assertTrue(summary.is_default_tier)
-        self.assertFalse(UserPackage.objects.exists())
-        by_label = {meter.label: meter for meter in summary.meters}
-        self.assertEqual(by_label["Downloads today"].limit, 2)
-        self.assertTrue(by_label["Bandwidth this month"].unlimited)
-        self.assertEqual(by_label["Bandwidth this month"].percent, 0)
+        response = client.get(reverse("shop:pricing"))
 
-    def test_summary_reports_usage_percent_and_text(self):
-        package = services.activate_package(self.user, self.free)
-        UserPackage.objects.filter(pk=package.pk).update(
-            downloads_today=1, last_download_at=timezone.now()
-        )
+        assert response.context["current_package_id"] == pricing_catalog["premium"].pk
+        assert response.content.decode().count("Current plan") >= 2
+        assert "Renew" in response.content.decode()
 
-        meter = services.entitlement_summary(self.user).meters[0]
+    def test_everyone_without_a_package_is_on_the_free_plan(
+        self, client, user, pricing_catalog
+    ):
+        client.force_login(user)
 
-        self.assertEqual((meter.used, meter.percent), (1, 50))
-        self.assertEqual(meter.text, "1 of 2")
+        response = client.get(reverse("shop:pricing"))
 
-    def test_yesterdays_counters_do_not_count_today_and_nothing_is_saved(self):
-        package = services.activate_package(self.user, self.free)
-        UserPackage.objects.filter(pk=package.pk).update(
-            downloads_today=2, last_download_at=timezone.now() - timedelta(days=1)
-        )
+        assert response.context["current_package_id"] == pricing_catalog["free"].pk
 
-        meter = services.entitlement_summary(self.user).meters[0]
+    def test_anonymous_visitors_see_the_page_and_the_payment_notice(
+        self, client, pricing_catalog
+    ):
+        response = client.get(reverse("shop:pricing"))
 
-        self.assertEqual(meter.used, 0)
-        package.refresh_from_db()
-        self.assertEqual(package.downloads_today, 2)
+        assert response.status_code == 200
+        assert "Online payments are not available" in response.content.decode()
 
-    def test_staff_override_changes_the_displayed_limit(self):
-        PackageQuotaOverride.objects.create(user=self.user, daily_download_limit=10)
+    def test_hidden_packages_stay_off_the_page(self, client, pricing_catalog):
+        PackageTier.objects.filter(slug="gold").update(is_public=False)
 
-        meter = services.entitlement_summary(self.user).meters[0]
+        text = client.get(reverse("shop:pricing")).content.decode()
 
-        self.assertEqual(meter.limit, 10)
+        assert "Gold" not in text
 
-    def test_category_access_follows_the_tier(self):
-        services.activate_package(self.user, self.pro)
+    def test_explains_free_featured_and_paid_files(self, client):
+        text = client.get(reverse("shop:pricing")).content.decode()
 
-        access = dict(services.entitlement_summary(self.user).type_access)
-
-        self.assertTrue(access["Engineering"])
-        self.assertFalse(access["Modified"])
+        for phrase in ("Free files", "Featured files", "Paid files", "staff"):
+            assert phrase in text
+        assert "No packages are available yet" in text
 
 
-class ShopPagesTests(EntitlementTestCase):
-    def test_pricing_shows_features_current_package_and_the_payment_notice(self):
-        services.activate_package(self.user, self.pro)
+class TestPackagePage:
+    def test_has_a_csrf_protected_request_form(self, client, user, pricing_catalog):
+        client.force_login(user)
 
-        response = self.login().get(reverse("shop:pricing"))
+        text = client.get(
+            reverse("shop:package_detail", kwargs={"slug": "premium"})
+        ).content.decode()
 
-        self.assertContains(response, "Online payments are not available")
-        self.assertContains(response, "Ad-free downloads")
-        self.assertContains(response, "Your package")
-        self.assertContains(response, "Request this package")
-        self.assertContains(response, "Included with every account")
-        self.assertContains(
-            response, reverse("shop:product_detail", args=["pro-package"])
-        )
+        assert "csrfmiddlewaretoken" in text
+        assert reverse("shop:place_order", kwargs={"slug": "premium"}) in text
+        assert "Nothing is charged" in text
 
-    def test_pricing_is_public_and_marks_no_package_for_anonymous_visitors(self):
-        response = self.client.get(reverse("shop:pricing"))
+    def test_unverified_users_see_why_they_cannot_order(
+        self, client, make_user, pricing_catalog
+    ):
+        client.force_login(make_user("unverified", verified=False))
 
-        self.assertEqual(response.status_code, 200)
-        self.assertNotContains(response, "Your package")
+        text = client.get(
+            reverse("shop:package_detail", kwargs={"slug": "premium"})
+        ).content.decode()
 
-    def test_product_detail_has_a_csrf_protected_request_form(self):
-        response = self.login().get(
-            reverse("shop:product_detail", args=["pro-package"])
-        )
+        assert "Verify your email address before placing an order" in text
+        assert reverse("shop:place_order", kwargs={"slug": "premium"}) not in text
 
-        self.assertContains(response, "csrfmiddlewaretoken")
-        self.assertContains(response, reverse("shop:place_order", args=["pro-package"]))
-        self.assertContains(response, "Nothing is charged")
+    def test_anonymous_visitors_are_asked_to_sign_in(self, client, pricing_catalog):
+        text = client.get(
+            reverse("shop:package_detail", kwargs={"slug": "premium"})
+        ).content.decode()
 
-    def test_csrf_is_enforced_when_requesting_an_order(self):
-        client = Client(enforce_csrf_checks=True)
-        client.force_login(self.user)
+        assert "to get this package" in text
 
-        response = client.post(reverse("shop:place_order", args=["pro-package"]))
+    def test_the_default_package_has_nothing_to_order(self, client, pricing_catalog):
+        text = client.get(
+            reverse("shop:package_detail", kwargs={"slug": "free"})
+        ).content.decode()
 
-        self.assertEqual(response.status_code, 403)
-        self.assertFalse(Order.objects.exists())
+        assert "included with every account" in text
+        assert "place_order" not in text
 
-    def test_unverified_users_see_why_they_cannot_order(self):
-        user = get_user_model().objects.create_user(
-            username="unverified_buyer",
-            email="unverified-buyer@example.com",
-            password=PASSWORD,
-        )
+    def test_credits_are_hidden_while_the_wallet_is_unavailable(
+        self, client, user, pricing_catalog
+    ):
+        client.force_login(user)
 
-        response = self.login(user).get(
-            reverse("shop:product_detail", args=["pro-package"])
-        )
+        text = client.get(
+            reverse("shop:package_detail", kwargs={"slug": "premium"})
+        ).content.decode()
 
-        self.assertContains(
-            response, "Verify your email address before placing an order"
-        )
-        self.assertNotContains(
-            response, reverse("shop:place_order", args=["pro-package"])
-        )
+        assert "Pay 300 credits" not in text
 
-    def test_anonymous_visitors_are_asked_to_sign_in(self):
-        response = self.client.get(reverse("shop:product_detail", args=["pro-package"]))
 
-        self.assertContains(response, "to request this order")
+class TestAccountPages:
+    def test_my_package_shows_meters_devices_and_the_counting_rule(
+        self, client, user, pricing_catalog
+    ):
+        client.force_login(user)
 
-    def test_my_package_page_shows_meters_access_and_a_not_enforced_note(self):
-        response = self.login().get(reverse("shop:my_subscriptions"))
+        text = client.get(reverse("shop:my_package")).content.decode()
 
-        self.assertContains(response, "Downloads today")
-        self.assertContains(response, "<meter", html=False)
-        self.assertContains(response, "Firmware categories")
-        self.assertContains(response, "not applied to downloads")
+        assert "New files today" in text
+        assert "<meter" in text
+        assert "Included with every account" in text
+        assert "3 devices" in text
+        assert "counts once" in text or "Each file counts once" in text
 
-    @override_settings(SHOP_ENTITLEMENTS_ENFORCED=True)
-    def test_my_package_page_drops_the_note_when_enforcement_is_on(self):
-        response = self.login().get(reverse("shop:my_subscriptions"))
+    def test_my_package_lists_perks_of_a_held_package(
+        self, client, user, pricing_catalog
+    ):
+        services.activate_package(user, pricing_catalog["premium"])
+        client.force_login(user)
 
-        self.assertNotContains(response, "not applied to downloads")
+        text = client.get(reverse("shop:my_package")).content.decode()
 
-    def test_order_detail_shows_progress_for_the_owner_only(self):
-        order = services.create_order(self.user, self.product, "monthly")
+        assert "Ad-free downloads" in text
+        assert "Premium" in text
 
-        mine = self.login().get(reverse("shop:order_detail", args=[order.pk]))
-        theirs = self.login(self.other).get(
-            reverse("shop:order_detail", args=[order.pk])
-        )
-        anonymous = self.client.get(reverse("shop:order_detail", args=[order.pk]))
+    def test_order_detail_shows_progress_for_the_owner_only(
+        self, client, user, other, pricing_catalog
+    ):
+        order = services.create_order(user, pricing_catalog["premium"])
+        url = reverse("shop:order_detail", args=[order.pk])
 
-        self.assertContains(mine, f"#{order.pk}")
-        self.assertContains(mine, "Waiting for staff to confirm your payment")
-        self.assertContains(mine, "Online payments are not available")
-        self.assertEqual(theirs.status_code, 404)
-        self.assertEqual(anonymous.status_code, 302)
+        client.force_login(user)
+        mine = client.get(url)
+        client.force_login(other)
+        theirs = client.get(url)
+        anonymous = Client().get(url)
 
-    def test_paid_order_detail_shows_confirmation(self):
-        staff = get_user_model().objects.create_user(
-            username="shop_ui_staff",
-            email="shop-ui-staff@example.com",
-            password=PASSWORD,
-        )
-        order = services.create_order(self.user, self.product, "monthly")
+        text = mine.content.decode()
+        assert f"#{order.pk}" in text
+        assert "Waiting for staff to confirm your payment" in text
+        assert "Package · 30 days" in text
+        assert theirs.status_code == 404
+        assert anonymous.status_code == 302
+
+    def test_paid_order_detail_shows_confirmation(
+        self, client, user, staff, pricing_catalog
+    ):
+        order = services.create_order(user, pricing_catalog["premium"])
         services.mark_order_paid(order.pk, staff_user=staff, reference="REF-1")
+        client.force_login(user)
 
-        response = self.login().get(reverse("shop:order_detail", args=[order.pk]))
+        text = client.get(
+            reverse("shop:order_detail", args=[order.pk])
+        ).content.decode()
 
-        self.assertContains(response, "Payment confirmed")
-        self.assertContains(response, "REF-1")
+        assert "Payment confirmed" in text
+        assert "REF-1" in text
 
-    def test_order_history_links_to_each_order(self):
-        order = services.create_order(self.user, self.product, "monthly")
+    def test_order_history_links_to_each_order(self, client, user, pricing_catalog):
+        order = services.create_order(user, pricing_catalog["premium"])
+        client.force_login(user)
 
-        response = self.login().get(reverse("shop:order_history"))
+        text = client.get(reverse("shop:order_history")).content.decode()
 
-        self.assertContains(response, reverse("shop:order_detail", args=[order.pk]))
+        assert reverse("shop:order_detail", args=[order.pk]) in text
+        assert "Premium" in text
 
 
-class DashboardAndFirmwareSeamTests(EntitlementTestCase):
-    def test_account_dashboard_links_the_shop_package_and_pending_orders(self):
-        services.create_order(self.user, self.product, "monthly")
+class TestSeams:
+    def test_account_dashboard_links_the_shop_package_and_pending_orders(
+        self, client, user, pricing_catalog
+    ):
+        services.create_order(user, pricing_catalog["premium"])
+        client.force_login(user)
 
-        response = self.login().get(reverse("users:dashboard"))
+        text = client.get(reverse("users:dashboard")).content.decode()
 
-        self.assertContains(response, reverse("shop:my_subscriptions"))
-        self.assertContains(response, "Download package")
-        self.assertContains(response, "1 order(s) awaiting payment confirmation")
+        assert reverse("shop:my_package") in text
+        assert "Download package" in text
+        assert "1 order(s) awaiting payment confirmation" in text
 
-    def test_firmware_page_shows_the_visitors_allowance(self):
-        brand = Brand.objects.create(name="Seam Brand", slug="seam-brand")
-        model = Model.objects.create(brand=brand, name="S1", slug="s1")
-        firmware = OfficialFirmware.objects.create(
-            original_file_name="seam.zip",
-            stored_file_path="/firmware/seam.zip",
-            brand=brand,
-            model=model,
-            is_verified=True,
-            is_active=True,
-        )
+    def test_firmware_page_shows_the_visitors_allowance(
+        self, client, user, pricing_catalog, make_firmware
+    ):
+        firmware = make_firmware()
         url = reverse(
             "firmwares:firmware_detail",
             kwargs={"firmware_type": "official", "firmware_id": str(firmware.pk)},
         )
+        client.force_login(user)
 
-        signed_in = self.login().get(url)
-        anonymous = self.client.get(url)
+        signed_in = client.get(url).content.decode()
+        anonymous = Client().get(url).content.decode()
 
-        self.assertContains(signed_in, "Your download allowance")
-        self.assertContains(signed_in, "Compare packages")
-        self.assertNotContains(anonymous, "Your download allowance")
+        assert "Your download allowance" in signed_in
+        assert "10 new files left today" in signed_in
+        assert "Your download allowance" not in anonymous
 
-
-class DownloadGateSeamTests(EntitlementTestCase):
-    def request_for(self, user):
-        request = RequestFactory().get("/")
-        request.user = user
-        return request
-
-    def firmware(self, model_class=OfficialFirmware, size=1024 * 1024):
-        return model_class.objects.create(
-            original_file_name="gate.zip",
-            stored_file_path="/firmware/gate.zip",
-            file_size=size,
-            is_verified=True,
-            is_active=True,
-        )
-
-    def test_enforcement_is_off_by_default_so_behaviour_is_unchanged(self):
-        firmware = self.firmware(EngineeringFirmware)
-
-        allowed, reason = download_service.check_download_allowed(
-            self.request_for(self.user), firmware
-        )
-
-        self.assertEqual((allowed, reason), (True, ""))
-        download_service.record_entitlement_download(
-            self.request_for(self.user), firmware
-        )
-        self.assertFalse(UserPackage.objects.exists())
-
-    @override_settings(SHOP_ENTITLEMENTS_ENFORCED=True)
-    def test_tier_without_engineering_access_is_refused(self):
-        firmware = self.firmware(EngineeringFirmware)
-
-        allowed, reason = download_service.check_download_allowed(
-            self.request_for(self.user), firmware
-        )
-
-        self.assertFalse(allowed)
-        self.assertIn("does not include this firmware category", reason)
-
-    @override_settings(SHOP_ENTITLEMENTS_ENFORCED=True)
-    def test_package_with_access_is_allowed_and_usage_is_recorded(self):
-        services.activate_package(self.user, self.pro)
-        firmware = self.firmware(EngineeringFirmware, size=3 * 1024 * 1024)
-        request = self.request_for(self.user)
-
-        self.assertEqual(
-            download_service.check_download_allowed(request, firmware), (True, "")
-        )
-        download_service.record_entitlement_download(request, firmware)
-
-        package = services.get_active_package(self.user)
-        if package is None:
-            self.fail("The user should have an active package.")
-        self.assertEqual(package.downloads_today, 1)
-        self.assertEqual(package.bandwidth_today_mb, 3)
-
-    @override_settings(SHOP_ENTITLEMENTS_ENFORCED=True)
-    def test_daily_quota_is_enforced_and_reported(self):
-        firmware = self.firmware()
-        request = self.request_for(self.user)
-        for _ in range(2):
-            download_service.record_entitlement_download(request, firmware)
-
-        allowed, reason = download_service.check_download_allowed(request, firmware)
-
-        self.assertFalse(allowed)
-        self.assertEqual(reason, "Daily download limit reached.")
-
-    @override_settings(SHOP_ENTITLEMENTS_ENFORCED=True)
-    def test_anonymous_visitors_keep_the_existing_ip_policy(self):
-        from django.contrib.auth.models import AnonymousUser
-
-        request = self.request_for(AnonymousUser())
-
-        allowed, _ = download_service.check_download_allowed(request, self.firmware())
-
-        self.assertTrue(allowed)
-
-    @override_settings(SHOP_ENTITLEMENTS_ENFORCED=True)
-    def test_refusal_reaches_the_download_page_as_a_message(self):
-        firmware = self.firmware(EngineeringFirmware)
+    def test_firmware_page_shows_the_discounted_price_to_package_holders(
+        self, client, user, pricing_catalog, make_firmware
+    ):
+        services.activate_package(user, pricing_catalog["gold"])
+        firmware = make_firmware("paid", "10.00")
         url = reverse(
-            "firmwares:firmware_download",
-            kwargs={"firmware_type": "engineering", "firmware_id": str(firmware.pk)},
+            "firmwares:firmware_detail",
+            kwargs={"firmware_type": "official", "firmware_id": str(firmware.pk)},
         )
+        client.force_login(user)
 
-        response = self.login().get(url, follow=True)
+        text = client.get(url).content.decode()
 
-        self.assertContains(response, "does not include this firmware category")
+        assert "7.50 USD" in text
+        assert "list 10.00 USD" in text

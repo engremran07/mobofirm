@@ -1,0 +1,22 @@
+{% extends "admin/staff_page.html" %}
+{% block mf_nav %}{% include "admin/distribution/_nav.html" %}{% endblock %}
+{% block mf_body %}
+{% if not capabilities.cards %}<p class="mf-ui-note mf-ui-note--warning" role="status">Share cards are off: {{ capabilities.cards_note }}</p>{% endif %}
+<div class="mf-ui-grid mf-ui-grid--wide">
+  {% for card in cards %}
+  <article class="mf-ui-card" aria-labelledby="plat-{{ card.kind }}">
+    <h2 class="mf-ui-card__title" id="plat-{{ card.kind }}">{{ card.adapter.label }}</h2>
+    <p class="mf-ui-row">
+      {% if card.adapter.media == "video" %}<span class="mf-ui-badge mf-ui-badge--warning">Needs video</span>
+      {% elif card.adapter.media == "image" %}<span class="mf-ui-badge mf-ui-badge--info">Needs image</span>
+      {% else %}<span class="mf-ui-badge mf-ui-badge--success">Text{% if card.adapter.image_optional %} + optional image{% endif %}</span>{% endif %}
+      <span class="mf-ui-badge">{{ card.adapter.message_limit }} characters</span>
+      <span class="mf-ui-badge">{{ card.adapter.hashtag_limit }} hashtags</span>
+    </p>
+    <p class="mf-ui-help">{{ card.adapter.how_to }}</p>
+    <p class="mf-ui-help">You will enter: {% for field in card.fields %}{{ field.label }}{% if not forloop.last %}, {% endif %}{% endfor %}.</p>
+    <a class="mf-ui-btn mf-ui-btn--primary" href="{{ card.url }}">Add {{ card.adapter.label }}</a>
+  </article>
+  {% endfor %}
+</div>
+{% endblock %}

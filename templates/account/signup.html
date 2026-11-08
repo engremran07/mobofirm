@@ -4,6 +4,8 @@
 {% block content %}
 {% get_providers as social_providers %}
 <div class="site-container py-5">
+  {% include "components/breadcrumbs.html" with current="Create account" %}
+  
   <section class="surface-card auth-card p-4 mx-auto" aria-labelledby="signup-title">
     <p class="section-eyebrow">Join Mobofirm</p>
     <h1 id="signup-title" class="h2 mb-4">Create your account</h1>

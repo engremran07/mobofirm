@@ -1,0 +1,6 @@
+{# Contract: my_files_tab (library, uploads, quota). Sub-navigation shared by every My files page. #}
+<nav class="d-flex flex-wrap gap-2 mb-4" aria-label="My files sections">
+  <a class="btn btn-sm {% if my_files_tab == 'library' %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="{% url 'library:my_files' %}"{% if my_files_tab == 'library' %} aria-current="page"{% endif %}><i class="icon" data-lucide="download" aria-hidden="true"></i> Library</a>
+  <a class="btn btn-sm {% if my_files_tab == 'uploads' %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="{% url 'library:my_uploads' %}"{% if my_files_tab == 'uploads' %} aria-current="page"{% endif %}><i class="icon" data-lucide="upload" aria-hidden="true"></i> My uploads</a>
+  <a class="btn btn-sm {% if my_files_tab == 'quota' %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="{% url 'library:my_quota' %}"{% if my_files_tab == 'quota' %} aria-current="page"{% endif %}><i class="icon" data-lucide="gauge" aria-hidden="true"></i> Quota</a>
+</nav>

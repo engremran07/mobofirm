@@ -1,0 +1,6 @@
+{% extends "components/dialog.html" %}
+{# Generic form dialog: renders every field of `form` (see apps/core/dialogs.py DialogView). Apps extend components/dialog.html for custom bodies. #}
+{% block dialog_body %}
+  {% include "components/form_errors.html" with form=form %}
+  {% for field in form %}{% include "components/form_field.html" with field=field %}{% endfor %}
+{% endblock %}

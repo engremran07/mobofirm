@@ -8,12 +8,15 @@ to be blocked silently by the browser.
 
 from __future__ import annotations
 
+import importlib
 import re
 from collections.abc import Callable, Iterable
 from typing import Any
 
-import nh3
 from django.utils.text import slugify as django_slugify
+
+# Loaded dynamically: nh3 is a compiled extension that static analysis cannot read.
+nh3: Any = importlib.import_module("nh3")
 
 DEFAULT_TAGS = frozenset(
     {

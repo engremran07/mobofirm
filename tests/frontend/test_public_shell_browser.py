@@ -208,7 +208,7 @@ def test_blocked_storage_does_not_break_the_frontend(live_server):
     assert not failures, failures
 
 
-def _registration_state(live_server) -> tuple[str, str]:
+def _registration_state() -> tuple[str, str]:
     """Create a user with a pending browser-registration prompt (ORM, pre-browser)."""
     user = get_user_model().objects.create_user(
         username="shell-dialog-user",
@@ -263,7 +263,7 @@ def _registration_context(
 @pytest.mark.django_db(transaction=True)
 def test_device_dialog_escape_closes_it_and_leaves_the_page_usable(live_server):
     failures: list[str] = []
-    state = _registration_state(live_server)
+    state = _registration_state()
     with chromium() as browser:
         context = _registration_context(browser, live_server, state)
         page = context.new_page()
@@ -326,6 +326,8 @@ def test_app_confirm_dialog_opens_cancels_and_closes_on_escape(live_server):
 
         page.locator("#open-demo").click()
         page.mouse.click(4, 4)
+        expect(dialog).to_be_visible()  # destructive dialogs ignore backdrop clicks
+        page.keyboard.press("Escape")
         expect(dialog).not_to_be_visible()
         assert not native
 
@@ -378,7 +380,7 @@ def test_htmx_failures_are_visible_to_sighted_users(live_server):
     with chromium() as browser:
         page = browser.new_page(viewport={"width": 1365, "height": 900})
         page.route(
-            "**/firmwares/api/search/autocomplete/**",
+            "**/search/suggest/**",
             lambda route: route.fulfill(status=500, body="boom"),
         )
         page.goto(f"{live_server.url}/", wait_until="load")

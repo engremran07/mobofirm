@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
+from django.apps import apps as django_apps
 from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
@@ -146,9 +147,10 @@ class MarketplaceAdminActionTests(TestCase):
     def test_every_marketplace_changelist_and_add_form_render(self) -> None:
         request = RequestFactory().get("/")
         request.user = self.staff
-        for model, model_admin in admin.site._registry.items():
-            if model._meta.app_label != "marketplace":
+        for model in django_apps.get_app_config("marketplace").get_models():
+            if not admin.site.is_registered(model):
                 continue
+            model_admin = admin.site.get_model_admin(model)
             name = model._meta.model_name
             with self.subTest(model=model._meta.label, page="changelist"):
                 self.assertEqual(

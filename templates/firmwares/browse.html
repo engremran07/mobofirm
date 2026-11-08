@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load ad_tags %}
 {% block title %}Firmware catalogue | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block meta_description %}Browse approved firmware records by device, manufacturer, chipset and package type.{% endblock %}
 {% block content %}
@@ -46,5 +47,6 @@
     </div>
   </form>
   <div id="firmware-table-content" aria-live="polite">{% include "firmwares/fragments/firmware_table.html" %}</div>
+  {% ad_zone "between_items" %}
 </div>
 {% endblock %}

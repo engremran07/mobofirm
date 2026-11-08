@@ -27,9 +27,11 @@ from apps.seo.sitemap_registry import register_sitemap_filter
 from apps.site_settings.services import get_site_settings
 
 from .models import Category, Post
+from .paywall import teaser_text
 from .selectors import author_name
 
 HOME = ("Home", "/")
+PAYWALL_SELECTOR = ".article-paywall"
 
 
 def _crumbs(*items: tuple[str, str]) -> list[Crumb]:
@@ -138,7 +140,8 @@ def post_detail(ctx: ProviderContext) -> PageSEO | None:
     path = post.get_absolute_url()
     published = post.published_at or post.publish_at
     description = ctx.describe(
-        post.seo_description or post.summary, clean_text(post.body)
+        post.seo_description or post.summary,
+        clean_text(teaser_text(post) if post.is_gated else post.body),
     )
     crumbs = _blog_crumbs()
     if post.category is not None:
@@ -167,18 +170,25 @@ def post_detail(ctx: ProviderContext) -> PageSEO | None:
         modified=post.updated_at,
         sources={"canonical": "object" if post.canonical_url else "route"},
     )
-    page.schema.append(
-        schema.blog_posting(
-            headline=post.title,
-            url=post.canonical_url or absolute,
-            description=description,
-            image=ctx.absolute(post.cover_image_url),
-            published=published,
-            modified=post.updated_at,
-            author_name=author,
-            publisher_name=ctx.settings.site_name or get_site_settings().site_name,
-        )
+    posting = schema.blog_posting(
+        headline=post.title,
+        url=post.canonical_url or absolute,
+        description=description,
+        image=ctx.absolute(post.cover_image_url),
+        published=published,
+        modified=post.updated_at,
+        author_name=author,
+        publisher_name=ctx.settings.site_name or get_site_settings().site_name,
     )
+    if post.is_gated:
+        # Google paywalled-content markup: the gated part is the paywall element.
+        posting["isAccessibleForFree"] = False
+        posting["hasPart"] = {
+            "@type": "WebPageElement",
+            "isAccessibleForFree": False,
+            "cssSelector": PAYWALL_SELECTOR,
+        }
+    page.schema.append(posting)
     return page
 
 

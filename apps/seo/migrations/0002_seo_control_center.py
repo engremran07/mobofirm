@@ -7,7 +7,7 @@ from django.conf import settings
 from django.db import migrations, models
 
 
-def enable_metadata_defaults(apps, schema_editor):
+def enable_metadata_defaults(apps, _schema_editor):
     apps.get_model("seo", "SEOSettings").objects.update(
         auto_meta_enabled=True, auto_schema_enabled=True
     )

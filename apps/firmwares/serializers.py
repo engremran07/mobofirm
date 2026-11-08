@@ -1,19 +1,29 @@
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from django.core.validators import MinLengthValidator
 from rest_framework import serializers
 
 from .models import (
+    AccessTier,
+    Brand,
     BrandCreationRequest,
+    ChipsetCreationRequest,
     FirmwarePackageFormat,
     ModelCreationRequest,
     PendingFirmware,
-    SchemaUpdateProposal,
     VariantCreationRequest,
 )
 
 
 class _HierarchyFields(serializers.Serializer):
+    """Input-only serializer base: validates a payload and is never saved."""
+
+    def create(self, *args: Any, **kwargs: Any) -> Any:
+        raise TypeError(f"{type(self).__name__} validates input only; it cannot save.")
+
+    def update(self, *args: Any, **kwargs: Any) -> Any:
+        raise TypeError(f"{type(self).__name__} validates input only; it cannot save.")
+
     brand_id = serializers.IntegerField(required=False, allow_null=True)
     model_id = serializers.IntegerField(required=False, allow_null=True)
     variant_id = serializers.IntegerField(required=False, allow_null=True)
@@ -24,6 +34,12 @@ class _HierarchyFields(serializers.Serializer):
     )
     extra_info = serializers.CharField(
         required=False, allow_blank=True, allow_null=True
+    )
+    access_tier = serializers.ChoiceField(
+        choices=AccessTier.choices, required=False, default=AccessTier.FREE
+    )
+    proposed_price = serializers.DecimalField(
+        max_digits=10, decimal_places=2, required=False, allow_null=True
     )
 
 
@@ -68,6 +84,9 @@ class PendingFirmwareSerializer(serializers.ModelSerializer):
             "ai_variant",
             "status",
             "extra_info",
+            "access_tier",
+            "proposed_price",
+            "approved_price",
             "created_at",
             "updated_at",
         ]
@@ -75,31 +94,6 @@ class PendingFirmwareSerializer(serializers.ModelSerializer):
 
     def get_extra_info(self, obj: PendingFirmware) -> str:
         return str((obj.metadata or {}).get("extra_info", ""))
-
-
-class SchemaUpdateProposalSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = SchemaUpdateProposal
-        fields: ClassVar[list[str]] = [
-            "id",
-            "brand",
-            "proposed_by",
-            "schema_json",
-            "status",
-            "reviewed_by",
-            "reviewed_at",
-            "notes",
-            "created_at",
-            "updated_at",
-        ]
-        read_only_fields: ClassVar[list[str]] = [
-            "id",
-            "proposed_by",
-            "reviewed_by",
-            "reviewed_at",
-            "created_at",
-            "updated_at",
-        ]
 
 
 _REQUEST_READ_ONLY = [
@@ -121,6 +115,7 @@ class BrandCreationRequestSerializer(serializers.ModelSerializer):
         fields: ClassVar[list[str]] = [
             "id",
             "name",
+            "details",
             "requested_by",
             "ai_suggestion",
             "status",
@@ -139,7 +134,32 @@ class ModelCreationRequestSerializer(serializers.ModelSerializer):
         fields: ClassVar[list[str]] = [
             "id",
             "brand",
+            "chipset",
             "name",
+            "model_code",
+            "details",
+            "requested_by",
+            "ai_suggestion",
+            "status",
+            "reviewed_by",
+            "reviewed_at",
+            "notes",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = _REQUEST_READ_ONLY
+
+
+class ChipsetCreationRequestSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ChipsetCreationRequest
+        fields: ClassVar[list[str]] = [
+            "id",
+            "vendor",
+            "name",
+            "family",
+            "aliases",
+            "details",
             "requested_by",
             "ai_suggestion",
             "status",
@@ -153,12 +173,22 @@ class ModelCreationRequestSerializer(serializers.ModelSerializer):
 
 
 class VariantCreationRequestSerializer(serializers.ModelSerializer):
+    brand = serializers.PrimaryKeyRelatedField(
+        queryset=Brand.objects.all(),
+        write_only=True,
+        help_text="Brand of the model; the model must belong to it",
+    )
+
     class Meta:
         model = VariantCreationRequest
         fields: ClassVar[list[str]] = [
             "id",
+            "brand",
             "model",
             "name",
+            "model_code",
+            "region",
+            "details",
             "requested_by",
             "ai_suggestion",
             "status",
@@ -169,3 +199,10 @@ class VariantCreationRequestSerializer(serializers.ModelSerializer):
             "updated_at",
         ]
         read_only_fields = _REQUEST_READ_ONLY
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        if attrs["model"].brand_id != attrs["brand"].pk:
+            raise serializers.ValidationError(
+                {"model": "This model does not belong to the chosen brand."}
+            )
+        return attrs

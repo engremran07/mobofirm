@@ -1,0 +1,50 @@
+<section class="mf-ui-seo-panel" aria-label="{{ rule.label }}">
+  <h3 class="mf-ui-card__title">{{ rule.label }}</h3>
+  {% if rule.standard %}<p class="mf-ui-help">Standard: {{ rule.standard }}</p>{% endif %}
+  <dl class="mf-ui-seo-dl">
+    <dt>Page</dt>
+    <dd>{% if issue.url %}<a href="{{ issue.url }}" rel="noopener">{{ issue.url }}</a>{% else %}Site-wide{% endif %}</dd>
+    {% if issue.object_title %}<dt>Object</dt><dd>{% if admin_url %}<a href="{{ admin_url }}">{{ issue.object_title }}</a>{% else %}{{ issue.object_title }}{% endif %}</dd>{% endif %}
+    {% if issue.measured %}<dt>Current</dt><dd>{{ issue.measured }}</dd>{% endif %}
+    {% if issue.expected %}<dt>Standard</dt><dd>{{ issue.expected }}</dd>{% endif %}
+    {% if proposal %}<dt>Proposal</dt><dd>{{ proposal }}{% if basis %} <span class="mf-ui-help">(from {{ basis }})</span>{% endif %}</dd>{% endif %}
+    {% if issue.status == 'resolved' %}<dt>Status</dt><dd>Resolved{% if issue.resolved_at %} {{ issue.resolved_at|timesince }} ago{% endif %}.</dd>{% endif %}
+  </dl>
+
+  {% if can_fix and issue.status == 'open' %}
+    <form method="post" action="{% url 'seo:issue_apply' pk=issue.pk %}" class="mf-ui-form">
+      {% csrf_token %}<input type="hidden" name="next" value="{{ next_url }}">
+      {% if issue.seo_field == 'noindex' %}
+        <input type="hidden" name="value" value="false">
+        <p>Applying removes the noindex override so the page can be indexed again.</p>
+      {% else %}
+        <div class="mf-ui-field">
+          <label for="fix-value-{{ issue.pk }}">{{ field_label }} ({{ min_len }}-{{ max_len }} characters)</label>
+          <textarea id="fix-value-{{ issue.pk }}" name="value" rows="3" maxlength="{{ max_len }}" required>{{ proposal }}</textarea>
+          <p class="mf-ui-help">{% if proposal %}Prefilled from the object's own data; edit it if you know better.{% else %}No proposal could be built from the stored data: write one.{% endif %}</p>
+        </div>
+      {% endif %}
+      <div class="mf-ui-row"><button type="submit" class="mf-ui-btn mf-ui-btn--primary">Apply fix</button></div>
+    </form>
+  {% elif issue.status == 'open' and issue.seo_field %}
+    <p class="mf-ui-note mf-ui-note--warning">You need the "change metadata" permission to apply fixes.</p>
+  {% elif issue.status == 'open' %}
+    <p class="mf-ui-help">This finding is not fixed from the override layer. {% if admin_url %}Edit the <a href="{{ admin_url }}">object</a> and re-audit.{% else %}Fix it at its source and re-audit.{% endif %}</p>
+  {% endif %}
+
+  {% if can_manage and issue.status == 'open' %}
+    <div class="mf-ui-seo-actions">
+      <form method="post" action="{% url 'seo:issue_reaudit' pk=issue.pk %}" class="mf-ui-seo-inline">
+        {% csrf_token %}<input type="hidden" name="next" value="{{ next_url }}">
+        <button type="submit" class="mf-ui-btn mf-ui-btn--small">Re-audit this page</button>
+      </form>
+      <form method="post" action="{% url 'seo:issue_ignore' pk=issue.pk %}" class="mf-ui-seo-inline">
+        {% csrf_token %}<input type="hidden" name="next" value="{{ next_url }}">
+        <label class="mf-ui-sr" for="ignore-reason-{{ issue.pk }}">Reason for ignoring</label>
+        <input type="text" id="ignore-reason-{{ issue.pk }}" name="reason" minlength="3" maxlength="255" placeholder="Reason for ignoring" required>
+        <button type="submit" class="mf-ui-btn mf-ui-btn--small">Ignore with reason</button>
+      </form>
+    </div>
+  {% endif %}
+  {% if fix_ledger %}<p class="mf-ui-help">Last fix: <a href="{% url 'seo:ledger' %}?status={{ fix_ledger.status }}">change {{ fix_ledger.pk }}</a> ({{ fix_ledger.get_status_display }}).</p>{% endif %}
+</section>

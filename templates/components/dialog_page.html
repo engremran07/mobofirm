@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{# Non-JavaScript fallback: the same dialog, rendered open inside a normal page. #}
+{% block title %}{{ dialog_title }}{% endblock %}
+{% block content %}
+<div class="site-container py-4 py-lg-5">
+  {% include dialog_template %}
+</div>
+{% endblock %}

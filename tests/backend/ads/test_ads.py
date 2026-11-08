@@ -1,30 +1,22 @@
 from __future__ import annotations
 
-from io import StringIO
-from types import SimpleNamespace
 from unittest.mock import patch
 
-from django.contrib.auth import get_user_model
-from django.core.management import call_command
-from django.core.management.base import CommandError
 from django.db import OperationalError
+from django.template import Context
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
 from apps.ads.api import track_affiliate_click_sync
 from apps.ads.models import (
     AdCreative,
-    AdEvent,
-    AdNetwork,
     AdPlacement,
     AdsSettings,
-    AdUnit,
     AffiliateClick,
     AffiliateProduct,
     AffiliateProvider,
     Campaign,
     PlacementAssignment,
-    RewardedAdConfig,
 )
 from apps.ads.services.rotation.engine import choose_creative
 from apps.ads.templatetags.ad_tags import render_ad_slot
@@ -158,7 +150,7 @@ class AdsApiTests(TestCase):
         assert res.status_code == 403
 
     @patch("apps.ads.views._has_ads_consent", return_value=True)
-    def test_fill_ad_returns_creative(self, mock_consent):
+    def test_fill_ad_returns_creative(self, _mock_consent):
         campaign = Campaign.objects.create(name="C1")
         placement = AdPlacement.objects.create(
             name="Top",
@@ -283,125 +275,9 @@ class AdsApiTests(TestCase):
             code="after-hero",
         )
 
-        markup = render_ad_slot({}, placement.code)
+        markup = render_ad_slot(Context({}), placement.code)
 
         self.assertIn('aria-label="Advertisement: Homepage banner"', markup)
         self.assertIn("Advertisement", markup)
         self.assertNotIn("style=", markup)
         self.assertNotIn("Your Ad Here", markup)
-
-
-@override_settings(
-    ALLOWED_HOSTS=["testserver", "localhost"],
-    ROOT_URLCONF="app.urls",
-    SECURE_SSL_REDIRECT=False,
-)
-class DemoAdPreviewTests(TestCase):
-    def test_preview_requires_an_ads_manager(self):
-        response = self.client.get(reverse("ads:demo_preview"))
-
-        self.assertEqual(response.status_code, 302)
-
-    def test_preview_renders_disabled_database_creatives_without_serving_ads(self):
-        user = get_user_model().objects.create_user(
-            username="ad-preview-manager",
-            email="ad-preview-manager@example.test",
-            password="test-password",
-            is_staff=True,
-        )
-        self.client.force_login(user)
-
-        with patch(
-            "apps.ads.services.scanner.scan_templates_for_placements",
-            return_value={"status": "success", "scanned": 0, "discoveries": 0},
-        ):
-            call_command("setup_test_environment", stdout=StringIO())
-
-        response = self.client.get(reverse("ads:demo_preview"))
-
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(
-            response.content.decode().count(
-                '<article class="ad-preview-card" data-ad-format='
-            ),
-            len(AdUnit.AD_FORMATS),
-        )
-        for format_code, _ in AdUnit.AD_FORMATS:
-            self.assertContains(response, f'data-ad-format="{format_code}"')
-        self.assertEqual(
-            response.content.decode().count('data-demo-preview="true"'),
-            len(AdUnit.AD_FORMATS),
-        )
-        self.assertContains(response, "Rendered from the saved demo creative")
-        self.assertContains(
-            response, "No provider, impression, click, or reward is triggered."
-        )
-        self.assertFalse(AdNetwork.objects.filter(is_enabled=True).exists())
-        self.assertFalse(PlacementAssignment.objects.filter(is_enabled=True).exists())
-        self.assertEqual(AdEvent.objects.count(), 0)
-
-    def test_public_renderer_does_not_render_disabled_local_demo_creatives(self):
-        with patch(
-            "apps.ads.services.scanner.scan_templates_for_placements",
-            return_value={"status": "success", "scanned": 0, "discoveries": 0},
-        ):
-            call_command("setup_test_environment", stdout=StringIO())
-
-        markup = render_ad_slot({}, "demo-display")
-
-        self.assertEqual(markup, "")
-
-
-class DemoAdSetupTests(TestCase):
-    def test_setup_creates_disabled_format_profiles_and_is_idempotent(self):
-        scan_result = {"status": "success", "scanned": 12, "discoveries": 8}
-        with patch(
-            "apps.ads.services.scanner.scan_templates_for_placements",
-            return_value=scan_result,
-        ) as scan_templates:
-            call_command("setup_test_environment", stdout=StringIO())
-            creative = AdCreative.objects.get(
-                campaign__name="Mobofirm Local Demo Campaign",
-                name="Local Demo Display Banner",
-            )
-            creative.html = "<p>Stale local demo content</p>"
-            creative.save(update_fields=["html"])
-            call_command("setup_test_environment", stdout=StringIO())
-
-        self.assertEqual(AdNetwork.objects.count(), 1)
-        network = AdNetwork.objects.get()
-        self.assertFalse(network.is_enabled)
-        self.assertEqual(network.api_key, "")
-        self.assertEqual(network.header_script, "")
-        self.assertEqual(
-            set(
-                AdUnit.objects.filter(network=network).values_list(
-                    "ad_format", flat=True
-                )
-            ),
-            {format_code for format_code, _ in AdUnit.AD_FORMATS},
-        )
-        self.assertFalse(AdUnit.objects.filter(is_enabled=True).exists())
-        self.assertEqual(AffiliateProvider.objects.count(), 1)
-        self.assertFalse(AffiliateProvider.objects.get().is_enabled)
-        self.assertFalse(Campaign.objects.filter(is_active=True).exists())
-        self.assertFalse(AdCreative.objects.filter(is_active=True).exists())
-        self.assertFalse(AdPlacement.objects.filter(is_active=True).exists())
-        self.assertFalse(PlacementAssignment.objects.filter(is_active=True).exists())
-        self.assertFalse(RewardedAdConfig.objects.filter(is_enabled=True).exists())
-        self.assertEqual(scan_templates.call_count, 2)
-        creative.refresh_from_db()
-        self.assertIn("Rendered from the saved demo creative", creative.html)
-
-    def test_setup_refuses_a_non_local_database(self):
-        with (
-            patch(
-                "apps.ads.management.commands.setup_test_environment.connection",
-                SimpleNamespace(
-                    vendor="postgresql",
-                    settings_dict={"HOST": "remote-db.example.invalid"},
-                ),
-            ),
-            self.assertRaises(CommandError),
-        ):
-            call_command("setup_test_environment", stdout=StringIO())

@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% load mf_ui %}
+{% block title %}Ways to earn credits{% endblock %}
+{% block content %}
+{% url 'wallet:dashboard' as wallet_url %}
+<div class="site-container py-4 py-lg-5">
+  {% include "components/breadcrumbs.html" with current="Ways to earn" parent_label="Wallet" parent_url=wallet_url %}
+  {% include "components/page_header.html" with eyebrow="Account" title="Ways to earn credits" lead="Rewards come from real, reviewed contributions. Limits keep the system fair." %}
+  {% include "wallet/_subnav.html" %}
+  {% if rules %}
+    {% table_scroll "Ways to earn credits" %}
+    <table class="table align-middle">
+      <thead><tr><th scope="col">Action</th><th scope="col" class="text-end">Credits</th><th scope="col">Limits</th><th scope="col">Needs</th></tr></thead>
+      <tbody>
+        {% for rule in rules %}
+          <tr>
+            <td>{{ rule.label }}</td>
+            <td class="text-end fw-semibold">{% if rule.dynamic_amount %}Varies{% else %}+{{ rule.credits }}{% endif %}</td>
+            <td>
+              {% if rule.daily_cap or rule.monthly_cap or rule.lifetime_cap %}
+                {% if rule.daily_cap %}{{ rule.daily_cap }}/day {% endif %}{% if rule.monthly_cap %}{{ rule.monthly_cap }}/month {% endif %}{% if rule.lifetime_cap %}{{ rule.lifetime_cap }} in total{% endif %}
+              {% else %}No cap{% endif %}
+              {% if rule.cooldown_seconds %}<span class="muted small d-block">{{ rule.cooldown_seconds }}s between rewards</span>{% endif %}
+            </td>
+            <td>{% if rule.requires_verified_email %}Verified email{% else %}&mdash;{% endif %}{% if rule.min_account_age_days %}<span class="muted small d-block">Account {{ rule.min_account_age_days }}+ days old</span>{% endif %}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endtable_scroll %}
+  {% else %}
+    {% include "components/empty_state.html" with title="No earning rules are active" message="Staff have not enabled any rewards yet. Check back soon." %}
+  {% endif %}
+  {% include "promotions/_offers_panel.html" %}
+</div>
+{% endblock %}

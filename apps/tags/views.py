@@ -15,6 +15,7 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 
 from apps.blog import selectors as blog_selectors
 from apps.blog.models import Post
+from apps.core.admin_pages import render_admin_page
 from apps.tags.api import get_settings as tag_settings
 from apps.tags.models import Tag
 from apps.tags.models_keyword import KeywordSuggestion
@@ -175,10 +176,16 @@ def manage_tags(request: HttpRequest) -> HttpResponse:
         curated=Count("pk", filter=Q(is_curated=True)),
         pending=Count("pk", filter=Q(is_curated=False, ai_suggested=True)),
     )
-    return render(
+    return render_admin_page(
         request,
         "tags/manage.html",
-        {
+        title="Tag management",
+        subtitle=(
+            "Tags from the catalogue are curated automatically. Suggestions from "
+            "article text are approved automatically once enough articles use them; "
+            "review the rest here."
+        ),
+        context={
             "suggestions": suggestions,
             "top_tags": top_tags,
             "totals": totals,
@@ -206,9 +213,7 @@ def review_tag(request: HttpRequest) -> HttpResponse:
         transaction.on_commit(lambda: reattach_curated_tag.delay(tag.pk))
         messages.success(request, f"Approved “{tag.name}”.")
     elif decision == "reject":
-        tag.is_curated = False
-        tag.is_active = False
-        tag.save(update_fields=["is_curated", "is_active", "updated_at"])
+        automation.reject_suggestion(tag)
         messages.success(request, f"Rejected “{tag.name}”.")
     else:
         messages.error(request, "Choose approve or reject.")
@@ -236,10 +241,11 @@ def merge_tags(request: HttpRequest) -> HttpResponse:
         automation.merge_tags(source, target, user=request.user)
         messages.success(request, f"Merged “{source.name}” into “{target.name}”.")
         return redirect("tags:manage")
-    return render(
+    return render_admin_page(
         request,
         "tags/merge_confirm.html",
-        {
+        title="Confirm tag merge",
+        context={
             "source": source,
             "target": target,
             "affected": Post.objects.filter(tags=source).count(),
@@ -272,8 +278,15 @@ def search_duplicates(request: HttpRequest) -> JsonResponse:
 @require_GET
 def duplicates_review(request: HttpRequest) -> HttpResponse:
     _require_tag_staff(request.user)
-    return render(
-        request, "tags/admin_duplicates.html", {"pairs": similar_pairs(0.7, 100)}
+    return render_admin_page(
+        request,
+        "tags/admin_duplicates.html",
+        title="Review similar tags",
+        subtitle=(
+            "Pairs among the most used tags with similar names. "
+            "Choose a pair to review the merge."
+        ),
+        context={"pairs": similar_pairs(0.7, 100)},
     )
 
 
@@ -284,8 +297,15 @@ def keyword_review(request: HttpRequest) -> HttpResponse:
     suggestions = KeywordSuggestion.objects.select_related("provider").order_by(
         "-score", "-created_at"
     )[:200]
-    return render(
-        request, "tags/admin_keyword_review.html", {"suggestions": suggestions}
+    return render_admin_page(
+        request,
+        "tags/admin_keyword_review.html",
+        title="Keyword suggestions",
+        subtitle=(
+            "Keywords added in the admin as suggestions. Creating a tag from one "
+            "makes it a curated tag immediately."
+        ),
+        context={"suggestions": suggestions},
     )
 
 

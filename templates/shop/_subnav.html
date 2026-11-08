@@ -1,9 +1,8 @@
-{# Contract: shop_tab (packages, products, account, orders). Sub-navigation shared by every shop page. #}
+{# Contract: shop_tab (packages, account, orders). Sub-navigation shared by every shop page. #}
 <nav class="d-flex flex-wrap gap-2 mb-4" aria-label="Shop sections">
   <a class="btn btn-sm {% if shop_tab == 'packages' %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="{% url 'shop:pricing' %}"{% if shop_tab == 'packages' %} aria-current="page"{% endif %}>Packages</a>
-  <a class="btn btn-sm {% if shop_tab == 'products' %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="{% url 'shop:product_list' %}"{% if shop_tab == 'products' %} aria-current="page"{% endif %}>All products</a>
   {% if user.is_authenticated %}
-    <a class="btn btn-sm {% if shop_tab == 'account' %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="{% url 'shop:my_subscriptions' %}"{% if shop_tab == 'account' %} aria-current="page"{% endif %}>My package</a>
+    <a class="btn btn-sm {% if shop_tab == 'account' %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="{% url 'shop:my_package' %}"{% if shop_tab == 'account' %} aria-current="page"{% endif %}>My package</a>
     <a class="btn btn-sm {% if shop_tab == 'orders' %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="{% url 'shop:order_history' %}"{% if shop_tab == 'orders' %} aria-current="page"{% endif %}>My orders</a>
   {% endif %}
 </nav>

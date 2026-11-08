@@ -17,8 +17,9 @@ HTTP / Django ASGI or WSGI
              |
   +----------+-----------------------------------------------+
   | users | devices | firmwares | ads | blog | comments      |
-  | tags  | governance | core | storage | seo | pages            |
-  | shop  | marketplace | filemanager | site_settings            |
+  | tags  | core | storage | seo | pages                      |
+  | shop  | marketplace | site_settings                      |
+  | wallet | referral                                          |
   +----------+-----------------------------------------------+
              |
        Django ORM / PostgreSQL
@@ -39,8 +40,10 @@ HTTP / Django ASGI or WSGI
 - `blog` owns editorial revisions in the migrated `PostRevision` model; a draft restore never changes publication state.
 - Automated tag suggestions remain uncurated until governance fulfillment and are not attached to public content until curated.
 - `ads` owns ad and affiliate data; consumers must use the app's service/API contracts.
-- `storage` records provider, location and integrity for typed firmware through ContentType; it reuses the firmware external-host allow-list and never serves files. `seo` owns the sitemap registry and routes (`/sitemap.xml`, `/robots.txt`) and the SEO settings flags; `pages`, `shop`, `marketplace` and `filemanager` are feature-flagged through `core.AppRegistry`.
+- `consent` owns cookie/tracker consent and exposes only `has_consent(request, category)`; `ads` and the `site_settings` analytics loader ask it. `gamification` and `bounty` react to `firmware.approved` and wallet events on the event bus and reach the wallet only through `apps.wallet.api`. `distribution` listens to `firmware.approved` and the blog publish signal and sends everything through the SEO SafeFetcher.
+- `storage` records provider, location and integrity for typed firmware through ContentType; it reuses the firmware external-host allow-list and never serves files. `seo` owns the sitemap registry and routes (`/sitemap.xml`, `/robots.txt`) and the SEO settings flags; `pages`, `shop` and `marketplace` are feature-flagged through `core.AppRegistry`.
 - `core` owns shared support and health/retention utilities, not a second copy of domain state.
+- `wallet` is the only place credits live. Apps earn through `apps.wallet.api.grant_reward` and spend through `spend`/`refund` (idempotent on a caller key, atomic under a wallet row lock); `referral` rewards through the same contract and subscribes to the `contribution.approved` and email-verified events.
 - `site_settings` is the single runtime settings authority for site-wide values (see `docs/04-backend/site-settings.md`). Every consumer reads `apps.site_settings.services.get_site_settings()` (cached, invalidated on save; Django/environment settings are the defaults) and never copies those values; settings that another app owns stay with that app.
 
 Treat signal/task behavior as an explicit integration contract: preserve idempotency and after-commit semantics where required, and test observable downstream state.

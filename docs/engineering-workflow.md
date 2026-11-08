@@ -4,7 +4,7 @@ This checkout is a runnable Django project. Django project configuration is in `
 
 ## Installed applications
 
-Verify `app/settings/base.py` for the live inventory. Current installed apps are `users`, `core`, `ads`, `devices`, `blog`, `comments`, `firmwares`, and `tags` plus the integrated `storage`, `seo`, `pages`, `shop`, `marketplace`, and `filemanager`. Profile, following, and activity functionality is owned by `users`. Do not add dependencies on apps that are not installed.
+Verify `app/settings/base.py` for the live inventory. Current installed apps are `users`, `core`, `ads`, `devices`, `blog`, `comments`, `firmwares`, and `tags` plus the integrated `storage`, `seo`, `pages`, `shop`, `marketplace`, and `site_settings`. Profile, following, activity, and the "My files" library are owned by `users`. Do not add dependencies on apps that are not installed.
 
 ## Workspace workflows
 

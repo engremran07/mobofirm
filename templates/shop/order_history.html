@@ -15,7 +15,7 @@
         {% for order in orders %}
           <tr>
             <td><a href="{% url 'shop:order_detail' pk=order.pk %}">#{{ order.pk }}</a></td>
-            <td>{% for item in order.items.all %}{{ item.product.name }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+            <td>{% for item in order.items.all %}{{ item.label }}{% if not forloop.last %}, {% endif %}{% endfor %}</td>
             <td>{{ order.total }} {{ order.currency }}</td>
             <td>{% include "shop/_order_status.html" %}</td>
             <td>{{ order.created_at|date:"j M Y" }}</td>
@@ -25,7 +25,7 @@
     </table>
     {% endtable_scroll %}
   {% else %}
-    {% include "components/empty_state.html" with title="You have not placed any orders" message="Choose a package or product and request an order." action_label="View packages" action_url=shop_url %}
+    {% include "components/empty_state.html" with title="You have not placed any orders" message="Choose a package and request an order." action_label="View packages" action_url=shop_url %}
   {% endif %}
 </div>
 {% endblock %}

@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}My files · Library | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block content %}
+<div class="site-container py-4 py-lg-5">
+  {% include "components/breadcrumbs.html" with current="My files" %}
+  {% include "components/page_header.html" with eyebrow="My files" title="Your firmware library" lead="Every file served to you, free, paid or featured, ready to download again." %}
+  {% include "users/library/_tabs.html" %}
+
+  <div class="row g-4">
+    <div class="col-12 col-xl-8 order-2 order-xl-1 min-w-0">
+      <form id="library-filters" class="row g-2 mb-4" method="get" action="{% url 'library:my_files' %}"
+            hx-get="{% url 'library:my_files' %}" hx-trigger="change, submit, input delay:350ms from:#library-q"
+            hx-target="#library-results" hx-include="this" hx-swap="innerHTML" hx-push-url="true" role="search" aria-label="Filter your library">
+        <div class="col-12 col-md-6">
+          <label class="form-label" for="library-q">Search</label>
+          <input id="library-q" class="form-control" type="search" name="q" value="{{ filters.query }}" maxlength="100" placeholder="File, brand or device" autocomplete="off">
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label" for="library-tier">Access</label>
+          <select id="library-tier" class="form-select" name="tier">
+            <option value="">All</option>
+            {% for value, label in tiers %}<option value="{{ value }}"{% if filters.tier == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label" for="library-brand">Brand</label>
+          <select id="library-brand" class="form-select" name="brand">
+            <option value="">All brands</option>
+            {% for slug, name in brands %}<option value="{{ slug }}"{% if filters.brand == slug %} selected{% endif %}>{{ name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label" for="library-from">Served from</label>
+          <input id="library-from" class="form-control" type="date" name="from" value="{{ filters.date_from|date:'Y-m-d' }}">
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label" for="library-to">Served until</label>
+          <input id="library-to" class="form-control" type="date" name="to" value="{{ filters.date_to|date:'Y-m-d' }}">
+        </div>
+        <div class="col-12 col-md-6 d-flex align-items-end justify-content-md-end gap-2">
+          <button type="submit" class="btn btn-primary">Apply</button>
+          <a class="btn btn-outline-secondary" href="{% url 'library:my_files' %}">Clear filters</a>
+        </div>
+      </form>
+      <div id="library-results" aria-live="polite">{% include "users/library/_results.html" %}</div>
+    </div>
+    <div class="col-12 col-xl-4 order-1 order-xl-2">
+      {% include "users/library/_quota_panel.html" with compact=True %}
+      {% if quota.purchased %}
+        <section class="surface-card p-3 p-md-4 mt-3" aria-labelledby="purchased-heading">
+          <h2 class="h6" id="purchased-heading">Purchased — download available</h2>
+          <ul class="list-unstyled mb-0 d-grid gap-2">
+            {% for file in quota.purchased %}
+              <li class="small"><strong class="d-block">{{ file.label }}</strong>{% if file.download_url %}<a href="{{ file.download_url }}">Download</a>{% else %}<span class="muted">Unavailable</span>{% endif %}</li>
+            {% endfor %}
+          </ul>
+        </section>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -10,7 +10,7 @@ from datetime import datetime
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.utils import timezone
 
-from apps.blog.models import Post, PostStatus
+from apps.blog.models import Post, PostAccess, PostStatus
 from apps.core.utils.logging import log_event
 
 logger = logging.getLogger(__name__)
@@ -80,6 +80,23 @@ def request_review(post: Post, user=None) -> WorkflowResult:
     return WorkflowResult(ok=True, status=post.status, message="Submitted for review")
 
 
+def _approve_price(post: Post, user) -> list[str]:
+    """Staff publishing a gated post approves its proposed price; paid needs one."""
+    if post.access == PostAccess.FREE:
+        return []
+    if post.price is None:
+        if post.proposed_price is not None:
+            post.price = post.proposed_price
+            post.price_approved_by = user
+            post.price_approved_at = timezone.now()
+            return ["price", "price_approved_by", "price_approved_at"]
+        if post.access == PostAccess.PAID:
+            raise ValidationError(
+                "A paid post needs an approved price before it can go live."
+            )
+    return []
+
+
 def schedule(post: Post, when: datetime, user=None) -> WorkflowResult:
     _require_moderator(user)
     when = when or timezone.now()
@@ -87,9 +104,20 @@ def schedule(post: Post, when: datetime, user=None) -> WorkflowResult:
         raise ValidationError("Scheduled publication time must include a timezone.")
     if post.status not in PUBLISHABLE_STATUSES:
         raise ValidationError("This post cannot be scheduled from its current status.")
+    price_fields = _approve_price(post, user)
     post.status = PostStatus.SCHEDULED
     post.publish_at = when
-    post.save(update_fields=["status", "publish_at", "is_published", "updated_at"])
+    post.published_by = user
+    post.save(
+        update_fields=[
+            "status",
+            "publish_at",
+            "published_by",
+            "is_published",
+            "updated_at",
+            *price_fields,
+        ]
+    )
     _audit("schedule", post, user, publish_at=when.isoformat())
     return WorkflowResult(ok=True, status=post.status, message="Scheduled")
 
@@ -98,17 +126,21 @@ def publish(post: Post, user=None) -> WorkflowResult:
     _require_moderator(user)
     if post.status not in PUBLISHABLE_STATUSES:
         raise ValidationError("This post cannot be published from its current status.")
+    price_fields = _approve_price(post, user)
     now = timezone.now()
     post.status = PostStatus.PUBLISHED
     post.publish_at = now
     post.published_at = post.published_at or now
+    post.published_by = user
     post.save(
         update_fields=[
             "status",
             "publish_at",
             "published_at",
+            "published_by",
             "is_published",
             "updated_at",
+            *price_fields,
         ]
     )
     _audit("publish", post, user)

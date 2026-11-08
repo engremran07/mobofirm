@@ -71,9 +71,11 @@ class S3StorageBackend(StorageBackend):
             )
 
             self.storage = S3Boto3Storage()
-        except ImportError:
+        except ImportError as exc:
             logger.exception("django-storages[s3] not installed")
-            raise ImportError("Install with: pip install django-storages[boto3]")
+            raise ImportError(
+                "Install with: pip install django-storages[boto3]"
+            ) from exc
 
     def save(self, name: str, content) -> str:
         return self.storage.save(name, content)
@@ -102,9 +104,11 @@ class GCSStorageBackend(StorageBackend):
             )
 
             self.storage = GoogleCloudStorage()
-        except ImportError:
+        except ImportError as exc:
             logger.exception("django-storages[google] not installed")
-            raise ImportError("Install with: pip install django-storages[google]")
+            raise ImportError(
+                "Install with: pip install django-storages[google]"
+            ) from exc
 
     def save(self, name: str, content) -> str:
         return self.storage.save(name, content)
@@ -133,9 +137,11 @@ class AzureStorageBackend(StorageBackend):
             )
 
             self.storage = AzureStorage()
-        except ImportError:
+        except ImportError as exc:
             logger.exception("django-storages[azure] not installed")
-            raise ImportError("Install with: pip install django-storages[azure]")
+            raise ImportError(
+                "Install with: pip install django-storages[azure]"
+            ) from exc
 
     def save(self, name: str, content) -> str:
         return self.storage.save(name, content)
@@ -179,12 +185,12 @@ class StorageService:
 
         backend_class = backends.get(resolved)
         if not backend_class:
-            logger.warning(f"Unknown storage backend '{backend}', using local")
+            logger.warning("Unknown storage backend '%s', using local", resolved)
             backend_class = LocalStorageBackend
 
         self.backend = backend_class()
-        self.backend_name = backend
-        logger.info(f"StorageService initialized with {backend} backend")
+        self.backend_name = resolved
+        logger.info("StorageService initialized with %s backend", resolved)
 
     def save_file(self, name: str, content) -> str:
         """
@@ -223,7 +229,7 @@ class StorageService:
         """
         try:
             return self.backend.delete(name)
-        except Exception:
+        except (OSError, ValueError, RuntimeError):
             logger.exception("Failed to delete file %s", name)
             return False
 

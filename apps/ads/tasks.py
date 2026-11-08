@@ -23,7 +23,6 @@ from apps.ads.models import (
     AffiliateProduct,
     AffiliateProvider,
     PlacementAssignment,
-    RewardedAdView,
 )
 from apps.ads.services import scanner
 from apps.ads.services.ai_optimizer import analyze_performance
@@ -84,12 +83,11 @@ def aggregate_events(self) -> dict[str, Any]:
 
 
 @shared_task(
-    bind=True,
     acks_late=True,
     soft_time_limit=60,
     time_limit=120,
 )
-def cleanup_old_events(self) -> dict[str, Any]:
+def cleanup_old_events() -> dict[str, Any]:
     """
     Cleanup ad events older than 90 days.
     Runs daily to keep database size manageable.
@@ -138,12 +136,11 @@ def scan_blog_post_content(self, post_id: int) -> dict[str, Any]:
 
 
 @shared_task(
-    bind=True,
     acks_late=True,
     soft_time_limit=600,
     time_limit=900,
 )
-def ai_optimize_ad_placements(self) -> dict[str, Any]:
+def ai_optimize_ad_placements() -> dict[str, Any]:
     """
     Use AI to analyze ad performance and optimize placements.
 
@@ -252,156 +249,15 @@ def ai_optimize_ad_placements(self) -> dict[str, Any]:
         return {"status": "error", "error": str(e)}
 
 
-# ==================== REWARDED ADS TASKS ====================
-
-
-@shared_task(
-    bind=True,
-    acks_late=True,
-    soft_time_limit=60,
-    time_limit=120,
-)
-def process_rewarded_ad_completion(
-    self,
-    view_id: int,
-    watch_duration: int,
-) -> dict[str, Any]:
-    """
-    Process a completed rewarded ad view and grant the reward.
-
-    Called when user finishes watching a rewarded video ad.
-    """
-    try:
-        view = RewardedAdView.objects.select_related("config", "user").get(id=view_id)
-
-        if view.reward_granted:
-            return {"status": "already_granted"}
-
-        config = view.config
-        if not config:
-            return {"status": "error", "reason": "no_config"}
-
-        # Verify minimum watch time
-        min_seconds = config.min_watch_seconds or 30  # Default 30s
-        if watch_duration < min_seconds:
-            view.status = "skipped"
-            view.watch_duration_seconds = watch_duration
-            view.save()
-            return {"status": "skipped", "reason": "insufficient_watch_time"}
-
-        # Check rate limits
-        today = timezone.now().date()
-        views_today = RewardedAdView.objects.filter(
-            user=view.user, config=config, reward_granted=True, created_at__date=today
-        ).count()
-
-        if views_today >= config.daily_limit_per_user:
-            return {"status": "limit_reached", "reason": "daily_limit"}
-
-        # Grant the reward
-        reward_type = config.reward_type
-        reward_amount = config.reward_amount
-
-        # Handle different reward types
-        if reward_type == "download":
-            # Grant extra download credits
-            _grant_download_credits(view.user, reward_amount)
-        elif reward_type == "points":
-            # Grant points/credits
-            _grant_points(view.user, reward_amount)
-        elif reward_type == "premium":
-            # Grant temporary premium access
-            _grant_premium_access(view.user, hours=reward_amount)
-        elif reward_type == "ad_free":
-            # Grant ad-free period
-            _grant_ad_free_period(view.user, hours=reward_amount)
-
-        # Update view record
-        view.status = "completed"
-        view.completed_at = timezone.now()
-        view.watch_duration_seconds = watch_duration
-        view.reward_granted = True
-        view.reward_type = reward_type
-        view.reward_amount = reward_amount
-        view.save()
-
-        logger.info(
-            "Rewarded ad completed: user=%s, reward=%s:%s",
-            view.user.id,
-            reward_type,
-            reward_amount,
-        )
-
-        return {
-            "status": "success",
-            "reward_type": reward_type,
-            "reward_amount": reward_amount,
-        }
-
-    except RewardedAdView.DoesNotExist:
-        return {"status": "error", "reason": "view_not_found"}
-    except DatabaseError as e:
-        logger.exception("Rewarded ad processing failed")
-        return {"status": "error", "error": str(e)}
-
-
-def _grant_download_credits(user, amount: int):
-    """Grant download credits to user."""
-    # Implement based on your user model
-    try:
-        profile = user.profile if hasattr(user, "profile") else user
-        if hasattr(profile, "download_credits"):
-            profile.download_credits = (profile.download_credits or 0) + amount
-            profile.save(update_fields=["download_credits"])
-    except DatabaseError as e:
-        logger.warning("Could not grant download credits: %s", e)
-
-
-def _grant_points(user, amount: int):
-    """Grant points/credits to user."""
-    try:
-        profile = user.profile if hasattr(user, "profile") else user
-        if hasattr(profile, "points"):
-            profile.points = (profile.points or 0) + amount
-            profile.save(update_fields=["points"])
-    except DatabaseError as e:
-        logger.warning("Could not grant points: %s", e)
-
-
-def _grant_premium_access(user, hours: int):
-    """Grant temporary premium access."""
-    try:
-        profile = user.profile if hasattr(user, "profile") else user
-        if hasattr(profile, "premium_until"):
-            current = max(profile.premium_until or timezone.now(), timezone.now())
-            profile.premium_until = current + timedelta(hours=hours)
-            profile.save(update_fields=["premium_until"])
-    except DatabaseError as e:
-        logger.warning("Could not grant premium access: %s", e)
-
-
-def _grant_ad_free_period(user, hours: int):
-    """Grant ad-free viewing period."""
-    try:
-        profile = user.profile if hasattr(user, "profile") else user
-        if hasattr(profile, "ad_free_until"):
-            current = max(profile.ad_free_until or timezone.now(), timezone.now())
-            profile.ad_free_until = current + timedelta(hours=hours)
-            profile.save(update_fields=["ad_free_until"])
-    except DatabaseError as e:
-        logger.warning("Could not grant ad-free period: %s", e)
-
-
 # ==================== AD NETWORK SYNC TASKS ====================
 
 
 @shared_task(
-    bind=True,
     acks_late=True,
     soft_time_limit=300,
     time_limit=600,
 )
-def sync_ad_networks(self) -> dict[str, Any]:
+def sync_ad_networks() -> dict[str, Any]:
     """
     Sync ad network configurations and fetch latest ad unit data.
 
@@ -450,30 +306,30 @@ def _sync_network(network) -> dict[str, Any]:
     network_type = network.network_type
 
     if network_type == "adsense":
-        return _sync_adsense(network)
+        return _sync_adsense()
     elif network_type == "admanager":
-        return _sync_admanager(network)
+        return _sync_admanager()
     elif network_type in ("ezoic", "mediavine", "adthrive"):
-        return _sync_premium_network(network)
+        return _sync_premium_network()
     else:
         # Generic networks don't have APIs to sync
         return {"status": "no_api"}
 
 
-def _sync_adsense(network) -> dict[str, Any]:
+def _sync_adsense() -> dict[str, Any]:
     """Sync Google AdSense data via API (if configured)."""
     # Placeholder for AdSense API integration
     # Would use google-api-python-client for real implementation
     return {"status": "adsense_api_not_configured"}
 
 
-def _sync_admanager(network) -> dict[str, Any]:
+def _sync_admanager() -> dict[str, Any]:
     """Sync Google Ad Manager (DFP) data via API."""
     # Placeholder for Ad Manager API integration
     return {"status": "admanager_api_not_configured"}
 
 
-def _sync_premium_network(network) -> dict[str, Any]:
+def _sync_premium_network() -> dict[str, Any]:
     """Sync premium network data (Ezoic, Mediavine, AdThrive)."""
     # These networks typically provide dashboard access rather than APIs
     return {"status": "manual_sync_required"}
@@ -482,14 +338,14 @@ def _sync_premium_network(network) -> dict[str, Any]:
 # ==================== SCHEDULED TASK REGISTRATION ====================
 
 
-@shared_task(bind=True, soft_time_limit=30, time_limit=60)
-def ads_hourly_tasks(self) -> None:
+@shared_task(soft_time_limit=30, time_limit=60)
+def ads_hourly_tasks() -> None:
     """Run all hourly ads tasks."""
     aggregate_events.delay()
 
 
-@shared_task(bind=True, soft_time_limit=30, time_limit=60)
-def ads_daily_tasks(self) -> None:
+@shared_task(soft_time_limit=30, time_limit=60)
+def ads_daily_tasks() -> None:
     """Run all daily ads tasks."""
     cleanup_old_events.delay()
     ai_optimize_ad_placements.delay()
@@ -534,9 +390,9 @@ def sync_affiliate_products(self) -> dict[str, Any]:
                 if provider.provider_type == "amazon":
                     result = _sync_amazon_products(provider, settings_obj)
                 elif provider.provider_type == "cj":
-                    result = _sync_cj_products(provider, settings_obj)
+                    result = _sync_cj_products(provider)
                 elif provider.provider_type == "shareasale":
-                    result = _sync_shareasale_products(provider, settings_obj)
+                    result = _sync_shareasale_products(provider)
                 else:
                     result = {
                         "status": "no_api",
@@ -814,7 +670,7 @@ def _save_amazon_product(item, provider, search_keyword) -> str:
         return "error"
 
 
-def _sync_cj_products(provider, settings_obj) -> dict[str, Any]:
+def _sync_cj_products(provider) -> dict[str, Any]:
     """
     Sync products from CJ (Commission Junction) Affiliate Publisher API v2.
 
@@ -930,7 +786,7 @@ def _sync_cj_products(provider, settings_obj) -> dict[str, Any]:
         }
 
 
-def _sync_shareasale_products(provider, settings_obj) -> dict[str, Any]:
+def _sync_shareasale_products(provider) -> dict[str, Any]:
     """
     Sync products from ShareASale API v3.3.
 
@@ -1081,8 +937,6 @@ def track_affiliate_click(
     product_id: int,
     user_id: int | None = None,
     page_url: str = "",
-    referrer_type: str = "",
-    referrer_id: int | None = None,
     ip_address: str = "",
     user_agent: str = "",
     session_id: str = "",
@@ -1095,8 +949,6 @@ def track_affiliate_click(
         product_id=product_id,
         user_id=user_id,
         page_url=page_url,
-        referrer_type=referrer_type,
-        referrer_id=referrer_id,
         ip_address=ip_address,
         user_agent=user_agent,
         session_id=session_id,
@@ -1106,8 +958,8 @@ def track_affiliate_click(
     return result
 
 
-@shared_task(bind=True)
-def update_affiliate_product_rankings(self) -> dict[str, Any]:
+@shared_task
+def update_affiliate_product_rankings() -> dict[str, Any]:
     """
     Update AI relevance scores for affiliate products.
     Based on click-through rates, conversion data, and targeting accuracy.

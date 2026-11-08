@@ -146,10 +146,10 @@ def resolve_chipset(brand_name: str, model_name: str) -> str:
     return BRAND_DEFAULT_CHIPSET.get(brand_name.lower().strip(), "")
 
 
-def is_tool_compatible(tool_name: str, brand_name: str, chipset_family: str) -> bool:
-    """Check if a specific tool is compatible with a brand+chipset.
+def is_tool_compatible(tool_name: str, brand_name: str) -> bool:
+    """Check if a specific tool is compatible with a brand.
 
-    Checks both chipset and brand restrictions.
+    Checks the brand restrictions and non-Android brands.
     """
     tool_lower = tool_name.lower().strip()
 
@@ -168,18 +168,15 @@ def get_compatible_tools_from_db(
     brand_name: str,
     chipset: str,
     *,
-    guide_type: str = "",
     limit: int = 8,
 ) -> list[FlashingTool]:
     """Query DB for compatible flashing tools based on brand and chipset.
 
-    Filters by chipset family and removes brand-incompatible tools.
+    Filters by chipset vendor and removes brand-incompatible tools.
     Returns tools ordered by relevance (featured first).
     """
     from .chipsets import vendor_for
     from .models import FlashingTool
-
-    family = get_chipset_family(chipset)
 
     if brand_name in NON_ANDROID_BRANDS:
         return []
@@ -196,7 +193,7 @@ def get_compatible_tools_from_db(
     # Remove brand-restricted tools that don't match
     compatible: list[FlashingTool] = []
     for tool in tools:
-        if is_tool_compatible(tool.name, brand_name, family):
+        if is_tool_compatible(tool.name, brand_name):
             compatible.append(tool)
 
     return compatible[:limit]
@@ -213,7 +210,6 @@ def filter_tools_for_brand(
     """
     from .chipsets import vendor_for
 
-    family = get_chipset_family(chipset)
     vendor = vendor_for(chipset)
 
     if brand_name in NON_ANDROID_BRANDS:
@@ -221,7 +217,7 @@ def filter_tools_for_brand(
 
     result: list[FlashingTool] = []
     for tool in tools:
-        if not is_tool_compatible(tool.name, brand_name, family):
+        if not is_tool_compatible(tool.name, brand_name):
             continue
         # If the chipset vendor is known, the tool must support it when it lists any
         if vendor:

@@ -1,0 +1,24 @@
+{% extends "admin/staff_page.html" %}
+{% block mf_actions %}<a class="mf-ui-btn" href="{% url 'admin:distribution_channel_change' channel.pk %}">Edit channel</a>{% endblock %}
+{% block mf_nav %}{% include "admin/distribution/_nav.html" %}{% endblock %}
+{% block mf_body %}
+{% for item in previews %}
+<section class="mf-ui-card" aria-labelledby="pv-{{ forloop.counter }}">
+  <h2 class="mf-ui-card__title" id="pv-{{ forloop.counter }}">{% if item.sample %}Sample content{% else %}Latest shared content{% endif %}: {{ item.title }}</h2>
+  <div class="mf-ui-dist-post" role="group" aria-label="Post text">{{ item.preview.text }}</div>
+  <p class="mf-ui-row">
+    <span class="mf-ui-badge{% if item.preview.length > item.preview.limit %} mf-ui-badge--danger{% else %} mf-ui-badge--success{% endif %}">{{ item.preview.length }} / {{ item.preview.limit }} characters</span>
+    <span class="mf-ui-badge mf-ui-badge--info">Needs: {{ item.preview.requires }}</span>
+    {% if item.hook %}<span class="mf-ui-badge">Opening: {{ item.hook }}</span>{% endif %}
+  </p>
+  {% if item.preview.media_problem %}<p class="mf-ui-note mf-ui-note--warning">{{ item.preview.media_problem }}</p>{% endif %}
+  {% for warning in item.preview.warnings %}<p class="mf-ui-note mf-ui-note--warning">{{ warning }}</p>{% endfor %}
+  {% if item.preview.steps %}
+  <p class="mf-ui-help">Requests it would make:</p>
+  <ul class="mf-ui-dist-list">{% for step in item.preview.steps %}<li><code class="mf-ui-code">{{ step }}</code></li>{% endfor %}</ul>
+  {% endif %}
+</section>
+{% empty %}
+<p class="mf-ui-empty">This channel has an unknown platform, so no preview is available.</p>
+{% endfor %}
+{% endblock %}

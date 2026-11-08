@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from django.contrib.auth.signals import user_logged_in
 from django.db import DatabaseError
@@ -14,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 @receiver(user_logged_in, dispatch_uid="devices_register_on_login")
-def register_device_on_login(sender: Any, request, user, **kwargs) -> None:
+def register_device_on_login(request, user, **kwargs) -> None:
     """
     Ensure a device record is registered whenever a user logs in,
     even if AppService routing is skipped elsewhere.

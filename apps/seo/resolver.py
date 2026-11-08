@@ -292,4 +292,5 @@ def _resolve(request: HttpRequest, context: Mapping[str, Any]) -> ResolvedSEO:
         provenance=sources,
         policy_version=POLICY_VERSION,
         warnings=tuple(warnings),
+        object_ref=page.object_ref,
     )

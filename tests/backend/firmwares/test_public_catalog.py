@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
@@ -28,19 +27,9 @@ from apps.firmwares.models import (
 )
 from apps.firmwares.sitemaps import FirmwareFileSitemap
 
-NO_AUTOFILL = (
-    "apps.firmwares.admin_autofill.FirmwareAutoFill.autofill_brand",
-    "apps.firmwares.admin_autofill.FirmwareAutoFill.autofill_model",
-    "apps.firmwares.admin_autofill.FirmwareAutoFill.autofill_variant",
-)
-
 
 class CatalogTestCase(TestCase):
     def setUp(self):
-        for target in NO_AUTOFILL:
-            patcher = patch(target, return_value={})
-            patcher.start()
-            self.addCleanup(patcher.stop)
         self.brand = Brand.objects.create(name="Catalog Brand", slug="catalog-brand")
         self.chipset = Chipset.objects.create(
             vendor="MediaTek",

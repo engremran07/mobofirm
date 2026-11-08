@@ -8,15 +8,20 @@ module instead of ``unfold`` or ``django.contrib.admin`` directly.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from typing import TYPE_CHECKING
+from collections.abc import Mapping, Sequence
+from contextvars import ContextVar
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from django import forms
+from django.apps import apps as django_apps
+from django.contrib import admin
 from django.contrib.admin.options import BaseModelAdmin
 from django.db.models import Model
 from django.http import HttpRequest, HttpResponse
+from django.template.response import SimpleTemplateResponse
 from django.urls import reverse
-from django.utils.html import format_html
+from django.utils.html import format_html, format_html_join
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.utils.safestring import SafeString
 from django.utils.translation import gettext_lazy as _
@@ -28,6 +33,8 @@ from unfold.dataclasses import ActionDialog
 from unfold.decorators import action, display
 from unfold.forms import BaseDialogForm
 from unfold.widgets import UnfoldAdminTextareaWidget
+
+from apps.core.utils.managers import default_manager
 
 if TYPE_CHECKING:
     from django_stubs_ext import StrOrPromise
@@ -41,6 +48,8 @@ __all__ = [
     "NoAddModelAdmin",
     "ReadOnlyModelAdmin",
     "ReasonForm",
+    "RelatedLink",
+    "RelatedOverviewMixin",
     "SingletonModelAdmin",
     "StackedInline",
     "TabularInline",
@@ -116,6 +125,94 @@ class SingletonModelAdmin(SoloSingletonModelAdmin, ModelAdmin):
     # Explicit Django defaults: solo's stock templates would replace Unfold's header tools.
     change_form_template = "admin/change_form.html"
     object_history_template = "admin/object_history.html"
+
+
+@dataclass(frozen=True, slots=True)
+class RelatedLink:
+    """Records of another app that belong to the object being edited."""
+
+    model: str  # "app_label.ModelName" of the related records
+    lookup: str  # field path from the related model to the edited object
+    label: str = ""  # defaults to the related model's plural name
+
+
+_current_request: ContextVar[HttpRequest | None] = ContextVar(
+    "admin_related_overview_request", default=None
+)
+
+
+def _forget_request(_response: object) -> None:
+    _current_request.set(None)
+
+
+class RelatedOverviewMixin(admin.ModelAdmin):
+    """Adds a read-only "related records" field listing counts and filtered links.
+
+    Objects such as an account or a package own work in several apps. Instead of
+    importing those apps' models (or scattering the lookups across their changelists
+    by hand), declare ``related_links`` and add ``related_overview`` to a tab. Only
+    models that are registered in the admin and viewable by the current staff user
+    are listed, so the page never leaks counts the user could not open.
+    """
+
+    related_links: ClassVar[Sequence[RelatedLink]] = ()
+
+    def changeform_view(
+        self,
+        request: HttpRequest,
+        object_id: str | None = None,
+        form_url: str = "",
+        extra_context: dict[str, Any] | None = None,
+    ) -> HttpResponse:
+        # Read-only fields render after this method returns, so the request is kept
+        # until the response has been rendered.
+        _current_request.set(request)
+        try:
+            response = super().changeform_view(
+                request, object_id, form_url, extra_context
+            )
+        except BaseException:
+            _current_request.set(None)
+            raise
+        if isinstance(response, SimpleTemplateResponse) and not response.is_rendered:
+            response.add_post_render_callback(_forget_request)
+        else:
+            _current_request.set(None)
+        return response
+
+    @display(description=_("Related records"))
+    def related_overview(self, obj: Model | None) -> SafeString | str:
+        request = _current_request.get()
+        if request is None or obj is None or obj.pk is None:
+            return "—"
+        rows: list[tuple[str, object, object]] = []
+        for link in self.related_links:
+            related = django_apps.get_model(link.model)
+            if not admin.site.is_registered(related):
+                continue
+            if not admin.site.get_model_admin(related).has_view_permission(request):
+                continue
+            opts = related._meta
+            url = reverse(f"admin:{opts.app_label}_{opts.model_name}_changelist")
+            count = default_manager(related).filter(**{link.lookup: obj.pk}).count()
+            rows.append(
+                (
+                    f"{url}?{link.lookup}__id__exact={obj.pk}",
+                    link.label or opts.verbose_name_plural,
+                    count,
+                )
+            )
+        if not rows:
+            return str(_("Nothing related that you can view."))
+        return format_html(
+            '<ul class="flex flex-col gap-2">{}</ul>',
+            format_html_join(
+                "",
+                '<li><a class="text-primary-600 underline dark:text-primary-500" '
+                'href="{}">{}</a> <span class="text-subtle tabular-nums">{}</span></li>',
+                rows,
+            ),
+        )
 
 
 class TabularInline(UnfoldTabularInline):

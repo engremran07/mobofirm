@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Report a problem | {{ site_name }}{% endblock %}
+{% block content %}
+<div class="site-container py-4 py-lg-5">
+  {% include "components/breadcrumbs.html" with current="Report a problem" parent_label="Bounties" parent_url="/bounty/" %}
+  <div class="row justify-content-center">
+    <div class="col-12 col-lg-8 col-xl-6">
+      {% include "components/page_header.html" with eyebrow="Bounty" title="Report a problem" lead=bounty.target_label %}
+      <form method="post" class="surface-card p-4" novalidate>
+        {% csrf_token %}
+        {% include "components/form_errors.html" with form=form %}
+        {% include "components/form_field.html" with field=form.reason %}
+        <div class="d-flex flex-wrap gap-2">
+          <button class="btn btn-primary" type="submit">Send to staff</button>
+          <a class="btn btn-outline-secondary" href="{% url 'bounty:detail' pk=bounty.pk %}">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

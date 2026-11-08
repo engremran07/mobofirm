@@ -205,7 +205,7 @@ class PageAdmin(ModelAdmin):
         ),
     )
     def publish_page(
-        self, request: HttpRequest, form: BaseDialogForm, object_id: str
+        self, request: HttpRequest, _form: BaseDialogForm, object_id: str
     ) -> HttpResponse:
         return self._transition_one(
             request, object_id, Page.Status.PUBLISHED, _("Page published.")
@@ -223,7 +223,7 @@ class PageAdmin(ModelAdmin):
         ),
     )
     def unpublish_page(
-        self, request: HttpRequest, form: BaseDialogForm, object_id: str
+        self, request: HttpRequest, _form: BaseDialogForm, object_id: str
     ) -> HttpResponse:
         return self._transition_one(
             request, object_id, Page.Status.DRAFT, _("Page returned to draft.")

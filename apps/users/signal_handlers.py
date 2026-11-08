@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 @receiver(notification_send_requested)
 def send_notifications(
-    sender, user_ids, title, message, action_type="system", priority="info", **kwargs
+    user_ids, title, message, action_type="system", priority="info", **kwargs
 ):
     """Handle notification send requests from other apps"""
     from apps.users.models import CustomUser, Notification
@@ -43,7 +43,7 @@ def send_notifications(
 
 @receiver(user_registered)
 @receiver(user_signed_up)
-def send_welcome_notification(sender, user, request, **kwargs):
+def send_welcome_notification(user, **kwargs):
     """Send welcome notification when user registers"""
     from apps.users.models import Notification
 

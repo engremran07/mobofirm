@@ -1,0 +1,8 @@
+{# Rendered by {% bounty_cta kind target %}: optional "add a bounty" step. #}
+{% if show %}
+<aside class="surface-card p-3 d-flex flex-wrap align-items-center gap-2" aria-label="Bounty">
+  <i class="icon" data-lucide="gift" aria-hidden="true"></i>
+  <p class="mb-0 flex-grow-1">{% if count %}{{ credits }} credits are offered across {{ count }} bount{{ count|pluralize:"y,ies" }}.{% else %}Want this sooner? Offer credits to whoever uploads it.{% endif %}</p>
+  {% if signed_in %}<a class="btn btn-sm btn-outline-primary" href="{{ new_url }}">Add a bounty</a>{% else %}<a class="btn btn-sm btn-outline-primary" href="{% url 'users:account_login' %}?next={{ new_url|urlencode }}">Sign in to add a bounty</a>{% endif %}
+</aside>
+{% endif %}

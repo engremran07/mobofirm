@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% load mf_ui %}
+{% block title %}Leaderboard | {{ site_name }}{% endblock %}
+{% block content %}
+<div class="site-container py-4 py-lg-5">
+  {% include "components/breadcrumbs.html" with current="Leaderboard" %}
+  {% include "components/page_header.html" with eyebrow="Community" title="Leaderboard" lead="Top contributors ranked by XP earned from approved contributions. Members with a private profile are not listed." %}
+  <nav class="d-flex flex-wrap gap-2 mb-4" aria-label="Leaderboard period">
+    {% for value, label in periods %}
+      <a class="btn btn-sm {% if value == period %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="?period={{ value }}"{% if value == period %} aria-current="page"{% endif %}>{{ label }}</a>
+    {% endfor %}
+    <a class="btn btn-sm btn-link" href="{% url 'gamification:badges' %}">Badges</a>
+  </nav>
+  {% if rows %}
+    {% table_scroll "Leaderboard" %}
+    <table class="table align-middle">
+      <thead><tr><th scope="col">#</th><th scope="col">Member</th><th scope="col">Level</th><th scope="col" class="text-end">XP</th></tr></thead>
+      <tbody>
+        {% for row in rows %}
+          <tr{% if row.user_id == user.pk %} class="table-active"{% endif %}>
+            <th scope="row">{{ row.rank }}</th>
+            <td>{{ row.username }}{% if row.user_id == user.pk %} <span class="muted">(you)</span>{% endif %}</td>
+            <td>{{ row.level }}</td>
+            <td class="text-end tabular-nums">{{ row.xp }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endtable_scroll %}
+  {% else %}
+    {% include "components/empty_state.html" with title="Nobody is ranked yet" message="Approved firmware uploads, fulfilled requests and helpful comments earn XP." %}
+  {% endif %}
+</div>
+{% endblock %}

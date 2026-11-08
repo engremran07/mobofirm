@@ -1,0 +1,5 @@
+{% extends "admin/staff_page.html" %}
+{# Non-JavaScript fallback of a staff dialog: the same dialog, rendered open inside the admin shell. #}
+{% block mf_body %}
+<div class="mf-ui-card">{% include dialog_template %}</div>
+{% endblock %}

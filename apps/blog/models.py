@@ -1,9 +1,15 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import ClassVar
 
 from django.conf import settings
-from django.core.validators import MaxLengthValidator, MinLengthValidator
+from django.core.validators import (
+    MaxLengthValidator,
+    MaxValueValidator,
+    MinLengthValidator,
+    MinValueValidator,
+)
 from django.db import models
 from django.db.models import QuerySet
 from django.db.models.functions import Lower
@@ -21,6 +27,14 @@ class PostStatus(models.TextChoices):
     SCHEDULED = "scheduled", "Scheduled"
     PUBLISHED = "published", "Published"
     ARCHIVED = "archived", "Archived"
+
+
+class PostAccess(models.TextChoices):
+    """Who may read the full body (see ``apps.blog.paywall``)."""
+
+    FREE = "free", "Free"
+    FEATURED = "featured", "Featured (packages or credits)"
+    PAID = "paid", "Paid (credits)"
 
 
 class Category(models.Model):
@@ -61,7 +75,7 @@ class Post(models.Model):
     objects = PostQuerySet.as_manager()
 
     # Set by the pre_save signal so the post_save hook can detect a first publication.
-    _was_published: bool = False
+    was_published_before_save: bool = False
 
     title = models.CharField(
         max_length=200,
@@ -157,6 +171,54 @@ class Post(models.Model):
         help_text="Rewarded ad configuration for this post's gate.",
     )
 
+    access = models.CharField(
+        max_length=10,
+        choices=PostAccess.choices,
+        default=PostAccess.FREE,
+        db_index=True,
+        help_text="Featured and paid posts show a teaser to readers without access.",
+    )
+    price = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("0.01"))],
+        help_text="Staff-approved price in USD; converted to credits at the wallet rate.",
+    )
+    proposed_price = models.DecimalField(
+        max_digits=8,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        validators=[MinValueValidator(Decimal("0.01"))],
+        help_text="The author's suggested USD price; staff approve it on publication.",
+    )
+    price_approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    price_approved_at = models.DateTimeField(null=True, blank=True)
+    published_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+        help_text="The staff member who published or scheduled this post.",
+    )
+    guide_request = models.ForeignKey(
+        "blog.GuideRequest",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="solutions",
+        help_text="The approved guide request this post answers.",
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -192,12 +254,21 @@ class Post(models.Model):
         return self.publish_at is None or self.publish_at <= timezone.now()
 
     @property
+    def is_gated(self) -> bool:
+        """Featured and paid posts withhold the body from readers without access."""
+        return self.access != PostAccess.FREE
+
+    @property
     def cover_image_url(self) -> str:
         """The hero image when it is served from this site (``img-src 'self'``)."""
         return self.hero_image if is_same_origin_path(self.hero_image) else ""
 
     def save(self, *args, **kwargs):
         self.body = sanitize_html(self.body)
+        if self.access == PostAccess.FREE:
+            self.price = self.proposed_price = None
+            self.price_approved_by = None
+            self.price_approved_at = None
         if not self.slug:
             base = slugify(self.title)[:230]
             candidate = base
@@ -258,6 +329,124 @@ class PostLike(models.Model):
         return f"{self.user_id} likes {self.post_id}"
 
 
+class GuideRequest(models.Model):
+    """A member's request for a flashing method, pattern, trick or guide.
+
+    Staff review every request first: it is private until approved, and only an
+    approved request is public and can carry a credit bounty (``apps.bounty``).
+    """
+
+    class Kind(models.TextChoices):
+        METHOD = "method", "Flashing method"
+        PATTERN = "pattern", "Unlock pattern"
+        TRICK = "trick", "Trick"
+        GUIDE = "guide", "Guide"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending review"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+        FULFILLED = "fulfilled", "Fulfilled"
+        CANCELLED = "cancelled", "Cancelled"
+
+    PUBLIC: ClassVar[tuple[str, ...]] = (Status.APPROVED, Status.FULFILLED)
+
+    requester = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="guide_requests",
+    )
+    title = models.CharField(
+        max_length=200,
+        validators=[MinLengthValidator(8)],
+        help_text="8-200 characters.",
+    )
+    description = models.TextField(
+        validators=[MinLengthValidator(20), MaxLengthValidator(2000)],
+        help_text="What you need, the device situation and what you already tried.",
+    )
+    kind = models.CharField(max_length=10, choices=Kind.choices, default=Kind.GUIDE)
+    brand = models.ForeignKey(
+        "firmwares.Brand",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="guide_requests",
+    )
+    firmware_model = models.ForeignKey(
+        "firmwares.Model",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="guide_requests",
+    )
+    chipset = models.ForeignKey(
+        "firmwares.Chipset",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="guide_requests",
+    )
+    status = models.CharField(
+        max_length=10, choices=Status.choices, default=Status.PENDING, db_index=True
+    )
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    decision_reason = models.CharField(max_length=500, blank=True)
+    fulfilled_by_post = models.ForeignKey(
+        "blog.Post",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    fulfilled_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ["-created_at", "-id"]
+        verbose_name = "Guide request"
+        verbose_name_plural = "Guide requests"
+        indexes = (
+            models.Index(
+                fields=["status", "-created_at"], name="blog_guidereq_status_idx"
+            ),
+        )
+
+    def __str__(self) -> str:
+        return self.title
+
+    def get_absolute_url(self) -> str:
+        return reverse("blog:request_detail", kwargs={"pk": self.pk})
+
+    @property
+    def is_public(self) -> bool:
+        return self.status in self.PUBLIC
+
+    @property
+    def accepts_solutions(self) -> bool:
+        return self.status == self.Status.APPROVED
+
+    @property
+    def label(self) -> str:
+        """Short device context for lists: brand, model and chipset when set."""
+        parts = [
+            self.brand.name if self.brand_id and self.brand else "",
+            self.firmware_model.name
+            if self.firmware_model_id and self.firmware_model
+            else "",
+            self.chipset.display_name if self.chipset_id and self.chipset else "",
+        ]
+        return " · ".join(part for part in parts if part)
+
+
 class PostDraft(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="post_drafts"
@@ -309,6 +498,25 @@ class BlogSettings(SingletonModel):
     enable_blog = models.BooleanField(default=True)
     enable_blog_comments = models.BooleanField(default=True)
     allow_user_blog_posts = models.BooleanField(default=False)
+    teaser_words = models.PositiveIntegerField(
+        default=80,
+        validators=[MinValueValidator(20), MaxValueValidator(300)],
+        help_text="Words of a featured or paid article shown to readers without access.",
+    )
+    allow_guide_requests = models.BooleanField(
+        default=True,
+        help_text="Members may request a method or guide (staff still review each one).",
+    )
+    guide_requests_per_day = models.PositiveIntegerField(
+        default=3,
+        validators=[MinValueValidator(1), MaxValueValidator(50)],
+        help_text="Most requests one member can send in 24 hours.",
+    )
+    guide_requests_open_limit = models.PositiveIntegerField(
+        default=5,
+        validators=[MinValueValidator(1), MaxValueValidator(50)],
+        help_text="Most pending or approved requests one member may have at once.",
+    )
 
     class Meta:
         verbose_name = "Blog Settings"

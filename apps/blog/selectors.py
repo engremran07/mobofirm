@@ -9,11 +9,11 @@ from urllib.parse import urlencode
 
 from django.conf import settings
 from django.db import connection
-from django.db.models import Count, F, Q, QuerySet
+from django.db.models import Case, Count, F, Q, QuerySet, TextField, Value, When
 from django.utils import timezone
 
-from apps.blog.models import Category, Post
-from apps.blog.rendering import plain_excerpt
+from apps.blog.models import Category, Post, PostAccess
+from apps.blog.paywall import public_excerpt
 from apps.tags.models import Tag
 from apps.tags.selectors import public_tags
 
@@ -88,7 +88,7 @@ def build_card(post: Post, tags: list[Tag] | None = None) -> PostCard:
         post=post,
         url=post.get_absolute_url(),
         title=post.title,
-        excerpt=plain_excerpt(post.summary or post.body, 170),
+        excerpt=public_excerpt(post, 170),
         author=author_name(post),
         published=post.published_at,
         reading_time=post.reading_time,
@@ -171,10 +171,16 @@ def apply_search(posts: QuerySet[Post], query: str) -> tuple[QuerySet[Post], boo
             SearchVector,
         )
 
+        # A gated body must not decide what matches: it would reveal hidden text.
+        open_body = Case(
+            When(access=PostAccess.FREE, then=F("body")),
+            default=Value(""),
+            output_field=TextField(),
+        )
         vector = (
             SearchVector("title", weight="A")
             + SearchVector("summary", weight="B")
-            + SearchVector("body", weight="C")
+            + SearchVector(open_body, weight="C")
         )
         ranked = posts.annotate(rank=SearchRank(vector, SearchQuery(query))).filter(
             rank__gte=0.01
@@ -184,7 +190,7 @@ def apply_search(posts: QuerySet[Post], query: str) -> tuple[QuerySet[Post], boo
         posts.filter(
             Q(title__icontains=query)
             | Q(summary__icontains=query)
-            | Q(body__icontains=query)
+            | Q(body__icontains=query, access=PostAccess.FREE)
         ),
         False,
     )

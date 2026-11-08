@@ -1,17 +1,18 @@
-{% extends "seo/base.html" %}
-{% block seo_content %}
-<form method="get" class="mf-seo-form">
-  <label for="seo-inspect-url">Page path or URL</label>
-  <input id="seo-inspect-url" type="text" name="url" value="{{ url }}" placeholder="/firmwares/samsung/" required>
-  <button type="submit" class="button">Inspect</button>
+{% extends "admin/staff_page.html" %}
+{% block mf_nav %}{% include "seo/_tabs.html" %}{% endblock %}
+{% block mf_body %}
+<form method="get" class="mf-ui-seo-filter" role="search" aria-label="Inspect a page">
+  <div class="mf-ui-field mf-ui-seo-grow"><label for="seo-inspect-url">Page path or URL</label>
+    <input id="seo-inspect-url" type="text" name="url" value="{{ url }}" placeholder="/firmwares/samsung/" required></div>
+  <button type="submit" class="mf-ui-btn mf-ui-btn--primary">Inspect</button>
 </form>
 {% if report %}
   {% with resolved=report.resolved observation=report.observation %}
-  <h2>{{ report.path }}</h2>
+  <h2 class="mf-ui-seo-heading">{{ report.path }}</h2>
   {% if resolved %}
-    <section aria-labelledby="seo-intended">
-      <h3 id="seo-intended">What the resolver intends</h3>
-      <dl class="mf-seo-dl">
+    <section class="mf-ui-card" aria-labelledby="seo-intended">
+      <h3 id="seo-intended" class="mf-ui-card__title">What the resolver intends</h3>
+      <dl class="mf-ui-seo-dl">
         <dt>Page type</dt><dd>{{ resolved.page_type }}</dd>
         <dt>Title</dt><dd>{{ resolved.title }} <small>({{ resolved.provenance.title }})</small></dd>
         <dt>Description</dt><dd>{{ resolved.description }} <small>({{ resolved.provenance.description }})</small></dd>
@@ -20,15 +21,16 @@
         <dt>Indexable</dt><dd>{{ resolved.indexable|yesno:"Yes,No" }}{% if resolved.noindex_reason %} - {{ resolved.noindex_reason }}{% endif %}</dd>
         <dt>In sitemap</dt><dd>{{ report.in_sitemap|yesno:"Yes,No" }}</dd>
         <dt>Policy version</dt><dd>{{ resolved.policy_version }}</dd>
+        {% if snapshot %}<dt>Last scanned</dt><dd>{{ snapshot.scanned_at|date:"Y-m-d H:i" }} &middot; {{ snapshot.word_count }} words</dd>{% endif %}
       </dl>
     </section>
   {% else %}
-    <p>No route matches this path.</p>
+    <p class="mf-ui-empty">No route matches this path.</p>
   {% endif %}
-  <section aria-labelledby="seo-served">
-    <h3 id="seo-served">What the server last returned</h3>
+  <section class="mf-ui-card" aria-labelledby="seo-served">
+    <h3 id="seo-served" class="mf-ui-card__title">What the server last returned</h3>
     {% if observation %}
-      <dl class="mf-seo-dl">
+      <dl class="mf-ui-seo-dl">
         <dt>Crawl</dt><dd>{{ observation.run_id }} at {{ observation.observed_at }}</dd>
         <dt>Status</dt><dd>{{ observation.status_code|default:"-" }}{% if observation.fetch_error %} ({{ observation.fetch_error }}){% endif %}</dd>
         <dt>Titles</dt><dd>{{ observation.titles|join:" | " }}</dd>
@@ -37,12 +39,12 @@
         <dt>JSON-LD</dt><dd>{{ observation.jsonld_types|join:", "|default:"none" }}</dd>
       </dl>
     {% else %}
-      <p>This URL has not been crawled yet.</p>
+      <p class="mf-ui-help">This URL has not been crawled yet.</p>
     {% endif %}
   </section>
-  <section aria-labelledby="seo-page-issues">
-    <h3 id="seo-page-issues">Open issues</h3>
-    <ul>{% for issue in report.issues %}<li><strong>{{ issue.code }}</strong> ({{ issue.severity }}): {{ issue.message }}</li>{% empty %}<li>None.</li>{% endfor %}</ul>
+  <section class="mf-ui-card" aria-labelledby="seo-page-issues">
+    <h3 id="seo-page-issues" class="mf-ui-card__title">Open issues</h3>
+    <ul class="mf-ui-seo-list">{% for issue in report.issues %}<li><strong>{{ issue.code }}</strong> ({{ issue.severity }}): {{ issue.message }} <a href="{% url 'seo:issue_detail' pk=issue.pk %}">Review{% if issue.fixable %} and fix{% endif %}</a></li>{% empty %}<li>None.</li>{% endfor %}</ul>
   </section>
   {% endwith %}
 {% endif %}

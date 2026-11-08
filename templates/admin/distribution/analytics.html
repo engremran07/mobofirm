@@ -1,0 +1,70 @@
+{% extends "admin/staff_page.html" %}
+{% block mf_actions %}<a class="mf-ui-btn" href="{% url 'admin:distribution_channel_analytics_export' %}">Export CSV</a>{% endblock %}
+{% block mf_nav %}{% include "admin/distribution/_nav.html" %}{% endblock %}
+{% block mf_body %}
+<ul class="mf-ui-tabs" aria-label="Time range">
+  {% for r in ranges %}<li><a href="?days={{ r }}"{% if r == days %} aria-current="page"{% endif %}>{{ r }} days</a></li>{% endfor %}
+</ul>
+<div class="mf-ui-grid">
+  <div class="mf-ui-card mf-ui-stat"><span class="mf-ui-stat__label">Human clicks ({{ days }} days)</span><span class="mf-ui-stat__value">{{ total }}</span></div>
+  <div class="mf-ui-card mf-ui-stat"><span class="mf-ui-stat__label">Best time</span><span class="mf-ui-stat__value">{{ heatmap.best|default:"—" }}</span><span class="mf-ui-stat__hint">weekday and hour with most clicks</span></div>
+  <div class="mf-ui-card mf-ui-stat"><span class="mf-ui-stat__label">All-time clicks</span><span class="mf-ui-stat__value">{{ lifetime }}</span></div>
+</div>
+<p class="mf-ui-help">Clicks are counted on first-party /go/ links; platforms do not report impressions, so “clicks per post” is the comparable rate. Bots, link previews and prefetches are excluded and no personal data is stored.</p>
+
+<section aria-labelledby="an-channels">
+  <h2 class="mf-ui-dist-heading" id="an-channels">By channel</h2>
+  <div class="mf-ui-table-wrap" role="region" aria-label="Clicks by channel" tabindex="0">
+    <table class="mf-ui-table">
+      <thead><tr><th scope="col">Channel</th><th scope="col">Platform</th><th scope="col" class="is-number">Posts sent</th><th scope="col" class="is-number">Clicks</th><th scope="col" class="is-number">Clicks per post</th></tr></thead>
+      <tbody>
+        {% for row in channels %}<tr><td>{{ row.channel.name }}</td><td>{{ row.channel.get_kind_display }}</td><td class="is-number">{{ row.posts }}</td><td class="is-number">{{ row.clicks }}</td><td class="is-number">{{ row.per_post }}</td></tr>
+        {% empty %}<tr><td colspan="5">No channels yet.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section aria-labelledby="an-content">
+  <h2 class="mf-ui-dist-heading" id="an-content">Top content</h2>
+  {% if content %}
+  <div class="mf-ui-table-wrap" role="region" aria-label="Top content" tabindex="0">
+    <table class="mf-ui-table">
+      <thead><tr><th scope="col">Content</th><th scope="col">Type</th><th scope="col" class="is-number">Shares</th><th scope="col" class="is-number">Clicks</th></tr></thead>
+      <tbody>{% for row in content %}<tr><td>{{ row.title }}</td><td>{{ row.kind }}</td><td class="is-number">{{ row.shares }}</td><td class="is-number">{{ row.clicks }}</td></tr>{% endfor %}</tbody>
+    </table>
+  </div>
+  {% else %}<p class="mf-ui-empty">No clicks in this range.</p>{% endif %}
+</section>
+
+<section aria-labelledby="an-ab">
+  <h2 class="mf-ui-dist-heading" id="an-ab">A/B opening styles</h2>
+  {% if variants %}
+  <div class="mf-ui-table-wrap" role="region" aria-label="Opening style results" tabindex="0">
+    <table class="mf-ui-table">
+      <thead><tr><th scope="col">Channel</th><th scope="col">Style</th><th scope="col" class="is-number">Posts</th><th scope="col" class="is-number">Clicks</th><th scope="col" class="is-number">Clicks per post</th><th scope="col">Result</th></tr></thead>
+      <tbody>
+        {% for entry in variants %}{% for stat in entry.result.stats %}
+        <tr>
+          <td>{{ entry.channel.name }}</td><td>{{ stat.variant }} · {{ stat.hook }}</td><td class="is-number">{{ stat.posts }}</td><td class="is-number">{{ stat.clicks }}</td><td class="is-number">{{ stat.per_post|floatformat:2 }}</td>
+          <td>{% if entry.result.winner == stat.hook %}<span class="mf-ui-badge mf-ui-badge--success">Winner</span>{% elif entry.result.decided %}<span class="mf-ui-badge mf-ui-badge--info">Retired</span>{% else %}<span class="mf-ui-badge mf-ui-badge--warning">Testing ({{ entry.result.total_clicks }}/{{ entry.preset.ab_min_clicks }} clicks)</span>{% endif %}</td>
+        </tr>
+        {% endfor %}{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}<p class="mf-ui-empty">No opening-style data yet.</p>{% endif %}
+</section>
+
+<section aria-labelledby="an-heat">
+  <h2 class="mf-ui-dist-heading" id="an-heat">Best-hour heatmap (server time)</h2>
+  <div class="mf-ui-table-wrap" role="region" aria-label="Clicks by weekday and hour" tabindex="0">
+    <table class="mf-ui-table mf-ui-dist-heat">
+      <thead><tr><th scope="col">Day</th>{% for hour in heatmap.rows.0.cells %}<th scope="col" class="is-number">{{ hour.hour }}</th>{% endfor %}</tr></thead>
+      <tbody>
+        {% for line in heatmap.rows %}<tr><th scope="row">{{ line.label }}</th>{% for cell in line.cells %}<td class="is-number mf-ui-dist-heat-{{ cell.level }}">{% if cell.clicks %}{{ cell.clicks }}{% endif %}</td>{% endfor %}</tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

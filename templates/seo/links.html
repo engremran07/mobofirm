@@ -1,0 +1,73 @@
+{% extends "admin/staff_page.html" %}
+{% block mf_actions %}
+  {% if can_change %}
+    <form method="post" action="{% url 'seo:links_generate' %}" class="mf-ui-seo-inline">
+      {% csrf_token %}<input type="hidden" name="next" value="{{ next_url }}">
+      <button type="submit" class="mf-ui-btn mf-ui-btn--primary">Generate proposals</button>
+    </form>
+  {% endif %}
+{% endblock %}
+{% block mf_nav %}{% include "seo/_tabs.html" %}{% endblock %}
+{% block mf_body %}
+<p class="mf-ui-help">Every proposal comes from a real relation (brand has model, model uses chipset, tool supports chipset or brand, post covers a model, chipset has a flashing guide). Nothing renders until you accept it; rejected pairs are never proposed again. Each source has a link budget and each target rotates its anchor text.</p>
+
+<div class="mf-ui-grid">
+  <article class="mf-ui-card mf-ui-stat"><span class="mf-ui-stat__label">Waiting for review</span><span class="mf-ui-stat__value">{{ counts.proposed }}</span></article>
+  <article class="mf-ui-card mf-ui-stat"><span class="mf-ui-stat__label">Accepted</span><span class="mf-ui-stat__value">{{ counts.accepted }}</span><span class="mf-ui-stat__hint">rendered where the source supports related links</span></article>
+  <article class="mf-ui-card mf-ui-stat"><span class="mf-ui-stat__label">Rejected</span><span class="mf-ui-stat__value">{{ counts.rejected }}</span></article>
+</div>
+
+<form method="get" class="mf-ui-seo-filter" role="search" aria-label="Filter proposals">
+  <div class="mf-ui-field"><label for="link-q">Search</label><input type="search" id="link-q" name="q" value="{{ q }}" maxlength="100" placeholder="Source or target"></div>
+  <div class="mf-ui-field"><label for="link-status">Status</label>
+    <select id="link-status" name="status">{% for value, label in statuses %}<option value="{{ value }}"{% if value == status %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+  <div class="mf-ui-field"><label for="link-relation">Relation</label>
+    <select id="link-relation" name="relation"><option value="">All</option>{% for value, label in relations %}<option value="{{ value }}"{% if value == relation %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+  <button type="submit" class="mf-ui-btn">Filter</button>
+</form>
+
+{% if page.object_list %}
+  {% if can_change %}
+    <form method="post" action="{% url 'seo:links_bulk' %}" id="links-bulk-form" class="mf-ui-seo-filter" aria-label="Bulk decision">
+      {% csrf_token %}<input type="hidden" name="next" value="{{ next_url }}">
+      <div class="mf-ui-field"><label for="bulk-decision">For the selected proposals</label>
+        <select id="bulk-decision" name="decision"><option value="accept">Accept</option><option value="reject">Reject</option><option value="reset">Reopen</option></select></div>
+      <button type="submit" class="mf-ui-btn mf-ui-btn--primary">Apply to selected</button>
+    </form>
+  {% endif %}
+  <div class="mf-ui-table-wrap" role="region" aria-label="Link proposals" tabindex="0">
+    <table class="mf-ui-table">
+      <thead><tr>{% if can_change %}<th scope="col"><span class="mf-ui-sr">Select</span></th>{% endif %}<th scope="col">From</th><th scope="col">To</th><th scope="col">Anchor</th><th scope="col">Why</th><th scope="col" class="is-number">Score</th><th scope="col">Status</th>{% if can_change %}<th scope="col">Decide</th>{% endif %}</tr></thead>
+      <tbody>
+        {% for item in page.object_list %}
+          <tr>
+            {% if can_change %}<td><input type="checkbox" name="ids" value="{{ item.pk }}" form="links-bulk-form" aria-label="Select {{ item.source.title }} to {{ item.target.title }}"></td>{% endif %}
+            <td><a href="{{ item.source.url }}">{{ item.source.title }}</a><br><small>{{ item.source.entity_type }}</small></td>
+            <td><a href="{{ item.target.url }}">{{ item.target.title }}</a><br><small>{{ item.target.entity_type }}</small></td>
+            <td>{{ item.anchor }}</td>
+            <td>{{ item.reason }}<br><small>{% for key, label in relations %}{% if key == item.relation %}{{ label }}{% endif %}{% endfor %}</small></td>
+            <td class="is-number">{{ item.score|floatformat:2 }}</td>
+            <td><span class="mf-ui-badge{% if item.status == 'accepted' %} mf-ui-badge--success{% elif item.status == 'rejected' %} mf-ui-badge--danger{% else %} mf-ui-badge--warning{% endif %}">{{ item.get_status_display }}</span></td>
+            {% if can_change %}
+              <td>
+                {% if item.status != 'accepted' %}<form method="post" action="{% url 'seo:link_decide' pk=item.pk decision='accept' %}" class="mf-ui-seo-inline">{% csrf_token %}<input type="hidden" name="next" value="{{ next_url }}"><button type="submit" class="mf-ui-btn mf-ui-btn--small mf-ui-btn--primary">Accept<span class="mf-ui-sr"> {{ item.anchor }}</span></button></form>{% endif %}
+                {% if item.status != 'rejected' %}<form method="post" action="{% url 'seo:link_decide' pk=item.pk decision='reject' %}" class="mf-ui-seo-inline">{% csrf_token %}<input type="hidden" name="next" value="{{ next_url }}"><button type="submit" class="mf-ui-btn mf-ui-btn--small">Reject<span class="mf-ui-sr"> {{ item.anchor }}</span></button></form>{% endif %}
+                {% if item.status != 'proposed' %}<form method="post" action="{% url 'seo:link_decide' pk=item.pk decision='reset' %}" class="mf-ui-seo-inline">{% csrf_token %}<input type="hidden" name="next" value="{{ next_url }}"><button type="submit" class="mf-ui-btn mf-ui-btn--small">Reopen<span class="mf-ui-sr"> {{ item.anchor }}</span></button></form>{% endif %}
+              </td>
+            {% endif %}
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if page.has_other_pages %}
+    <nav class="mf-ui-seo-pager" aria-label="Proposal pages">
+      {% if page.has_previous %}<a class="mf-ui-btn mf-ui-btn--small" href="?{{ filters }}&amp;page={{ page.previous_page_number }}">Previous</a>{% endif %}
+      <span>Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+      {% if page.has_next %}<a class="mf-ui-btn mf-ui-btn--small" href="?{{ filters }}&amp;page={{ page.next_page_number }}">Next</a>{% endif %}
+    </nav>
+  {% endif %}
+{% else %}
+  <p class="mf-ui-empty">No {{ status }} proposals match. {% if can_change %}Use "Generate proposals" to build them from the catalogue relations.{% endif %}</p>
+{% endif %}
+{% endblock %}

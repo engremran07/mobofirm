@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import tempfile
 from pathlib import Path
-from unittest import mock
 
+from django.apps import apps as django_apps
 from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
@@ -212,29 +212,15 @@ class CatalogueRequestActionTests(FirmwareAdminActionTestCase):
         self.assertEqual(request_row.status, "rejected")
         self.assertEqual(request_row.notes, "Not a real device")
 
-    def test_brand_autofill_fills_only_an_empty_description(self) -> None:
-        brand = Brand.objects.create(name="Fill Brand", slug="fill-brand")
-        url = reverse("admin:firmwares_brand_autofill_description", args=[brand.pk])
-
-        with mock.patch(
-            "apps.firmwares.admin.FirmwareAutoFill.autofill_brand",
-            return_value={"description": "A catalogue brand."},
-        ) as lookup:
-            self.client.post(url, DIALOG)
-            self.client.post(url, DIALOG)
-
-        brand.refresh_from_db()
-        self.assertEqual(brand.description, "A catalogue brand.")
-        lookup.assert_called_once_with("Fill Brand")
-
 
 class FirmwareAdminPagesTests(FirmwareAdminActionTestCase):
     def test_every_firmware_model_changelist_and_add_form_render(self) -> None:
         request = RequestFactory().get("/")
         request.user = self.admin_user
-        for model, model_admin in admin.site._registry.items():
-            if model._meta.app_label != "firmwares":
+        for model in django_apps.get_app_config("firmwares").get_models():
+            if not admin.site.is_registered(model):
                 continue
+            model_admin = admin.site.get_model_admin(model)
             opts = model._meta
             changelist = reverse(f"admin:firmwares_{opts.model_name}_changelist")
             with self.subTest(model=opts.label, page="changelist"):

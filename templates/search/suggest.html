@@ -1,0 +1,38 @@
+{# Combobox options (HTMX partial). Context: rows [{hit, kind}], query, mode, prefix, kinds, show_kind. #}
+{% load firmware_requests %}
+{% for row in rows %}
+  {% with hit=row.hit %}
+    {% if mode == "navigate" and hit.url and hit.url|slice:":1" == "/" and hit.url|slice:":2" != "//" %}
+      <a id="{{ prefix }}-option-{{ forloop.counter0 }}" class="combobox-option" role="option" aria-selected="false" tabindex="-1" href="{{ hit.url }}">
+        {% if show_kind %}<span class="combobox-kind">{{ row.kind }}</span>{% endif %}
+        <span class="combobox-title">{{ hit.title }}</span>
+        {% if hit.subtitle %}<span class="combobox-subtitle">{{ hit.subtitle }}</span>{% endif %}
+      </a>
+    {% else %}
+      <div id="{{ prefix }}-option-{{ forloop.counter0 }}" class="combobox-option" role="option" aria-selected="false"
+           data-value="{{ hit.picked_value }}" data-label="{{ hit.picked_label }}" data-kind="{{ hit.kind }}"{% for key, extra in hit.extra %} data-{{ key }}="{{ extra }}"{% endfor %}>
+        {% if show_kind %}<span class="combobox-kind">{{ row.kind }}</span>{% endif %}
+        <span class="combobox-title">{{ hit.title }}</span>
+        {% if hit.subtitle %}<span class="combobox-subtitle">{{ hit.subtitle }}</span>{% endif %}
+      </div>
+    {% endif %}
+  {% endwith %}
+{% empty %}
+  <div id="{{ prefix }}-option-empty" class="combobox-empty" role="option" aria-disabled="true">
+    {% if query %}No matches for “{{ query }}”.{% else %}Type to search.{% endif %}
+  </div>
+  {% if query and mode == "navigate" %}
+    {% request_cta_target "brand" query as cta_brand %}{% request_cta_target "model" query as cta_model %}{% request_cta_target "variant" query as cta_variant %}{% request_cta_target "chipset" query as cta_chipset %}{% request_cta_target "firmware" query as cta_firmware %}
+    <a id="{{ prefix }}-option-request-brand" class="combobox-option combobox-request" role="option" aria-selected="false" tabindex="-1" href="{{ cta_brand.url }}" data-request-cta="brand">{{ cta_brand.label }}</a>
+    <a id="{{ prefix }}-option-request-model" class="combobox-option combobox-request" role="option" aria-selected="false" tabindex="-1" href="{{ cta_model.url }}" data-request-cta="model">{{ cta_model.label }}</a>
+    <a id="{{ prefix }}-option-request-variant" class="combobox-option combobox-request" role="option" aria-selected="false" tabindex="-1" href="{{ cta_variant.url }}" data-request-cta="variant">{{ cta_variant.label }}</a>
+    <a id="{{ prefix }}-option-request-chipset" class="combobox-option combobox-request" role="option" aria-selected="false" tabindex="-1" href="{{ cta_chipset.url }}" data-request-cta="chipset">{{ cta_chipset.label }}</a>
+    <a id="{{ prefix }}-option-request-firmware" class="combobox-option combobox-request" role="option" aria-selected="false" tabindex="-1" href="{{ cta_firmware.url }}" data-request-cta="firmware">{{ cta_firmware.label }}</a>
+  {% endif %}
+{% endfor %}
+{% if rows and mode == "navigate" %}
+  <a id="{{ prefix }}-option-all" class="combobox-option combobox-all" role="option" aria-selected="false" tabindex="-1"
+     href="{% url 'search:results' %}?q={{ query|urlencode }}{% if kinds %}&amp;kinds={{ kinds|urlencode }}{% endif %}">See all results for “{{ query }}”</a>
+  <a id="{{ prefix }}-option-request" class="combobox-option combobox-request" role="option" aria-selected="false" tabindex="-1"
+     href="{% url 'search:results' %}?q={{ query|urlencode }}#request-missing">Can’t find it? Request it</a>
+{% endif %}

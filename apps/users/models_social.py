@@ -890,8 +890,6 @@ class SocialPostingAccount(models.Model):
     def oauth_callback_url(self) -> str:
         """Get OAuth callback URL for this platform."""
         try:
-            from django.contrib.sites.models import Site
-
             site = Site.objects.get_current()
             protocol = "https" if not settings.DEBUG else "http"
             return f"{protocol}://{site.domain}/admin/distribution/social-posting/oauth/callback/{self.platform}/"

@@ -20,3 +20,5 @@ class CoreConfig(AppConfig):
 
         # Auto-discover signals.py in submodules
         autodiscover_modules("signals")
+        # Each app registers its search providers from <app>/search_providers.py.
+        autodiscover_modules("search_providers")

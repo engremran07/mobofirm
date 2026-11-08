@@ -1,0 +1,36 @@
+{# Contract (also in docs/05-frontend/components.md): input_id (required, unique per page); label (visually hidden label; omit when a visible <label for=input_id> exists); mode "navigate" (options are links, the input is name=q) or "pick" (default; options set a hidden value); name (pick mode: hidden input name); value + display (current value and its label text); kinds (comma separated search kinds, e.g. "country"); placeholder; min_chars (default 2 navigate, 0 pick); limit (default 8); required; invalid; describedby; depends_on + depends_param (cascade: parent combobox input id and the filter.<param> sent to providers; cleared and disabled until the parent has a value); detected ("true" when the value came from auto-detection and a better hint may replace it); icon (search icon); name_label (accessible name when the visible <label> is outside the component). Needs Alpine + HTMX; without JavaScript a pick-mode field keeps its server rendered value. #}
+{% url 'search:suggest' as suggest_url %}
+{% firstof label name_label as accessible_name %}
+<div class="combobox{% if mode == 'navigate' %} combobox-navigate{% endif %}" x-data="combobox"
+     data-mode="{% if mode == 'navigate' %}navigate{% else %}pick{% endif %}"
+     data-min-chars="{% if mode == 'navigate' %}{{ min_chars|default:2 }}{% else %}{{ min_chars|default:0 }}{% endif %}"
+     {% if depends_on %}data-depends-on="{{ depends_on }}" data-depends-param="{{ depends_param }}"{% endif %}
+     {% if detected == "true" %}data-detected="true"{% endif %}
+     @htmx:before-request="onBeforeRequest" @htmx:config-request="onConfigRequest"
+     @htmx:after-request="onAfterRequest" @htmx:after-swap="onResults"
+     @combobox:set="onExternalSet" @combobox:select.window="onSiblingChange" @combobox:clear.window="onSiblingChange"
+     @focusout="onFocusOut">
+  {% if label %}<label class="visually-hidden" for="{{ input_id }}">{{ label }}</label>{% endif %}
+  <div class="input-group combobox-control">
+    {% if icon %}<span class="input-group-text" aria-hidden="true"><i data-lucide="search"></i></span>{% endif %}
+    <input id="{{ input_id }}" class="form-control{% if invalid %} is-invalid{% endif %}" type="text" name="q" x-ref="input"
+           role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" aria-controls="{{ input_id }}-results"
+           {% if describedby %}aria-describedby="{{ describedby }}"{% endif %}
+           {% if invalid %}aria-invalid="true"{% endif %}{% if required %} aria-required="true"{% endif %}
+           autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="{% if mode == 'navigate' %}search{% else %}done{% endif %}"
+           {% if mode != "navigate" %}form="{{ input_id }}-detached"{% endif %}
+           value="{{ display|default:'' }}" placeholder="{{ placeholder|default:'' }}"
+           hx-get="{{ suggest_url }}" hx-trigger="input changed delay:150ms, focus, mf:suggest" hx-target="#{{ input_id }}-results"
+           hx-swap="innerHTML" hx-sync="this:replace" hx-indicator="#{{ input_id }}-indicator" hx-push-url="false"
+           hx-vals='{"kinds": "{{ kinds|default:''|escapejs }}", "mode": "{% if mode == 'navigate' %}navigate{% else %}pick{% endif %}", "id": "{{ input_id|escapejs }}", "limit": "{{ limit|default:8 }}"}'
+           @input="onInput" @keydown="onKeydown" @focus="onFocus"
+           :aria-expanded="expandedAttr" :aria-activedescendant="activeId">
+    <button class="btn btn-outline-secondary combobox-clear" type="button" aria-label="Clear{% if accessible_name %} {{ accessible_name|lower }}{% endif %}" @click="clear" :hidden="isEmpty" hidden>
+      <i data-lucide="x" aria-hidden="true"></i>
+    </button>
+  </div>
+  <span id="{{ input_id }}-indicator" class="htmx-indicator combobox-indicator" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span><span class="visually-hidden">Searching</span></span>
+  <div id="{{ input_id }}-results" class="combobox-listbox" role="listbox" aria-label="{{ accessible_name|default:'Suggestions' }}" x-ref="list" @mousedown.prevent @click="onListClick" :hidden="closed" hidden></div>
+  <p id="{{ input_id }}-status" class="visually-hidden" role="status" aria-live="polite" x-text="status"></p>
+  {% if name and mode != "navigate" %}<input type="hidden" name="{{ name }}" id="{{ input_id }}-value" value="{{ value|default:'' }}"><noscript><input class="form-control mt-2" name="{{ name }}" value="{{ value|default:'' }}" aria-label="{{ accessible_name|default:'Code' }} (type the code)"></noscript>{% endif %}
+</div>

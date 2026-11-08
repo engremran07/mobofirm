@@ -1,0 +1,25 @@
+{# Contract: kind, noun, query, selected, results, limit. The HTMX swap target; chosen options stay checked so they submit with the form. #}
+<div class="mkt-picker__body" id="picker-{{ kind }}-body" aria-live="polite">
+  {% if selected %}
+    <div>
+      <p class="mkt-meta mb-1">Chosen ({{ selected|length }} of {{ limit }})</p>
+      <div class="mkt-picker__options">
+        {% for option in selected %}
+          <label class="mkt-option"><input class="form-check-input mt-0" type="checkbox" name="{{ kind }}" value="{{ option.pk }}" checked> {{ option.label }}</label>
+        {% endfor %}
+      </div>
+    </div>
+  {% endif %}
+  <div>
+    <p class="mkt-meta mb-1">{% if query %}Matches for &ldquo;{{ query }}&rdquo;{% else %}Suggestions{% endif %}</p>
+    {% if results %}
+      <div class="mkt-picker__options">
+        {% for option in results %}
+          <label class="mkt-option"><input class="form-check-input mt-0" type="checkbox" name="{{ kind }}" value="{{ option.pk }}"> {{ option.label }}{% if option.hint %} <span class="mkt-meta">{{ option.hint }}</span>{% endif %}</label>
+        {% endfor %}
+      </div>
+    {% else %}
+      <p class="mkt-meta mb-0">No {{ noun }} matches. Try a different spelling.</p>
+    {% endif %}
+  </div>
+</div>

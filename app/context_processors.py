@@ -1,31 +1,17 @@
-import tomllib
-from functools import lru_cache
-from importlib.metadata import PackageNotFoundError, version
-from pathlib import Path
-
 from django.db import DatabaseError
 from django.http import HttpRequest
 from django.urls import reverse
 from django.utils.functional import SimpleLazyObject
 
+from app.version import BuildInfo, build_info
 from apps.core.models import AppRegistry
 from apps.site_settings.services import get_site_settings
 
 
-@lru_cache(maxsize=1)
-def _release_version() -> str:
-    try:
-        return version("mobofirm")
-    except PackageNotFoundError:
-        # Not pip-installed (for example a source checkout): pyproject.toml is the
-        # single release-version source, so read it instead of failing every page.
-        pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
-        with pyproject.open("rb") as handle:
-            return str(tomllib.load(handle)["project"]["version"])
-
-
-def release_metadata(_request) -> dict[str, str]:
-    return {"release_version": _release_version()}
+def release_metadata(_request: HttpRequest | None) -> dict[str, str | BuildInfo]:
+    """Release version (single source: ``app.version``) and build metadata."""
+    info = build_info()
+    return {"release_version": info.version, "release_build": info}
 
 
 # Footer legal pages are CMS pages (apps.pages) published under these slugs.
@@ -52,7 +38,7 @@ _NAV_NAMESPACES = {
     "pages": "pages",
     "shop": "shop",
     "marketplace": "marketplace",
-    "filemanager": "files",
+    "library": "files",
 }
 
 _NAV_SECTIONS = {
@@ -82,7 +68,7 @@ def _nav_section(request: HttpRequest) -> str:
 
 def _ecosystem_flags() -> dict[str, bool]:
     """Which optional ecosystem apps are switched on in the AppRegistry."""
-    names = ("pages", "shop", "marketplace", "filemanager")
+    names = ("pages", "shop", "marketplace")
     try:
         registry = AppRegistry.get_solo()
     except DatabaseError:

@@ -3,7 +3,7 @@
 ## Versioning contract
 
 - `pyproject.toml` `[project].version` is the only application release-version source. It follows Semantic Versioning (`MAJOR.MINOR.PATCH`); prerelease/build identifiers are valid metadata, but the release-preparation command currently creates stable releases only.
-- Public and Django admin shells render the installed distribution version. Keep those displays sourced from the installed package metadata; do not add another settings value.
+- Public and Django admin shells render the version from `app/version.py` (pyproject at runtime, installed metadata when there is no checkout), together with optional build metadata; see `docs/08-operations/releases.md`. Do not add another settings value.
 - `CHANGELOG.md` follows Keep a Changelog. Record changes in `Unreleased` using `Added`, `Changed`, `Deprecated`, `Removed`, `Fixed`, or `Security` headings and concise bullets.
 - Git release tags use `vMAJOR.MINOR.PATCH`, must exactly match `pyproject.toml`, and are never moved or force-updated after publication.
 - Blog post revision history is separate content versioning owned by the blog app. Restoring remains limited to drafts; it does not restore publication state.
@@ -19,7 +19,7 @@
    .venv\Scripts\python.exe scripts\release.py bump patch
    ```
 
-   Use `minor` for backward-compatible functionality and `major` only for an approved breaking public change. `bump` updates the canonical version and archives `Unreleased` notes under a UTC-dated release heading. It refuses dirty worktrees, uncategorized/empty notes, and an existing local tag. It never creates commits, tags, or pushes.
+   Use `minor` for backward-compatible functionality and `major` only for an approved breaking public change. `bump` updates the canonical version and archives `Unreleased` notes under a dated release heading (with regenerated compare links). Preview with `--dry-run`. It refuses dirty worktrees (unless `--allow-dirty`), uncategorized/empty notes, and an existing local tag. By default it writes files only; `--commit` and `--commit --tag` are explicit opt-ins, and it never pushes. See `docs/08-operations/releases.md` for every command.
 
 5. Review the generated diff, refresh the editable install (`.venv\Scripts\python.exe -m pip install -e .` on Windows), run `scripts/release.py check` and the required tests again, and commit the version/changelog update. Do not combine unrelated changes into a release commit.
 6. Create an annotated tag on that commit and push it only after the Problems panel is clear and the repository owner authorizes publication:
@@ -32,7 +32,7 @@
 7. A pushed `v*` tag triggers the CI test job. The GitHub release job runs only after that job passes, verifies the tag against package metadata and changelog, and publishes the matching release notes. The workflow does not deploy the application.
 8. Verify the GitHub release, then deploy through the approved deployment path. Confirm liveness/readiness and the affected user journey; record the release identifier, validation evidence, operator, and rollback/forward-fix outcome in the approved release system.
 
-The public shell and admin metadata contract is covered by `tests/backend/core/test_release_metadata.py`. The release CLI's clean-worktree, changelog, bump, tag, and notes behavior is covered by `tests/backend/core/test_release_script.py`.
+The public shell and admin metadata contract is covered by `tests/backend/core/test_release_metadata.py` and the cross-surface/pyproject-bump contract by `tests/backend/core/test_release_version.py`. The release CLI's clean-worktree, changelog, bump, link, commit, tag, and notes behavior is covered by `tests/backend/core/test_release_script.py`.
 
 ## CI and repository protections
 

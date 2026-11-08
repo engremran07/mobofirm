@@ -6,25 +6,31 @@ from typing import Any
 
 from django.contrib.auth.decorators import user_passes_test
 from django.db import DatabaseError
+from django.db.models import Count, Q
 from django.http import (
+    Http404,
     HttpRequest,
     HttpResponse,
     HttpResponseBadRequest,
+    HttpResponseRedirect,
     JsonResponse,
 )
-from django.shortcuts import redirect, render
-from django.utils.text import slugify
+from django.shortcuts import redirect
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_GET, require_POST
 
-from apps.ads.constants import LOCAL_DEMO_PLACEMENT_PREFIX
+from apps.ads import rewarded
 from apps.ads.permissions import can_manage_ads as _can_manage_ads
+from apps.ads.services import overview
 from apps.ads.services.analytics.tracker import record_event as tracker_record_event
+from apps.ads.services.markup import safe_click_url
 from apps.ads.services.rotation.engine import choose_creative
 from apps.ads.services.schemas import AdRequest, AdResponse, CreativeSelection
 from apps.ads.services.targeting.engine import campaign_allowed
+from apps.consent.constants import ADVERTISING
+from apps.consent.services import has_consent
+from apps.core.admin_pages import render_admin_page
 from apps.core.utils.ip import get_client_ip
-from apps.users.services.consent import check as consent_check
 from apps.users.services.consent import hash_ip, hash_ua
 from apps.users.services.rate_limit import allow_action
 
@@ -33,10 +39,10 @@ from .models import (
     AdEvent,
     AdPlacement,
     AdsSettings,
-    AdUnit,
     AffiliateSource,
     Campaign,
     PlacementAssignment,
+    RewardedAdConfig,
 )
 
 logger = logging.getLogger(__name__)
@@ -57,8 +63,8 @@ def _ads_enabled() -> bool:
 
 
 def _has_ads_consent(request: HttpRequest) -> bool:
-    """Honor consent categories; track events only when ads consent granted."""
-    return consent_check("ads", request)
+    """Ad measurement and personalisation need the visitor's advertising consent."""
+    return has_consent(request, ADVERTISING)
 
 
 def _log(request: HttpRequest, message: str, **extra):
@@ -333,6 +339,84 @@ def record_click(request: HttpRequest) -> JsonResponse:
     return JsonResponse({"ok": True})
 
 
+@require_GET
+def click_redirect(
+    request: HttpRequest, placement: str, creative_id: int
+) -> HttpResponse:
+    """Count a banner click (with advertising consent) and forward to the advertiser.
+
+    The destination always comes from the stored creative of an enabled placement, never
+    from the request, so this cannot be used as an open redirect.
+    """
+    slot = AdPlacement.objects.filter(
+        slug=placement, is_enabled=True, is_active=True, is_deleted=False
+    ).first()
+    creative = (
+        AdCreative.objects.filter(
+            pk=creative_id, is_enabled=True, is_active=True, is_deleted=False
+        )
+        .select_related("campaign")
+        .first()
+    )
+    if slot is None or creative is None:
+        raise Http404("Unknown ad.")
+    assigned = (
+        slot.fallback_creative_id == creative.pk
+        or slot.assignments.filter(
+            creative=creative, is_enabled=True, is_active=True, is_deleted=False
+        ).exists()
+    )
+    destination = safe_click_url(creative.click_url)
+    if not assigned or not destination or not creative.campaign.is_live():
+        raise Http404("Unknown ad.")
+    if (
+        _ads_enabled()
+        and _has_ads_consent(request)
+        and not _is_rate_limited(f"ads:click:{get_client_ip(request) or 'anon'}", 30)
+    ):
+        tracker_record_event(
+            "click",
+            placement=slot,
+            creative=creative,
+            campaign=creative.campaign,
+            user=request.user if request.user.is_authenticated else None,
+            request_meta={
+                "ip": hash_ip(get_client_ip(request) or ""),
+                "referrer": request.headers.get("Referer", ""),
+                "user_agent": hash_ua(request.headers.get("User-Agent", "")),
+                "page_url": request.headers.get("Referer", ""),
+                "consent_granted": True,
+                "correlation_id": getattr(request, "correlation_id", None),
+            },
+        )
+    response = HttpResponseRedirect(destination)
+    response["Cache-Control"] = "no-store"
+    return response
+
+
+def _rewarded_overview() -> dict[str, Any]:
+    """Rewarded-ads status for the dashboard: configured or an honest 'not configured'."""
+    settings_row = AdsSettings.get_solo()
+    configs = list(
+        RewardedAdConfig.objects.filter(is_deleted=False).select_related("placement")
+    )
+    rows = [
+        {
+            "config": config,
+            "reason": rewarded.unavailable_reason(config),
+        }
+        for config in configs
+    ]
+    return {
+        "switch_on": bool(
+            settings_row.ads_enabled and settings_row.rewarded_ads_enabled
+        ),
+        "rows": rows,
+        "configured": any(not row["reason"] for row in rows),
+        "stats": rewarded.analytics(),
+    }
+
+
 @user_passes_test(_can_manage_ads)
 def dashboard(request: HttpRequest) -> HttpResponse:
     # Basic CTR stats
@@ -340,16 +424,18 @@ def dashboard(request: HttpRequest) -> HttpResponse:
     clicks = AdEvent.objects.filter(event_type="click").count()
     ctr = (clicks / impressions * 100) if impressions else 0
     ss = _ads_settings()
-    placements = AdPlacement.objects.all()[:50]
-    campaigns = Campaign.objects.all()[:50]
-    creatives = AdCreative.objects.select_related("campaign")[:50]
+    placements = list(
+        AdPlacement.objects.filter(is_deleted=False).order_by("zone", "name")[:50]
+    )
+    campaigns = list(Campaign.objects.filter(is_deleted=False)[:50])
+    creatives = list(
+        AdCreative.objects.filter(is_deleted=False).select_related("campaign")[:50]
+    )
     affiliate_sources = AffiliateSource.objects.all()[:10]
     # Fill stats per placement / creative
     placement_stats = {}
     creative_stats = {}
     # OPTIMIZED: Single query with aggregation for placement stats
-    from django.db.models import Count, Q
-
     placement_ids = [p.pk for p in placements]
     placement_aggregates = (
         AdEvent.objects.filter(placement_id__in=placement_ids)
@@ -372,10 +458,7 @@ def dashboard(request: HttpRequest) -> HttpResponse:
             "ctr": round(ctr_local, 2),
         }
     # OPTIMIZED: Single query with aggregation instead of N+1
-    from django.db.models import Count, Q
-
-    all_creatives = AdCreative.objects.all()[:50]
-    creative_ids = [c.pk for c in all_creatives]
+    creative_ids = [c.pk for c in creatives]
     creative_aggregates = (
         AdEvent.objects.filter(creative_id__in=creative_ids)
         .values("creative_id")
@@ -386,7 +469,7 @@ def dashboard(request: HttpRequest) -> HttpResponse:
     )
     creative_lookup = {stat["creative_id"]: stat for stat in creative_aggregates}
 
-    for c in all_creatives:
+    for c in creatives:
         creative_row = creative_lookup.get(c.pk, {"impressions": 0, "clicks": 0})
         imp = creative_row["impressions"]
         clk = creative_row["clicks"]
@@ -397,7 +480,7 @@ def dashboard(request: HttpRequest) -> HttpResponse:
             "ctr": round(ctr_local, 2),
         }
     assignments = PlacementAssignment.objects.filter(
-        placement__in=placements, is_enabled=True
+        placement_id__in=placement_ids, is_enabled=True, is_deleted=False
     ).select_related("placement", "creative", "creative__campaign")
     placement_campaigns: defaultdict[int, list[dict[str, Any]]] = defaultdict(list)
     for a in assignments:
@@ -412,11 +495,27 @@ def dashboard(request: HttpRequest) -> HttpResponse:
                 else a.creative.is_enabled,
             }
         )
-    return render(
+    return render_admin_page(
         request,
         "ads/dashboard.html",
-        {
-            "placements": placements,
+        title="Ad management",
+        subtitle="Serving status, placements, campaigns and rewarded ads.",
+        context={
+            "ads_tab": "dashboard",
+            "overview": overview.overview(),
+            "profile": overview.profile_state(request),
+            "rewarded": _rewarded_overview(),
+            "placement_rows": [
+                {
+                    "placement": p,
+                    "stats": placement_stats[p.pk],
+                    "creatives": placement_campaigns.get(p.pk, []),
+                }
+                for p in placements
+            ],
+            "creative_rows": [
+                {"creative": c, "stats": creative_stats[c.pk]} for c in creatives
+            ],
             "campaigns": campaigns,
             "ads_enabled": _ads_enabled(),
             "ad_networks_enabled": ss.get("ad_networks_enabled", False),
@@ -425,40 +524,10 @@ def dashboard(request: HttpRequest) -> HttpResponse:
             "clicks": clicks,
             "ctr": round(ctr, 2),
             "ad_aggressiveness_level": ss.get("ad_aggressiveness_level", "balanced"),
-            "placement_stats": placement_stats,
-            "placement_campaigns": placement_campaigns,
             "affiliate_sources": affiliate_sources,
-            "creative_stats": creative_stats,
-            "creatives": creatives,
+            "can_place": request.user.has_perm("ads.change_adplacement"),
         },
     )
-
-
-@user_passes_test(_can_manage_ads)
-@require_GET
-def demo_preview(request: HttpRequest) -> HttpResponse:
-    """Render disabled database-backed demo creatives through the slot renderer."""
-    placement_codes = [
-        f"{LOCAL_DEMO_PLACEMENT_PREFIX}{slugify(code)}" for code, _ in AdUnit.AD_FORMATS
-    ]
-    placements = {
-        placement.code: placement
-        for placement in AdPlacement.objects.filter(
-            code__in=placement_codes, is_deleted=False
-        )
-    }
-    formats = [
-        {
-            "code": code,
-            "label": label,
-            "placement_code": f"{LOCAL_DEMO_PLACEMENT_PREFIX}{slugify(code)}",
-            "placement": placements.get(
-                f"{LOCAL_DEMO_PLACEMENT_PREFIX}{slugify(code)}"
-            ),
-        }
-        for code, label in AdUnit.AD_FORMATS
-    ]
-    return render(request, "ads/demo_preview.html", {"formats": formats})
 
 
 @csrf_protect
@@ -570,8 +639,6 @@ def track_affiliate_click(request: HttpRequest) -> JsonResponse:
             product_id=product_id,
             user_id=request.user.pk if request.user.is_authenticated else None,
             page_url=page_url[:500],
-            referrer_type=referrer_type[:20],
-            referrer_id=referrer_id,
             ip_address=get_client_ip(request) or "",
             user_agent=request.META.get("HTTP_USER_AGENT", "")[:500],
             session_id=request.session.session_key or "",

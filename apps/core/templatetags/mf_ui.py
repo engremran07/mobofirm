@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from typing import Final
 
 from django import forms, template
 from django.core.paginator import Page
@@ -10,8 +11,12 @@ from django.template import Node, NodeList
 from django.template.base import FilterExpression, Parser, Token
 from django.template.context import Context
 from django.template.loader import render_to_string
+from django.urls import NoReverseMatch, reverse
 from django.utils.html import format_html
 from django.utils.safestring import SafeString
+
+from apps.core.geo import calling_code_label, country_label
+from apps.core.widgets import ComboboxSelect
 
 register = template.Library()
 
@@ -77,6 +82,48 @@ def mf_is_check(field: forms.BoundField) -> bool:
 
 
 @register.filter
+def mf_is_combobox(field: forms.BoundField) -> bool:
+    """Whether the field renders as the shared type-ahead combobox."""
+    return isinstance(field.field.widget, ComboboxSelect)
+
+
+@register.inclusion_tag("components/combobox.html")
+def combobox_field(field: forms.BoundField) -> dict[str, object]:
+    """Render a ``ComboboxSelect`` field with ``components/combobox.html``."""
+    widget = field.field.widget
+    if not isinstance(widget, ComboboxSelect):
+        raise TypeError(f"{field.name} does not use a ComboboxSelect widget")
+    raw = field.value()
+    value = str(raw) if raw not in (None, "") else ""
+    if widget.kinds == "calling_code":
+        related = (
+            field.form["country"].value() if "country" in field.form.fields else ""
+        )
+        display = calling_code_label(value, str(related or ""))
+    else:
+        display = country_label(value)
+    describedby = []
+    if field.help_text:
+        describedby.append(f"{field.auto_id}_help")
+    if field.errors:
+        describedby.append(f"{field.auto_id}_errors")
+    return {
+        "input_id": field.auto_id,
+        "name": field.html_name,
+        "mode": "pick",
+        "name_label": str(field.label),
+        "kinds": widget.kinds,
+        "value": value,
+        "display": display or value,
+        "placeholder": widget.placeholder,
+        "required": field.field.required,
+        "invalid": bool(field.errors),
+        "describedby": " ".join(describedby),
+        "detected": "true" if widget.detected and value else "",
+    }
+
+
+@register.filter
 def elided_pages(page_obj: Page) -> Iterator[int | str]:
     """Page numbers around the current page, with the paginator's ellipsis marker."""
     return page_obj.paginator.get_elided_page_range(
@@ -111,3 +158,58 @@ def do_table_scroll(parser: Parser, token: Token) -> TableScrollNode:
     nodelist = parser.parse(("endtable_scroll",))
     parser.delete_first_token()
     return TableScrollNode(parser.compile_filter(bits[1]), nodelist)
+
+
+_ALLAUTH_CRUMBS: Final[dict[str, str]] = {
+    "account_email": "Email addresses",
+    "account_email_verification_sent": "Verify email",
+    "account_confirm_email": "Confirm email",
+    "account_logout": "Sign out",
+    "account_reauthenticate": "Confirm password",
+    "account_change_password": "Change password",
+    "account_set_password": "Set password",
+    "account_reset_password": "Reset password",
+    "account_reset_password_done": "Reset password",
+    "account_reset_password_from_key": "Reset password",
+    "account_reset_password_from_key_done": "Reset password",
+    "socialaccount_connections": "Connected accounts",
+    "socialaccount_signup": "Complete sign-up",
+    "usersessions_list": "Active sessions",
+}
+_ALLAUTH_PREFIXES: Final[tuple[str, ...]] = (
+    "socialaccount_",
+    "usersessions_",
+    "account_",
+    "mfa_",
+)
+
+
+def allauth_crumb_label(url_name: str) -> str:
+    """Breadcrumb label for an allauth page, from its URL name."""
+    if url_name in _ALLAUTH_CRUMBS:
+        return _ALLAUTH_CRUMBS[url_name]
+    if url_name.startswith("mfa_"):
+        return "Two-factor authentication"
+    for prefix in _ALLAUTH_PREFIXES:
+        if url_name.startswith(prefix):
+            url_name = url_name.removeprefix(prefix)
+            break
+    return url_name.replace("_", " ").strip().capitalize() or "Account"
+
+
+@register.simple_tag(takes_context=True)
+def allauth_breadcrumbs(context: Context) -> SafeString:
+    """Breadcrumbs for django-allauth pages rendered by ``allauth/layouts/base.html``."""
+    request = context.get("request")
+    match = getattr(request, "resolver_match", None)
+    url_name = getattr(match, "url_name", "") or ""
+    values: dict[str, str] = {"current": allauth_crumb_label(url_name)}
+    user = getattr(request, "user", None)
+    if getattr(user, "is_authenticated", False):
+        try:
+            values["parent_url"] = reverse("users:dashboard")
+        except NoReverseMatch:
+            values["parent_url"] = ""
+        if values["parent_url"]:
+            values["parent_label"] = "Account"
+    return SafeString(render_to_string("components/breadcrumbs.html", values))

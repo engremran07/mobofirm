@@ -99,3 +99,30 @@ def make_catalog() -> Catalog:
         seo_description="About this site.",
     )
     return Catalog(brand, chipset, model, firmware, tool, post, category, tag, page)
+
+
+def make_staff(username: str = "reviewer", *codenames: str, superuser: bool = False):
+    """A staff account holding exactly the named model permissions."""
+    from django.contrib.auth.models import Permission
+
+    user = get_user_model().objects.create_user(
+        username=username, email=f"{username}@example.com", password="pass-12345-x"
+    )
+    user.is_staff = True
+    user.is_superuser = superuser
+    user.save()
+    for codename in codenames:
+        user.user_permissions.add(Permission.objects.get(codename=codename))
+    return user
+
+
+def make_post(slug: str, title: str, author, category, **fields) -> Post:
+    return Post.objects.create(
+        title=title,
+        slug=slug,
+        author=author,
+        category=category,
+        status=PostStatus.PUBLISHED,
+        publish_at=timezone.now(),
+        **fields,
+    )

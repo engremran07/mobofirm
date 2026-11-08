@@ -30,10 +30,19 @@ RUN pip install -r requirements.txt
 
 # ---- Stage 3: runtime -------------------------------------------------------
 FROM python:3.12-slim-bookworm AS runtime
+# Build metadata surfaced by app/version.py (/health/ready/, admin, footer); the
+# release version itself always comes from pyproject.toml, never from build args.
+ARG APP_GIT_SHA=""
+ARG APP_BUILD_DATE=""
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     DJANGO_SETTINGS_MODULE=app.settings.production \
-    PATH=/opt/venv/bin:$PATH
+    PATH=/opt/venv/bin:$PATH \
+    APP_GIT_SHA=$APP_GIT_SHA \
+    APP_BUILD_DATE=$APP_BUILD_DATE
+LABEL org.opencontainers.image.title="mobofirm" \
+      org.opencontainers.image.revision=$APP_GIT_SHA \
+      org.opencontainers.image.created=$APP_BUILD_DATE
 RUN useradd --system --uid 10001 --create-home --shell /usr/sbin/nologin app
 WORKDIR /app
 COPY --from=python-deps /opt/venv /opt/venv

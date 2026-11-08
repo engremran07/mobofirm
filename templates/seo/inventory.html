@@ -1,21 +1,75 @@
-{% extends "seo/base.html" %}
-{% block seo_content %}
-<p>{{ items|length }} discovered URLs from the URL conf and sitemaps: {{ indexable_total }} indexable, {{ conflict_total }} with sitemap conflicts. Discovery never makes a page indexable; policy decides.</p>
-<table class="mf-seo-table">
-  <thead>
-    <tr><th scope="col">Path</th><th scope="col">Type</th><th scope="col">Index</th><th scope="col">Sitemap</th><th scope="col">Source</th><th scope="col">Notes</th></tr>
-  </thead>
-  <tbody>
-    {% for item in items %}
-      <tr>
-        <td><a href="{% url 'seo:inspect' %}?url={{ item.path|urlencode }}">{{ item.path }}</a></td>
-        <td>{{ item.page_type }}</td>
-        <td>{{ item.indexable|yesno:"index,noindex" }}</td>
-        <td>{{ item.in_sitemap|yesno:"listed,-" }}</td>
-        <td>{{ item.source }}</td>
-        <td>{% if item.conflicts %}<strong>{{ item.conflicts|join:", " }}</strong>{% else %}{{ item.reason }}{% endif %}</td>
-      </tr>
-    {% endfor %}
-  </tbody>
-</table>
+{% extends "admin/staff_page.html" %}
+{% block mf_actions %}
+  {% if can_scan %}
+    <form method="post" action="{% url 'seo:run_scan' %}" class="mf-ui-seo-inline">
+      {% csrf_token %}<input type="hidden" name="next" value="{% url 'seo:inventory' %}">
+      <button type="submit" class="mf-ui-btn mf-ui-btn--primary">Run scan now</button>
+    </form>
+  {% endif %}
+{% endblock %}
+{% block mf_nav %}{% include "seo/_tabs.html" %}{% endblock %}
+{% block mf_body %}
+<p class="mf-ui-help">{{ items|length }} discovered URLs from the URL conf and sitemaps: {{ indexable_total }} indexable, {{ conflict_total }} with sitemap conflicts. Discovery never makes a page indexable; policy decides. The table below lists what the last scan recorded for each public URL ({{ scanned_total }} pages).</p>
+
+<form method="get" class="mf-ui-seo-filter" role="search" aria-label="Filter the inventory">
+  <div class="mf-ui-field"><label for="inv-q">Search</label><input type="search" id="inv-q" name="q" value="{{ q }}" maxlength="100" placeholder="Path, title or object"></div>
+  <div class="mf-ui-field"><label for="inv-group">Object type</label>
+    <select id="inv-group" name="group"><option value="">All</option>{% for key, label in groups %}<option value="{{ key }}"{% if key == group %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+  <div class="mf-ui-field"><label for="inv-index">Indexing</label>
+    <select id="inv-index" name="index"><option value="">All</option><option value="yes"{% if index == "yes" %} selected{% endif %}>Indexable</option><option value="no"{% if index == "no" %} selected{% endif %}>noindex</option></select></div>
+  <button type="submit" class="mf-ui-btn">Filter</button>
+</form>
+
+{% if rows %}
+  <div class="mf-ui-table-wrap" role="region" aria-label="Scanned pages" tabindex="0">
+    <table class="mf-ui-table">
+      <thead><tr><th scope="col">Path</th><th scope="col">Type</th><th scope="col">Title</th><th scope="col">Index</th><th scope="col">Sitemap</th><th scope="col" class="is-number">Words</th><th scope="col" class="is-number">Links in</th><th scope="col" class="is-number">Links out</th><th scope="col" class="is-number">Issues</th></tr></thead>
+      <tbody>
+        {% for row in rows %}
+          <tr>
+            <td><a href="{% url 'seo:inspect' %}?url={{ row.snapshot.path|urlencode }}">{{ row.snapshot.path }}</a></td>
+            <td>{{ row.snapshot.page_type }}</td>
+            <td>{{ row.snapshot.title }}</td>
+            <td>{% if row.snapshot.indexable %}<span class="mf-ui-badge mf-ui-badge--success">index</span>{% else %}<span class="mf-ui-badge mf-ui-badge--warning" title="{{ row.snapshot.noindex_reason }}">noindex</span>{% endif %}</td>
+            <td>{{ row.snapshot.in_sitemap|yesno:"listed,-" }}</td>
+            <td class="is-number">{{ row.snapshot.word_count }}</td>
+            <td class="is-number">{% if row.snapshot.links_out or row.snapshot.links_in %}{{ row.snapshot.links_in }}{% else %}-{% endif %}</td>
+            <td class="is-number">{% if row.snapshot.links_out or row.snapshot.links_in %}{{ row.snapshot.links_out }}{% else %}-{% endif %}</td>
+            <td class="is-number">{% if row.open_issues %}<a href="{% url 'seo:issues' %}?q={{ row.snapshot.path|urlencode }}">{{ row.open_issues }}</a>{% else %}0{% endif %}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if page.has_other_pages %}
+    <nav class="mf-ui-seo-pager" aria-label="Inventory pages">
+      {% if page.has_previous %}<a class="mf-ui-btn mf-ui-btn--small" href="?{{ filters }}&amp;page={{ page.previous_page_number }}">Previous</a>{% endif %}
+      <span>Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+      {% if page.has_next %}<a class="mf-ui-btn mf-ui-btn--small" href="?{{ filters }}&amp;page={{ page.next_page_number }}">Next</a>{% endif %}
+    </nav>
+  {% endif %}
+{% else %}
+  <p class="mf-ui-empty">No pages have been scanned yet. Run a scan to build the inventory.</p>
+{% endif %}
+
+<section class="mf-ui-seo-section" aria-labelledby="inv-policy">
+  <h2 id="inv-policy" class="mf-ui-seo-heading">Routes and sitemap policy</h2>
+  <div class="mf-ui-table-wrap" role="region" aria-label="Routes and sitemap policy" tabindex="0">
+    <table class="mf-ui-table">
+      <thead><tr><th scope="col">Path</th><th scope="col">Type</th><th scope="col">Index</th><th scope="col">Sitemap</th><th scope="col">Source</th><th scope="col">Notes</th></tr></thead>
+      <tbody>
+        {% for item in items %}
+          <tr>
+            <td><a href="{% url 'seo:inspect' %}?url={{ item.path|urlencode }}">{{ item.path }}</a></td>
+            <td>{{ item.page_type }}</td>
+            <td>{{ item.indexable|yesno:"index,noindex" }}</td>
+            <td>{{ item.in_sitemap|yesno:"listed,-" }}</td>
+            <td>{{ item.source }}</td>
+            <td>{% if item.conflicts %}<strong>{{ item.conflicts|join:", " }}</strong>{% else %}{{ item.reason }}{% endif %}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
 {% endblock %}

@@ -11,6 +11,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import QuerySet
 from django.forms import ModelForm
 from django.http import Http404, HttpRequest, HttpResponse
+from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from unfold.contrib.filters.admin import (
     BooleanRadioFilter,
@@ -22,9 +23,12 @@ from unfold.enums import ActionVariant
 from unfold.widgets import UnfoldAdminSplitDateTimeWidget
 
 from apps.core.admin_base import (
+    BADGE_APPROVAL,
     BADGE_JOB,
     ConfirmForm,
     ModelAdmin,
+    NoAddModelAdmin,
+    ReasonForm,
     SingletonModelAdmin,
     TabularInline,
     action,
@@ -35,12 +39,15 @@ from apps.core.admin_base import (
     return_url,
 )
 
+from . import guide_requests, shop_gateway
 from .models import (
     AutoTopic,
     BlogSettings,
     Category,
     CategoryTranslation,
+    GuideRequest,
     Post,
+    PostAccess,
     PostRevision,
     PostStatus,
     PostTranslation,
@@ -104,6 +111,7 @@ class PostAdmin(ModelAdmin):
         "status_badge",
         "content_source",
         "category",
+        "access",
         "firmware_brand",
         "firmware_model",
         "author",
@@ -114,6 +122,7 @@ class PostAdmin(ModelAdmin):
     )
     list_filter = (
         ("status", ChoicesDropdownFilter),
+        ("access", ChoicesDropdownFilter),
         ("category", RelatedDropdownFilter),
         ("firmware_brand", RelatedDropdownFilter),
         ("is_ai_generated", BooleanRadioFilter),
@@ -132,11 +141,21 @@ class PostAdmin(ModelAdmin):
     )
     prepopulated_fields: ClassVar[dict[str, tuple[str, ...]]] = {"slug": ("title",)}
     autocomplete_fields = ("category", "tags")
-    raw_id_fields = ("author", "firmware_brand", "firmware_model", "ad_gate_config")
+    raw_id_fields = (
+        "author",
+        "firmware_brand",
+        "firmware_model",
+        "ad_gate_config",
+        "guide_request",
+    )
     readonly_fields = (
         "status",
         "is_published",
         "published_at",
+        "published_by",
+        "price_approved_by",
+        "price_approved_at",
+        "buyers",
         "version",
         "views_count",
         "likes_count",
@@ -151,6 +170,27 @@ class PostAdmin(ModelAdmin):
             {
                 "classes": ("tab",),
                 "fields": ("author", "category", "tags", "featured", "hero_image"),
+            },
+        ),
+        (
+            _("Access & price"),
+            {
+                "classes": ("tab",),
+                "description": _(
+                    "Featured and paid posts show a teaser to readers without access. "
+                    "The approved price is in USD and is converted to credits at the "
+                    "wallet rate. Publishing a post approves its proposed price."
+                ),
+                "fields": (
+                    "access",
+                    "price",
+                    "proposed_price",
+                    "price_approved_by",
+                    "price_approved_at",
+                    "guide_request",
+                    "published_by",
+                    "buyers",
+                ),
             },
         ),
         (
@@ -226,15 +266,34 @@ class PostAdmin(ModelAdmin):
             return "automated", str(_("Automated"))
         return "manual", str(_("Manual"))
 
+    @display(description=_("Buyers"))
+    def buyers(self, obj: Post | None) -> str:
+        """Read-only list of buyers, supplied by the shop (it owns purchases)."""
+        if obj is None or obj.pk is None or not obj.is_gated:
+            return "—"
+        rows = shop_gateway.buyers(obj.pk)
+        if not rows:
+            return str(_("No purchases recorded."))
+        return ", ".join(
+            f"{row.get('user', '?')} ({row.get('credits', '?')} credits)"
+            for row in rows
+        )
+
     def save_model(
         self, request: HttpRequest, obj: Post, form: ModelForm, change: bool
     ) -> None:
         if not change:
+            if obj.access != PostAccess.FREE and obj.price is not None:
+                obj.price_approved_by_id = request.user.pk
+                obj.price_approved_at = timezone.now()
             super().save_model(request, obj, form, change)
             return
         values = {
             name: value for name, value in form.cleaned_data.items() if name != "tags"
         }
+        if values.get("price") is not None and values["price"] != obj.price:
+            values["price_approved_by_id"] = request.user.pk
+            values["price_approved_at"] = timezone.now()
         PostHistoryService.update_post(
             obj,
             user=request.user,
@@ -325,7 +384,7 @@ class PostAdmin(ModelAdmin):
         ),
     )
     def request_review(
-        self, request: HttpRequest, form: ConfirmForm, object_id: str
+        self, request: HttpRequest, _form: ConfirmForm, object_id: str
     ) -> HttpResponse:
         return self._decide(
             request,
@@ -346,7 +405,7 @@ class PostAdmin(ModelAdmin):
         ),
     )
     def publish(
-        self, request: HttpRequest, form: ConfirmForm, object_id: str
+        self, request: HttpRequest, _form: ConfirmForm, object_id: str
     ) -> HttpResponse:
         return self._decide(
             request,
@@ -388,7 +447,7 @@ class PostAdmin(ModelAdmin):
         ),
     )
     def archive(
-        self, request: HttpRequest, form: ConfirmForm, object_id: str
+        self, request: HttpRequest, _form: ConfirmForm, object_id: str
     ) -> HttpResponse:
         return self._decide(
             request,
@@ -404,10 +463,182 @@ class BlogSettingsAdmin(SingletonModelAdmin):
     fieldsets = (
         (None, {"fields": ("enable_blog", "enable_blog_comments")}),
         (_("User posting"), {"fields": ("allow_user_blog_posts",)}),
+        (_("Featured and paid articles"), {"fields": ("teaser_words",)}),
+        (
+            _("Guide requests"),
+            {
+                "fields": (
+                    "allow_guide_requests",
+                    "guide_requests_per_day",
+                    "guide_requests_open_limit",
+                )
+            },
+        ),
     )
 
     def has_add_permission(self, request: HttpRequest) -> bool:
         return False
+
+
+@admin.register(GuideRequest)
+class GuideRequestAdmin(NoAddModelAdmin):
+    """Review queue: staff decide; nothing else about a request is edited here."""
+
+    list_display = (
+        "title",
+        "kind",
+        "status_badge",
+        "requester",
+        "context",
+        "created_at",
+        "reviewed_by",
+    )
+    list_filter = (
+        ("status", ChoicesDropdownFilter),
+        ("kind", ChoicesDropdownFilter),
+        ("created_at", RangeDateTimeFilter),
+    )
+    search_fields = ("title", "description", "requester__username", "requester__email")
+    list_select_related = (
+        "requester",
+        "brand",
+        "firmware_model",
+        "chipset",
+        "reviewed_by",
+    )
+    ordering = ("status", "-created_at")
+    readonly_fields = (
+        "requester",
+        "title",
+        "description",
+        "kind",
+        "brand",
+        "firmware_model",
+        "chipset",
+        "status",
+        "reviewed_by",
+        "reviewed_at",
+        "decision_reason",
+        "fulfilled_by_post",
+        "fulfilled_at",
+        "created_at",
+        "updated_at",
+    )
+    fieldsets = (
+        (None, {"fields": ("title", "kind", "description", "requester")}),
+        (_("Device"), {"fields": ("brand", "firmware_model", "chipset")}),
+        (
+            _("Decision"),
+            {
+                "fields": (
+                    "status",
+                    "reviewed_by",
+                    "reviewed_at",
+                    "decision_reason",
+                    "fulfilled_by_post",
+                    "fulfilled_at",
+                )
+            },
+        ),
+        (_("Dates"), {"fields": ("created_at", "updated_at")}),
+    )
+    actions = ("approve_selected",)
+    actions_row = ("approve_request", "reject_request")
+    actions_detail = ("approve_request", "reject_request")
+
+    def has_delete_permission(
+        self, request: HttpRequest, obj: GuideRequest | None = None
+    ) -> bool:
+        return False
+
+    @display(description=_("Status"), ordering="status", label=BADGE_APPROVAL)
+    def status_badge(self, obj: GuideRequest) -> tuple[str, str]:
+        return obj.status, obj.get_status_display()
+
+    @display(description=_("Device"))
+    def context(self, obj: GuideRequest) -> str:
+        return obj.label or "—"
+
+    def _decide(
+        self,
+        request: HttpRequest,
+        object_id: str,
+        step: Callable[[GuideRequest], object],
+        success: str,
+    ) -> HttpResponse:
+        item = self.get_object(request, object_id)
+        if item is None:
+            raise Http404
+        try:
+            step(item)
+        except guide_requests.GuideRequestError as error:
+            self.message_user(request, str(error), messages.ERROR)
+        else:
+            self.log_change(request, item, success)
+            self.message_user(request, success, messages.SUCCESS)
+        return htmx_redirect(return_url(request, change_url(self, item.pk)))
+
+    @action(description=_("Approve selected requests"), permissions=["change"])
+    def approve_selected(
+        self, request: HttpRequest, queryset: QuerySet[GuideRequest]
+    ) -> None:
+        done = skipped = 0
+        for item in queryset.filter(status=GuideRequest.Status.PENDING):
+            try:
+                guide_requests.approve(item.pk, reviewer=request.user)
+            except guide_requests.GuideRequestError:
+                skipped += 1
+            else:
+                done += 1
+        self.message_user(request, f"Approved {done} requests; {skipped} skipped.")
+
+    @action(
+        description=_("Approve"),
+        icon="check_circle",
+        variant=ActionVariant.PRIMARY,
+        permissions=["change"],
+        dialog=confirm_dialog(
+            _("Approve this request?"),
+            _(
+                "It becomes public and can carry credit bounties. The requester is notified."
+            ),
+            submit=_("Approve"),
+        ),
+    )
+    def approve_request(
+        self, request: HttpRequest, _form: ConfirmForm, object_id: str
+    ) -> HttpResponse:
+        return self._decide(
+            request,
+            object_id,
+            lambda item: guide_requests.approve(item.pk, reviewer=request.user),
+            str(_("Request approved.")),
+        )
+
+    @action(
+        description=_("Reject"),
+        icon="cancel",
+        variant=ActionVariant.DANGER,
+        permissions=["change"],
+        dialog=confirm_dialog(
+            _("Reject this request?"),
+            _("The requester is told the reason."),
+            ReasonForm,
+            submit=_("Reject"),
+        ),
+    )
+    def reject_request(
+        self, request: HttpRequest, form: ReasonForm, object_id: str
+    ) -> HttpResponse:
+        reason = str(form.cleaned_data.get("reason", ""))
+        return self._decide(
+            request,
+            object_id,
+            lambda item: guide_requests.reject(
+                item.pk, reviewer=request.user, reason=reason
+            ),
+            str(_("Request rejected.")),
+        )
 
 
 @admin.register(AutoTopic)

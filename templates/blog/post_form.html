@@ -8,6 +8,13 @@
   <form method="post" class="surface-card p-3 p-md-4" novalidate>
     {% csrf_token %}
     {% if editing_post %}<input type="hidden" name="edit" value="{{ editing_post.slug }}">{% endif %}
+    {% if solving %}
+      <input type="hidden" name="solves" value="{{ solving.pk }}">
+      <div class="alert alert-info" role="status">
+        <strong>Answering request:</strong> <a href="{{ solving.get_absolute_url }}">{{ solving.title }}</a>.
+        Choose who can read your solution. Staff review it; approval publishes it and releases any bounty to you.
+      </div>
+    {% endif %}
     {% include "components/form_errors.html" with form=form %}
     {% for field in form %}{% include "components/form_field.html" with field=field %}{% endfor %}
     <div class="d-flex flex-wrap gap-2">

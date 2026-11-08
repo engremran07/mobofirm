@@ -1,10 +1,12 @@
 {% extends "base.html" %}
 {% load mf_ui %}
+{% block title %}Showcase listings · Mobofirm{% endblock %}
 {% block content %}
 {% url 'marketplace:listing_browse' as market_url %}
+{% url 'marketplace:dashboard' as dashboard_url %}
 <div class="site-container py-4 py-lg-5">
-  {% include "components/breadcrumbs.html" with current="Seller dashboard" parent_label="Marketplace" parent_url=market_url %}
-  {% include "components/page_header.html" with eyebrow="Seller dashboard" title=seller.display_name %}
+  {% include "components/breadcrumbs.html" with current="Showcase listings" grandparent_label="Marketplace" grandparent_url=market_url parent_label="Seller dashboard" parent_url=dashboard_url %}
+  {% include "components/page_header.html" with eyebrow="Seller dashboard" title="Showcase listings" lead="Listings are shown after staff review. Payment is arranged with site staff, not on the site." %}
 
   <div class="row g-3 mb-4">
     <div class="col-6 col-lg-3">{% include "components/stat_tile.html" with label="Listings" value=summary.listings %}</div>
@@ -12,28 +14,6 @@
     <div class="col-6 col-lg-3">{% include "components/stat_tile.html" with label="Awaiting review" value=summary.pending %}</div>
     <div class="col-6 col-lg-3">{% include "components/stat_tile.html" with label="Views" value=summary.views %}</div>
   </div>
-
-  <section class="surface-card p-4 mb-4" aria-labelledby="verification-heading">
-    <h2 class="h5 d-flex flex-wrap align-items-center gap-2" id="verification-heading">Verification
-      {% if seller.verified %}{% include "components/status_pill.html" with label="Verified" tone="success" icon="badge-check" %}
-      {% elif pending_verification %}{% include "components/status_pill.html" with label="Waiting for staff review" tone="warning" icon="clock" %}
-      {% else %}{% include "components/status_pill.html" with label="Not verified" %}{% endif %}
-    </h2>
-    {% if seller.verified %}
-      <p class="mb-0">Staff verified your profile. Your approved listings are public.</p>
-    {% elif pending_verification %}
-      <p class="mb-0">Your verification request is waiting for staff review. Listings stay hidden from the public until you are verified.</p>
-    {% else %}
-      {% if latest_verification and latest_verification.status == "rejected" %}
-        <div class="mb-3">{% include "components/notice.html" with tone="danger" icon="info" heading="Your last request was not approved." message=latest_verification.review_reason|default:"No reason was given. You can submit a new request with more detail." %}</div>
-      {% endif %}
-      <form method="post" action="{% url 'marketplace:request_verification' %}">
-        {% csrf_token %}
-        {% for field in verification_form %}{% include "components/form_field.html" with field=field %}{% endfor %}
-        <button type="submit" class="btn btn-outline-primary">Request verification</button>
-      </form>
-    {% endif %}
-  </section>
 
   <section class="surface-card p-4 mb-4" aria-labelledby="new-listing-heading">
     <h2 class="h5" id="new-listing-heading">New listing</h2>

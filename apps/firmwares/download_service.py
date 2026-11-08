@@ -13,7 +13,6 @@ from datetime import timedelta
 from typing import Any
 from urllib.parse import urlsplit
 
-from django.apps import apps as django_apps
 from django.conf import settings
 from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
@@ -25,6 +24,7 @@ from django.utils.crypto import constant_time_compare, salted_hmac
 from apps.core.utils.ip import get_client_ip as get_request_ip
 from apps.site_settings.services import get_site_settings
 
+from .access import check_download_access, has_perk
 from .models import (
     AdGateLog,
     DownloadSession,
@@ -80,7 +80,9 @@ def create_download_token(firmware: Any, request: HttpRequest) -> DownloadToken:
         return existing
 
     gate_on = config["gate_enabled"]
-    ad_required = bool(gate_on and config["ad_gate_enabled"])
+    ad_required = bool(
+        gate_on and config["ad_gate_enabled"] and not has_perk(user, "ad_free")
+    )
     return DownloadToken.objects.create(
         firmware=firmware,
         user=user,
@@ -154,6 +156,10 @@ def check_download_allowed(request: HttpRequest, firmware: Any) -> tuple[bool, s
     if config["require_login"] and not request.user.is_authenticated:
         return False, "Login required to download firmware."
 
+    decision = check_download_access(request.user, firmware)
+    if not decision.allowed:
+        return False, decision.reason
+
     if config["max_per_day"] > 0:
         day_ago = timezone.now() - timedelta(hours=24)
         used = DownloadToken.objects.filter(
@@ -167,53 +173,7 @@ def check_download_allowed(request: HttpRequest, firmware: Any) -> tuple[bool, s
         if used.count() >= config["max_per_day"]:
             return False, f"Daily download limit ({config['max_per_day']}) reached."
 
-    return check_entitlement(request, firmware)
-
-
-def _entitlement_context(request: HttpRequest, firmware: Any):
-    """Shop services plus the firmware type key, or ``None`` when not enforced.
-
-    Optional seam to ``apps.shop``: off unless ``SHOP_ENTITLEMENTS_ENFORCED`` is true,
-    the shop app is installed, and the visitor is signed in (anonymous visitors keep
-    the IP-based daily limit above).
-    """
-    if not getattr(settings, "SHOP_ENTITLEMENTS_ENFORCED", False):
-        return None
-    if not request.user.is_authenticated or not django_apps.is_installed("apps.shop"):
-        return None
-    from apps.shop import services as shop_services
-
-    from .catalog import TYPE_KEY_BY_CLASS
-
-    type_key = TYPE_KEY_BY_CLASS.get(type(firmware), "")
-    return shop_services, type_key
-
-
-def _size_mb(firmware: Any) -> int:
-    return math.ceil((firmware.file_size or 0) / (1024 * 1024))
-
-
-def check_entitlement(request: HttpRequest, firmware: Any) -> tuple[bool, str]:
-    """Apply the visitor's shop package (type access and quotas) when enforced."""
-    context = _entitlement_context(request, firmware)
-    if context is None:
-        return True, ""
-    shop_services, type_key = context
-    if type_key in shop_services.TIER_GATED_TYPES and (
-        not shop_services.firmware_type_allowed(request.user, type_key)
-    ):
-        return False, "Your package does not include this firmware category."
-    decision = shop_services.check_download_quota(
-        request.user, size_mb=_size_mb(firmware)
-    )
-    return decision.allowed, decision.reason
-
-
-def record_entitlement_download(request: HttpRequest, firmware: Any) -> None:
-    """Count a granted download against the visitor's package (when enforced)."""
-    context = _entitlement_context(request, firmware)
-    if context is not None:
-        context[0].record_download(request.user, size_mb=_size_mb(firmware))
+    return True, ""
 
 
 def check_hotlink(request: HttpRequest) -> bool:

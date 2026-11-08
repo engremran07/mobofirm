@@ -82,7 +82,10 @@ def test_email_code_verification_is_responsive_and_completes_signup(live_server)
         )
         page.get_by_role("heading", name="Verify your email address").wait_for()
         assert page.get_by_label("Verification code").is_visible()
-        assert page.locator('form input[name="csrfmiddlewaretoken"]').count() == 2
+        assert (
+            page.locator('#main-content form input[name="csrfmiddlewaretoken"]').count()
+            == 2
+        )
         assert page.get_by_text("browser-code@example.com").is_visible()
 
         for width in (390, 1365):

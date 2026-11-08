@@ -1,82 +1,140 @@
-{% extends "seo/base.html" %}
-{% block seo_content %}
-<section aria-labelledby="seo-health" class="mf-seo-cards">
-  <h2 id="seo-health" class="visually-hidden">Measured health</h2>
-  <article class="mf-seo-card">
-    <h3>Crawl health</h3>
-    {% if latest_run and latest_run.health_percent is not None %}
-      <p class="mf-seo-figure">{{ latest_run.health_percent }}%</p>
-      <p>Share of {{ latest_run.pages_crawled }} crawled pages without an error-level issue (crawl {{ latest_run.pk }}).</p>
-    {% else %}
-      <p class="mf-seo-figure">No data</p>
-      <p>No completed crawl yet. Health is computed only from measured issues.</p>
-    {% endif %}
-  </article>
-  <article class="mf-seo-card">
-    <h3>Open issues</h3>
-    <p class="mf-seo-figure">{{ open_errors }} <span>errors</span></p>
-    <p>{{ open_warnings }} warnings. <a href="{% url 'seo:issues' %}">Review issues</a></p>
-  </article>
-  <article class="mf-seo-card">
-    <h3>Approvals</h3>
-    <p class="mf-seo-figure">{{ pending_changes }}</p>
-    <p>Proposed changes waiting. <a href="{% url 'seo:ledger' %}?status=proposed">Open the queue</a></p>
-  </article>
-  <article class="mf-seo-card">
-    <h3>Jobs</h3>
-    <p class="mf-seo-figure">{{ pending_jobs }} <span>pending</span></p>
-    <p>{{ failed_jobs }} failed. <a href="{% url 'seo:jobs' %}">View jobs</a></p>
-  </article>
+{% extends "admin/staff_page.html" %}
+{% block mf_actions %}
+  {% if can_crawl %}
+    <form method="post" action="{% url 'seo:run_scan' %}" class="mf-ui-seo-inline">
+      {% csrf_token %}
+      <button type="submit" class="mf-ui-btn mf-ui-btn--primary">Run scan now</button>
+    </form>
+  {% endif %}
+{% endblock %}
+{% block mf_nav %}{% include "seo/_tabs.html" %}{% endblock %}
+{% block mf_body %}
+<section class="mf-ui-seo-section" aria-labelledby="seo-health">
+  <h2 id="seo-health" class="mf-ui-seo-heading">Measured health</h2>
+  <div class="mf-ui-grid">
+    <article class="mf-ui-card mf-ui-stat">
+      <span class="mf-ui-stat__label">Last content scan</span>
+      {% if latest_scan %}
+        <span class="mf-ui-stat__value">{{ latest_scan.pages_crawled }} / {{ latest_scan.urls_total }}</span>
+        <span class="mf-ui-stat__hint">URLs checked {{ latest_scan.finished_at|timesince }} ago (scan {{ latest_scan.pk }}){% if latest_scan.partial %}; stopped on its time budget, run again to continue{% endif %}.</span>
+      {% else %}
+        <span class="mf-ui-stat__value">None yet</span>
+        <span class="mf-ui-stat__hint">Run a scan to audit every public page, post, firmware, model, brand, chipset and tool.</span>
+      {% endif %}
+    </article>
+    <article class="mf-ui-card mf-ui-stat">
+      <span class="mf-ui-stat__label">Open issues</span>
+      <span class="mf-ui-stat__value">{{ open_total }}</span>
+      <span class="mf-ui-stat__hint">{{ open_errors }} errors, {{ open_warnings }} warnings, {{ open_info }} info. <a href="{% url 'seo:issues' %}">Review issues</a></span>
+    </article>
+    <article class="mf-ui-card mf-ui-stat">
+      <span class="mf-ui-stat__label">Fixes applied</span>
+      <span class="mf-ui-stat__value">{{ fixes_total }}</span>
+      <span class="mf-ui-stat__hint">{{ fixes_week }} in the last 7 days, all in the <a href="{% url 'seo:ledger' %}">ledger</a> with rollback.</span>
+    </article>
+    <article class="mf-ui-card mf-ui-stat">
+      <span class="mf-ui-stat__label">Crawl health</span>
+      {% if latest_run and latest_run.health_percent is not None %}
+        <span class="mf-ui-stat__value">{{ latest_run.health_percent }}%</span>
+        <span class="mf-ui-stat__hint">Share of {{ latest_run.pages_crawled }} crawled pages without an error-level issue (crawl {{ latest_run.pk }}).</span>
+      {% else %}
+        <span class="mf-ui-stat__value">No data</span>
+        <span class="mf-ui-stat__hint">No completed crawl yet. Health is computed only from measured issues.</span>
+      {% endif %}
+    </article>
+    <article class="mf-ui-card mf-ui-stat">
+      <span class="mf-ui-stat__label">Pages in inventory</span>
+      <span class="mf-ui-stat__value">{{ snapshot_total }}</span>
+      <span class="mf-ui-stat__hint">{{ snapshot_indexable }} indexable. <a href="{% url 'seo:inventory' %}">Open the inventory</a></span>
+    </article>
+    <article class="mf-ui-card mf-ui-stat">
+      <span class="mf-ui-stat__label">Link proposals</span>
+      <span class="mf-ui-stat__value">{{ link_counts.proposed }}</span>
+      <span class="mf-ui-stat__hint">{{ link_counts.accepted }} accepted. <a href="{% url 'seo:links' %}">Review interlinking</a></span>
+    </article>
+    <article class="mf-ui-card mf-ui-stat">
+      <span class="mf-ui-stat__label">Job queue</span>
+      <span class="mf-ui-stat__value">{{ pending_jobs }} <small>pending</small></span>
+      <span class="mf-ui-stat__hint">{{ failed_jobs }} failed. <a href="{% url 'seo:jobs' %}">View jobs</a></span>
+      {% if can_process and pending_jobs %}
+        <form method="post" action="{% url 'seo:process_jobs' %}" class="mf-ui-seo-inline">
+          {% csrf_token %}<input type="hidden" name="next" value="{% url 'seo:dashboard' %}">
+          <button type="submit" class="mf-ui-btn mf-ui-btn--small">Process queue now</button>
+        </form>
+      {% endif %}
+    </article>
+  </div>
 </section>
 
-<section aria-labelledby="seo-mode">
-  <h2 id="seo-mode">Autonomy</h2>
-  <p>Mode: <strong>{{ seo_settings.get_autonomy_mode_display }}</strong>. SEO is {{ seo_settings.seo_enabled|yesno:"enabled,disabled" }}; sitemap is {{ seo_settings.sitemap_enabled|yesno:"enabled,disabled" }}.</p>
+<section class="mf-ui-seo-section" aria-labelledby="seo-groups">
+  <h2 id="seo-groups" class="mf-ui-seo-heading">Open issues by object type</h2>
+  <div class="mf-ui-table-wrap" role="region" aria-label="Open issues by object type" tabindex="0">
+    <table class="mf-ui-table">
+      <thead><tr><th scope="col">Object type</th><th scope="col" class="is-number">Open issues</th><th scope="col"><span class="mf-ui-sr">Review</span></th></tr></thead>
+      <tbody>
+        {% for row in group_rows %}
+          <tr><th scope="row">{{ row.label }}</th><td class="is-number">{{ row.total }}</td><td><a href="{{ row.url }}">Review</a></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="mf-ui-seo-section" aria-labelledby="seo-mode">
+  <h2 id="seo-mode" class="mf-ui-seo-heading">Autonomy</h2>
+  <p>Mode: <strong>{{ seo_settings.get_autonomy_mode_display }}</strong>. SEO is {{ seo_settings.seo_enabled|yesno:"enabled,disabled" }}; sitemap is {{ seo_settings.sitemap_enabled|yesno:"enabled,disabled" }}. In suggest mode proposals wait on the board for a person; safe autopilot fills missing titles and descriptions after each scan.</p>
   {% if can_crawl %}
-    <form method="post" action="{% url 'seo:start_crawl' %}">
+    <form method="post" action="{% url 'seo:start_crawl' %}" class="mf-ui-seo-inline">
       {% csrf_token %}
-      <button type="submit" class="button">Run crawl and audit now</button>
+      <button type="submit" class="mf-ui-btn">Run crawl and audit now</button>
     </form>
+    <p class="mf-ui-help">The render crawl fetches pages in-process (no network) to check headings, images, JSON-LD and internal links; it also bumps view counters like a visitor would.</p>
   {% endif %}
 </section>
 
-<section aria-labelledby="seo-sitemaps">
-  <h2 id="seo-sitemaps">Sitemap sections</h2>
-  <table class="mf-seo-table">
-    <thead><tr><th scope="col">Section</th><th scope="col">URLs</th></tr></thead>
-    <tbody>
-      {% for section in sections %}
-        <tr><td><a href="{% url 'seo_public:sitemap_section' section=section.name %}">{{ section.name }}</a></td><td>{{ section.urls }}</td></tr>
-      {% empty %}
-        <tr><td colspan="2">No sitemap sections are registered.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+<section class="mf-ui-seo-section" aria-labelledby="seo-sitemaps">
+  <h2 id="seo-sitemaps" class="mf-ui-seo-heading">Sitemap sections</h2>
+  <div class="mf-ui-table-wrap" role="region" aria-label="Sitemap sections" tabindex="0">
+    <table class="mf-ui-table">
+      <thead><tr><th scope="col">Section</th><th scope="col" class="is-number">URLs</th></tr></thead>
+      <tbody>
+        {% for section in sections %}
+          <tr><td><a href="{% url 'seo_public:sitemap_section' section=section.name %}">{{ section.name }}</a></td><td class="is-number">{{ section.urls }}</td></tr>
+        {% empty %}
+          <tr><td colspan="2">No sitemap sections are registered.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </section>
 
-<section aria-labelledby="seo-integrations">
-  <h2 id="seo-integrations">Integrations</h2>
-  <table class="mf-seo-table">
-    <thead><tr><th scope="col">Integration</th><th scope="col">State</th><th scope="col">Detail</th></tr></thead>
-    <tbody>
-      {% for item in integrations %}
-        <tr><td>{{ item.label }}</td><td><span class="mf-seo-state mf-seo-state--{{ item.state }}">{{ item.state }}</span></td><td>{{ item.detail }}</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+<section class="mf-ui-seo-section" aria-labelledby="seo-integrations">
+  <h2 id="seo-integrations" class="mf-ui-seo-heading">Integrations</h2>
+  <div class="mf-ui-table-wrap" role="region" aria-label="Integrations" tabindex="0">
+    <table class="mf-ui-table">
+      <thead><tr><th scope="col">Integration</th><th scope="col">State</th><th scope="col">Detail</th></tr></thead>
+      <tbody>
+        {% for item in integrations %}
+          <tr><td>{{ item.label }}</td><td><span class="mf-ui-badge{% if item.state == 'ready' or item.state == 'enabled' %} mf-ui-badge--success{% elif item.state == 'error' %} mf-ui-badge--danger{% else %} mf-ui-badge--warning{% endif %}">{{ item.state }}</span></td><td>{{ item.detail }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </section>
 
-<section aria-labelledby="seo-runs">
-  <h2 id="seo-runs">Recent crawls</h2>
-  <table class="mf-seo-table">
-    <thead><tr><th scope="col">Run</th><th scope="col">Status</th><th scope="col">Pages</th><th scope="col">With errors</th><th scope="col">Finished</th></tr></thead>
-    <tbody>
-      {% for run in recent_runs %}
-        <tr><td>{{ run.pk }}</td><td>{{ run.get_status_display }}</td><td>{{ run.pages_crawled }}</td><td>{{ run.pages_with_errors }}</td><td>{{ run.finished_at|default:"-" }}</td></tr>
-      {% empty %}
-        <tr><td colspan="5">No crawls have run.</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
+<section class="mf-ui-seo-section" aria-labelledby="seo-runs">
+  <h2 id="seo-runs" class="mf-ui-seo-heading">Recent scans and crawls</h2>
+  <div class="mf-ui-table-wrap" role="region" aria-label="Recent runs" tabindex="0">
+    <table class="mf-ui-table">
+      <thead><tr><th scope="col">Run</th><th scope="col">Type</th><th scope="col">Status</th><th scope="col" class="is-number">Pages</th><th scope="col" class="is-number">With errors</th><th scope="col">Finished</th></tr></thead>
+      <tbody>
+        {% for run in recent_runs %}
+          <tr><td>{{ run.pk }}</td><td>{{ run.get_kind_display }}</td><td>{{ run.get_status_display }}{% if run.partial %} (partial){% endif %}</td><td class="is-number">{{ run.pages_crawled }}</td><td class="is-number">{{ run.pages_with_errors }}</td><td>{{ run.finished_at|default:"-" }}</td></tr>
+        {% empty %}
+          <tr><td colspan="6">No scans or crawls have run.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </section>
 {% endblock %}

@@ -1,3 +1,4 @@
+{% load wallet_tags %}
 <header class="site-header">
   <div class="site-container py-2" x-data="{ mobileOpen: false }" @keydown.escape.window="mobileOpen = false">
     <div class="d-flex align-items-center gap-3">
@@ -19,6 +20,7 @@
           <i data-lucide="sun" data-theme-icon="light" aria-hidden="true"></i>
         </button>
         {% if user.is_authenticated %}
+          {% wallet_balance_chip %}
           <a class="btn btn-outline-secondary" href="{% url 'users:dashboard' %}">
             <i data-lucide="user-round" aria-hidden="true"></i><span class="ms-1">Account</span>
           </a>
@@ -48,6 +50,7 @@
         {% include "includes/site_search.html" with search_id="site-search-mobile" %}
         {% include "includes/nav_links.html" %}
         {% if user.is_authenticated %}
+          {% wallet_balance_chip %}
           <a class="site-nav-link" href="{% url 'users:dashboard' %}">Account</a>
           <form method="post" action="{% url 'users:account_logout' %}">
             {% csrf_token %}

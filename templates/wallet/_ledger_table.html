@@ -1,0 +1,22 @@
+{# Contract: entries (iterable of LedgerEntry). Amounts are whole credits; the sign and the visually hidden text both state the direction. #}
+{% load mf_ui %}
+{% table_scroll "Credit history" %}
+<table class="table align-middle">
+  <thead><tr><th scope="col">Date</th><th scope="col">What</th><th scope="col" class="text-end">Credits</th><th scope="col" class="text-end">Balance after</th></tr></thead>
+  <tbody>
+    {% for entry in entries %}
+      <tr>
+        <td>{{ entry.created_at|date:"j M Y, H:i" }}</td>
+        <td>
+          {{ entry.get_reason_display }}{% if entry.note %}<span class="muted small d-block">{{ entry.note }}</span>{% endif %}
+        </td>
+        <td class="text-end">
+          <span class="fw-semibold">{% if entry.direction == "credit" %}+{% else %}&minus;{% endif %}{{ entry.amount }}</span>
+          <span class="visually-hidden">{{ entry.get_direction_display }}</span>
+        </td>
+        <td class="text-end">{{ entry.balance_after }}</td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endtable_scroll %}

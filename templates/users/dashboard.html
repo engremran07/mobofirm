@@ -1,8 +1,10 @@
 {% extends "base.html" %}
-{% load shop_tags filemanager_tags marketplace_tags %}
+{% load shop_tags marketplace_tags %}
 {% block title %}Account overview | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block content %}
 <div class="site-container py-5">
+  {% include "components/breadcrumbs.html" with current="Account" %}
+  
   <header class="mb-4"><p class="section-eyebrow">Account</p><h1 class="h2">Welcome, {{ display_name }}</h1></header>
   {% if profile_missing_fields %}<div class="alert alert-info" role="status">Complete your profile: {{ profile_missing_fields|join:", " }}. <a href="{% url 'users:profile' %}">Review profile</a></div>{% endif %}
   <div class="row g-3 mb-4">
@@ -15,7 +17,7 @@
     <h2 id="services-title" class="h5">Your services</h2>
     <div class="row g-3">
       <div class="col-12 col-sm-6 col-lg-4">{% shop_dashboard_tile %}</div>
-      <div class="col-12 col-sm-6 col-lg-4">{% filemanager_dashboard_tile %}</div>
+      <div class="col-12 col-sm-6 col-lg-4">{% url 'library:my_files' as my_files_url %}{% include "components/dashboard_tile.html" with url=my_files_url label="My files" value=download_count icon="download" hint="Everything served to you, your uploads and quota" %}</div>
       <div class="col-12 col-sm-6 col-lg-4">{% marketplace_dashboard_tile %}</div>
     </div>
   </section>

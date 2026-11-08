@@ -3,12 +3,15 @@ from __future__ import annotations
 from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_GET, require_POST
 
+from apps.core.admin_pages import render_admin_page
+from apps.devices import slots
 from apps.devices.models import Device, DeviceEvent
 from apps.devices.services import (
     DevicePolicyError,
@@ -31,12 +34,23 @@ def my_devices(request: HttpRequest) -> HttpResponse:
     devices = list(
         Device.objects.filter(user_id=request.user.pk).order_by("-last_seen_at")
     )
+    at_limit = summary["active_devices"] >= summary["max_devices"]
+    can_approve_current = bool(
+        current_device is not None
+        and current_device.browser_key_hash
+        and not current_device.is_trusted
+        and not current_device.is_blocked
+        and current_device.revoked_at is None
+        and not at_limit
+    )
     return render(
         request,
         "devices/my_devices.html",
         {
             "devices": devices,
             "current_device": current_device,
+            "options": slots.slot_options(request.user) if at_limit else None,
+            "can_approve_current": can_approve_current,
             **summary,
         },
     )
@@ -44,8 +58,27 @@ def my_devices(request: HttpRequest) -> HttpResponse:
 
 @staff_member_required(login_url="admin:login")
 def device_events(request: HttpRequest) -> HttpResponse:
-    events = DeviceEvent.objects.select_related("device").order_by("-created_at")[:50]
-    return render(request, "devices/events.html", {"events": events})
+    """Recent device audit events, rendered inside the admin shell."""
+    if not request.user.has_perm("devices.view_deviceevent"):
+        raise PermissionDenied
+    kinds = dict(DeviceEvent.EVENT_CHOICES)
+    selected = request.GET.get("type", "")
+    events = DeviceEvent.objects.select_related("device", "user").order_by(
+        "-created_at"
+    )
+    if selected in kinds:
+        events = events.filter(event_type=selected)
+    return render_admin_page(
+        request,
+        "devices/events.html",
+        title="Device events",
+        subtitle="The latest 50 device and slot activity records.",
+        context={
+            "events": events[:50],
+            "kinds": kinds,
+            "selected": selected if selected in kinds else "",
+        },
+    )
 
 
 # ---------------------------------------------------------------------
@@ -95,8 +128,8 @@ def acknowledge_new_device(request: HttpRequest) -> HttpResponse:
         if exc.reason == "limit_reached":
             messages.error(
                 request,
-                "Your approved-device allowance is full. Contact an administrator "
-                "to reset or revoke a registration.",
+                "Your approved-device allowance is full. Free a slot below: ask "
+                "staff, pay credits or watch a rewarded ad.",
             )
         elif exc.reason == "blocked_device":
             messages.error(

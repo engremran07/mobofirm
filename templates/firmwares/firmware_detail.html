@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load shop_tags storage_tags %}
+{% load shop_tags storage_tags ad_tags %}
 {% block title %}{{ firmware.build_number|default:firmware.original_file_name }} | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block meta_description %}Review compatibility, file size, build details, and review status for this firmware record.{% endblock %}
 {% block content %}
@@ -27,10 +27,18 @@
           <dt class="col-sm-4 muted fw-normal">Security patch</dt><dd class="col-sm-8">{{ firmware.security_patch|date:"F j, Y"|default:"Not specified" }}</dd>
           <dt class="col-sm-4 muted fw-normal">Hosting</dt><dd class="col-sm-8">{% if firmware.is_external %}<span class="badge text-bg-secondary">External download</span> hosted on {{ external_host }}{% else %}Hosted by Mobofirm{% endif %}</dd>
           <dt class="col-sm-4 muted fw-normal">Review status</dt><dd class="col-sm-8"><span class="status-verified">Verified</span>{% if firmware.reviewed_at %} · {{ firmware.reviewed_at|date:"F j, Y" }}{% endif %}</dd>
+          <dt class="col-sm-4 muted fw-normal">Access</dt><dd class="col-sm-8">{% include "firmwares/includes/tier_badge.html" with firmware=firmware %}</dd>
           <dt class="col-sm-4 muted fw-normal">SHA-256</dt><dd class="col-sm-8 build-code">{% if firmware.file_hash %}{{ firmware.file_hash }}{% else %}Not provided{% endif %}</dd>
           <dt class="col-sm-4 muted fw-normal">Added</dt><dd class="col-sm-8">{{ firmware.created_at|date:"F j, Y" }}</dd>
         </dl>
       </section>
+      {% if changelog %}
+        <section class="surface-card p-4 mt-4" aria-labelledby="firmware-changelog-title">
+          <h2 id="firmware-changelog-title" class="h4 mb-3">Changelog</h2>
+          <div class="mb-0">{{ changelog|linebreaksbr }}</div>
+        </section>
+      {% endif %}
+      {% ad_zone "in_content" %}
       {% if related_firmwares %}
         <section class="surface-card p-4 mt-4" aria-labelledby="related-firmware-title">
           <h2 id="related-firmware-title" class="h4 mb-3">Other files for this device</h2>
@@ -43,16 +51,34 @@
       {% endif %}
     </div>
     <aside class="col-12 col-lg-4">
-      <section class="surface-card p-4" aria-labelledby="download-panel-title">
+      {% ad_zone "sidebar" %}      <section class="surface-card p-4" aria-labelledby="download-panel-title">
         <p class="section-eyebrow mb-2">Availability</p>
         <h2 id="download-panel-title" class="h4">Download information</h2>
+        <p class="mb-2">{% include "firmwares/includes/tier_badge.html" with firmware=firmware %}</p>
         <p class="muted">Check the exact model and variant before installing firmware. The review label describes this record's status, not a guarantee of compatibility with every device.</p>
-        <a class="btn btn-primary btn-lg w-100" href="{% url 'firmwares:firmware_download' firmware_type=firmware_type firmware_id=firmware.pk %}">
-          <i data-lucide="download" aria-hidden="true"></i><span class="ms-2">Continue to download</span>
-        </a>
+        {% if access.allowed %}
+          <a class="btn btn-primary btn-lg w-100" href="{% url 'firmwares:firmware_download' firmware_type=firmware_type firmware_id=firmware.pk %}">
+            <i data-lucide="download" aria-hidden="true"></i><span class="ms-2">{% if access.already_served %}Download again{% else %}Continue to download{% endif %}</span>
+          </a>
+        {% else %}
+          <div class="access-locked p-3" role="status" data-access-locked="{{ access.requires|default:'locked' }}">
+            <p class="fw-semibold mb-2"><i data-lucide="lock" aria-hidden="true"></i><span class="ms-1">Locked</span></p>
+            <p class="mb-3">{{ access.reason }}</p>
+            {% if access.requires == "login" %}
+              <a class="btn btn-primary w-100" href="{{ login_url }}">Sign in to continue</a>
+            {% elif access.requires == "purchase" and access.price %}
+              <form method="post" action="{% url 'shop:request_file' firmware_type=firmware_type firmware_id=firmware.pk %}">
+                {% csrf_token %}
+                <button class="btn btn-primary w-100" type="submit">Request this file · {{ firmware.tier_label|cut:"Paid · " }}</button>
+              </form>
+            {% elif access.requires == "package" %}
+              <a class="btn btn-primary w-100" href="{% url 'shop:pricing' %}">See plans</a>
+            {% endif %}
+          </div>
+        {% endif %}
         <p class="small muted mt-3 mb-0">File size: {{ file_size_display }}{% if firmware.is_external %} · External download{% endif %}</p>
       </section>
-      {% shop_firmware_allowance firmware_type %}
+      {% shop_firmware_allowance firmware %}
       {% firmware_storage_panel firmware %}
       {% if firmware.model %}
         <section class="surface-card p-4 mt-4" aria-labelledby="related-guides-title">

@@ -1,0 +1,23 @@
+{# Contract: promotion, state (OfferState), effect, terms, audience_text, form, dialog_* (apps.core.dialogs.DialogView). Promotions-owned content for the generic dialog shell. #}
+{% extends "components/dialog.html" %}
+{% block dialog_body %}
+  {% include "components/form_errors.html" with form=form %}
+  <p class="promo-effect fw-semibold mb-2">{{ effect }}</p>
+  {% if promotion.description %}<p class="mb-2">{{ promotion.description|truncatechars:240 }}</p>{% endif %}
+  <dl class="eco-kv mb-2"><dt>Who can take it</dt><dd>{{ audience_text }}</dd></dl>
+  {% if terms %}<ul class="small">{% for line in terms %}<li>{{ line }}</li>{% endfor %}</ul>{% endif %}
+  {% if state.can_claim %}
+    <p class="small muted mb-0">Claiming is final and recorded once for your account.</p>
+  {% else %}
+    <p class="mb-0" role="status">{{ state.message }}</p>
+  {% endif %}
+{% endblock %}
+{% block dialog_footer %}
+  {% if state.can_claim %}
+    {{ block.super }}
+  {% elif dialog_inline %}
+    <a class="btn btn-outline-secondary" href="{{ cancel_url }}">Back to the offer</a>
+  {% else %}
+    <button type="button" class="btn btn-outline-secondary" @click="requestClose">Close</button>
+  {% endif %}
+{% endblock %}

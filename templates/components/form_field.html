@@ -9,7 +9,7 @@
       <label class="form-check-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
     {% else %}
       <label class="form-label"{% if field|mf_is_group %} id="{{ field.auto_id }}_label"{% endif %} for="{{ field.id_for_label }}">{{ field.label }}</label>
-      {{ field|mf_widget }}
+      {% if field|mf_is_combobox %}{% combobox_field field %}{% else %}{{ field|mf_widget }}{% endif %}
     {% endif %}
     {% if field.errors %}
       <div class="invalid-feedback d-block" id="{{ field.auto_id }}_errors" role="alert">

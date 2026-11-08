@@ -17,6 +17,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.views.decorators.http import require_http_methods, require_POST
 
+from apps.blog import guide_requests
 from apps.blog.access import (
     blog_enabled_for,
     can_author_posts,
@@ -25,7 +26,7 @@ from apps.blog.access import (
     can_manage_post,
 )
 from apps.blog.forms import CategoryForm, PostForm
-from apps.blog.models import Post, PostRevision, PostStatus
+from apps.blog.models import GuideRequest, Post, PostRevision, PostStatus
 from apps.blog.services import workflow
 from apps.blog.services.history import PostHistoryService
 from apps.core.utils.logging import log_event
@@ -39,6 +40,23 @@ WORKFLOW_ACTIONS = {"request_review", "schedule", "publish", "archive"}
 def _require_author(request: HttpRequest) -> None:
     if not blog_enabled_for(request.user) or not can_author_posts(request.user):
         raise Http404
+
+
+def _solving_request(request: HttpRequest) -> GuideRequest | None:
+    """The approved guide request a new post answers (``?solves=<id>``), if any.
+
+    Any verified member except the requester may answer, even when general user
+    posting is off; the post still needs staff approval to go live.
+    """
+    raw = request.GET.get("solves") or request.POST.get("solves") or ""
+    if not raw.isdigit():
+        return None
+    target = get_object_or_404(GuideRequest, pk=int(raw))
+    if not blog_enabled_for(request.user) or not guide_requests.accepts_solution(
+        request.user, target
+    ):
+        raise Http404
+    return target
 
 
 def run_workflow(post: Post, action: str, user, when: datetime | None = None):
@@ -167,7 +185,9 @@ def bulk_publish(request: HttpRequest) -> HttpResponse:
 @login_required
 @require_http_methods(["GET", "POST"])
 def post_create(request: HttpRequest) -> HttpResponse:
-    _require_author(request)
+    solving = _solving_request(request)
+    if solving is None:
+        _require_author(request)
     instance = None
     edit_slug = request.GET.get("edit") or request.POST.get("edit")
     if edit_slug:
@@ -182,7 +202,12 @@ def post_create(request: HttpRequest) -> HttpResponse:
             return redirect("blog:manage_posts")
 
     if request.method == "POST":
-        form = PostForm(request.POST, instance=instance)
+        form = PostForm(
+            request.POST,
+            instance=instance,
+            user=request.user,
+            require_access=solving is not None and instance is None,
+        )
         if form.is_valid():
             values = dict(form.cleaned_data)
             tags = values.pop("tags")
@@ -202,21 +227,42 @@ def post_create(request: HttpRequest) -> HttpResponse:
                     post.publish_at = None
                     post.published_at = None
                     post.featured = False
+                    post.guide_request = solving
+                    if solving is not None:
+                        post.firmware_brand = solving.brand
+                        post.firmware_model = solving.firmware_model
                     post.save()
                     post.tags.set(tags)
                     PostHistoryService.record_current_version(
                         post, user=request.user, change_summary="Initial version"
                     )
+                    if solving is not None:
+                        workflow.request_review(post, user=request.user)
                 if not tags:
                     transaction.on_commit(partial(sync_post_tags.delay, post.pk))
+            if solving is not None and instance is None:
+                messages.success(
+                    request,
+                    "Solution submitted. Staff review it; approval publishes it and pays the bounty.",
+                )
+                return redirect(solving.get_absolute_url())
             messages.success(request, "Post updated." if instance else "Draft saved.")
             return redirect("blog:post_detail", slug=post.slug)
     else:
-        form = PostForm(instance=instance)
+        form = PostForm(
+            instance=instance,
+            user=request.user,
+            require_access=solving is not None and instance is None,
+        )
     return render(
         request,
         "blog/post_form.html",
-        {"form": form, "editing": bool(instance), "editing_post": instance},
+        {
+            "form": form,
+            "editing": bool(instance),
+            "editing_post": instance,
+            "solving": solving,
+        },
     )
 
 

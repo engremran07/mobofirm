@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 
@@ -21,10 +23,10 @@ def _sync_count(post_id: int | None) -> None:
 
 
 @receiver(post_save, sender=Comment, dispatch_uid="comments_sync_count_on_save")
-def sync_count_on_save(sender, instance: Comment, **kwargs) -> None:
+def sync_count_on_save(instance: Comment, **kwargs: Any) -> None:
     _sync_count(instance.post_id)
 
 
 @receiver(post_delete, sender=Comment, dispatch_uid="comments_sync_count_on_delete")
-def sync_count_on_delete(sender, instance: Comment, **kwargs) -> None:
+def sync_count_on_delete(instance: Comment, **kwargs: Any) -> None:
     _sync_count(instance.post_id)

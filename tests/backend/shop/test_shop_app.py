@@ -1,383 +1,299 @@
+"""Shop services and public views around the single Package concept."""
+
 from __future__ import annotations
 
 from datetime import timedelta
 from decimal import Decimal
 
-from django.contrib import admin
-from django.contrib.auth import get_user_model
+import pytest
 from django.db import IntegrityError, transaction
-from django.test import Client, TestCase
+from django.test import Client
 from django.urls import reverse
 from django.utils import timezone
 
 from apps.shop import services
 from apps.shop import urls as shop_urls
-from apps.shop.models import (
-    Order,
-    PackageQuotaOverride,
-    PackageTier,
-    Product,
-    Subscription,
-    SubscriptionPlan,
-    UserPackage,
-)
+from apps.shop.models import Order, PackageTier, UserPackage
 from apps.shop.tasks import expire_packages
 
-PASSWORD = "Pass-12345!"
+pytestmark = pytest.mark.django_db
 
 
-class ShopTestCase(TestCase):
-    def setUp(self):
-        user_model = get_user_model()
-        self.user = user_model.objects.create_user(
-            username="shopper",
-            email="shopper@example.com",
-            password=PASSWORD,
-            email_verified_at=timezone.now(),
-        )
-        self.unverified = user_model.objects.create_user(
-            username="unverified_shopper",
-            email="unverified-shopper@example.com",
-            password=PASSWORD,
-        )
-        self.staff = user_model.objects.create_user(
-            username="shop_staff",
-            email="shop-staff@example.com",
-            password=PASSWORD,
-            is_staff=True,
-            is_superuser=True,
-        )
-        self.free = PackageTier.objects.create(
-            name="Free",
-            slug="free",
-            is_default=True,
-            daily_download_limit=2,
-            monthly_download_limit=3,
-            daily_bandwidth_mb=100,
-            max_file_size_mb=50,
-        )
-        self.pro = PackageTier.objects.create(
-            name="Pro",
-            slug="pro",
-            tier_level="pro",
-            price_monthly=Decimal("9.00"),
-            daily_download_limit=-1,
-            monthly_download_limit=-1,
-            daily_bandwidth_mb=-1,
-            monthly_bandwidth_mb=-1,
-            max_file_size_mb=-1,
-            access_engineering=True,
-        )
-        self.pro_product = Product.objects.create(
-            name="Pro package",
-            slug="pro-package",
-            product_type="package",
-            price=Decimal("9.00"),
-            package_tier=self.pro,
-        )
-        self.plan = SubscriptionPlan.objects.create(
-            name="Plus", slug="plus", price_monthly=Decimal("5.00")
-        )
-        self.sub_product = Product.objects.create(
-            name="Plus plan",
-            slug="plus-plan",
-            product_type="subscription",
-            price=Decimal("5.00"),
-            subscription_plan=self.plan,
-        )
+@pytest.fixture
+def pro(pro_tier) -> PackageTier:
+    return pro_tier
 
 
-class OnlinePaymentsDisabledTests(ShopTestCase):
-    def test_online_payments_are_explicitly_disabled_and_visible_in_the_ui(self):
-        self.assertFalse(services.ONLINE_PAYMENTS_ENABLED)
+@pytest.fixture
+def gold(db) -> PackageTier:
+    return PackageTier.objects.create(
+        name="Gold",
+        slug="gold",
+        price=Decimal("20.00"),
+        credit_price_override=500,
+        duration_days=90,
+        limit_files=100,
+        applies_to_featured=True,
+    )
+
+
+class TestOnlinePaymentsDisabled:
+    def test_the_flag_is_off_and_visible_in_the_ui(self, client, pro):
+        assert services.ONLINE_PAYMENTS_ENABLED is False
 
         for name, kwargs in (
             ("shop:pricing", {}),
-            ("shop:product_list", {}),
-            ("shop:product_detail", {"slug": "pro-package"}),
+            ("shop:package_detail", {"slug": "pro"}),
         ):
-            with self.subTest(route=name):
-                response = self.client.get(reverse(name, kwargs=kwargs))
-                self.assertContains(response, "Online payments are not available")
+            response = client.get(reverse(name, kwargs=kwargs))
+            assert "Online payments are not available" in response.content.decode()
 
     def test_no_payment_provider_routes_remain(self):
-        names = {route.name for route in shop_urls.urlpatterns}
+        names = {route.name for route in shop_urls.urlpatterns if route.name}
 
-        self.assertFalse({name for name in names if name and "stripe" in name})
-        self.assertFalse({name for name in names if name and "webhook" in name})
+        assert not {name for name in names if "stripe" in name or "webhook" in name}
 
 
-class OrderFlowTests(ShopTestCase):
-    def test_create_order_is_pending_and_priced_from_the_product(self):
-        order = services.create_order(self.user, self.pro_product, "yearly")
+class TestOrderFlow:
+    def test_create_order_is_pending_and_priced_from_the_package(self, user, pro):
+        order = services.create_order(user, pro)
 
-        self.assertEqual(order.status, Order.Status.PENDING)
-        self.assertEqual(order.total, Decimal("9.00"))
-        self.assertEqual(order.items.get().billing_cycle, "yearly")
-        self.assertFalse(UserPackage.objects.filter(user=self.user).exists())
+        assert (order.status, order.total) == (Order.Status.PENDING, Decimal("9.00"))
+        item = order.items.get()
+        assert (item.package, item.duration_days, item.description) == (pro, 30, "Pro")
+        assert not UserPackage.objects.filter(user=user).exists()
 
-    def test_repeated_requests_reuse_the_pending_order(self):
-        first = services.create_order(self.user, self.pro_product, "monthly")
-        again = services.create_order(self.user, self.pro_product, "monthly")
-        yearly = services.create_order(self.user, self.pro_product, "yearly")
+    def test_repeated_requests_reuse_the_pending_order(self, user, pro, gold):
+        first = services.create_order(user, pro)
+        again = services.create_order(user, pro)
+        other = services.create_order(user, gold)
 
-        self.assertEqual(first.pk, again.pk)
-        self.assertNotEqual(first.pk, yearly.pk)
-        self.assertEqual(Order.objects.filter(user=self.user).count(), 2)
+        assert first.pk == again.pk
+        assert other.pk != first.pk
 
-    def test_inactive_product_and_bad_cycle_are_rejected(self):
-        self.pro_product.is_active = False
-        self.pro_product.save()
-        with self.assertRaises(services.OrderError):
-            services.create_order(self.user, self.pro_product)
-        with self.assertRaises(services.OrderError):
-            services.create_order(self.user, self.sub_product, "weekly")
+    def test_unavailable_free_and_default_packages_are_rejected(
+        self, user, pro, default_tier
+    ):
+        PackageTier.objects.filter(pk=pro.pk).update(is_public=False)
+        pro.refresh_from_db()
+        with pytest.raises(services.OrderError, match="not available"):
+            services.create_order(user, pro)
+        with pytest.raises(services.OrderError, match="not available"):
+            services.create_order(user, default_tier)
+        free_paid = PackageTier.objects.create(
+            name="Zero", slug="zero", price=Decimal(0), limit_files=1
+        )
+        with pytest.raises(services.OrderError, match="free"):
+            services.create_order(user, free_paid)
 
-    def test_mark_paid_provisions_once_and_is_idempotent(self):
-        order = services.create_order(self.user, self.pro_product)
+    def test_mark_paid_provisions_once_and_is_idempotent(self, user, staff, pro):
+        order = services.create_order(user, pro)
 
-        services.mark_order_paid(order.pk, staff_user=self.staff, reference="BANK-1")
-        services.mark_order_paid(order.pk, staff_user=self.staff, reference="BANK-2")
+        services.mark_order_paid(order.pk, staff_user=staff, reference="BANK-1")
+        services.mark_order_paid(order.pk, staff_user=staff, reference="BANK-2")
 
         order.refresh_from_db()
-        self.assertEqual(order.status, Order.Status.PAID)
-        self.assertEqual(order.payment_reference, "BANK-1")
-        self.assertEqual(order.processed_by, self.staff)
-        package = UserPackage.objects.get(user=self.user)
-        self.assertEqual(package.package, self.pro)
-        self.assertEqual(package.status, UserPackage.Status.ACTIVE)
-        self.assertEqual(UserPackage.objects.filter(user=self.user).count(), 1)
+        assert (order.status, order.payment_reference) == (Order.Status.PAID, "BANK-1")
+        assert order.processed_by == staff
+        held = UserPackage.objects.get(user=user)
+        assert (held.package, held.status, held.source) == (
+            pro,
+            UserPackage.Status.ACTIVE,
+            UserPackage.Source.ORDER,
+        )
+        assert held.order == order
+        assert held.expires_at is not None
+        assert held.expires_at - held.started_at == timedelta(days=30)
 
-    def test_subscription_product_creates_a_subscription(self):
-        order = services.create_order(self.user, self.sub_product, "monthly")
+    def test_the_order_snapshot_decides_the_duration(self, user, staff, pro):
+        order = services.create_order(user, pro)
+        PackageTier.objects.filter(pk=pro.pk).update(duration_days=0)
 
-        services.mark_order_paid(order.pk, staff_user=self.staff)
+        services.mark_order_paid(order.pk, staff_user=staff)
 
-        subscription = Subscription.objects.get(user=self.user)
-        self.assertEqual(subscription.plan, self.plan)
-        self.assertIsNotNone(subscription.expires_at)
+        assert UserPackage.objects.get(user=user).expires_at is not None
 
-    def test_cancelled_orders_cannot_be_paid_and_paid_orders_cannot_be_cancelled(self):
-        cancelled = services.create_order(self.user, self.pro_product)
-        services.cancel_order(cancelled.pk, staff_user=self.staff)
-        with self.assertRaises(services.OrderError):
-            services.mark_order_paid(cancelled.pk, staff_user=self.staff)
+    def test_lifetime_packages_never_expire(self, user, staff):
+        forever = PackageTier.objects.create(
+            name="Forever", slug="forever", price=Decimal(99), duration_days=0
+        )
+        order = services.create_order(user, forever)
 
-        paid = services.create_order(self.user, self.sub_product)
-        services.mark_order_paid(paid.pk, staff_user=self.staff)
-        with self.assertRaises(services.OrderError):
-            services.cancel_order(paid.pk, staff_user=self.staff)
+        services.mark_order_paid(order.pk, staff_user=staff)
 
-    def test_activating_a_package_expires_the_previous_one(self):
-        first = services.activate_package(self.user, self.free)
-        services.activate_package(self.user, self.pro)
+        assert UserPackage.objects.get(user=user).expires_at is None
+
+    def test_cancelled_orders_cannot_be_paid_and_paid_orders_cannot_be_cancelled(
+        self, user, staff, pro, gold
+    ):
+        cancelled = services.create_order(user, pro)
+        services.cancel_order(cancelled.pk, staff_user=staff)
+        with pytest.raises(services.OrderError):
+            services.mark_order_paid(cancelled.pk, staff_user=staff)
+
+        paid = services.create_order(user, gold)
+        services.mark_order_paid(paid.pk, staff_user=staff)
+        with pytest.raises(services.OrderError):
+            services.cancel_order(paid.pk, staff_user=staff)
+
+    def test_activating_a_package_expires_the_previous_one(
+        self, user, pro, gold, default_tier
+    ):
+        first = services.activate_package(user, pro)
+        services.activate_package(user, gold)
 
         first.refresh_from_db()
-        self.assertEqual(first.status, UserPackage.Status.EXPIRED)
-        self.assertEqual(
-            UserPackage.objects.filter(user=self.user, status="active").count(), 1
-        )
+        assert first.status == UserPackage.Status.EXPIRED
+        assert UserPackage.objects.filter(user=user, status="active").count() == 1
 
-    def test_database_allows_only_one_live_package_per_user(self):
-        UserPackage.objects.create(user=self.user, package=self.free)
-        with self.assertRaises(IntegrityError), transaction.atomic():
-            UserPackage.objects.create(user=self.user, package=self.pro)
+    def test_renewing_the_same_package_stacks_the_period(self, user, staff, pro):
+        first = services.activate_package(user, pro)
 
-    def test_package_products_need_a_tier(self):
-        with self.assertRaises(IntegrityError), transaction.atomic():
-            Product.objects.create(
-                name="Broken", slug="broken", product_type="package", price=1
-            )
+        renewed = services.activate_package(user, pro)
 
-    def test_expiry_task_expires_overdue_packages_and_subscriptions(self):
+        assert renewed.expires_at is not None and first.expires_at is not None
+        assert renewed.expires_at == first.expires_at + timedelta(days=30)
+
+    def test_database_allows_only_one_live_package_per_user(self, user, pro, gold):
+        UserPackage.objects.create(user=user, package=pro)
+        with pytest.raises(IntegrityError), transaction.atomic():
+            UserPackage.objects.create(user=user, package=gold)
+
+    def test_expiry_task_expires_overdue_packages(self, user, staff, pro):
         past = timezone.now() - timedelta(days=1)
-        package = UserPackage.objects.create(
-            user=self.user, package=self.pro, expires_at=past
-        )
-        subscription = Subscription.objects.create(
-            user=self.user, plan=self.plan, expires_at=past
-        )
-        UserPackage.objects.create(user=self.staff, package=self.pro)
+        overdue = UserPackage.objects.create(user=user, package=pro, expires_at=past)
+        UserPackage.objects.create(user=staff, package=pro)
 
         result = expire_packages()
 
-        package.refresh_from_db()
-        subscription.refresh_from_db()
-        self.assertEqual(result, {"packages": 1, "subscriptions": 1})
-        self.assertEqual(package.status, UserPackage.Status.EXPIRED)
-        self.assertEqual(subscription.status, Subscription.Status.EXPIRED)
-        self.assertEqual(expire_packages(), {"packages": 0, "subscriptions": 0})
+        overdue.refresh_from_db()
+        assert result == {"packages": 1}
+        assert overdue.status == UserPackage.Status.EXPIRED
+        assert expire_packages() == {"packages": 0}
 
 
-class QuotaTests(ShopTestCase):
-    def test_default_tier_is_assigned_and_limits_are_enforced(self):
-        self.assertTrue(services.check_download_quota(self.user, size_mb=10).allowed)
-        services.record_download(self.user, size_mb=10)
-        services.record_download(self.user, size_mb=10)
+class TestPackageAdministrationServices:
+    def test_deactivating_keeps_holders_and_blocks_orders(self, user, pro):
+        services.activate_package(user, pro)
 
-        decision = services.check_download_quota(self.user, size_mb=10)
+        services.set_package_active(pro, active=False)
 
-        self.assertFalse(decision.allowed)
-        self.assertEqual(decision.reason, "Daily download limit reached.")
+        assert UserPackage.objects.get(user=user).status == "active"
+        with pytest.raises(services.OrderError):
+            services.create_order(user, pro)
+        services.set_package_active(pro, active=True)
+        assert services.create_order(user, pro)
 
-    def test_file_size_and_bandwidth_limits(self):
-        self.assertFalse(services.check_download_quota(self.user, size_mb=51).allowed)
-        services.record_download(self.user, size_mb=90)
+    def test_the_default_package_cannot_be_deactivated_or_archived(self, default_tier):
+        with pytest.raises(services.OrderError):
+            services.set_package_active(default_tier, active=False)
+        with pytest.raises(services.OrderError):
+            services.archive_package(default_tier)
 
-        decision = services.check_download_quota(self.user, size_mb=20)
+    def test_archiving_hides_the_package_and_cancels_pending_orders(
+        self, user, other, pro
+    ):
+        pending = services.create_order(user, pro)
 
-        self.assertEqual(decision.reason, "Daily bandwidth limit reached.")
+        services.archive_package(pro)
 
-    def test_unlimited_tier_and_user_overrides(self):
-        services.activate_package(self.user, self.pro)
-        for _ in range(5):
-            services.record_download(self.user, size_mb=1000)
-        self.assertTrue(services.check_download_quota(self.user, size_mb=5000).allowed)
+        pro.refresh_from_db()
+        pending.refresh_from_db()
+        assert (pro.is_active, pro.is_public) == (False, False)
+        assert pending.status == Order.Status.CANCELLED
 
-        other = get_user_model().objects.create_user(
-            username="override_user", email="override@example.com", password=PASSWORD
-        )
-        PackageQuotaOverride.objects.create(
-            user=other, daily_download_limit=10, monthly_download_limit=10
-        )
-        for _ in range(3):
-            services.record_download(other)
-        self.assertTrue(services.check_download_quota(other).allowed)
+    def test_duplicate_makes_a_hidden_inactive_non_default_copy(self, default_tier):
+        copy = services.duplicate_package(default_tier)
+        second = services.duplicate_package(default_tier)
 
-    def test_expired_override_is_ignored(self):
-        PackageQuotaOverride.objects.create(
-            user=self.user,
-            daily_download_limit=100,
-            expires_at=timezone.now() - timedelta(days=1),
-        )
-        services.record_download(self.user)
-        services.record_download(self.user)
-
-        self.assertFalse(services.check_download_quota(self.user).allowed)
-
-    def test_usage_windows_roll_over(self):
-        services.record_download(self.user)
-        services.record_download(self.user)
-        UserPackage.objects.filter(user=self.user).update(
-            last_download_at=timezone.now() - timedelta(days=2)
-        )
-
-        self.assertTrue(services.check_download_quota(self.user).allowed)
-
-    def test_firmware_type_access_follows_the_tier(self):
-        self.assertTrue(services.firmware_type_allowed(self.user, "official"))
-        self.assertFalse(services.firmware_type_allowed(self.user, "engineering"))
-        services.activate_package(self.user, self.pro)
-        self.assertTrue(services.firmware_type_allowed(self.user, "engineering"))
-        self.assertFalse(services.firmware_type_allowed(self.user, "unknown"))
-
-    def test_no_default_tier_means_no_downloads(self):
-        PackageTier.objects.filter(pk=self.free.pk).update(is_default=False)
-
-        self.assertFalse(services.check_download_quota(self.user).allowed)
+        assert copy.name == "Copy of Free" and second.name == "Copy of Free 2"
+        assert copy.slug == "copy-of-free" and second.slug == "copy-of-free-2"
+        assert (copy.is_default, copy.is_active, copy.is_public) == (False,) * 3
+        assert copy.limit_files == default_tier.limit_files
+        assert copy.summary() == default_tier.summary()
 
 
-class ShopViewTests(ShopTestCase):
-    def test_public_pages_render(self):
+class TestPublicViews:
+    def test_public_pages_render(self, client, pro, default_tier):
         for name, kwargs in (
             ("shop:pricing", {}),
-            ("shop:product_list", {}),
-            ("shop:product_detail", {"slug": "pro-package"}),
+            ("shop:package_detail", {"slug": "pro"}),
         ):
-            with self.subTest(route=name):
-                response = self.client.get(reverse(name, kwargs=kwargs))
-                self.assertEqual(response.status_code, 200)
+            assert client.get(reverse(name, kwargs=kwargs)).status_code == 200
 
-    def test_inactive_product_is_hidden(self):
-        self.pro_product.is_active = False
-        self.pro_product.save()
+    def test_the_shop_root_redirects_to_the_pricing_page(self, client):
+        response = client.get("/shop/")
 
-        response = self.client.get(
-            reverse("shop:product_detail", kwargs={"slug": "pro-package"})
+        assert response.status_code == 302
+        assert response["Location"] == "/shop/pricing/"
+        assert reverse("shop:pricing") == "/shop/pricing/"
+
+    def test_inactive_and_hidden_packages_are_not_public(self, client, pro):
+        PackageTier.objects.filter(pk=pro.pk).update(is_active=False)
+
+        assert (
+            client.get(
+                reverse("shop:package_detail", kwargs={"slug": "pro"})
+            ).status_code
+            == 404
         )
+        assert "Pro" not in client.get(reverse("shop:pricing")).content.decode()
 
-        self.assertEqual(response.status_code, 404)
+    def test_account_pages_require_login(self, client):
+        for name in ("shop:my_package", "shop:order_history"):
+            assert client.get(reverse(name)).status_code == 302
 
-    def test_account_pages_require_login(self):
-        for name in ("shop:my_subscriptions", "shop:order_history"):
-            with self.subTest(route=name):
-                self.assertEqual(self.client.get(reverse(name)).status_code, 302)
+    def test_placing_an_order_requires_post_login_verified_email_and_csrf(
+        self, client, make_user, pro
+    ):
+        url = reverse("shop:place_order", kwargs={"slug": "pro"})
+        assert client.get(url).status_code == 405
+        assert client.post(url).status_code == 302
+        assert Order.objects.count() == 0
 
-    def test_placing_an_order_requires_post_login_verified_email_and_csrf(self):
-        url = reverse("shop:place_order", kwargs={"slug": "pro-package"})
-        self.assertEqual(self.client.get(url).status_code, 405)
-        self.assertEqual(self.client.post(url).status_code, 302)
-        self.assertEqual(Order.objects.count(), 0)
+        client.force_login(make_user("unverified", verified=False))
+        client.post(url)
+        assert Order.objects.count() == 0
 
-        self.client.force_login(self.unverified)
-        self.client.post(url)
-        self.assertEqual(Order.objects.count(), 0)
-
+        member = make_user("member")
         csrf_client = Client(enforce_csrf_checks=True)
-        csrf_client.force_login(self.user)
-        self.assertEqual(csrf_client.post(url).status_code, 403)
+        csrf_client.force_login(member)
+        assert csrf_client.post(url).status_code == 403
 
-        self.client.force_login(self.user)
-        response = self.client.post(url, {"billing_cycle": "monthly"})
-        self.assertRedirects(response, reverse("shop:order_history"))
+        client.force_login(member)
+        response = client.post(url)
         order = Order.objects.get()
-        self.assertEqual((order.user, order.status), (self.user, Order.Status.PENDING))
+        assert response.status_code == 302
+        assert response["Location"] == reverse("shop:order_detail", args=[order.pk])
+        assert (order.user, order.status) == (member, Order.Status.PENDING)
 
-    def test_order_history_only_shows_own_orders(self):
-        mine = services.create_order(self.user, self.pro_product)
-        services.create_order(self.staff, self.sub_product)
-        self.client.force_login(self.user)
+    def test_default_and_unknown_packages_cannot_be_ordered(
+        self, client, user, default_tier
+    ):
+        client.force_login(user)
 
-        response = self.client.get(reverse("shop:order_history"))
+        for slug in (default_tier.slug, "nope"):
+            response = client.post(reverse("shop:place_order", kwargs={"slug": slug}))
+            assert response.status_code == 404
 
-        self.assertContains(response, f"#{mine.pk}")
-        self.assertEqual(len(response.context["orders"]), 1)
+    def test_order_history_only_shows_own_orders(self, client, user, other, pro, gold):
+        mine = services.create_order(user, pro)
+        services.create_order(other, gold)
+        client.force_login(user)
 
-    def test_my_subscriptions_shows_package_state(self):
-        services.activate_package(self.user, self.pro)
-        self.client.force_login(self.user)
+        response = client.get(reverse("shop:order_history"))
 
-        response = self.client.get(reverse("shop:my_subscriptions"))
+        assert f"#{mine.pk}" in response.content.decode()
+        assert len(response.context["orders"]) == 1
 
-        self.assertContains(response, "Pro")
+    def test_my_package_shows_the_package_summary_and_history(
+        self, client, user, pro, default_tier
+    ):
+        services.activate_package(user, pro)
+        client.force_login(user)
 
+        response = client.get(reverse("shop:my_package"))
 
-class ShopAdminTests(ShopTestCase):
-    def test_every_model_is_registered(self):
-        for model in (
-            SubscriptionPlan,
-            PackageTier,
-            UserPackage,
-            PackageQuotaOverride,
-            Product,
-            Subscription,
-            Order,
-        ):
-            with self.subTest(model=model.__name__):
-                self.assertIn(model, admin.site._registry)
-
-    def test_mark_paid_admin_action_provisions_and_blocks_non_permitted_staff(self):
-        order = services.create_order(self.user, self.pro_product)
-        self.client.force_login(self.staff)
-        url = reverse("admin:shop_order_changelist")
-
-        response = self.client.post(
-            url, {"action": "mark_paid", "_selected_action": [order.pk]}, follow=True
-        )
-
-        self.assertEqual(response.status_code, 200)
-        order.refresh_from_db()
-        self.assertEqual(order.status, Order.Status.PAID)
-        self.assertTrue(UserPackage.objects.filter(user=self.user).exists())
-
-        limited = get_user_model().objects.create_user(
-            username="limited_staff",
-            email="limited-staff@example.com",
-            password=PASSWORD,
-            is_staff=True,
-        )
-        second = services.create_order(self.user, self.sub_product)
-        self.client.force_login(limited)
-        self.client.post(url, {"action": "mark_paid", "_selected_action": [second.pk]})
-        second.refresh_from_db()
-        self.assertEqual(second.status, Order.Status.PENDING)
+        text = response.content.decode()
+        assert "Pro" in text and pro.summary() in text
+        assert response.context["package"].package == pro

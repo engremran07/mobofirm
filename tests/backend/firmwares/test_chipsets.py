@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from importlib import import_module
-
-from django.apps import apps as django_apps
 from django.test import TestCase
 
 from apps.firmwares.chipsets import (
@@ -197,27 +194,6 @@ class ModelAndVariantReferenceTests(TestCase):
         model.refresh_from_db()
         self.assertIsNone(model.chipset_ref)
         self.assertEqual(model.chipset, "Unisoc T618")
-
-
-class BackfillMigrationTests(TestCase):
-    def test_backfill_resolves_existing_free_text_chipsets(self):
-        brand = Brand.objects.create(name="Backfill Brand", slug="backfill-brand")
-        model = Model.objects.create(
-            brand=brand,
-            name="Old Phone",
-            slug="old-phone",
-            chipset="MediaTek Helio P35",
-        )
-        Model.objects.filter(pk=model.pk).update(chipset_ref=None)
-        Chipset.objects.all().delete()
-        migration = import_module(
-            "apps.firmwares.migrations.0020_backfill_chipset_references"
-        )
-
-        migration.backfill_chipsets(django_apps, None)
-
-        model.refresh_from_db()
-        self.assertEqual(_chipset_of(self, model).slug, "mediatek-helio-p35")
 
 
 class ToolMatchingTests(TestCase):

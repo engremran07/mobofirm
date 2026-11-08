@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Request a payout · Mobofirm{% endblock %}
+{% block content %}
+{% url 'marketplace:listing_browse' as market_url %}
+{% url 'marketplace:dashboard' as dashboard_url %}
+<div class="site-container py-4 py-lg-5">
+  {% include "components/breadcrumbs.html" with current="Request a payout" grandparent_label="Marketplace" grandparent_url=market_url parent_label="Seller dashboard" parent_url=dashboard_url %}
+  {% include "components/page_header.html" with eyebrow="Seller dashboard" title="Request a payout" lead="Ask staff to pay out credits you earned from sales." %}
+  <div class="row">
+    <div class="col-12 col-lg-7">
+      {% if earnings.wallet_enabled %}
+        <form method="post" class="surface-card p-4 d-grid gap-3" aria-label="Payout request">
+          {% include "marketplace/dialogs/_payout_fields.html" %}
+          <div class="d-flex flex-wrap gap-2">
+            <button type="submit" class="btn btn-primary">Send request</button>
+            <a class="btn btn-outline-secondary" href="{{ dashboard_url }}">Back to dashboard</a>
+          </div>
+        </form>
+      {% else %}
+        {% include "components/empty_state.html" with title="Payouts are not enabled yet" message="The credit wallet is not switched on, so there is nothing to pay out. Earnings are recorded and credited once it is." action_label="Back to dashboard" action_url=dashboard_url %}
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

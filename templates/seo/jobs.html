@@ -1,20 +1,32 @@
-{% extends "seo/base.html" %}
-{% block seo_content %}
-<p>{{ pending }} pending. Jobs are recorded after content commits and succeed only when every attempted action was verified.</p>
-{% if perms.seo.change_seojob %}
-  <form method="post" action="{% url 'seo:process_jobs' %}">{% csrf_token %}<button type="submit" class="button">Process pending jobs now</button></form>
+{% extends "admin/staff_page.html" %}
+{% block mf_actions %}
+  {% if can_process %}
+    <form method="post" action="{% url 'seo:process_jobs' %}" class="mf-ui-seo-inline">
+      {% csrf_token %}
+      <button type="submit" class="mf-ui-btn mf-ui-btn--primary">Process pending jobs now</button>
+    </form>
+  {% endif %}
+{% endblock %}
+{% block mf_nav %}{% include "seo/_tabs.html" %}{% endblock %}
+{% block mf_body %}
+<p class="mf-ui-help">{{ pending }} pending, {{ failed }} failed. Jobs are recorded after content commits and succeed only when every attempted action was verified. Processing runs here without Celery; with a worker, the beat task does the same every minute.</p>
+{% if jobs %}
+<div class="mf-ui-table-wrap" role="region" aria-label="SEO jobs" tabindex="0">
+  <table class="mf-ui-table">
+    <thead><tr><th scope="col">Kind</th><th scope="col">Key</th><th scope="col">Status</th><th scope="col" class="is-number">Attempts</th><th scope="col">Result / error</th></tr></thead>
+    <tbody>
+      {% for job in jobs %}
+        <tr>
+          <td>{{ job.kind }}</td><td><code class="mf-ui-code">{{ job.job_key }}</code></td>
+          <td><span class="mf-ui-badge{% if job.status == 'succeeded' %} mf-ui-badge--success{% elif job.status == 'failed' %} mf-ui-badge--danger{% elif job.status == 'pending' %} mf-ui-badge--warning{% endif %}">{{ job.get_status_display }}</span></td>
+          <td class="is-number">{{ job.attempts }}/{{ job.max_attempts }}</td>
+          <td>{% if job.last_error %}<strong>{{ job.last_error }}</strong>{% else %}<code class="mf-ui-code">{{ job.result }}</code>{% endif %}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+  <p class="mf-ui-empty">No jobs recorded.</p>
 {% endif %}
-<table class="mf-seo-table">
-  <thead><tr><th scope="col">Kind</th><th scope="col">Key</th><th scope="col">Status</th><th scope="col">Attempts</th><th scope="col">Result / error</th></tr></thead>
-  <tbody>
-    {% for job in jobs %}
-      <tr>
-        <td>{{ job.kind }}</td><td><code>{{ job.job_key }}</code></td><td>{{ job.get_status_display }}</td><td>{{ job.attempts }}/{{ job.max_attempts }}</td>
-        <td>{% if job.last_error %}<strong>{{ job.last_error }}</strong>{% else %}<code>{{ job.result }}</code>{% endif %}</td>
-      </tr>
-    {% empty %}
-      <tr><td colspan="5">No jobs recorded.</td></tr>
-    {% endfor %}
-  </tbody>
-</table>
 {% endblock %}

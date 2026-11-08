@@ -1,16 +1,45 @@
-{% extends "base.html" %}
-{% block title %}Device events | {{ site_name|default:"Mobofirm" }}{% endblock %}
-{% block content %}
-<div class="site-container py-5">
-  {% include "components/page_header.html" with eyebrow="Staff" title="Device events" %}
-  {% for event in events %}
-    <article class="surface-card p-3 mb-2">
-      <strong>{{ event }}</strong>
-      <time class="small muted d-block" datetime="{{ event.created_at|date:'c' }}">{{ event.created_at|date:"M j, Y H:i" }} UTC</time>
-      {% if event.device %}<p class="mb-0 muted">{{ event.device }}</p>{% endif %}
-    </article>
-  {% empty %}
-    {% include "components/empty_state.html" with title="No device events are available" %}
-  {% endfor %}
-</div>
+{% extends "admin/staff_page.html" %}
+{% block mf_actions %}
+  <a class="mf-ui-btn" href="{% url 'admin:devices_deviceevent_changelist' %}">All events</a>
+  <a class="mf-ui-btn" href="{% url 'admin:devices_device_changelist' %}">Devices</a>
+{% endblock %}
+{% block mf_nav %}
+  <ul class="mf-ui-tabs" aria-label="Event type">
+    <li><a href="{% url 'devices:device_events' %}"{% if not selected %} aria-current="page"{% endif %}>All</a></li>
+    {% for key, label in kinds.items %}
+      <li><a href="?type={{ key }}"{% if key == selected %} aria-current="page"{% endif %}>{{ label }}</a></li>
+    {% endfor %}
+  </ul>
+{% endblock %}
+{% block mf_body %}
+  {% if events %}
+    <div class="mf-ui-table-wrap" role="region" aria-label="Device events" tabindex="0">
+      <table class="mf-ui-table">
+        <thead>
+          <tr>
+            <th scope="col">When</th>
+            <th scope="col">Event</th>
+            <th scope="col">Outcome</th>
+            <th scope="col">User</th>
+            <th scope="col">Device</th>
+            <th scope="col">Reason</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for event in events %}
+            <tr>
+              <td><time datetime="{{ event.created_at|date:'c' }}">{{ event.created_at|date:"M j, Y H:i" }}</time></td>
+              <td>{{ event.get_event_type_display }}</td>
+              <td>{% if event.success %}<span class="mf-ui-badge mf-ui-badge--success">OK</span>{% else %}<span class="mf-ui-badge mf-ui-badge--danger">Failed</span>{% endif %}</td>
+              <td>{{ event.user|default:"—" }}</td>
+              <td>{{ event.device|default:"—" }}</td>
+              <td>{{ event.reason|default:"—" }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="mf-ui-empty">No device events{% if selected %} of this type{% endif %} are available.</p>
+  {% endif %}
 {% endblock %}

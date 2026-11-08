@@ -1,0 +1,7 @@
+{% extends "components/dialog.html" %}
+{# Blog-owned content for the generic dialog shell: names the post and, for scheduling, asks for the time. #}
+{% block dialog_body %}
+  {% include "components/form_errors.html" with form=form %}
+  <p class="mb-3"><strong>{{ post.title }}</strong> <span class="badge text-bg-secondary">{{ post.get_status_display }}</span></p>
+  {% for field in form %}{% include "components/form_field.html" with field=field %}{% endfor %}
+{% endblock %}

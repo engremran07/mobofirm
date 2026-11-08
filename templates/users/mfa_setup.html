@@ -2,13 +2,25 @@
 {% block title %}Set up two-factor authentication | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block content %}
 <div class="site-container py-5">
-  <section class="surface-card auth-card p-4" aria-labelledby="mfa-setup-title">
+  {% url 'users:dashboard' as account_url %}
+  {% include "components/breadcrumbs.html" with current="Two-factor setup" parent_label="Account" parent_url=account_url %}
+  <section class="surface-card auth-card p-4" aria-labelledby="mfa-setup-title" x-data="mfaSetup">
     <p class="section-eyebrow">Account security</p>
     <h1 id="mfa-setup-title" class="h2">Set up an authenticator</h1>
-    <p>Use an authenticator app that supports time-based one-time passwords.</p>
-    <ol>
-      <li>Add a new account in your authenticator app.</li>
-      <li>Enter this setup key: <code>{{ secret }}</code></li>
+    <p>Use an authenticator app that supports time-based one-time passwords, such as Google Authenticator, Microsoft Authenticator or Authy.</p>
+    <ol class="mfa-steps">
+      <li>Open your authenticator app and choose <strong>Add account</strong>, then <strong>Scan a QR code</strong>.</li>
+      <li>
+        Scan this code. It adds <strong>{{ issuer }}</strong> for {{ user.email }}.
+        <div class="my-3">{{ qr_svg }}</div>
+        <button class="btn btn-link px-0" type="button" aria-controls="mfa-setup-key" :aria-expanded="expandedAttr" @click="toggle" x-text="toggleLabel">Can't scan? Show setup key</button>
+        <div id="mfa-setup-key" class="mt-2" :hidden="keyHidden" hidden>
+          <p class="mb-1">Enter this key manually in your app (time-based, 6 digits):</p>
+          <p class="mb-2"><code class="mfa-setup-key" x-ref="key">{{ setup_key }}</code></p>
+          <button class="btn btn-sm btn-outline-secondary" type="button" @click="copy" x-text="copyLabel">Copy key</button>
+        </div>
+        <noscript><p class="mt-2">Setup key: <code class="mfa-setup-key">{{ setup_key }}</code></p></noscript>
+      </li>
       <li>Enter the six-digit code from the app to confirm setup.</li>
     </ol>
     <form method="post">

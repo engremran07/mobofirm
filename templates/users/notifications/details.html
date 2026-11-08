@@ -1,7 +1,10 @@
 {% extends "base.html" %}
 {% block title %}{{ notification.title }} | Notifications{% endblock %}
 {% block content %}
-<div class="site-container py-5"><article class="surface-card p-4">
+<div class="site-container py-5">
+  {% url 'users:dashboard' as account_url %}{% url 'users:notifications' as notifications_url %}
+  {% include "components/breadcrumbs.html" with current=notification.title parent_label="Notifications" parent_url=notifications_url grandparent_label="Account" grandparent_url=account_url %}
+  <article class="surface-card p-4">
   <p class="section-eyebrow">Notification</p><h1 class="h2">{{ notification.title }}</h1>
   <p>{{ notification.message|linebreaksbr }}</p><time class="small muted" datetime="{{ notification.created_at|date:'c' }}">{{ notification.created_at|date:"F j, Y H:i" }}</time>
   {% if notification.url|slice:":1" == "/" and notification.url|slice:":2" != "//" and "\\" not in notification.url %}<p class="mt-3"><a class="btn btn-outline-secondary" href="{{ notification.url }}">Open related item</a></p>{% endif %}

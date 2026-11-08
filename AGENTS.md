@@ -3,7 +3,7 @@
 ## Repository baseline
 
 - This is a runnable Django project. `app/` contains project configuration and `apps/` contains the installed Django applications.
-- The installed local applications are `users`, `core`, `ads`, `devices`, `blog`, `comments`, `firmwares`, and `tags` (plus the integrated `storage`, `seo`, `pages`, `shop`, `marketplace`, and `filemanager`). Verify `app/settings/base.py` before changing that inventory.
+- The installed local applications are `users`, `core`, `ads`, `devices`, `blog`, `comments`, `firmwares`, and `tags` (plus the integrated `storage`, `seo`, `pages`, `shop`, `marketplace`, and `site_settings`). There is no personal file storage: "My files" (`/files/`) is owned by `users` and lists files served to the account, its uploads and its download quota. Verify `app/settings/base.py` before changing that inventory.
 - Profile, following, and activity functionality belongs to `users`.
 - Governance-pack policies, registers, and decisions are documentation under `docs/00-governance/`. The former `apps.governance` Django app was removed by owner decision: moderation is app-owned (firmware pending/approved/rejected with reviewer, timestamp and reason in `firmwares`; blog post status workflow in `blog`; comment moderation status in `comments`; tag curation in `tags`), operated by staff holding the relevant model permission.
 - PostgreSQL is the configured runtime database. Tests use in-memory SQLite. Do not run migrations or cleanup commands against a non-test database without explicit authorization.

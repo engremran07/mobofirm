@@ -114,7 +114,7 @@ class Command(BaseCommand):
 
             # 6) Fix empty descriptions
             elif not seo_desc.strip():
-                new_desc = _generate_description(post, device)
+                new_desc = _generate_description(device)
                 post.seo_description = new_desc
                 post.summary = new_desc
                 self._log(f"  [desc] generated ({len(new_desc)}ch)", post)
@@ -279,7 +279,7 @@ def _trim_description(desc: str) -> str:
     return Truncator(desc).chars(DESC_MAX, truncate="…")
 
 
-def _generate_description(post: Post, device: str) -> str:
+def _generate_description(device: str) -> str:
     """Generate description from scratch when none exists."""
     return (
         f"Download and install firmware for {device}. "

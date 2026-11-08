@@ -1,0 +1,11 @@
+{# Contract: kind (required: brand|model|variant|firmware|chipset); query (optional text the user typed, prefilled into the request form); brand / model (optional objects or ids giving context, prefilled in the form); heading (optional lead sentence). Signed-out visitors are sent to sign in and then back to the prefilled form (next). #}
+{% load firmware_requests %}
+{% request_cta_target kind query brand model as cta %}
+<aside class="request-cta" data-request-kind="{{ kind }}" aria-label="Request a missing {{ cta.noun }}">
+  <i data-lucide="circle-help" aria-hidden="true"></i>
+  <div class="request-cta__body">
+    <p class="request-cta__title">{% if heading %}{{ heading }}{% elif cta.query %}Can’t find “{{ cta.query }}”?{% else %}Can’t find the {{ cta.noun }} you need?{% endif %}</p>
+    <p class="request-cta__text">Ask us to add this {{ cta.noun }}; a reviewer checks every request and you are notified of the decision.</p>
+  </div>
+  <a class="btn btn-primary request-cta__action" href="{{ cta.url }}" data-request-cta="{{ kind }}"><i data-lucide="plus" aria-hidden="true"></i><span class="ms-1">{{ cta.label }}</span></a>
+</aside>

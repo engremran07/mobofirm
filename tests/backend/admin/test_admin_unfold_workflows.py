@@ -18,7 +18,7 @@ from django.utils import timezone
 from apps.ads.models import AdPlacement, AutoAdsScanResult, ScanDiscovery
 from apps.blog.models import Post, PostStatus
 from apps.comments.models import Comment
-from apps.devices.models import Device, DeviceEvent
+from apps.devices.models import Device, DeviceConfig, DeviceEvent
 from apps.tags.models import Tag
 
 DIALOG = {"_form_submitted": "on"}
@@ -344,16 +344,33 @@ def test_device_actions_need_the_change_permission(device):
 
 
 @pytest.mark.django_db
-def test_device_quota_and_config_stay_superuser_only(device):
+def test_device_config_changes_stay_superuser_only(device):
     manager = _user(
-        "quota-manager",
+        "config-manager",
         staff=True,
-        perms=("view_userdevicequota", "change_userdevicequota", "add_userdevicequota"),
+        perms=("view_deviceconfig", "change_deviceconfig"),
     )
     client = _client(manager)
+    config_url = _url("devices_deviceconfig_changelist")
 
-    assert client.get(_url("devices_userdevicequota_changelist")).status_code == 200
-    assert client.get(_url("devices_userdevicequota_add")).status_code == 403
+    # Holding the model permission is not enough: only superusers may change it.
+    response = client.post(config_url, {"slot_reset_monthly_cap": "99"}, follow=True)
+
+    assert response.status_code in (200, 403)
+    assert DeviceConfig.get_solo().slot_reset_monthly_cap != 99
+    assert client.get(_url("devices_deviceconfig_add")).status_code == 403
+
+
+def test_slot_resets_are_read_only_audit_records(device):
+    staff = _user(
+        "reset-auditor",
+        staff=True,
+        perms=("view_deviceslotreset", "add_deviceslotreset", "change_deviceslotreset"),
+    )
+    client = _client(staff)
+
+    assert client.get(_url("devices_deviceslotreset_changelist")).status_code == 200
+    assert client.get(_url("devices_deviceslotreset_add")).status_code == 403
 
 
 # -- ads ------------------------------------------------------------------------------

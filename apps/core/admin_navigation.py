@@ -14,6 +14,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any
 
+from django.apps import apps as django_apps
 from django.contrib import admin
 from django.http import HttpRequest
 from django.urls import NoReverseMatch, reverse
@@ -62,13 +63,41 @@ NAV_GROUPS: tuple[NavGroup, ...] = (
             m("firmwares.model", "smartphone", "Models"),
             m("firmwares.variant", "devices", "Variants"),
             m("firmwares.chipset", "memory", "Chipsets"),
-            m("firmwares.gsmarenadevice", "sync", "GSMArena devices"),
-            m("firmwares.brandschema", "schema", "Brand schemas"),
-            m("firmwares.schemaupdateproposal", "rule", "Schema proposals"),
-            m("firmwares.brandcreationrequest", "add_business", "Brand requests"),
-            m("firmwares.modelcreationrequest", "add_circle", "Model requests"),
-            m("firmwares.variantcreationrequest", "add_box", "Variant requests"),
-            m("firmwares.firmwarerequest", "help", "Firmware requests"),
+        ),
+    ),
+    NavGroup(
+        "Review queues",
+        (
+            m(
+                "firmwares.brandcreationrequest",
+                "add_business",
+                "Brand requests (review)",
+                badge="apps.core.admin_navigation.badge_brand_requests",
+            ),
+            m(
+                "firmwares.modelcreationrequest",
+                "add_circle",
+                "Model requests (review)",
+                badge="apps.core.admin_navigation.badge_model_requests",
+            ),
+            m(
+                "firmwares.variantcreationrequest",
+                "add_box",
+                "Variant requests (review)",
+                badge="apps.core.admin_navigation.badge_variant_requests",
+            ),
+            m(
+                "firmwares.chipsetcreationrequest",
+                "memory",
+                "Chipset requests (review)",
+                badge="apps.core.admin_navigation.badge_chipset_requests",
+            ),
+            m(
+                "firmwares.firmwarerequest",
+                "help",
+                "Firmware requests (review)",
+                badge="apps.core.admin_navigation.badge_firmware_requests",
+            ),
         ),
     ),
     NavGroup(
@@ -105,6 +134,7 @@ NAV_GROUPS: tuple[NavGroup, ...] = (
         (
             m("firmwares.downloadtoken", "key", "Download tokens"),
             m("firmwares.downloadsession", "download", "Download sessions"),
+            m("firmwares.serveddownload", "library_books", "Served downloads"),
             m("firmwares.adgatelog", "ads_click", "Ad gate log"),
             m("firmwares.hotlinkblock", "block", "Hotlink blocks"),
             m("firmwares.firmwaredownloadattempt", "downloading", "Download attempts"),
@@ -121,6 +151,7 @@ NAV_GROUPS: tuple[NavGroup, ...] = (
         (
             m("blog.post", "edit_note", "Blog posts"),
             m("blog.category", "folder", "Categories"),
+            m("blog.guiderequest", "help_center", "Guide requests (review)"),
             m(
                 "tags.tag",
                 "sell",
@@ -162,6 +193,8 @@ NAV_GROUPS: tuple[NavGroup, ...] = (
             u("Inventory", "inventory", "seo:inventory", "seo.view_issue"),
             u("Page inspector", "search", "seo:inspect", "seo.view_issue"),
             u("Issues board", "bug_report", "seo:issues", "seo.view_issue"),
+            u("Interlinking", "add_link", "seo:links", "seo.view_linksuggestion"),
+            u("Flash guides", "menu_book", "seo:guides", "seo.view_issue"),
             u("Change ledger", "fact_check", "seo:ledger", "seo.view_changeledger"),
             u("Job queue", "schedule", "seo:jobs", "seo.view_seojob"),
             u("SEO control settings", "tune", "seo:settings", "seo.view_seosettings"),
@@ -176,6 +209,7 @@ NAV_GROUPS: tuple[NavGroup, ...] = (
             m("seo.seokeywordhistory", "trending_up", "Keyword history"),
             m("seo.seomodel", "dataset", "SEO records"),
             m("seo.crawlrun", "travel_explore", "Crawl runs"),
+            m("seo.pagesnapshot", "list_alt", "Scanned pages"),
             m("seo.pageobservation", "pageview", "Page observations"),
             m(
                 "seo.issue",
@@ -202,12 +236,14 @@ NAV_GROUPS: tuple[NavGroup, ...] = (
                 "Orders",
                 badge="apps.core.admin_navigation.badge_orders",
             ),
-            m("shop.product", "inventory_2", "Products"),
-            m("shop.subscriptionplan", "workspace_premium", "Subscription plans"),
-            m("shop.subscription", "autorenew", "Subscriptions"),
-            m("shop.packagetier", "layers", "Package tiers"),
+            m("shop.packagetier", "layers", "Packages"),
             m("shop.userpackage", "badge", "User packages"),
-            m("shop.packagequotaoverride", "speed", "Quota overrides"),
+            m("shop.packagequotaoverride", "speed", "Package quota overrides"),
+            m("shop.userquotaoverride", "manage_accounts", "Account overrides"),
+            m("shop.quotaoverrideaudit", "history", "Override audit"),
+            m("shop.quotaconsumption", "data_usage", "Quota consumption"),
+            m("shop.featuredblogpurchase", "article", "Featured blog purchases"),
+            m("shop.shopsettings", "tune", "Shop settings"),
         ),
     ),
     NavGroup(
@@ -221,10 +257,28 @@ NAV_GROUPS: tuple[NavGroup, ...] = (
             ),
             m("marketplace.sellerprofile", "store", "Sellers"),
             m("marketplace.sellerverification", "verified_user", "Seller verification"),
+            m("marketplace.sellerearning", "payments", "Seller earnings"),
         ),
     ),
     NavGroup(
-        "Files & storage",
+        "Credits economy",
+        (
+            m("wallet.rewardrule", "redeem", "Reward rules"),
+            m("wallet.creditprice", "sell", "Credit prices"),
+            m("wallet.wallet", "account_balance_wallet", "Wallets"),
+            m("wallet.ledgerentry", "receipt_long", "Ledger"),
+            m("wallet.topuprequest", "add_card", "Top-up requests"),
+            m("wallet.payoutrequest", "payments", "Payout requests"),
+            m("wallet.escrowhold", "lock_clock", "Escrow holds"),
+            m("wallet.rewardrefusal", "flag", "Abuse flags"),
+            m("wallet.walletsettings", "tune", "Credits & pricing"),
+            m("referral.referral", "group_add", "Referrals"),
+            m("referral.referralcode", "link", "Referral codes"),
+            m("referral.referralsettings", "settings", "Referral settings"),
+        ),
+    ),
+    NavGroup(
+        "Firmware storage",
         (
             u(
                 "Storage status",
@@ -233,11 +287,6 @@ NAV_GROUPS: tuple[NavGroup, ...] = (
                 "storage.view_firmwarestoragelocation",
             ),
             m("storage.firmwarestoragelocation", "cloud_done", "Storage locations"),
-            m("filemanager.fileitem", "description", "Files"),
-            m("filemanager.folder", "folder_open", "Folders"),
-            m("filemanager.fileshare", "share", "Shares"),
-            m("filemanager.folderpermission", "lock_person", "Folder permissions"),
-            m("filemanager.storageusage", "data_usage", "Storage usage"),
         ),
     ),
     NavGroup(
@@ -253,6 +302,7 @@ NAV_GROUPS: tuple[NavGroup, ...] = (
             m("ads.adevent", "ads_click", "Ad events"),
             m("ads.rewardedadconfig", "redeem", "Rewarded configs"),
             m("ads.rewardedadview", "smart_display", "Rewarded views"),
+            m("ads.rewardedadgrant", "redeem", "Rewarded grants"),
             m("ads.affiliatesource", "handshake", "Affiliate sources"),
             m("ads.affiliatelink", "link", "Affiliate links"),
             m("ads.affiliateprovider", "storefront", "Affiliate providers"),
@@ -288,13 +338,23 @@ NAV_GROUPS: tuple[NavGroup, ...] = (
         (
             m("devices.device", "devices", "Devices"),
             m("devices.deviceevent", "event_note", "Device events"),
-            m("devices.userdevicequota", "speed", "Device quotas"),
+            m("devices.deviceslotrequest", "add_circle", "Slot requests"),
+            m("devices.deviceslotreset", "restart_alt", "Slot resets"),
+            m("devices.deviceresetallowance", "event_repeat", "Reset allowances"),
             m("devices.apppolicy", "policy", "App policies"),
-            m("devices.quotatier", "layers", "Quota tiers"),
             m("devices.devicefingerprint", "fingerprint", "Fingerprints"),
             m("devices.trustscore", "shield", "Trust scores"),
             m("devices.registryevent", "list_alt", "Registry events"),
             m("devices.behaviorinsight", "insights", "Behavior insights"),
+        ),
+    ),
+    NavGroup(
+        "Campaigns",
+        (
+            m("promotions.promotion", "campaign", "Promotions"),
+            m("promotions.promotiongrant", "redeem", "Grants"),
+            m("promotions.promotionprogress", "trending_up", "Earn progress"),
+            m("promotions.promotionlog", "history", "Campaign log"),
         ),
     ),
     NavGroup(
@@ -310,6 +370,75 @@ NAV_GROUPS: tuple[NavGroup, ...] = (
             m("users.notificationpreferences", "tune", "Preferences"),
             m("users.pushsubscription", "web_asset", "Push subscriptions"),
             m("users.announcement", "campaign", "Announcements"),
+        ),
+    ),
+    NavGroup(
+        "Community",
+        (
+            m("gamification.badge", "military_tech", "Badges"),
+            m("gamification.userbadge", "workspace_premium", "Awarded badges"),
+            m("gamification.xprule", "tune", "XP rules"),
+            m("gamification.level", "stairs", "Levels"),
+            m("gamification.xptransaction", "history", "XP ledger"),
+            m("gamification.streak", "local_fire_department", "Streaks"),
+            m("bounty.bounty", "request_quote", "Bounties"),
+            m(
+                "bounty.bountydispute",
+                "gavel",
+                "Bounty reports (review)",
+                badge="apps.core.admin_navigation.badge_bounty_reports",
+            ),
+            m("bounty.bountylog", "history", "Bounty log"),
+        ),
+    ),
+    NavGroup(
+        "Distribution",
+        (
+            u(
+                "Dashboard",
+                "monitoring",
+                "admin:distribution_channel_dashboard",
+                "distribution.view_channel",
+            ),
+            m("distribution.channel", "podcasts", "Channels"),
+            m("distribution.campaign", "campaign", "Campaign presets"),
+            u(
+                "Content calendar",
+                "calendar_month",
+                "admin:distribution_channel_calendar",
+                "distribution.view_sharejob",
+            ),
+            u(
+                "Approval queue",
+                "fact_check",
+                "admin:distribution_channel_review",
+                "distribution.change_sharejob",
+            ),
+            m("distribution.sharejob", "send", "Share queue"),
+            u(
+                "Link analytics",
+                "insights",
+                "admin:distribution_channel_analytics",
+                "distribution.view_shortlink",
+            ),
+            m("distribution.shortlink", "link", "Short links"),
+            m("distribution.sharelog", "list_alt", "Distribution log"),
+            m("distribution.mediaasset", "image", "Generated media"),
+            m("distribution.distributionsettings", "tune", "Retention settings"),
+        ),
+    ),
+    NavGroup(
+        "Compliance",
+        (
+            u(
+                "Consent statistics",
+                "bar_chart",
+                "admin:consent_consentdecision_stats",
+                "consent.view_consentdecision",
+            ),
+            m("consent.consentpolicy", "policy", "Policy versions"),
+            m("consent.consentcategory", "category", "Categories"),
+            m("consent.consentdecision", "fact_check", "Consent records"),
         ),
     ),
     NavGroup(
@@ -343,6 +472,26 @@ def badge_comments(request: HttpRequest) -> str:
     return metric_badge(request, "pending_comments")
 
 
+def badge_brand_requests(request: HttpRequest) -> str:
+    return metric_badge(request, "pending_brand_requests")
+
+
+def badge_model_requests(request: HttpRequest) -> str:
+    return metric_badge(request, "pending_model_requests")
+
+
+def badge_variant_requests(request: HttpRequest) -> str:
+    return metric_badge(request, "pending_variant_requests")
+
+
+def badge_chipset_requests(request: HttpRequest) -> str:
+    return metric_badge(request, "pending_chipset_requests")
+
+
+def badge_firmware_requests(request: HttpRequest) -> str:
+    return metric_badge(request, "open_firmware_requests")
+
+
 def badge_tags(request: HttpRequest) -> str:
     return metric_badge(request, "unapproved_tags")
 
@@ -363,6 +512,10 @@ def badge_listings(request: HttpRequest) -> str:
     return metric_badge(request, "pending_listings")
 
 
+def badge_bounty_reports(request: HttpRequest) -> str:
+    return metric_badge(request, "open_bounty_reports")
+
+
 def changelist_url(model_label: str) -> str | None:
     """Admin changelist URL for ``app_label.modelname`` or None if unregistered."""
     app_label, _sep, model_name = model_label.partition(".")
@@ -374,8 +527,9 @@ def changelist_url(model_label: str) -> str | None:
 
 def _registered_models() -> dict[str, Any]:
     return {
-        model._meta.label_lower: model_admin
-        for model, model_admin in admin.site._registry.items()
+        model._meta.label_lower: admin.site.get_model_admin(model)
+        for model in django_apps.get_models()
+        if admin.site.is_registered(model)
     }
 
 
@@ -462,7 +616,35 @@ def build_sidebar(request: HttpRequest) -> list[dict[str, Any]]:
     other = _other_group(request, registry)
     if other:
         groups.append(other)
+    _mark_active_item(request, groups)
     return groups
+
+
+def _link_path(link: str) -> str:
+    return link.partition("?")[0]
+
+
+def _mark_active_item(request: HttpRequest, groups: list[dict[str, Any]]) -> None:
+    """Highlight exactly one sidebar entry: the one with the longest matching path.
+
+    Unfold's own prefix test also lights a parent entry (a model changelist) when the
+    page is a child URL (that model's dashboard), so two rows looked selected.
+    """
+    path = request.path
+    index_path = reverse("admin:index")
+    best: dict[str, Any] | None = None
+    best_length = -1
+    all_items = [item for group in groups for item in group["items"]]
+    for item in all_items:
+        item_path = _link_path(str(item["link"]))
+        if item_path == index_path:
+            matches = path == index_path
+        else:
+            matches = path == item_path or path.startswith(item_path.rstrip("/") + "/")
+        if matches and len(item_path) > best_length:
+            best, best_length = item, len(item_path)
+    for item in all_items:
+        item["active"] = item is best
 
 
 def unlisted_models() -> list[str]:

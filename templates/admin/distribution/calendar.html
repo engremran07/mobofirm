@@ -1,0 +1,48 @@
+{% extends "admin/staff_page.html" %}
+{% block mf_nav %}{% include "admin/distribution/_nav.html" %}{% endblock %}
+{% block mf_body %}
+{% if days %}
+  {% for day in days %}
+  <section class="mf-ui-card" aria-labelledby="day-{{ day.date|date:'Ymd' }}">
+    <h2 class="mf-ui-card__title" id="day-{{ day.date|date:'Ymd' }}">{{ day.date|date:"l, j F Y" }}</h2>
+    <div class="mf-ui-table-wrap" role="region" aria-label="Posts on {{ day.date|date:'j F Y' }}" tabindex="0">
+      <table class="mf-ui-table">
+        <thead><tr><th scope="col">Time</th><th scope="col">Channel</th><th scope="col">Post</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead>
+        <tbody>
+          {% for item in day.items %}{% with job=item.job %}
+          <tr>
+            <td>{{ item.time|date:"H:i" }}</td>
+            <td>{{ job.channel.name }}<br><span class="mf-ui-help">{{ job.channel.timezone }}</span></td>
+            <td><strong>{{ job.title }}</strong>{% if job.reshare_round %} <span class="mf-ui-badge mf-ui-badge--info">re-share</span>{% endif %}{% if job.trending %} <span class="mf-ui-badge mf-ui-badge--info">new launch</span>{% endif %}<div class="mf-ui-dist-post">{{ job.text }}</div></td>
+            <td>
+              {% if job.status == "sent" %}<span class="mf-ui-badge mf-ui-badge--success">Sent</span>
+              {% elif job.status == "pending" %}<span class="mf-ui-badge mf-ui-badge--warning">Awaiting approval</span>
+              {% elif job.status == "needs_media" %}<span class="mf-ui-badge mf-ui-badge--warning">Needs media</span>
+              {% else %}<span class="mf-ui-badge mf-ui-badge--info">Scheduled</span>{% endif %}
+              {% if job.last_error %}<br><span class="mf-ui-help">{{ job.last_error }}</span>{% endif %}
+            </td>
+            <td>
+              {% if item.editable and can_change %}
+              <form method="post" action="{% url 'admin:distribution_channel_job_reschedule' job.pk %}" class="mf-ui-dist-actions">{% csrf_token %}
+                <input type="hidden" name="next" value="{% url 'admin:distribution_channel_calendar' %}">
+                <label class="mf-ui-dist-sr" for="when-{{ job.pk }}">New time for {{ job.title }}</label>
+                <input type="datetime-local" id="when-{{ job.pk }}" name="when" value="{{ item.input }}" required>
+                <button type="submit" class="mf-ui-btn mf-ui-btn--small">Reschedule</button>
+              </form>
+              <form method="post" action="{% url 'admin:distribution_channel_job_cancel' job.pk %}" class="mf-ui-dist-actions">{% csrf_token %}
+                <input type="hidden" name="next" value="{% url 'admin:distribution_channel_calendar' %}">
+                <button type="submit" class="mf-ui-btn mf-ui-btn--small mf-ui-btn--danger">Cancel</button>
+              </form>
+              {% else %}<span class="mf-ui-help">—</span>{% endif %}
+            </td>
+          </tr>
+          {% endwith %}{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endfor %}
+{% else %}
+  <p class="mf-ui-empty">Nothing scheduled and nothing sent in the last few days. New firmware and posts appear here as soon as they are queued.</p>
+{% endif %}
+{% endblock %}

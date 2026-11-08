@@ -1,0 +1,31 @@
+{# Contract: package (PackageTier), current_package_id (from the pricing view; marks the current plan). One package card: name, summary, price, order action. Shows a promotional price when a live campaign applies. #}
+{% load shop_tags %}
+{% package_promo package as promo %}
+<article class="surface-card eco-tier{% if package.is_popular %} eco-tier--featured{% endif %}" aria-labelledby="package-{{ package.pk }}">
+  <div class="d-flex flex-wrap align-items-center gap-2">
+    <h2 class="h4 mb-0" id="package-{{ package.pk }}">{{ package.name }}</h2>
+    {% if package.is_popular %}{% include "components/status_pill.html" with label="Popular" tone="accent" %}{% endif %}
+    {% if package.pk == current_package_id %}{% include "components/status_pill.html" with label="Current plan" tone="success" icon="check" %}{% endif %}
+    {% if package.is_default %}{% include "components/status_pill.html" with label="Included with every account" %}{% endif %}
+  </div>
+  {% if package.description %}<p class="small muted mb-0">{{ package.description }}</p>{% endif %}
+  {% if promo %}
+    <p class="eco-price"><s class="muted fs-6">{{ package.price_text }}</s> {{ promo.price_text }}{% if package.credit_price %} <small>or {{ promo.credit_price }} credits</small>{% endif %}</p>
+    <p class="small mb-2"><a href="{{ promo.url }}">{{ promo.name }}</a>{% if promo.ends_at %} · ends {{ promo.ends_at|date:"j M" }}{% endif %}</p>
+  {% else %}
+  <p class="eco-price">{{ package.price_text }}{% if package.credit_price %} <small>or {{ package.credit_price }} credits</small>{% endif %}</p>
+  {% endif %}
+  <p class="small mb-2 package-summary">{{ package.summary }}</p>
+  <ul class="eco-feature-list">
+    <li><i class="icon" data-lucide="check" aria-hidden="true"></i><span>{{ package.quota_text }}</span></li>
+    {% if package.extra_text %}<li><i class="icon" data-lucide="check" aria-hidden="true"></i><span>{{ package.extra_text }}</span></li>{% endif %}
+    <li><i class="icon" data-lucide="check" aria-hidden="true"></i><span>{{ package.devices_text|capfirst }}</span></li>
+    <li{% if not package.applies_to_featured %} class="is-off"{% endif %}><i class="icon" data-lucide="{% if package.applies_to_featured %}check{% else %}x{% endif %}" aria-hidden="true"></i><span>Featured files{% if not package.applies_to_featured %} <span class="visually-hidden">not included</span>{% endif %}</span></li>
+    {% for perk in package.perk_labels %}<li><i class="icon" data-lucide="check" aria-hidden="true"></i><span>{{ perk }}</span></li>{% endfor %}
+  </ul>
+  <div class="mt-auto d-flex flex-wrap gap-2">
+    {% if not package.is_default and package.price > 0 %}
+      <a class="btn btn-primary" href="{% url 'shop:package_detail' slug=package.slug %}">{% if package.pk == current_package_id %}Renew{% else %}Get this package{% endif %}</a>
+    {% endif %}
+  </div>
+</article>

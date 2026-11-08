@@ -1,10 +1,59 @@
-{% for issue in issues %}
-  <tr>
-    <td>{{ issue.severity }}</td>
-    <td>{{ issue.code }}</td>
-    <td><a href="{% url 'seo:inspect' %}?url={{ issue.url|urlencode }}">{{ issue.url|default:"(site-wide)" }}</a></td>
-    <td>{{ issue.message }}</td>
-  </tr>
-{% empty %}
-  <tr><td colspan="4">No open issues match.</td></tr>
-{% endfor %}
+<nav class="mf-ui-seo-groups" aria-label="Object types">
+  <ul class="mf-ui-tabs">
+    {% for tab in tabs %}
+      <li><a href="{% url 'seo:issues' %}?{{ tab.query }}"{% if tab.current %} aria-current="page"{% endif %} hx-get="{% url 'seo:issues' %}?{{ tab.query }}" hx-target="#seo-board-results" hx-push-url="true">{{ tab.label }} <span class="mf-ui-badge">{{ tab.total }}</span></a></li>
+    {% endfor %}
+  </ul>
+</nav>
+
+<p class="mf-ui-help">{{ page.paginator.count }} issue{{ page.paginator.count|pluralize }} match.</p>
+
+<ul class="mf-ui-seo-issues">
+  {% for row in rows %}
+    {% with issue=row.issue rule=row.rule %}
+    <li class="mf-ui-card mf-ui-seo-issue" id="issue-{{ issue.pk }}">
+      <div class="mf-ui-seo-issue__head">
+        <span class="mf-ui-badge{% if issue.severity == 'error' %} mf-ui-badge--danger{% elif issue.severity == 'warning' %} mf-ui-badge--warning{% else %} mf-ui-badge--info{% endif %}">{{ issue.get_severity_display }}</span>
+        <strong>{{ rule.label }}</strong>
+        {% if issue.fixable %}<span class="mf-ui-badge mf-ui-badge--success">Fix available</span>{% endif %}
+        {% if issue.status == 'ignored' %}<span class="mf-ui-badge">Ignored</span>{% endif %}
+      </div>
+      <p class="mf-ui-seo-issue__object">
+        {% if row.group_label %}{{ row.group_label }} &middot; {% endif %}
+        <a href="{% url 'seo:inspect' %}?url={{ issue.url|urlencode }}">{{ issue.object_title|default:issue.url|default:"(site-wide)" }}</a>
+        {% if issue.object_title and issue.url %}<span class="mf-ui-help"> {{ issue.url }}</span>{% endif %}
+      </p>
+      <p>{{ issue.message }}</p>
+      {% if issue.measured or issue.expected or row.proposal %}
+        <dl class="mf-ui-seo-dl">
+          {% if issue.measured %}<dt>Measured</dt><dd>{{ issue.measured }}</dd>{% endif %}
+          {% if issue.expected %}<dt>Standard</dt><dd>{{ issue.expected }}</dd>{% endif %}
+          {% if row.proposal %}<dt>Proposed</dt><dd>{{ row.proposal }}</dd>{% endif %}
+        </dl>
+      {% endif %}
+      {% if issue.status == 'ignored' and issue.ignored_reason %}<p class="mf-ui-help">Ignored: {{ issue.ignored_reason }}</p>{% endif %}
+      <div class="mf-ui-row">
+        <a class="mf-ui-btn mf-ui-btn--small mf-ui-btn--primary" href="{% url 'seo:issue_detail' pk=issue.pk %}?next={{ next_url|urlencode }}"
+           hx-get="{% url 'seo:issue_detail' pk=issue.pk %}?next={{ next_url|urlencode }}" hx-target="#fix-{{ issue.pk }}" hx-swap="innerHTML">{% if issue.status == 'open' and can_fix %}Review and fix{% else %}Details{% endif %}<span class="mf-ui-sr"> {{ rule.label }}</span></a>
+        {% if row.admin_url %}<a class="mf-ui-btn mf-ui-btn--small" href="{{ row.admin_url }}">Edit object</a>{% endif %}
+        {% if issue.status == 'ignored' and can_manage %}
+          <form method="post" action="{% url 'seo:issue_restore' pk=issue.pk %}" class="mf-ui-seo-inline">{% csrf_token %}<input type="hidden" name="next" value="{{ next_url }}"><button type="submit" class="mf-ui-btn mf-ui-btn--small">Reopen</button></form>
+        {% endif %}
+      </div>
+      <div id="fix-{{ issue.pk }}" class="mf-ui-seo-slot"></div>
+    </li>
+    {% endwith %}
+  {% empty %}
+    <li class="mf-ui-empty">
+      {% if latest_scan %}No issues match these filters. That is a good sign for what the scan covers.{% else %}No issues yet. Run a scan to audit every public page.{% endif %}
+    </li>
+  {% endfor %}
+</ul>
+
+{% if page.has_other_pages %}
+  <nav class="mf-ui-seo-pager" aria-label="Issue pages">
+    {% if page.has_previous %}<a class="mf-ui-btn mf-ui-btn--small" href="?{{ query_string }}&amp;page={{ page.previous_page_number }}" hx-get="{% url 'seo:issues' %}?{{ query_string }}&amp;page={{ page.previous_page_number }}" hx-target="#seo-board-results" hx-push-url="true">Previous</a>{% endif %}
+    <span>Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+    {% if page.has_next %}<a class="mf-ui-btn mf-ui-btn--small" href="?{{ query_string }}&amp;page={{ page.next_page_number }}" hx-get="{% url 'seo:issues' %}?{{ query_string }}&amp;page={{ page.next_page_number }}" hx-target="#seo-board-results" hx-push-url="true">Next</a>{% endif %}
+  </nav>
+{% endif %}

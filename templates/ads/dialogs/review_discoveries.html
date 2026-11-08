@@ -1,0 +1,15 @@
+{% extends "admin/staff_dialog.html" %}
+{% block dialog_body %}
+  {% if decision == "approve" %}
+    <p>Each approved suggestion creates a placement for its template and zone (switched on, with no creative until you assign one).</p>
+  {% else %}
+    <p>Rejected suggestions leave the queue and no placement is created.</p>
+  {% endif %}
+  {% if discoveries %}
+    <ul class="mf-ui-list">
+      {% for discovery in discoveries %}<li><code class="mf-ui-code">{{ discovery.scan_result.template_path }}</code> &middot; {{ discovery.placement_name }}</li>{% endfor %}
+    </ul>
+  {% else %}
+    <p class="mf-ui-note mf-ui-note--warning" role="status">None of the selected suggestions is pending.</p>
+  {% endif %}
+{% endblock %}

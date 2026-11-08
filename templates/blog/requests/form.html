@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Request a method or guide | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block meta_description %}Ask for a flashing method, unlock pattern, trick or guide. Staff review every request before writers can answer it.{% endblock %}
+{% block content %}
+{% url 'blog:request_list' as list_url %}
+<div class="site-container py-5">
+  {% include "components/breadcrumbs.html" with current="Request a method or guide" parent_label="Requests" parent_url=list_url %}
+  <div class="row justify-content-center">
+    <div class="col-12 col-lg-8 col-xl-7">
+      {% include "components/page_header.html" with eyebrow="Guide requests" title="Request a method or guide" lead="Describe the flashing method, unlock pattern or trick you need. Staff review every request first; once approved it is public and anyone can add a credit bounty." %}
+      {% if not requests_enabled %}
+        <p class="alert alert-info" role="status">Guide requests are switched off right now.</p>
+      {% else %}
+      <form method="post" class="surface-card p-4" novalidate data-guide-request-form>
+        {% csrf_token %}
+        {% include "components/form_errors.html" with form=form %}
+        {% if duplicates %}
+          <div class="alert alert-warning" role="status" data-testid="guide-duplicates">
+            <p class="mb-1"><strong>This may already exist:</strong></p>
+            <ul class="mb-0">{% for item in duplicates %}<li><a href="{{ item.url }}">{{ item.title }}</a> ({{ item.kind }})</li>{% endfor %}</ul>
+          </div>
+        {% endif %}
+        {% include "components/form_field.html" with field=form.title %}
+        {% include "components/form_field.html" with field=form.kind %}
+        {% include "blog/requests/_catalog_field.html" with field=form.brand input_id="guide-brand" label="Brand" kinds="brand" display=brand_label placeholder="Search brands…" %}
+        {% include "blog/requests/_catalog_field.html" with field=form.model input_id="guide-model" label="Model" kinds="model" display=model_label depends_on="guide-brand" depends_param="brand" placeholder="Search models…" %}
+        {% include "blog/requests/_catalog_field.html" with field=form.chipset input_id="guide-chipset" label="Chipset" kinds="chipset" display=chipset_label placeholder="Search chipsets…" %}
+        {% include "components/form_field.html" with field=form.description %}
+        <div class="d-flex flex-wrap gap-2">
+          <button class="btn btn-primary" type="submit">Send for review</button>
+          <a class="btn btn-outline-secondary" href="{{ list_url }}">Cancel</a>
+        </div>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

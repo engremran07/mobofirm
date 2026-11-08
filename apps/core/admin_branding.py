@@ -4,11 +4,22 @@ from __future__ import annotations
 
 from django.conf import settings
 from django.http import HttpRequest
+from django.templatetags.static import static
 from django.urls import reverse
 from django.utils.translation import gettext as _
 
-from app.context_processors import release_metadata
+from app.version import build_info, environment_name
 from apps.site_settings.services import get_site_settings
+
+
+def theme_styles(request: HttpRequest) -> str:
+    """Stylesheet of the header theme switcher (built by Vite)."""
+    return static("build/admin-theme-switch.css")
+
+
+def theme_scripts(request: HttpRequest) -> str:
+    """Classic head script that applies the stored theme before first paint."""
+    return static("build/admin-theme.js")
 
 
 def site_title(request: HttpRequest) -> str:
@@ -24,8 +35,9 @@ def site_subheader(request: HttpRequest) -> str:
 
 
 def site_version(request: HttpRequest) -> str:
-    """Installed release version, from the same source as the public footer."""
-    return f"v{release_metadata(request)['release_version']}"
+    """Release version (and build SHA when known), from ``app.version``."""
+    info = build_info()
+    return f"v{info.version}" + (f" · {info.git_sha}" if info.git_sha else "")
 
 
 def site_url(request: HttpRequest) -> str:
@@ -49,7 +61,11 @@ def favicons(request: HttpRequest) -> list[dict[str, str]]:
     return [{"rel": "icon", "href": url}] if url else []
 
 
-def environment_label(request: HttpRequest) -> tuple[str, str] | None:
+def environment_label(request: HttpRequest) -> tuple[str, str]:
+    """Environment badge shown in the admin header and on the dashboard."""
     if settings.DEBUG:
         return (_("Development"), "warning")
-    return None
+    name = environment_name()
+    if name and name != "production":
+        return (name.title(), "info")
+    return (_("Production"), "success")

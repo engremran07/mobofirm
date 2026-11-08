@@ -25,6 +25,12 @@ export default defineConfig({
         "seo-sitemap": fileURLToPath(
           new URL("./frontend/src/styles/seo-sitemap.css", import.meta.url),
         ),
+        "admin-theme": fileURLToPath(
+          new URL("./frontend/src/admin-theme.js", import.meta.url),
+        ),
+        "admin-theme-switch": fileURLToPath(
+          new URL("./frontend/src/styles/admin-theme.css", import.meta.url),
+        ),
       },
       output: {
         entryFileNames: "[name].js",

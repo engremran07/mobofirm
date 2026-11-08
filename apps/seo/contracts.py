@@ -96,6 +96,7 @@ class ResolvedSEO:
     provenance: dict[str, str]
     policy_version: str = POLICY_VERSION
     warnings: tuple[str, ...] = ()
+    object_ref: tuple[str, str] | None = None
 
     def as_report(self) -> dict[str, Any]:
         return {

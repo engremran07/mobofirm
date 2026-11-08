@@ -10,6 +10,11 @@
 
 {% block content %}
     {% trans "Action needed" as action_needed %}
+    <section aria-label="{% trans 'Release and environment' %}" id="dashboard-release" class="flex flex-row flex-wrap gap-3 items-center mb-6 text-subtle text-sm">
+        <span data-app-version="{{ release_version }}">{% trans "Version" %} {{ release_version }}</span>
+        {% if release_build.git_sha %}<span>{% trans "Build" %} {{ release_build.git_sha }}{% if release_build.build_date %} ({{ release_build.build_date }}){% endif %}</span>{% endif %}
+        {% if environment %}{% include "unfold/helpers/label.html" with text=environment.0 type=environment.1 %}{% endif %}
+    </section>
     <section aria-labelledby="dashboard-kpis" class="mb-6">
         <h2 id="dashboard-kpis" class="font-semibold mb-3 text-important text-sm uppercase">{% trans "Needs your attention" %}</h2>
         {% if kpis %}
@@ -22,7 +27,7 @@
                         </div>
                         <p class="font-semibold mt-3 text-3xl text-important tabular-nums" data-kpi-value="{{ kpi.value|default_if_none:'' }}">{% if kpi.value is None %}&mdash;{% else %}{{ kpi.value }}{% endif %}</p>
                         <p class="mt-1 text-subtle text-xs">{{ kpi.hint }}</p>
-                        {% if kpi.value %}
+                        {% if kpi.value and kpi.variant != "info" and kpi.variant != "success" %}
                             <div class="absolute right-4 top-4">
                                 {% include "unfold/helpers/label.html" with variant=kpi.variant text=action_needed %}
                             </div>

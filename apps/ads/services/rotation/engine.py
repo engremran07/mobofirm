@@ -7,7 +7,11 @@ from collections.abc import Iterable
 from django.db import DatabaseError
 
 from apps.ads.models import AdCreative, AdPlacement, AdsSettings, PlacementAssignment
-from apps.ads.services.targeting.engine import campaign_allowed, placement_allowed
+from apps.ads.services.targeting.engine import (
+    campaign_allowed,
+    campaign_within_caps,
+    placement_allowed,
+)
 from apps.core.utils import feature_flags
 from apps.core.utils.logging import log_event
 
@@ -68,8 +72,11 @@ def choose_creative(
     qs: Iterable[PlacementAssignment] = placement.assignments.filter(
         is_enabled=True,
         is_active=True,
+        is_deleted=False,
         creative__is_enabled=True,
         creative__is_active=True,
+        creative__is_deleted=False,
+        creative__campaign__is_deleted=False,
     ).select_related("creative", "creative__campaign")
     pool = []
     mult = _aggressiveness_multiplier()
@@ -87,6 +94,8 @@ def choose_creative(
         ):
             continue
         if campaign and not campaign_allowed(campaign, context):
+            continue
+        if campaign and not campaign_within_caps(campaign):
             continue
         weight = max(1, a.weight * mult)
         pool.extend([creative] * weight)

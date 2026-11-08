@@ -32,10 +32,8 @@ def get_settings() -> dict[str, Any]:
         "auto_ads_in_feed": bool(getattr(s, "auto_ads_in_feed", True)),
         "auto_ads_anchor": bool(getattr(s, "auto_ads_anchor", False)),
         "auto_ads_vignette": bool(getattr(s, "auto_ads_vignette", False)),
-        # Rewarded ads
+        # Rewarded ads (the reward itself is configured per RewardedAdConfig)
         "rewarded_ads_enabled": bool(getattr(s, "rewarded_ads_enabled", False)),
-        "rewarded_ads_reward_type": getattr(s, "rewarded_ads_reward_type", "downloads"),
-        "rewarded_ads_reward_value": getattr(s, "rewarded_ads_reward_value", 1),
         # Networks
         "adsense_enabled": bool(getattr(s, "adsense_enabled", False)),
         "adsense_publisher_id": getattr(s, "adsense_publisher_id", ""),
@@ -51,9 +49,7 @@ def get_settings() -> dict[str, Any]:
         "native_ads_style": getattr(s, "native_ads_style", "card"),
         # AI optimization
         "ai_optimization_enabled": bool(getattr(s, "ai_optimization_enabled", False)),
-        # Privacy
-        "require_consent": bool(getattr(s, "require_consent", True)),
-        "show_ads_without_consent": bool(getattr(s, "show_ads_without_consent", True)),
+        # Privacy: consent is decided per visitor by apps.consent, not configured here
         # Limits
         "max_ads_per_page": getattr(s, "max_ads_per_page", 5),
         "lazy_load_ads": bool(getattr(s, "lazy_load_ads", True)),
@@ -86,18 +82,24 @@ def get_enabled_networks() -> list[str]:
 
 def get_rewarded_ad_config(config_name: str | None = None) -> dict[str, Any]:
     """
-    Get rewarded ad configuration for a specific config or the first enabled one.
+    Get rewarded ad configuration for a specific config or the first available one.
+
+    ``enabled`` is true only when the master switches, the config and its placement
+    are all on, so callers never offer a reward that cannot start.
     """
     try:
+        from apps.ads import rewarded
         from apps.ads.models import RewardedAdConfig
 
+        configs = RewardedAdConfig.objects.filter(
+            is_enabled=True, is_deleted=False
+        ).select_related("placement")
         if config_name:
-            config = RewardedAdConfig.objects.filter(
-                name=config_name, is_enabled=True
-            ).first()
-        else:
-            config = RewardedAdConfig.objects.filter(is_enabled=True).first()
-
+            configs = configs.filter(name=config_name)
+        config = next(
+            (item for item in configs.order_by("pk") if rewarded.is_available(item)),
+            None,
+        )
         if not config:
             return {"enabled": False}
 
@@ -109,10 +111,36 @@ def get_rewarded_ad_config(config_name: str | None = None) -> dict[str, Any]:
             "reward_description": config.reward_description,
             "cooldown_minutes": config.cooldown_minutes,
             "daily_limit": config.daily_limit_per_user,
+            "monthly_limit": config.monthly_limit_per_user,
+            "url": rewarded.page_url(config),
         }
     except DatabaseError:
         logger.exception("Failed to load rewarded ad configuration.")
         return {"enabled": False, "error": "configuration_unavailable"}
+
+
+def rewarded_offer(reward_type: str) -> dict[str, Any]:
+    """The available rewarded ad that pays ``reward_type`` (for example ``device_reset``).
+
+    Used by other apps to show a "watch a rewarded ad" option only when staff enabled
+    and fully configured one; otherwise ``{"enabled": False}``.
+    """
+    from apps.ads import rewarded
+
+    try:
+        config = rewarded.available_config(reward_type)
+    except DatabaseError:
+        logger.exception("Failed to load the %s rewarded ad.", reward_type)
+        return {"enabled": False, "error": "configuration_unavailable"}
+    if config is None:
+        return {"enabled": False}
+    return {
+        "enabled": True,
+        "name": config.name,
+        "reward_type": config.reward_type,
+        "reward_description": config.reward_description,
+        "url": rewarded.page_url(config),
+    }
 
 
 def get_affiliate_products_settings() -> dict[str, Any]:
@@ -143,8 +171,6 @@ def track_affiliate_click_sync(
     product_id: int,
     user_id: int | None = None,
     page_url: str = "",
-    referrer_type: str = "",
-    referrer_id: int | None = None,
     ip_address: str = "",
     user_agent: str = "",
     session_id: str = "",
@@ -198,7 +224,7 @@ def get_contextual_products(
     """
     from django.db.models import Q
 
-    from apps.ads.models import AdsSettings, AffiliateProduct, AffiliateProductMatch
+    from apps.ads.models import AffiliateProduct, AffiliateProductMatch
 
     settings_obj = AdsSettings.get_solo()
     if not settings_obj.affiliate_products_enabled:
@@ -290,6 +316,7 @@ __all__ = [
     "get_enabled_networks",
     "get_rewarded_ad_config",
     "get_settings",
+    "rewarded_offer",
     "should_show_ads",
     "track_affiliate_click_sync",
 ]

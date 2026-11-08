@@ -7,13 +7,23 @@ from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_safe
 from redis.exceptions import RedisError
 
+from app.version import build_info
+
 logger = logging.getLogger(__name__)
+
+
+def _version_payload() -> dict[str, object]:
+    info = build_info()
+    return {
+        "version": info.version,
+        "build": {"git_sha": info.git_sha, "date": info.build_date},
+    }
 
 
 @never_cache
 @require_safe
 def liveness(_request):
-    return JsonResponse({"status": "ok"})
+    return JsonResponse({"status": "ok", "version": build_info().version})
 
 
 @never_cache
@@ -34,4 +44,4 @@ def readiness(_request):
         cache_ok = False
     if not cache_ok:
         return JsonResponse({"status": "unavailable"}, status=503)
-    return JsonResponse({"status": "ok"})
+    return JsonResponse({"status": "ok", **_version_payload()})

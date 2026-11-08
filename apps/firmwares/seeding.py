@@ -10,15 +10,13 @@ articles are produced by the same code that runs in production.
 from __future__ import annotations
 
 import re
-from collections.abc import Callable, Iterator, Sequence
-from contextlib import contextmanager
+from collections.abc import Sequence
 from dataclasses import replace
 from datetime import date
 
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.core.management.base import CommandError
 from django.db.models import Q
-from django.db.models.signals import post_save
 from django.utils.text import slugify
 
 from apps.core.seeding import SeedReport
@@ -160,31 +158,6 @@ def model_description(brand: BrandSeed, seed: ModelSeed) -> str:
         "flashing tools that support it."
     )
     return " ".join(sentences)
-
-
-@contextmanager
-def suppress_catalog_autofill() -> Iterator[None]:
-    """Create catalogue records without GSMArena or AI lookups.
-
-    The seed supplies every field itself, so the creation-time autofill receivers
-    are disconnected for the duration and restored afterwards.
-    """
-    from . import signal_handlers
-
-    disconnected: list[tuple[Callable[..., object], type]] = []
-    for handler_name, sender in (
-        ("autofill_brand_on_create", Brand),
-        ("autofill_model_on_create", Model),
-        ("autofill_variant_on_create", Variant),
-    ):
-        handler = getattr(signal_handlers, handler_name, None)
-        if handler is not None and post_save.disconnect(handler, sender=sender):
-            disconnected.append((handler, sender))
-    try:
-        yield
-    finally:
-        for restored_handler, restored_sender in disconnected:
-            post_save.connect(restored_handler, sender=restored_sender)
 
 
 def select_brands(limit: int | None = None) -> tuple[BrandSeed, ...]:
@@ -521,15 +494,14 @@ def seed_catalog(
         for key in (seed.chipset, *(variant.chipset for variant in seed.variants))
         if key
     }
-    with suppress_catalog_autofill():
-        chipset_report, _ = seed_chipsets(
-            [chipset for chipset in CHIPSETS if chipset.key in used]
-        )
-        total.merge(chipset_report)
-        total.merge(seed_brands_and_models(brands))
-        total.merge(seed_firmware(brands, uploader=uploader, reviewer=reviewer))
-        total.merge(seed_tools())
-        total.merge(seed_guides(publisher=publisher))
+    chipset_report, _ = seed_chipsets(
+        [chipset for chipset in CHIPSETS if chipset.key in used]
+    )
+    total.merge(chipset_report)
+    total.merge(seed_brands_and_models(brands))
+    total.merge(seed_firmware(brands, uploader=uploader, reviewer=reviewer))
+    total.merge(seed_tools())
+    total.merge(seed_guides(publisher=publisher))
     return total
 
 

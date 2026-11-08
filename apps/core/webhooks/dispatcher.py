@@ -11,7 +11,7 @@ import logging
 from typing import Any, ClassVar
 
 import requests
-from django.db import models
+from django.db import DatabaseError, models
 
 logger = logging.getLogger(__name__)
 
@@ -101,10 +101,10 @@ class WebhookDispatcher:
         webhooks = Webhook.objects.filter(event_type=event_type, active=True)
 
         if not webhooks.exists():
-            logger.debug(f"No webhooks registered for '{event_type}'")
+            logger.debug("No webhooks registered for '%s'", event_type)
             return
 
-        logger.info(f"Dispatching '{event_type}' to {webhooks.count()} webhooks")
+        logger.info("Dispatching '%s' to %s webhooks", event_type, webhooks.count())
 
         for webhook in webhooks:
             self._send_webhook(webhook, event_type, payload)
@@ -172,14 +172,18 @@ class WebhookDispatcher:
                     webhook.successful_deliveries += 1
                     webhook.save()
                     logger.info(
-                        f"Webhook delivered to {webhook.url} ({response.status_code})"
+                        "Webhook delivered to %s (%s)",
+                        webhook.url,
+                        response.status_code,
                     )
                     return  # Success, don't retry
                 else:
                     webhook.failed_deliveries += 1
                     webhook.save()
                     logger.warning(
-                        f"Webhook failed: {response.status_code} - {response.text[:200]}"
+                        "Webhook failed: %s - %s",
+                        response.status_code,
+                        response.text[:200],
                     )
 
             except requests.Timeout:
@@ -192,7 +196,7 @@ class WebhookDispatcher:
                 logger.exception("Webhook request failed to %s", webhook.url)
                 self._log_failed_delivery(webhook, event_type, payload, attempt, str(e))
 
-            except Exception as e:
+            except (DatabaseError, TypeError, ValueError) as e:
                 logger.exception("Webhook dispatch error")
                 self._log_failed_delivery(webhook, event_type, payload, attempt, str(e))
 
@@ -200,7 +204,10 @@ class WebhookDispatcher:
             if attempt < webhook.retry_count:
                 wait_seconds = 2**attempt
                 logger.info(
-                    f"Retrying webhook in {wait_seconds}s (attempt {attempt + 1}/{webhook.retry_count})"
+                    "Retrying webhook in %ss (attempt %s/%s)",
+                    wait_seconds,
+                    attempt + 1,
+                    webhook.retry_count,
                 )
                 time.sleep(wait_seconds)
 

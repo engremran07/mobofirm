@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Seller application · Mobofirm{% endblock %}
+{% block content %}
+{% url 'marketplace:listing_browse' as market_url %}
+<div class="site-container py-4 py-lg-5">
+  {% include "components/breadcrumbs.html" with current="Application status" parent_label="Marketplace" parent_url=market_url %}
+  {% include "components/page_header.html" with eyebrow="Marketplace" title="Seller application" lead="Follow the review of your seller application." %}
+
+  <section class="surface-card p-4 mb-4" aria-labelledby="status-heading">
+    <h2 class="h5 d-flex flex-wrap align-items-center gap-2" id="status-heading">Review status
+      {% if status.code == "approved" %}{% include "components/status_pill.html" with label=status.label tone="success" icon="badge-check" %}
+      {% elif status.code == "pending" %}{% include "components/status_pill.html" with label=status.label tone="warning" icon="clock" %}
+      {% elif status.code == "rejected" or status.code == "suspended" %}{% include "components/status_pill.html" with label=status.label tone="danger" %}
+      {% else %}{% include "components/status_pill.html" with label=status.label %}{% endif %}
+    </h2>
+    <p>{{ status.message }}</p>
+    {% if status.reason %}<div class="mb-3">{% include "components/notice.html" with tone="danger" icon="info" heading="Staff reason:" message=status.reason %}</div>{% endif %}
+    <dl class="eco-kv mb-3">
+      {% if status.submitted_at %}<dt>Sent</dt><dd>{{ status.submitted_at|date:"j F Y, H:i" }}</dd>{% endif %}
+      {% if status.reviewed_at %}<dt>Decided</dt><dd>{{ status.reviewed_at|date:"j F Y, H:i" }}</dd>{% endif %}
+    </dl>
+    {% if status.code == "approved" %}
+      <a class="btn btn-primary" href="{% url 'marketplace:dashboard' %}">Open seller dashboard</a>
+    {% elif status.code == "rejected" or status.code == "not_submitted" %}
+      <a class="btn btn-primary" href="{% url 'marketplace:become_seller' %}">Update and apply again</a>
+    {% endif %}
+  </section>
+
+  <section class="surface-card p-4" aria-labelledby="submitted-heading">
+    <h2 class="h5" id="submitted-heading">What you submitted</h2>
+    <dl class="eco-kv mb-0">
+      <dt>About your work</dt><dd>{{ seller.bio|linebreaksbr|default:"-" }}</dd>
+      <dt>Brands</dt><dd>{% for brand in brands %}{{ brand.name }}{% if not forloop.last %}, {% endif %}{% empty %}-{% endfor %}</dd>
+      <dt>Chipsets</dt><dd>{% for chipset in chipsets %}{{ chipset.display_name }}{% if not forloop.last %}, {% endif %}{% empty %}-{% endfor %}</dd>
+      <dt>Website</dt><dd>{% if website %}<a href="{{ website }}" target="_blank" rel="nofollow noopener noreferrer">{{ website }}</a>{% else %}-{% endif %}</dd>
+      <dt>Social links</dt>
+      <dd>{% if social_links %}<ul class="mkt-link-list">{% for label, url in social_links %}<li>{{ label }}: <a href="{{ url }}" target="_blank" rel="nofollow noopener noreferrer">{{ url }}</a></li>{% endfor %}</ul>{% else %}-{% endif %}</dd>
+      <dt>Contact</dt><dd>{{ seller.get_contact_preference_display }}</dd>
+    </dl>
+  </section>
+</div>
+{% endblock %}

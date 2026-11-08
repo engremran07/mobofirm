@@ -1,0 +1,8 @@
+{% extends "admin/staff_dialog.html" %}
+{# Comments-owned content for the staff dialog shell: shows what is being moderated; the optional note renders after it. #}
+{% block dialog_body %}
+  <blockquote class="mf-ui-dialog__quote">
+    <p>{{ comment.body|truncatechars:280|linebreaksbr }}</p>
+    <footer class="mf-ui-help">{{ comment.user.public_display_name }} on {{ comment.post.title|truncatechars:60 }}</footer>
+  </blockquote>
+{% endblock %}

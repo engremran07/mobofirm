@@ -73,10 +73,15 @@ def _reconciled(section: str, sitemap_class: type[Sitemap]) -> type[Sitemap]:
     )
 
 
-def get_sitemaps() -> dict[str, type[Sitemap]]:
+def get_raw_sitemaps() -> dict[str, type[Sitemap]]:
+    """Every registered section without indexation filters (the full public set)."""
     sections: dict[str, type[Sitemap]] = {}
     for name, (app_name, dotted_path) in DEFAULT_SECTIONS.items():
         if apps.is_installed(app_name):
             sections[name] = import_string(dotted_path)
     sections.update(_extra_sections)
-    return {name: _reconciled(name, cls) for name, cls in sections.items()}
+    return sections
+
+
+def get_sitemaps() -> dict[str, type[Sitemap]]:
+    return {name: _reconciled(name, cls) for name, cls in get_raw_sitemaps().items()}

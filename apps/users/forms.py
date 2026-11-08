@@ -10,6 +10,7 @@ the platform - Custom Allauth Signup & Onboarding Forms
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from typing import Any
 
 from allauth.account.forms import ChangePasswordForm
@@ -21,6 +22,7 @@ from django.http import HttpRequest
 from django.utils.module_loading import import_string
 from django.utils.translation import gettext_lazy as _
 
+from apps.core.widgets import ComboboxSelect
 from apps.users.services.country_detection import COUNTRY_PHONE_CODES
 
 logger = logging.getLogger(__name__)
@@ -124,20 +126,14 @@ class CustomSignupForm(forms.Form):
     country = forms.ChoiceField(
         required=False,
         label=_("Country"),
-        widget=forms.Select(
-            attrs={
-                "class": "form-select",
-            }
-        ),
+        widget=ComboboxSelect(kinds="country", placeholder=_("Start typing a country")),
     )
 
     phone_country_code = forms.ChoiceField(
         required=False,
         label=_("Country Code"),
-        widget=forms.Select(
-            attrs={
-                "class": "form-select",
-            }
+        widget=ComboboxSelect(
+            kinds="calling_code", placeholder=_("Country or calling code")
         ),
     )
 
@@ -190,7 +186,7 @@ class CustomSignupForm(forms.Form):
         try:
             password_validation.validate_password(password)
         except ValidationError as e:
-            raise ValidationError(e.messages)
+            raise ValidationError(e.messages) from e
         return password
 
     def clean_country(self) -> str:
@@ -310,20 +306,14 @@ class TellUsAboutYouForm(forms.Form):
     country = forms.ChoiceField(
         required=True,
         label=_("Country"),
-        widget=forms.Select(
-            attrs={
-                "class": "form-select",
-            }
-        ),
+        widget=ComboboxSelect(kinds="country", placeholder=_("Start typing a country")),
     )
 
     phone_country_code = forms.ChoiceField(
         required=False,
         label=_("Country Code"),
-        widget=forms.Select(
-            attrs={
-                "class": "form-select",
-            }
+        widget=ComboboxSelect(
+            kinds="calling_code", placeholder=_("Country or calling code")
         ),
     )
 
@@ -429,12 +419,17 @@ class TellUsAboutYouForm(forms.Form):
         *args: Any,
         user: Any | None = None,
         request: HttpRequest | None = None,
+        detected_fields: Iterable[str] = (),
         **kwargs: Any,
     ) -> None:
         self.user = user
         self.request = request
         super().__init__(*args, **kwargs)
         _apply_country_choices(self)
+        for name in detected_fields:
+            widget = self.fields[name].widget
+            if isinstance(widget, ComboboxSelect):
+                widget.detected = True
 
         # Require password only if user has no usable password (typical for social)
         self.require_password = bool(user and not user.has_usable_password())

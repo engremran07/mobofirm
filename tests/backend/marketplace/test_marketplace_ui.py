@@ -139,25 +139,27 @@ class BrowseAndDetailTests(MarketplaceUiTestCase):
         self.listing.refresh_from_db()
         self.assertEqual(self.listing.view_count, 1)
 
+    def test_every_marketplace_page_has_breadcrumbs_and_one_h1(self):
+        urls = [
+            reverse("marketplace:listing_browse"),
+            self.listing.get_absolute_url(),
+            self.seller.get_absolute_url(),
+        ]
+        client = self.login(self.owner)
+        urls += [
+            reverse("marketplace:dashboard"),
+            reverse("marketplace:my_listings"),
+        ]
+        for url in urls:
+            with self.subTest(url=url):
+                response = client.get(url)
+                self.assertContains(response, 'aria-label="Breadcrumb"')
+                self.assertContains(response, 'aria-current="page"')
+                self.assertEqual(response.content.decode().count("<h1"), 1)
 
-class SellerFlowTests(MarketplaceUiTestCase):
-    def test_become_seller_page_explains_the_steps_and_has_a_csrf_form(self):
-        response = self.login(self.visitor).get(reverse("marketplace:become_seller"))
 
-        self.assertContains(response, "How selling works")
-        self.assertContains(response, "csrfmiddlewaretoken")
-        self.assertContains(response, "Display name")
-
-    def test_invalid_seller_profile_shows_field_errors_accessibly(self):
-        response = self.login(self.visitor).post(
-            reverse("marketplace:become_seller"), {"display_name": "   ", "bio": ""}
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "This field is required")
-        self.assertContains(response, 'role="alert"')
-
-    def test_dashboard_shows_stats_and_review_state_per_listing(self):
+class ListingDashboardTests(MarketplaceUiTestCase):
+    def test_listings_page_shows_stats_and_review_state_per_listing(self):
         Listing.objects.create(
             seller=self.seller,
             title="Rejected one",
@@ -174,36 +176,9 @@ class SellerFlowTests(MarketplaceUiTestCase):
         self.assertContains(response, "Rejected")
         self.assertContains(response, "Not public yet")
         self.assertContains(response, "Public")
-
-    def test_verified_seller_sees_the_verified_state(self):
-        response = self.login(self.owner).get(reverse("marketplace:my_listings"))
-
-        self.assertContains(response, "Staff verified your profile")
-
-    def test_pending_verification_is_shown_and_hides_the_request_form(self):
-        SellerProfile.objects.filter(pk=self.seller.pk).update(verified=False)
-        SellerVerification.objects.create(seller=self.seller, evidence="My shop link")
-
-        response = self.login(self.owner).get(reverse("marketplace:my_listings"))
-
-        self.assertContains(response, "Waiting for staff review")
         self.assertNotContains(response, "Request verification")
 
-    def test_rejected_verification_shows_the_reason_and_allows_a_new_request(self):
-        SellerProfile.objects.filter(pk=self.seller.pk).update(verified=False)
-        SellerVerification.objects.create(
-            seller=self.seller,
-            evidence="Old evidence",
-            status=SellerVerification.Status.REJECTED,
-            review_reason="Link did not load",
-        )
-
-        response = self.login(self.owner).get(reverse("marketplace:my_listings"))
-
-        self.assertContains(response, "Link did not load")
-        self.assertContains(response, "Request verification")
-
-    def test_forms_on_the_dashboard_are_csrf_protected(self):
+    def test_forms_on_the_listings_page_are_csrf_protected(self):
         client = Client(enforce_csrf_checks=True)
         client.force_login(self.owner)
 
@@ -214,10 +189,17 @@ class SellerFlowTests(MarketplaceUiTestCase):
         self.assertEqual(response.status_code, 403)
 
     def test_account_dashboard_tile_reflects_seller_state(self):
-        seller = self.login(self.owner).get(reverse("users:dashboard"))
+        approved = self.login(self.owner).get(reverse("users:dashboard"))
         newcomer = self.login(self.visitor).get(reverse("users:dashboard"))
 
-        self.assertContains(seller, reverse("marketplace:my_listings"))
-        self.assertContains(seller, "Verified seller")
+        self.assertContains(approved, reverse("marketplace:dashboard"))
         self.assertContains(newcomer, reverse("marketplace:become_seller"))
         self.assertContains(newcomer, "Become a seller")
+
+    def test_pending_seller_tile_points_to_the_application_status(self):
+        SellerProfile.objects.filter(pk=self.seller.pk).update(verified=False)
+        SellerVerification.objects.create(seller=self.seller, evidence="My shop link")
+
+        response = self.login(self.owner).get(reverse("users:dashboard"))
+
+        self.assertContains(response, reverse("marketplace:application_status"))

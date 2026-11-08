@@ -15,7 +15,7 @@ from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
 from allauth.socialaccount.models import SocialApp, SocialLogin
 from django.conf import settings
 from django.contrib import messages
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.http import HttpRequest
 from django.shortcuts import redirect
 from django.urls import NoReverseMatch, reverse
@@ -41,6 +41,25 @@ def _safe_reverse(name: str, default: str = "/") -> str:
 
 class CustomAccountAdapter(DefaultAccountAdapter):
     """Account adapter with hardened password rules and trusted social email."""
+
+    # Phone sign-in and verification are not enabled; allauth only calls these when
+    # a phone login method is configured, so they fail loudly instead of guessing.
+    def get_phone(self, user: Any) -> tuple[str, bool] | None:
+        return None
+
+    def get_user_by_phone(self, phone: str) -> Any | None:
+        return None
+
+    def set_phone(self, user: Any, phone: str, verified: bool) -> None:
+        raise ImproperlyConfigured("Phone numbers are not managed through allauth.")
+
+    def set_phone_verified(self, user: Any, phone: str) -> None:
+        raise ImproperlyConfigured("Phone verification is not enabled.")
+
+    def send_verification_code_sms(
+        self, user: Any, phone: str, code: str, **kwargs: Any
+    ) -> None:
+        raise ImproperlyConfigured("SMS verification is not enabled.")
 
     def send_confirmation_mail(self, request, emailconfirmation, signup):
         email_address = emailconfirmation.email_address

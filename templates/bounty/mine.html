@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}My bounties | {{ site_name }}{% endblock %}
+{% block content %}
+<div class="site-container py-4 py-lg-5">
+  {% include "components/breadcrumbs.html" with current="My bounties" parent_label="Bounties" parent_url="/bounty/" %}
+  {% include "components/page_header.html" with eyebrow="Bounty" title="My bounties" %}
+  <section class="mb-4" aria-labelledby="mine-posted"><h2 class="h5" id="mine-posted">Posted by me</h2>
+    {% for bounty in posted %}<p class="mb-1"><a href="{% url 'bounty:detail' pk=bounty.pk %}">{{ bounty.target_label }}</a> — {{ bounty.credits }} credits {% include "bounty/_status.html" with bounty=bounty %}</p>{% empty %}<p class="muted">You have not posted a bounty.</p>{% endfor %}
+  </section>
+  <section class="mb-4" aria-labelledby="mine-claimed"><h2 class="h5" id="mine-claimed">I am working on</h2>
+    {% for bounty in claimed %}<p class="mb-1"><a href="{% url 'bounty:detail' pk=bounty.pk %}">{{ bounty.target_label }}</a> — {{ bounty.credits }} credits {% include "bounty/_status.html" with bounty=bounty %}</p>{% empty %}<p class="muted">Nothing yet.</p>{% endfor %}
+  </section>
+  <section aria-labelledby="mine-won"><h2 class="h5" id="mine-won">Paid to me</h2>
+    {% for bounty in won %}<p class="mb-1"><a href="{% url 'bounty:detail' pk=bounty.pk %}">{{ bounty.target_label }}</a> — {{ bounty.credits }} credits on {{ bounty.settled_at|date:"j M Y" }}</p>{% empty %}<p class="muted">No bounty payouts yet.</p>{% endfor %}
+  </section>
+</div>
+{% endblock %}

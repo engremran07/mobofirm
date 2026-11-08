@@ -40,6 +40,7 @@ from apps.core.admin_base import (
 from . import ledger
 from .crawler import CrawlUnavailable, run_crawl
 from .jobs import process_pending
+from .managers import default_manager
 from .models import (
     ChangeLedger,
     CrawlRun,
@@ -49,6 +50,7 @@ from .models import (
     LinkSuggestion,
     Metadata,
     PageObservation,
+    PageSnapshot,
     Redirect,
     SeoEntity,
     SeoEntityEdge,
@@ -85,7 +87,7 @@ class LedgerRecordingAdmin(ModelAdmin):
     ) -> None:
         before = {}
         if change:
-            stored = type(obj)._default_manager.filter(pk=obj.pk).first()
+            stored = default_manager(type(obj)).filter(pk=obj.pk).first()
             before = ledger.serialize(stored) if stored else {}
         super().save_model(request, obj, form, change)
         action_kind = (
@@ -172,19 +174,23 @@ class LinkSuggestionAdmin(ModelAdmin):
     list_display = (
         "source",
         "target",
+        "relation",
+        "status",
         "score",
         "is_applied",
-        "locked",
         "is_active",
         "created_at",
     )
     list_filter = (
+        ("status", ChoicesDropdownFilter),
+        ("relation", ChoicesDropdownFilter),
         "is_applied",
         "locked",
         "is_active",
         ("created_at", RangeDateTimeFilter),
     )
-    raw_id_fields = ("source", "target")
+    search_fields = ("source__title", "target__title", "anchor")
+    raw_id_fields = ("source", "target", "decided_by")
 
 
 @register(SEOSettings)
@@ -304,14 +310,17 @@ class InterlinkExclusionAdmin(ModelAdmin):
 class CrawlRunAdmin(SeoReadOnlyAdmin):
     list_display = (
         "pk",
+        "kind",
         "status_badge",
         "trigger",
         "pages_crawled",
         "pages_with_errors",
+        "partial",
         "started_at",
         "finished_at",
     )
     list_filter = (
+        ("kind", ChoicesDropdownFilter),
         ("status", ChoicesDropdownFilter),
         ("trigger", ChoicesDropdownFilter),
         ("started_at", RangeDateTimeFilter),
@@ -320,7 +329,7 @@ class CrawlRunAdmin(SeoReadOnlyAdmin):
     actions_list = ("start_crawl",)
 
     def has_crawl_permission(
-        self, request: HttpRequest, obj: object | None = None
+        self, request: HttpRequest, _obj: object | None = None
     ) -> bool:
         return request.user.has_perm("seo.run_crawl")
 
@@ -342,7 +351,7 @@ class CrawlRunAdmin(SeoReadOnlyAdmin):
             submit=_("Start crawl"),
         ),
     )
-    def start_crawl(self, request: HttpRequest, form: BaseDialogForm) -> HttpResponse:
+    def start_crawl(self, request: HttpRequest, _form: BaseDialogForm) -> HttpResponse:
         try:
             run = run_crawl(user=request.user)
         except CrawlUnavailable as reason:
@@ -358,6 +367,29 @@ class CrawlRunAdmin(SeoReadOnlyAdmin):
                 },
             )
         return htmx_redirect(return_url(request, changelist_url(self)))
+
+
+@register(PageSnapshot)
+class PageSnapshotAdmin(SeoReadOnlyAdmin):
+    list_display = (
+        "path",
+        "group",
+        "page_type",
+        "indexable",
+        "in_sitemap",
+        "word_count",
+        "links_in",
+        "links_out",
+        "scanned_at",
+    )
+    list_filter = (
+        ("group", ChoicesDropdownFilter),
+        "indexable",
+        "in_sitemap",
+        ("scanned_at", RangeDateTimeFilter),
+    )
+    search_fields = ("path", "title", "object_title")
+    raw_id_fields = ("last_run",)
 
 
 @register(PageObservation)
@@ -379,23 +411,28 @@ class IssueAdmin(SeoReadOnlyAdmin):
         "code",
         "severity_badge",
         "status_badge",
+        "group",
+        "object_title",
+        "fixable",
         "url",
         "updated_at",
     )
     list_filter = (
         ("severity", ChoicesDropdownFilter),
         ("status", ChoicesDropdownFilter),
+        ("group", ChoicesDropdownFilter),
         ("code", ChoicesDropdownFilter),
+        "fixable",
         ("updated_at", RangeDateTimeFilter),
     )
-    search_fields = ("url", "message")
-    raw_id_fields = ("first_seen_run", "last_seen_run")
+    search_fields = ("url", "message", "object_title")
+    raw_id_fields = ("first_seen_run", "last_seen_run", "fix_ledger", "ignored_by")
     actions = ("mark_ignored", "mark_open")
     actions_row = ("ignore_issue", "reopen_issue")
     actions_detail = ("ignore_issue", "reopen_issue")
 
     def has_manage_permission(
-        self, request: HttpRequest, obj: object | None = None
+        self, request: HttpRequest, _obj: object | None = None
     ) -> bool:
         return request.user.has_perm("seo.change_issue")
 
@@ -439,7 +476,7 @@ class IssueAdmin(SeoReadOnlyAdmin):
         ),
     )
     def ignore_issue(
-        self, request: HttpRequest, form: BaseDialogForm, object_id: str
+        self, request: HttpRequest, _form: BaseDialogForm, object_id: str
     ) -> HttpResponse:
         return self._set_status(request, object_id, Issue.Status.IGNORED)
 
@@ -454,7 +491,7 @@ class IssueAdmin(SeoReadOnlyAdmin):
         ),
     )
     def reopen_issue(
-        self, request: HttpRequest, form: BaseDialogForm, object_id: str
+        self, request: HttpRequest, _form: BaseDialogForm, object_id: str
     ) -> HttpResponse:
         return self._set_status(request, object_id, Issue.Status.OPEN)
 
@@ -526,12 +563,12 @@ class ChangeLedgerAdmin(SeoReadOnlyAdmin):
     )
 
     def has_approve_permission(
-        self, request: HttpRequest, obj: object | None = None
+        self, request: HttpRequest, _obj: object | None = None
     ) -> bool:
         return request.user.has_perm("seo.approve_changeledger")
 
     def has_rollback_permission(
-        self, request: HttpRequest, obj: object | None = None
+        self, request: HttpRequest, _obj: object | None = None
     ) -> bool:
         return request.user.has_perm("seo.rollback_changeledger")
 
@@ -590,7 +627,7 @@ class ChangeLedgerAdmin(SeoReadOnlyAdmin):
         ),
     )
     def approve_change(
-        self, request: HttpRequest, form: BaseDialogForm, object_id: str
+        self, request: HttpRequest, _form: BaseDialogForm, object_id: str
     ) -> HttpResponse:
         return self._run_one(request, object_id, ledger.approve)
 
@@ -606,7 +643,7 @@ class ChangeLedgerAdmin(SeoReadOnlyAdmin):
         ),
     )
     def reject_change(
-        self, request: HttpRequest, form: BaseDialogForm, object_id: str
+        self, request: HttpRequest, _form: BaseDialogForm, object_id: str
     ) -> HttpResponse:
         return self._run_one(request, object_id, ledger.reject)
 
@@ -622,7 +659,7 @@ class ChangeLedgerAdmin(SeoReadOnlyAdmin):
         ),
     )
     def rollback_change(
-        self, request: HttpRequest, form: BaseDialogForm, object_id: str
+        self, request: HttpRequest, _form: BaseDialogForm, object_id: str
     ) -> HttpResponse:
         return self._run_one(request, object_id, ledger.rollback)
 
@@ -649,7 +686,7 @@ class SEOJobAdmin(SeoReadOnlyAdmin):
     actions_list = ("process_jobs",)
 
     def has_manage_permission(
-        self, request: HttpRequest, obj: object | None = None
+        self, request: HttpRequest, _obj: object | None = None
     ) -> bool:
         return request.user.has_perm("seo.change_seojob")
 
@@ -676,7 +713,7 @@ class SEOJobAdmin(SeoReadOnlyAdmin):
         ),
     )
     def retry_job(
-        self, request: HttpRequest, form: BaseDialogForm, object_id: str
+        self, request: HttpRequest, _form: BaseDialogForm, object_id: str
     ) -> HttpResponse:
         job = self.get_object(request, unquote(object_id))
         if job is None:
@@ -703,7 +740,7 @@ class SEOJobAdmin(SeoReadOnlyAdmin):
             submit=_("Process"),
         ),
     )
-    def process_jobs(self, request: HttpRequest, form: BaseDialogForm) -> HttpResponse:
+    def process_jobs(self, request: HttpRequest, _form: BaseDialogForm) -> HttpResponse:
         counts = process_pending()
         self.message_user(
             request,

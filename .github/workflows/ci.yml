@@ -77,7 +77,14 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v7.0.1
       - name: Build the production image (no push)
-        run: docker build --tag mobofirm:ci .
+        run: |
+          docker build --tag mobofirm:ci \
+            --build-arg APP_GIT_SHA="${GITHUB_SHA::7}" \
+            --build-arg APP_BUILD_DATE="$(date -u +%F)" .
+      - name: Check the image reports the release version
+        run: |
+          expected="$(python3 scripts/release.py version)"
+          docker run --rm --entrypoint python mobofirm:ci -c "from app.version import build_info; i = build_info(); assert i.version == '${expected}', i; assert i.git_sha == '${GITHUB_SHA::7}', i"
 
   publish-release:
     if: startsWith(github.ref, 'refs/tags/v')

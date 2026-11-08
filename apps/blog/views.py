@@ -5,16 +5,20 @@ from __future__ import annotations
 import calendar
 import logging
 
+from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Count, F, Q
 from django.db.models.functions import ExtractMonth
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils import timezone
+from django.utils.cache import patch_cache_control
+from django.utils.html import format_html
+from django.utils.safestring import SafeString, mark_safe
 from django.views.decorators.http import require_GET
 from django.views.decorators.vary import vary_on_headers
 
-from apps.blog import selectors
+from apps.blog import selectors, shop_gateway
 from apps.blog.access import (
     blog_enabled_for,
     can_edit_post,
@@ -23,9 +27,11 @@ from apps.blog.access import (
 )
 from apps.blog.firmware_panel import firmware_inventory, firmware_summary
 from apps.blog.models import Category, Post, PostTranslation
+from apps.blog.paywall import resolve_gate, teaser_text
 from apps.blog.presentation import share_links
-from apps.blog.rendering import render_article
+from apps.blog.rendering import RenderedArticle, render_article
 from apps.comments.selectors import comment_tree
+from apps.core.app_service import AppService
 from apps.tags.selectors import tag_cloud
 
 logger = logging.getLogger(__name__)
@@ -37,6 +43,14 @@ MAX_REMEMBERED_VIEWS = 200
 def _require_blog(request: HttpRequest) -> None:
     if not blog_enabled_for(request.user):
         raise Http404("The blog is disabled.")
+
+
+def _with_internal_links(html: SafeString, post: Post) -> SafeString:
+    """Insert reviewed internal links when the SEO app is installed."""
+    seo = AppService.get("seo")
+    if seo is None:
+        return html
+    return mark_safe(seo.link_body_html(str(html), post))
 
 
 def _apply_translations(posts: list[Post], language: str) -> None:
@@ -117,6 +131,24 @@ def blog_search(request: HttpRequest) -> HttpResponse:
     return post_list(request)
 
 
+@login_required
+@require_GET
+def purchased(request: HttpRequest) -> HttpResponse:
+    """Featured and paid articles the signed-in member bought (the shop lists them)."""
+    _require_blog(request)
+    ids = shop_gateway.purchased_post_ids(request.user)
+    by_id = {post.pk: post for post in selectors.live_posts().filter(pk__in=ids)}
+    posts = [by_id[pk] for pk in ids if pk in by_id]
+    return render(
+        request,
+        "blog/purchased.html",
+        {
+            "cards": _cards(posts, request),
+            "shop_lists_purchases": bool(ids) or shop_gateway.available(),
+        },
+    )
+
+
 def _count_view(request: HttpRequest, post: Post) -> None:
     """Count one view per browser session; the counter is an atomic database update."""
     seen = list(request.session.get(SESSION_VIEWED_KEY, []))
@@ -136,6 +168,7 @@ def post_detail(request: HttpRequest, slug: str) -> HttpResponse:
             "firmware_brand",
             "firmware_model",
             "firmware_automation_link",
+            "guide_request",
         ).prefetch_related("tags"),
         slug__iexact=slug,
     )
@@ -146,13 +179,21 @@ def post_detail(request: HttpRequest, slug: str) -> HttpResponse:
     language = getattr(request, "LANGUAGE_CODE", "")
     _apply_translations([post], language)
 
-    article = render_article(post.body)
+    gate = resolve_gate(request.user, post)
+    if gate.locked:
+        article = RenderedArticle(
+            html=format_html("<p>{}</p>", teaser_text(post)), toc=[], word_count=0
+        )
+    else:
+        article = render_article(post.body)
+        article.html = _with_internal_links(article.html, post)
     tags = [tag for tag in post.tags.all() if selectors.is_public_tag(tag)]
     card = selectors.build_card(post, tags)
     older, newer = selectors.adjacent_posts(post)
-    comments_open = comments_enabled() and post.allow_comments
+    comments_open = comments_enabled() and post.allow_comments and not gate.locked
     context = {
         "post": post,
+        "gate": gate,
         "card": card,
         "article": article,
         "tags": tags,
@@ -182,7 +223,11 @@ def post_detail(request: HttpRequest, slug: str) -> HttpResponse:
         "comment_count": post.comments_count,
         "is_preview": not post.is_live,
     }
-    return render(request, "blog/post_detail.html", context)
+    response = render(request, "blog/post_detail.html", context)
+    if post.is_gated:
+        # The same URL shows different content per reader: never share it.
+        patch_cache_control(response, private=True)
+    return response
 
 
 def _hub(

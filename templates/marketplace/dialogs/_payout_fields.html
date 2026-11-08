@@ -1,0 +1,7 @@
+{# Contract: payout_form (PayoutRequestForm), earnings (EarningsSummary). Rendered inside a <form method="post">. #}
+{% csrf_token %}
+{% include "components/form_errors.html" with form=payout_form %}
+<p class="small muted">Withdrawable now: <strong>{{ earnings.withdrawable|default_if_none:0 }}</strong> credits. Staff review every request before paying it out.</p>
+{% include "components/form_field.html" with field=payout_form.credits %}
+{% include "components/form_field.html" with field=payout_form.method %}
+{% include "components/form_field.html" with field=payout_form.destination %}

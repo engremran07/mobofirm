@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load seo_tags %}
 {% block title %}{{ chipset.display_name }} firmware, devices and tools | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block meta_description %}Devices, flashing tools and approved firmware for the {{ chipset.display_name }} chipset.{% endblock %}
 {% block content %}
@@ -78,5 +79,6 @@
     <p class="mb-0">{% for other in related_chipsets %}<a class="me-3" href="{% url 'firmwares:chipset_detail' slug=other.slug %}">{{ other.name }}</a>{% endfor %}</p>
   </section>
   {% endif %}
+  {% related_links chipset %}
 </div>
 {% endblock %}

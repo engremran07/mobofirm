@@ -1,0 +1,15 @@
+{% load i18n %}
+{# Always-visible theme switcher (Unfold only offers one inside the account menu). Choice lives in Unfold's `adminTheme` Alpine state, persisted under `adminTheme`; admin-theme.js mirrors explicit choices to the public `mobofirm-theme` key. #}
+{% if not theme %}
+    <div class="admin-theme-switch" role="group" aria-label="{% trans 'Colour theme' %}" data-admin-theme-switch x-effect="window.mobofirmAdminTheme && window.mobofirmAdminTheme.sync(adminTheme)">
+        <button type="button" class="admin-theme-switch__option" data-admin-theme-choice="light" title="{% trans 'Light theme' %}" aria-label="{% trans 'Light theme' %}" aria-pressed="false" x-on:click="switchTheme('light')" x-bind:aria-pressed="adminTheme === 'light' ? 'true' : 'false'">
+            <span class="material-symbols-outlined" aria-hidden="true">light_mode</span>
+        </button>
+        <button type="button" class="admin-theme-switch__option" data-admin-theme-choice="dark" title="{% trans 'Dark theme' %}" aria-label="{% trans 'Dark theme' %}" aria-pressed="false" x-on:click="switchTheme('dark')" x-bind:aria-pressed="adminTheme === 'dark' ? 'true' : 'false'">
+            <span class="material-symbols-outlined" aria-hidden="true">dark_mode</span>
+        </button>
+        <button type="button" class="admin-theme-switch__option" data-admin-theme-choice="auto" title="{% trans 'Follow system theme' %}" aria-label="{% trans 'Follow system theme' %}" aria-pressed="true" x-on:click="switchTheme('auto')" x-bind:aria-pressed="adminTheme === 'auto' ? 'true' : 'false'">
+            <span class="material-symbols-outlined" aria-hidden="true">computer</span>
+        </button>
+    </div>
+{% endif %}

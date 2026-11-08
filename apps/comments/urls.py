@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from . import dialogs, views
 
 app_name = "comments"
 
@@ -13,4 +13,9 @@ urlpatterns = [
     path("edit/<int:comment_id>/", views.edit_comment, name="edit_comment"),
     path("moderation/", views.moderation_queue, name="moderation_queue"),
     path("moderation/action/", views.moderation_action, name="moderation_action"),
+    path(
+        "moderation/<int:comment_id>/<str:action>/dialog/",
+        dialogs.ModerationDialog.as_view(),
+        name="moderation_dialog",
+    ),
 ]

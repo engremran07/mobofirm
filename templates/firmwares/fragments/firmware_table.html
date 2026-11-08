@@ -2,7 +2,7 @@
   <div class="catalog-table-wrap" role="region" tabindex="0" aria-label="Firmware catalogue results">
     <table class="table table-hover catalog-table">
       <caption class="visually-hidden">Firmware catalogue results</caption>
-      <thead><tr><th scope="col">Device</th><th scope="col">Build / file</th><th scope="col">Region</th><th scope="col">Android</th><th scope="col">Size</th><th scope="col">Source</th><th scope="col"><span class="visually-hidden">Details</span></th></tr></thead>
+      <thead><tr><th scope="col">Device</th><th scope="col">Build / file</th><th scope="col">Region</th><th scope="col">Android</th><th scope="col">Size</th><th scope="col">Source</th><th scope="col">Access</th><th scope="col"><span class="visually-hidden">Details</span></th></tr></thead>
       <tbody>
       {% for firmware in firmwares %}
         <tr>
@@ -12,6 +12,7 @@
           <td>{{ firmware.android_version|default:"Not specified" }}</td>
           <td class="numeric">{% if firmware.file_size %}{{ firmware.file_size|filesizeformat }}{% else %}Not specified{% endif %}</td>
           <td>{% if firmware.is_external %}<span class="badge text-bg-secondary">External download</span>{% else %}<span class="status-verified"><i data-lucide="shield-check" aria-hidden="true"></i> Hosted</span>{% endif %}</td>
+          <td>{% include "firmwares/includes/tier_badge.html" with firmware=firmware %}</td>
           <td><a class="btn btn-sm btn-outline-secondary" href="{% url 'firmwares:firmware_detail' firmware_type=firmware.firmware_type firmware_id=firmware.pk %}">Details<span class="visually-hidden"> for {{ firmware.original_file_name }}</span></a></td>
         </tr>
       {% endfor %}
@@ -21,4 +22,6 @@
   {% include "components/pagination.html" with page_obj=firmwares label="Firmware result pages" hx_target="#firmware-table-content" %}
 {% else %}
   <p class="empty-state p-4 mb-0">No approved firmware matches these filters.</p>
+  {% include "components/request_cta.html" with kind="firmware" query=search_query heading="Looking for a file that is not listed?" %}
+  {% if search_query %}{% include "components/request_cta.html" with kind="model" query=search_query heading="Is the device itself missing?" %}{% endif %}
 {% endif %}

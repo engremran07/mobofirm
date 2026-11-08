@@ -1,0 +1,21 @@
+{% extends "admin/base_site.html" %}
+{% comment %}
+  Base for staff tool pages (not model admins). Contract:
+  - render with apps.core.admin_pages.render_admin_page (gives sidebar and branding);
+  - override {% block mf_actions %} for header buttons and {% block mf_body %} for content;
+  - build the body from the mf-ui components in frontend/src/styles/admin-ui.css.
+{% endcomment %}
+{% block breadcrumbs %}{% endblock %}
+{% block content %}
+<div class="mf-ui">
+  <header class="mf-ui-header">
+    <div>
+      <h1 class="mf-ui-title">{{ title }}</h1>
+      {% if mf_subtitle %}<p class="mf-ui-subtitle">{{ mf_subtitle }}</p>{% endif %}
+    </div>
+    <div class="mf-ui-actions">{% block mf_actions %}{% endblock %}</div>
+  </header>
+  {% block mf_nav %}{% endblock %}
+  {% block mf_body %}{% endblock %}
+</div>
+{% endblock %}

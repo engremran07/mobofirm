@@ -34,7 +34,7 @@ Every setting has exactly one owner.
 | Sign-up, password reset, notifications, MFA requirement and issuer, login-attempt limit and window | `users.UsersSettings` (`ENABLE_SIGNUP` / `REQUIRE_MFA` in the environment stay a hard floor that is OR-ed in) | `ENABLE_SIGNUP`, `REQUIRE_MFA` |
 | Device limits, fingerprint and registration policy | `devices.DeviceConfig` | none |
 | Sitemap, robots, redirects, SEO site-name and `twitter:site` overrides, default social image | `seo.SEOSettings` (blank values fall back to `site_settings` name, handle and share image) | none |
-| Feature flags for pages, shop, marketplace, filemanager | `core.AppRegistry` | none |
+| Feature flags for pages, shop, marketplace | `core.AppRegistry` | none |
 | Ads, blog, comments behaviour | their own apps | none |
 
 Dropped from the pasted code: wallet/credit/bounty/economy fields, a second `AppRegistry` model, and references to `themes`, `admin_suite` and `import_export`.

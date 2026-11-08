@@ -1,12 +1,40 @@
-{# Contract: summary, type_allowed, daily, pricing_url, account_url (from shop_firmware_allowance). Empty context renders nothing. #}
-{% if summary %}
+{# Contract: snapshot (QuotaSnapshot), plan (str), access_tier, price, list_price, owned, can_request, request_url, credits, credits_url, has_package, pricing_url, account_url, files_url (from shop_firmware_allowance). Empty context renders nothing. #}
+{% if snapshot %}
   <section class="surface-card p-3 mt-4" aria-labelledby="allowance-heading">
     <h2 class="h6" id="allowance-heading">Your download allowance</h2>
-    <p class="small mb-1">Package: <strong>{{ summary.tier.name }}</strong>{% if daily %} · {{ daily.text }} today{% endif %}</p>
-    {% if not type_allowed %}
-      <p class="small mb-1 status-unverified">{% if summary.enforced %}Your package does not include this firmware category.{% else %}This category is not part of your package.{% endif %}</p>
+    <p class="small mb-1">
+      Package: <strong>{{ snapshot.package_name }}</strong> ·
+      {% if snapshot.unlimited %}unlimited new files{% else %}{{ snapshot.remaining }} new files left {{ snapshot.window_label }}{% endif %}
+    </p>
+    {% if access_tier == "paid" %}
+      {% if owned %}
+        <p class="small mb-1 status-verified">You bought this file. It counts in your allowance once, the first time you download it.</p>
+      {% elif can_request %}
+        <p class="small mb-2">This is a paid file{% if price %}: <strong>{{ price }} USD</strong>{% if list_price and list_price != price %} <span class="muted">(package price; list {{ list_price }} USD)</span>{% endif %}{% endif %}. Online payments are not available; staff confirm cash payment after you request it.</p>
+        <div class="d-flex flex-wrap gap-2 mb-2">
+          {% if request_url %}
+            <form method="post" action="{{ request_url }}">
+              {% csrf_token %}
+              <button type="submit" class="btn btn-sm btn-primary">Request this file</button>
+            </form>
+          {% endif %}
+          {% if credits and credits_url %}<a class="btn btn-sm btn-outline-primary" href="{{ credits_url }}">Pay {{ credits }} credits{% if price_label %} <span class="muted">({{ price_label }})</span>{% endif %}</a>{% endif %}
+        </div>
+      {% endif %}
+    {% elif access_tier == "featured" %}
+      {% if owned %}
+        <p class="small mb-1 status-verified">You bought this featured file. It never counts against your allowance and stays yours.</p>
+      {% elif has_package %}
+        <p class="small mb-1">Featured file: included with your package.</p>
+      {% else %}
+        <p class="small mb-2 status-unverified">Featured files need a package that includes them{% if credits %}, or you can buy this one on its own{% endif %}.</p>
+        {% if credits and credits_url %}
+          <div class="d-flex flex-wrap gap-2 mb-2">
+            <a class="btn btn-sm btn-outline-primary" href="{{ credits_url }}" data-testid="buy-featured-file">Pay {{ credits }} credits{% if price_label %} <span class="muted">({{ price_label }})</span>{% endif %}</a>
+          </div>
+        {% endif %}
+      {% endif %}
     {% endif %}
-    {% if not summary.enforced %}<p class="small muted mb-1">Package limits are not applied to downloads at the moment.</p>{% endif %}
-    <p class="small mb-0"><a href="{{ account_url }}">Your allowance</a> · <a href="{{ pricing_url }}">Compare packages</a></p>
+    <p class="small mb-0"><a href="{{ account_url }}">Your allowance</a> · <a href="{{ pricing_url }}">Compare packages</a>{% if files_url %} · <a href="{{ files_url }}">My files</a>{% endif %}</p>
   </section>
 {% endif %}

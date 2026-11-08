@@ -17,11 +17,14 @@ Usage:
 
 from __future__ import annotations
 
+import importlib
 import logging
 import re
+from typing import Any
 
 try:
-    import nh3
+    # Loaded dynamically: nh3 is a compiled extension that static analysis cannot read.
+    nh3: Any = importlib.import_module("nh3")
 
     NH3_AVAILABLE = True
 except ImportError:

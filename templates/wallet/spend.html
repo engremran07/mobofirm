@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% load mf_ui %}
+{% block title %}Ways to spend credits{% endblock %}
+{% block content %}
+{% url 'wallet:dashboard' as wallet_url %}
+{% url 'wallet:earn' as earn_page %}
+<div class="site-container py-4 py-lg-5">
+  {% include "components/breadcrumbs.html" with current="Ways to spend" parent_label="Wallet" parent_url=wallet_url %}
+  {% include "components/page_header.html" with eyebrow="Account" title="Ways to spend credits" lead="Each purchase asks for your confirmation first." %}
+  {% include "wallet/_subnav.html" %}
+  <p class="mb-3" data-testid="credit-rate">Rate: <strong>1 {{ cfg.currency_label }} = {{ cfg.credits_per_currency }} credits</strong>. Anything priced in {{ cfg.currency_label }} costs that price × {{ cfg.credits_per_currency }} credits.</p>
+  {% if prices %}
+    {% table_scroll "Ways to spend credits" %}
+    <table class="table align-middle">
+      <thead><tr><th scope="col">What</th><th scope="col" class="text-end">Price</th></tr></thead>
+      <tbody>
+        {% for price in prices %}
+          <tr>
+            <td>{{ price.label }}</td>
+            <td class="text-end fw-semibold">{% if price.derived %}Price in {{ cfg.currency_label }} × {{ cfg.credits_per_currency }}{% elif price.credits %}{{ price.credits }} credits{% else %}Set per item{% endif %}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endtable_scroll %}
+    <p class="muted mt-3">Short on credits? <a href="{{ earn_page }}">See the ways to earn them</a>.</p>
+  {% else %}
+    {% include "components/empty_state.html" with title="Nothing can be bought with credits yet" message="Staff have not enabled any credit purchases." action_label="See ways to earn" action_url=earn_page %}
+  {% endif %}
+</div>
+{% endblock %}

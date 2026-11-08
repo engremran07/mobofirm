@@ -1,127 +1,200 @@
-"""Shop business logic: offline order fulfilment, packages and download quotas.
+"""Shop business logic: offline order fulfilment and packages.
+
+Per-file entitlements and download quotas live in :mod:`apps.shop.entitlements`.
 
 Online payments are intentionally not implemented. ``ONLINE_PAYMENTS_ENABLED`` is a
 fixed ``False`` so every UI and API can show the disabled state; enabling a payment
 provider is a separate, owner-approved change.
+
+Paying or refunding an order publishes ``shop.order_paid`` / ``shop.order_refunded``
+on the event bus after commit, with ``{"order_id", "user_id", "files": [{"content_type":
+"app_label.model", "object_id": "<uuid>", "amount": "9.99"}]}`` (paid-file lines only).
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
-from django.conf import settings
+from django.contrib.auth import get_user_model
 from django.db import transaction
-from django.db.models import F
 from django.utils import timezone
+from django.utils.text import slugify
 
-from .models import (
-    BillingCycle,
-    Order,
-    OrderItem,
-    PackageQuotaOverride,
-    PackageTier,
-    Product,
-    ProductType,
-    Subscription,
-    UserPackage,
-)
+from apps.core.events.bus import event_bus
+
+from . import promotion_gateway, request_cache, wallet_gateway
+from .models import LIFETIME, Order, OrderItem, PackageTier, UserPackage
 
 ONLINE_PAYMENTS_ENABLED = False
-
-# Firmware classifications a package tier can allow or deny; other types are
-# governed by quotas only.
-TIER_GATED_TYPES = frozenset({"official", "engineering", "readback", "modified"})
-
-CYCLE_DURATION = {
-    BillingCycle.MONTHLY: timedelta(days=30),
-    BillingCycle.QUARTERLY: timedelta(days=90),
-    BillingCycle.YEARLY: timedelta(days=365),
-    BillingCycle.LIFETIME: None,
-}
+ORDER_PAID_EVENT = "shop.order_paid"
+ORDER_REFUNDED_EVENT = "shop.order_refunded"
 
 
 class OrderError(ValueError):
     """Raised when an order cannot be created or transitioned."""
 
 
-def _expiry_for(cycle: str):
-    duration = CYCLE_DURATION[BillingCycle(cycle)]
-    return None if duration is None else timezone.now() + duration
+def lock_user(user: Any) -> None:
+    """Serialise one user's order/quota writes by locking only the user row.
+
+    ``of=("self",)`` keeps PostgreSQL from locking joined rows; SQLite ignores it.
+    """
+    get_user_model().objects.select_for_update(of=("self",)).get(pk=user.pk)
+
+
+def _expiry(start: datetime, duration_days: int) -> datetime | None:
+    return None if duration_days == LIFETIME else start + timedelta(days=duration_days)
+
+
+def _live_packages(user: Any) -> Any:
+    """Purchased or granted active packages (the free baseline row is never expired)."""
+    return UserPackage.objects.filter(
+        user=user, status=UserPackage.Status.ACTIVE, is_baseline=False
+    )
 
 
 @transaction.atomic
-def create_order(user: Any, product: Product, billing_cycle: str = "monthly") -> Order:
-    """Create a pending offline order for one active product."""
-    if not product.is_active:
-        raise OrderError("This product is not available.")
-    if billing_cycle not in BillingCycle.values:
-        raise OrderError("Unknown billing cycle.")
+def create_order(user: Any, package: PackageTier) -> Order:
+    """Create a pending offline order for one public, paid package."""
+    if not (package.is_active and package.is_public) or package.is_default:
+        raise OrderError("This package is not available.")
+    if package.price <= 0:
+        raise OrderError("This package is free; it does not need an order.")
+    lock_user(user)
     duplicate = Order.objects.filter(
-        user=user,
-        status=Order.Status.PENDING,
-        items__product=product,
-        items__billing_cycle=billing_cycle,
+        user=user, status=Order.Status.PENDING, items__package=package
     ).first()
     if duplicate is not None:
         return duplicate
-    order = Order.objects.create(user=user, total=product.price)
+    quote = promotion_gateway.quote(user, package)
+    price = quote.price if quote is not None else package.price
+    order = Order.objects.create(user=user, total=price)
     OrderItem.objects.create(
         order=order,
-        product=product,
-        billing_cycle=billing_cycle,
-        quantity=1,
-        unit_price=product.price,
-        line_total=product.price,
+        package=package,
+        description=package.name,
+        duration_days=package.duration_days,
+        unit_price=price,
+        line_total=price,
     )
+    if quote is not None:
+        promotion_gateway.redeem(user, package, reference=str(order.pk))
     return order
 
 
 @transaction.atomic
 def activate_package(
-    user: Any, tier: PackageTier, billing_cycle: str = "monthly", reference: str = ""
+    user: Any,
+    package: PackageTier,
+    *,
+    reference: str = "",
+    order: Order | None = None,
+    source: str = UserPackage.Source.ORDER,
+    duration_days: int | None = None,
 ) -> UserPackage:
-    """Make ``tier`` the user's one live package, expiring any previous one."""
-    UserPackage.objects.filter(
-        user=user,
-        status__in=[UserPackage.Status.ACTIVE, UserPackage.Status.TRIALING],
-    ).update(status=UserPackage.Status.EXPIRED)
+    """Make ``package`` the user's one live package, ending any previous one.
+
+    Renewing the package the user already holds adds the new period after the
+    current end date instead of overlapping it. ``duration_days`` defaults to the
+    package's own duration (0 = lifetime).
+    """
+    lock_user(user)
+    now = timezone.now()
+    days = package.duration_days if duration_days is None else duration_days
+    start = now
+    previous = list(_live_packages(user))
+    for held in previous:
+        if (
+            held.package_id == package.pk
+            and held.expires_at is not None
+            and held.expires_at > now
+        ):
+            start = held.expires_at
+    _live_packages(user).update(status=UserPackage.Status.EXPIRED)
+    request_cache.invalidate()
     return UserPackage.objects.create(
         user=user,
-        package=tier,
-        billing_cycle=billing_cycle,
+        package=package,
         status=UserPackage.Status.ACTIVE,
-        expires_at=_expiry_for(billing_cycle),
-        usage_reset_date=timezone.localdate(),
+        source=source,
+        started_at=now,
+        expires_at=_expiry(start, days),
         payment_reference=reference,
+        order=order,
     )
 
 
 @transaction.atomic
 def cancel_package(user_package: UserPackage) -> UserPackage:
+    if user_package.is_baseline:
+        raise OrderError("The free package cannot be cancelled.")
     user_package.status = UserPackage.Status.CANCELLED
     user_package.cancelled_at = timezone.now()
     user_package.save(update_fields=["status", "cancelled_at"])
+    request_cache.invalidate()
     return user_package
 
 
+def _file_lines(order: Order) -> list[dict[str, Any]]:
+    """File lines of an order, with the credits paid split across them.
+
+    Credits are divided in proportion to each line's price; the rounding remainder
+    goes to the last line so the shares always add up to the credits actually spent.
+    """
+    total_credits = order.credits_spent if order.payment_method == "credits" else 0
+    items = [
+        item
+        for item in order.items.select_related("content_type")
+        if item.content_type is not None
+    ]
+    total_price = sum((item.line_total for item in items), Decimal(0))
+    lines: list[dict[str, Any]] = []
+    assigned = 0
+    for index, item in enumerate(items):
+        if index == len(items) - 1:
+            share = total_credits - assigned
+        elif total_price > 0:
+            share = int(total_credits * item.line_total / total_price)
+        else:
+            share = total_credits // len(items)
+        assigned += share
+        content_type = item.content_type
+        assert content_type is not None
+        lines.append(
+            {
+                "content_type": f"{content_type.app_label}.{content_type.model}",
+                "object_id": str(item.object_id),
+                "amount": f"{item.line_total:.2f}",
+                "credits": share,
+            }
+        )
+    return lines
+
+
+def _publish_after_commit(event: str, order: Order) -> None:
+    payload = {
+        "order_id": order.pk,
+        "user_id": order.user_id,
+        "files": _file_lines(order),
+        "topup_credits": sum(item.topup_credits for item in order.items.all()),
+    }
+    transaction.on_commit(lambda: event_bus.publish(event, payload))
+
+
 def _provision_item(order: Order, item: OrderItem) -> None:
-    product = item.product
-    if product.product_type == ProductType.PACKAGE and product.package_tier:
-        activate_package(
-            order.user,
-            product.package_tier,
-            item.billing_cycle,
-            reference=order.payment_reference,
-        )
-    elif product.product_type == ProductType.SUBSCRIPTION and product.subscription_plan:
-        Subscription.objects.create(
-            user=order.user,
-            plan=product.subscription_plan,
-            expires_at=_expiry_for(item.billing_cycle),
-        )
+    """Provision a package line; a paid file line needs no records (the order is)."""
+    if item.package is None:
+        return
+    activate_package(
+        order.user,
+        item.package,
+        reference=order.payment_reference,
+        order=order,
+        source=UserPackage.Source.ORDER,
+        duration_days=item.duration_days,
+    )
 
 
 @transaction.atomic
@@ -144,10 +217,9 @@ def mark_order_paid(order_id: int, *, staff_user: Any, reference: str = "") -> O
     order.processed_by = staff_user
     order.payment_reference = reference[:200]
     order.save()
-    for item in order.items.select_related(
-        "product", "product__package_tier", "product__subscription_plan"
-    ):
+    for item in order.items.select_related("package"):
         _provision_item(order, item)
+    _publish_after_commit(ORDER_PAID_EVENT, order)
     return order
 
 
@@ -164,320 +236,101 @@ def cancel_order(order_id: int, *, staff_user: Any) -> Order:
     return order
 
 
-def expire_overdue_packages() -> dict[str, int]:
-    """Expire packages and subscriptions whose end date passed. Idempotent."""
-    now = timezone.now()
-    packages = UserPackage.objects.filter(
-        status__in=[UserPackage.Status.ACTIVE, UserPackage.Status.TRIALING],
-        expires_at__lt=now,
-    ).update(status=UserPackage.Status.EXPIRED)
-    subscriptions = Subscription.objects.filter(
-        status__in=[Subscription.Status.ACTIVE, Subscription.Status.TRIALING],
-        expires_at__lt=now,
-    ).update(status=Subscription.Status.EXPIRED)
-    return {"packages": packages, "subscriptions": subscriptions}
-
-
-# --- Download quotas -------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class QuotaDecision:
-    allowed: bool
-    reason: str = ""
-
-
-def get_active_package(user: Any) -> UserPackage | None:
-    return (
-        UserPackage.objects.select_related("package")
-        .filter(
-            user=user,
-            status__in=[UserPackage.Status.ACTIVE, UserPackage.Status.TRIALING],
-        )
-        .first()
-    )
-
-
-def ensure_package(user: Any) -> UserPackage | None:
-    """Return the user's live package, assigning the default tier if they have none."""
-    package = get_active_package(user)
-    if package is not None:
-        return package
-    default_tier = PackageTier.objects.filter(is_default=True, is_active=True).first()
-    if default_tier is None:
-        return None
-    return UserPackage.objects.create(
-        user=user,
-        package=default_tier,
-        status=UserPackage.Status.ACTIVE,
-        usage_reset_date=timezone.localdate(),
-    )
-
-
-def _roll_usage_windows(package: UserPackage) -> None:
-    today = timezone.localdate()
-    if (
-        package.last_download_at
-        and timezone.localtime(package.last_download_at).date() < today
-    ):
-        package.downloads_today = 0
-        package.bandwidth_today_mb = 0
-    reset = package.usage_reset_date
-    if reset is None or (reset.year, reset.month) != (today.year, today.month):
-        package.downloads_this_month = 0
-        package.bandwidth_this_month_mb = 0
-        package.usage_reset_date = today
-
-
-def _limit(
-    package: UserPackage, override: PackageQuotaOverride | None, name: str
-) -> int:
-    value = getattr(override, name, None) if override else None
-    return getattr(package.package, name) if value is None else value
-
-
-def check_download_quota(user: Any, *, size_mb: int = 0) -> QuotaDecision:
-    """Read-only quota decision for a prospective download."""
-    package = ensure_package(user)
-    if package is None:
-        return QuotaDecision(False, "No package is available for this account.")
-    _roll_usage_windows(package)
-    now = timezone.now()
-    override = (
-        PackageQuotaOverride.objects.filter(user=user)
-        .exclude(expires_at__lt=now)
-        .order_by("-created_at")
-        .first()
-    )
-    tier = package.package
-
-    if tier.max_file_size_mb >= 0 and size_mb > tier.max_file_size_mb:
-        return QuotaDecision(
-            False, f"File exceeds the {tier.max_file_size_mb} MB limit."
-        )
-    checks = (
-        (
-            "daily_download_limit",
-            package.downloads_today,
-            1,
-            "Daily download limit reached.",
-        ),
-        (
-            "monthly_download_limit",
-            package.downloads_this_month,
-            1,
-            "Monthly download limit reached.",
-        ),
-        (
-            "daily_bandwidth_mb",
-            package.bandwidth_today_mb,
-            size_mb,
-            "Daily bandwidth limit reached.",
-        ),
-        (
-            "monthly_bandwidth_mb",
-            package.bandwidth_this_month_mb,
-            size_mb,
-            "Monthly bandwidth limit reached.",
-        ),
-    )
-    for name, used, increment, message in checks:
-        limit = _limit(package, override, name)
-        if limit >= 0 and used + increment > limit:
-            return QuotaDecision(False, message)
-    return QuotaDecision(True)
-
-
-def firmware_type_allowed(user: Any, firmware_type: str) -> bool:
-    """Whether the user's tier may download this firmware classification."""
-    package = ensure_package(user)
-    if package is None:
-        return False
-    flag = {
-        "official": package.package.access_official,
-        "engineering": package.package.access_engineering,
-        "readback": package.package.access_readback,
-        "modified": package.package.access_modified,
-    }
-    return flag.get(firmware_type, False)
-
-
 @transaction.atomic
-def record_download(user: Any, *, size_mb: int = 0) -> UserPackage | None:
-    """Increment usage counters atomically after a download was granted."""
-    package = ensure_package(user)
-    if package is None:
-        return None
-    package = UserPackage.objects.select_for_update().get(pk=package.pk)
-    _roll_usage_windows(package)
-    package.save(
-        update_fields=[
-            "downloads_today",
-            "bandwidth_today_mb",
-            "downloads_this_month",
-            "bandwidth_this_month_mb",
-            "usage_reset_date",
-        ]
+def refund_order(order_id: int, *, staff_user: Any, reason: str = "") -> Order:
+    """Refund a paid order (money is returned offline) and revoke what it granted.
+
+    Paid-file lines stop being purchased the moment the order leaves ``paid``;
+    packages provisioned by the order are cancelled. Files that were already
+    served stay in the user's library but can no longer be re-downloaded.
+    """
+    order = Order.objects.select_for_update().get(pk=order_id)
+    if order.status == Order.Status.REFUNDED:
+        return order
+    if order.status != Order.Status.PAID:
+        raise OrderError("Only paid orders can be refunded.")
+    now = timezone.now()
+    order.status = Order.Status.REFUNDED
+    order.processed_by = staff_user
+    if reason:
+        order.notes = f"{order.notes}\nRefund: {reason}".strip()
+    order.save(update_fields=["status", "processed_by", "notes", "updated_at"])
+    if order.payment_method == Order.PaymentMethod.CREDITS and order.credits_spent:
+        try:
+            wallet_gateway.refund(
+                order.payment_reference, reason=reason or f"Order #{order.pk} refunded"
+            )
+        except wallet_gateway.CreditsUnavailable as error:
+            raise OrderError(str(error)) from error
+    UserPackage.objects.filter(order=order, status=UserPackage.Status.ACTIVE).update(
+        status=UserPackage.Status.CANCELLED, cancelled_at=now
     )
-    UserPackage.objects.filter(pk=package.pk).update(
-        downloads_today=F("downloads_today") + 1,
-        downloads_this_month=F("downloads_this_month") + 1,
-        bandwidth_today_mb=F("bandwidth_today_mb") + size_mb,
-        bandwidth_this_month_mb=F("bandwidth_this_month_mb") + size_mb,
-        last_download_at=timezone.now(),
-    )
-    package.refresh_from_db()
+    request_cache.invalidate()
+    _publish_after_commit(ORDER_REFUNDED_EVENT, order)
+    return order
+
+
+def expire_overdue_packages() -> dict[str, int]:
+    """Expire packages whose end date passed. Idempotent."""
+    packages = UserPackage.objects.filter(
+        status=UserPackage.Status.ACTIVE, expires_at__lt=timezone.now()
+    ).update(status=UserPackage.Status.EXPIRED)
+    request_cache.invalidate()
+    return {"packages": packages}
+
+
+# --- Package administration -------------------------------------------------
+
+
+def set_package_active(package: PackageTier, *, active: bool) -> PackageTier:
+    """Activate or deactivate a package; holders keep it, nobody can order it."""
+    if not active and package.is_default:
+        raise OrderError("The default package must stay active.")
+    package.is_active = active
+    package.save(update_fields=["is_active", "updated_at"])
+    request_cache.invalidate()
     return package
 
 
-@dataclass(frozen=True)
-class UsageMeter:
-    """One quota line: ``limit`` of -1 means unlimited."""
+@transaction.atomic
+def archive_package(package: PackageTier) -> PackageTier:
+    """Retire a package: hide it, stop orders and cancel its pending orders.
 
-    label: str
-    used: int
-    limit: int
-    unit: str = ""
-
-    @property
-    def unlimited(self) -> bool:
-        return self.limit < 0
-
-    @property
-    def percent(self) -> int:
-        if self.unlimited or self.limit == 0:
-            return 0 if self.unlimited else 100
-        return min(100, round(self.used / self.limit * 100))
-
-    @property
-    def text(self) -> str:
-        unit = f" {self.unit}" if self.unit else ""
-        if self.unlimited:
-            return f"{self.used}{unit} used · unlimited"
-        return f"{self.used} of {self.limit}{unit}"
-
-    @property
-    def dom_id(self) -> str:
-        return "meter-" + self.label.lower().replace(" ", "-")
-
-
-@dataclass(frozen=True)
-class EntitlementSummary:
-    """Read-only view of what an account may download; never writes to the database."""
-
-    tier: PackageTier | None
-    package: UserPackage | None
-    meters: list[UsageMeter]
-    type_access: list[tuple[str, bool]]
-    enforced: bool
-
-    @property
-    def is_default_tier(self) -> bool:
-        return self.package is None and self.tier is not None
-
-
-def _displayed_usage(package: UserPackage | None) -> dict[str, int]:
-    """Current counters with the same day/month rollover rules, without saving."""
-    if package is None:
-        return dict.fromkeys(
-            (
-                "downloads_today",
-                "downloads_this_month",
-                "bandwidth_today_mb",
-                "bandwidth_this_month_mb",
-            ),
-            0,
-        )
-    today = timezone.localdate()
-    usage = {
-        "downloads_today": package.downloads_today,
-        "downloads_this_month": package.downloads_this_month,
-        "bandwidth_today_mb": package.bandwidth_today_mb,
-        "bandwidth_this_month_mb": package.bandwidth_this_month_mb,
-    }
-    if (
-        package.last_download_at
-        and timezone.localtime(package.last_download_at).date() < today
-    ):
-        usage["downloads_today"] = usage["bandwidth_today_mb"] = 0
-    reset = package.usage_reset_date
-    if reset is None or (reset.year, reset.month) != (today.year, today.month):
-        usage["downloads_this_month"] = usage["bandwidth_this_month_mb"] = 0
-    return usage
-
-
-def entitlement_summary(user: Any) -> EntitlementSummary:
-    """Quota meters and category access for the account's live or default package."""
-    package = get_active_package(user)
-    tier = (
-        package.package
-        if package is not None
-        else PackageTier.objects.filter(is_default=True, is_active=True).first()
+    Current holders keep their package until it ends. The default package cannot
+    be archived.
+    """
+    if package.is_default:
+        raise OrderError("The default package cannot be archived.")
+    pending = Order.objects.select_for_update().filter(
+        status=Order.Status.PENDING, items__package=package
     )
-    meters: list[UsageMeter] = []
-    access: list[tuple[str, bool]] = []
-    if tier is not None:
-        override = (
-            PackageQuotaOverride.objects.filter(user=user)
-            .exclude(expires_at__lt=timezone.now())
-            .order_by("-created_at")
-            .first()
-        )
-        usage = _displayed_usage(package)
-
-        def limit(name: str) -> int:
-            value = getattr(override, name, None) if override else None
-            return getattr(tier, name) if value is None else value
-
-        meters = [
-            UsageMeter(
-                "Downloads today",
-                usage["downloads_today"],
-                limit("daily_download_limit"),
-            ),
-            UsageMeter(
-                "Downloads this month",
-                usage["downloads_this_month"],
-                limit("monthly_download_limit"),
-            ),
-            UsageMeter(
-                "Bandwidth today",
-                usage["bandwidth_today_mb"],
-                limit("daily_bandwidth_mb"),
-                "MB",
-            ),
-            UsageMeter(
-                "Bandwidth this month",
-                usage["bandwidth_this_month_mb"],
-                limit("monthly_bandwidth_mb"),
-                "MB",
-            ),
-        ]
-        access = [
-            ("Official", tier.access_official),
-            ("Engineering", tier.access_engineering),
-            ("Readback", tier.access_readback),
-            ("Modified", tier.access_modified),
-        ]
-    return EntitlementSummary(
-        tier=tier,
-        package=package,
-        meters=meters,
-        type_access=access,
-        enforced=bool(getattr(settings, "SHOP_ENTITLEMENTS_ENFORCED", False)),
-    )
+    pending.update(status=Order.Status.CANCELLED)
+    package.is_active = False
+    package.is_public = False
+    package.save(update_fields=["is_active", "is_public", "updated_at"])
+    request_cache.invalidate()
+    return package
 
 
-def shop_stats() -> dict[str, Any]:
-    """Aggregate counters for staff dashboards."""
-    from django.db.models import Sum
-
-    paid = Order.objects.filter(status=Order.Status.PAID)
-    return {
-        "pending_orders": Order.objects.filter(status=Order.Status.PENDING).count(),
-        "paid_orders": paid.count(),
-        "revenue": paid.aggregate(total=Sum("total"))["total"] or Decimal(0),
-        "active_packages": UserPackage.objects.filter(
-            status=UserPackage.Status.ACTIVE
-        ).count(),
+@transaction.atomic
+def duplicate_package(package: PackageTier) -> PackageTier:
+    """Copy a package as an inactive, hidden, non-default draft."""
+    base_name = f"Copy of {package.name}"[:90]
+    name, number = base_name, 1
+    while PackageTier.objects.filter(name=name).exists():
+        number += 1
+        name = f"{base_name} {number}"
+    slug_base = slugify(name)[:90] or "package"
+    slug, number = slug_base, 1
+    while PackageTier.objects.filter(slug=slug).exists():
+        number += 1
+        slug = f"{slug_base}-{number}"
+    values = {
+        field.name: getattr(package, field.name)
+        for field in PackageTier._meta.concrete_fields
+        if field.name not in {"id", "created_at", "updated_at"}
     }
+    values.update(
+        name=name, slug=slug, is_default=False, is_active=False, is_public=False
+    )
+    return PackageTier.objects.create(**values)

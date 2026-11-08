@@ -12,6 +12,6 @@ class DeviceBrowserKeyCookieMiddleware:
     def __call__(self, request):
         ensure_browser_key(request)
         response = self.get_response(request)
-        if getattr(request, "_device_browser_key_needs_cookie", False):
+        if getattr(request, "device_browser_key_needs_cookie", False):
             attach_device_cookie(response, request=request)
         return response

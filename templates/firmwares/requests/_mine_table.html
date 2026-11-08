@@ -1,0 +1,29 @@
+{# Context: rows, kind. One table per request kind; every row shows status and the reviewer's reason. #}
+{% load mf_ui %}
+{% table_scroll "Requests" %}
+<table class="table table-hover align-middle mb-0">
+  <thead><tr><th scope="col">Request</th><th scope="col">Status</th><th scope="col">Sent</th><th scope="col">Reviewer note</th></tr></thead>
+  <tbody>
+    {% for row in rows %}
+      <tr>
+        <td>
+          {% if kind == "brand" %}<strong>{{ row.name }}</strong>
+          {% elif kind == "model" %}<strong>{{ row.name }}</strong><span class="d-block small muted">{{ row.brand.name }}{% if row.model_code %} · {{ row.model_code }}{% endif %}</span>
+          {% elif kind == "variant" %}<strong>{{ row.name }}</strong><span class="d-block small muted">{{ row.model.brand.name }} {{ row.model.display_name }}{% if row.region %} · {{ row.region }}{% endif %}</span>
+          {% elif kind == "chipset" %}<strong>{{ row.vendor }} {{ row.name }}</strong>
+          {% else %}<strong>{{ row.brand.name }}{% if row.model %} / {{ row.model.display_name }}{% endif %}{% if row.variant_name %} / {{ row.variant_name }}{% endif %}</strong><span class="d-block small muted">{{ row.get_firmware_type_display }} · {{ row.request_count }} request{{ row.request_count|pluralize }}</span>{% endif %}
+        </td>
+        <td>
+          {% if kind == "firmware" %}
+            <span class="badge {% if row.status == 'fulfilled' %}text-bg-success{% elif row.status == 'rejected' %}text-bg-danger{% elif row.status == 'in_progress' %}text-bg-info{% else %}text-bg-warning{% endif %}">{{ row.get_status_display }}</span>
+          {% else %}
+            <span class="badge {% if row.status == 'approved' %}text-bg-success{% elif row.status == 'rejected' %}text-bg-danger{% else %}text-bg-warning{% endif %}">{{ row.status|capfirst }}</span>
+          {% endif %}
+        </td>
+        <td>{{ row.created_at|date:"M j, Y" }}</td>
+        <td>{% if kind == "firmware" %}{{ row.admin_notes|default:"—" }}{% else %}{{ row.notes|default:"—" }}{% endif %}{% if row.reviewed_at %}<span class="d-block small muted">Reviewed {{ row.reviewed_at|date:"M j, Y" }}</span>{% endif %}</td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endtable_scroll %}

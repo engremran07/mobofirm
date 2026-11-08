@@ -1,5 +1,3 @@
-from unittest.mock import patch
-
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
@@ -23,22 +21,12 @@ class FlashingGuideReviewTests(TestCase):
             password="test-password",
             is_staff=True,
         )
-        with (
-            patch(
-                "apps.firmwares.admin_autofill.FirmwareAutoFill.autofill_brand",
-                return_value={},
-            ),
-            patch(
-                "apps.firmwares.admin_autofill.FirmwareAutoFill.autofill_model",
-                return_value={},
-            ),
-        ):
-            self.brand = Brand.objects.create(name="Guide Brand", slug="guide-brand")
-            self.model = Model.objects.create(
-                brand=self.brand,
-                name="Guide Phone",
-                slug="guide-phone",
-            )
+        self.brand = Brand.objects.create(name="Guide Brand", slug="guide-brand")
+        self.model = Model.objects.create(
+            brand=self.brand,
+            name="Guide Phone",
+            slug="guide-phone",
+        )
         self.template = FlashingGuideTemplate.objects.create(
             title_template="Flash {brand} {model}",
             body_template="A practical guide for {brand} {model}. {steps}",

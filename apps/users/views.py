@@ -35,16 +35,18 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views.decorators.cache import never_cache
-from django.views.decorators.http import require_http_methods, require_POST
+from django.views.decorators.http import (
+    require_GET,
+    require_http_methods,
+    require_POST,
+)
 
 from apps.core.app_service import AppService
+from apps.core.geo import calling_code_label, country_label
 from apps.core.utils.ip import get_client_ip
+from apps.devices.services import DevicePolicyError
 from apps.site_settings.services import get_site_settings
-from apps.users.forms import (
-    TellUsAboutYouForm,
-    country_form_choices,
-    phone_code_form_choices,
-)
+from apps.users.forms import TellUsAboutYouForm
 from apps.users.mfa_views import begin_login_mfa
 from apps.users.models import Announcement, Notification
 from apps.users.profile_models import Profile, Reputation
@@ -53,7 +55,12 @@ from apps.users.services.email_verification import (
     consume_email_verification_code,
     get_pending_email_address,
 )
+from apps.users.services.location_hints import hint_from_browser, hint_from_request
 from apps.users.services.mfa import has_active_totp
+from apps.users.services.profile_completion import (
+    reward_profile_completion,
+    safe_next_url,
+)
 from apps.users.services.rate_limit import (
     CACHE_ERRORS,
     allow_action,
@@ -63,6 +70,17 @@ from apps.users.services.rate_limit import (
 from apps.users.services.recaptcha import verify_recaptcha
 
 logger = logging.getLogger(__name__)
+
+# Failures the optional devices contract may raise while checking a sign-in.
+_DEVICE_CHECK_ERRORS: tuple[type[Exception], ...] = (
+    DatabaseError,
+    *CACHE_ERRORS,
+    AttributeError,
+    LookupError,
+    RuntimeError,
+    TypeError,
+    ValueError,
+)
 
 
 @login_required
@@ -216,6 +234,33 @@ def _get_platform_features() -> list[dict[str, str]]:
     ]
 
 
+def device_registration_prompt(
+    enforcement_ctx: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Session payload asking the user to register a new, untrusted browser."""
+    if not enforcement_ctx:
+        return None
+    device = enforcement_ctx.get("device")
+    if not (
+        device
+        and not device.is_trusted
+        and not device.is_blocked
+        and device.revoked_at is None
+    ):
+        return None
+    context = enforcement_ctx.get("context", {})
+    active_devices = context.get("current_device_count", 0)
+    max_devices = context.get("max_devices", 3)
+    return {
+        "device_name": device.display_name,
+        "os_family": device.os_family,
+        "browser_family": device.browser_family,
+        "active_devices": active_devices,
+        "max_devices": max_devices,
+        "can_approve": active_devices < max_devices,
+    }
+
+
 # ============================================================
 # Enterprise Login View
 # ============================================================
@@ -240,9 +285,7 @@ class EnterpriseLoginView(LoginView):
                 str(settings_obj.get("rate_limit_window_seconds", 300))
             )
             try:
-                attempts = get_attempt_count(
-                    key, window_seconds=window_seconds, fail_open=False
-                )
+                attempts = get_attempt_count(key, fail_open=False)
                 if attempts >= max_attempts:
                     form.add_error(
                         None, "Too many login attempts. Please try again later."
@@ -268,13 +311,7 @@ class EnterpriseLoginView(LoginView):
         enforcement_ctx = None
 
         try:
-            attempts = get_attempt_count(
-                f"login:{ip}",
-                window_seconds=int(
-                    str(settings_obj.get("rate_limit_window_seconds", 300))
-                ),
-                fail_open=False,
-            )
+            attempts = get_attempt_count(f"login:{ip}", fail_open=False)
             if attempts >= int(str(settings_obj.get("max_login_attempts", 5))):
                 form.add_error(None, "Too many login attempts. Please try again later.")
                 logger.warning("Rate limit exceeded for IP=%s", ip)
@@ -309,11 +346,9 @@ class EnterpriseLoginView(LoginView):
             return super().form_valid(form)
 
         if login_user is not None:
-            devices_api = None
             try:
-                devices_api = AppService.get("devices")
-                enforce_policy = getattr(
-                    devices_api, "enforce_device_policy_for_login", None
+                enforce_policy = AppService.export(
+                    "devices", "enforce_device_policy_for_login"
                 )
                 if not callable(enforce_policy):
                     raise TypeError("Device login policy service is unavailable")
@@ -323,19 +358,16 @@ class EnterpriseLoginView(LoginView):
                     reason = enforcement_ctx.get("reason", "policy_denied")
                     form.add_error(None, self._device_policy_message(reason))
                     return super().form_invalid(form)
-            except Exception as exc:
-                policy_error = getattr(devices_api, "DevicePolicyError", None)
-                if not isinstance(policy_error, type) or not isinstance(
-                    exc, policy_error
-                ):
-                    logger.exception(
-                        "Device policy check failed for user %s", login_user.pk
-                    )
-                    form.add_error(
-                        None,
-                        "Device security check could not be completed. Try again later.",
-                    )
-                    return super().form_invalid(form)
+            except _DEVICE_CHECK_ERRORS:
+                logger.exception(
+                    "Device policy check failed for user %s", login_user.pk
+                )
+                form.add_error(
+                    None,
+                    "Device security check could not be completed. Try again later.",
+                )
+                return super().form_invalid(form)
+            except DevicePolicyError as exc:
                 policy_reason = str(getattr(exc, "reason", "policy_denied"))
                 if policy_reason in {"mfa_required", "mfa_required_risk"}:
                     try:
@@ -362,7 +394,11 @@ class EnterpriseLoginView(LoginView):
         if login_user is not None:
             try:
                 if has_active_totp(login_user):
-                    return begin_login_mfa(self.request, login_user)
+                    return begin_login_mfa(
+                        self.request,
+                        login_user,
+                        device_prompt=device_registration_prompt(enforcement_ctx),
+                    )
             except DatabaseError:
                 logger.exception(
                     "MFA factors could not be loaded for user %s",
@@ -378,25 +414,10 @@ class EnterpriseLoginView(LoginView):
         if getattr(form, "user", None) is not None:
             reset_rate_limit(f"login:{ip}")
         if enforcement_ctx:
-            device = enforcement_ctx.get("device")
-            self.request.device = device
-            if (
-                device
-                and not device.is_trusted
-                and not device.is_blocked
-                and device.revoked_at is None
-            ):
-                context = enforcement_ctx.get("context", {})
-                active_devices = context.get("current_device_count", 0)
-                max_devices = context.get("max_devices", 3)
-                self.request.session["device_registration_prompt"] = {
-                    "device_name": device.display_name,
-                    "os_family": device.os_family,
-                    "browser_family": device.browser_family,
-                    "active_devices": active_devices,
-                    "max_devices": max_devices,
-                    "can_approve": active_devices < max_devices,
-                }
+            self.request.device = enforcement_ctx.get("device")
+            prompt = device_registration_prompt(enforcement_ctx)
+            if prompt:
+                self.request.session["device_registration_prompt"] = prompt
 
         # Session rotation and the remember-me lifetime are handled by allauth's
         # login (django.contrib.auth.login cycles the key; "remember" sets expiry).
@@ -451,39 +472,7 @@ class EnterpriseSignupView(SignupView):
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
 
-        # Import country detection utilities
-        from django_countries import countries
-
-        from apps.users.services import (
-            COUNTRY_PHONE_CODES,
-            detect_country,
-            get_phone_code_for_country,
-        )
-
-        # Country comes from a trusted edge header only (no third-party lookups).
-        detected_country = detect_country(self.request)
-        detected_phone_code = (
-            get_phone_code_for_country(detected_country) if detected_country else None
-        )
-
-        # Build country choices list
-        country_choices = list(countries)
-
-        # Build phone code choices list
-        phone_code_choices = sorted(
-            [(code, dial) for code, dial in COUNTRY_PHONE_CODES.items()],
-            key=lambda x: x[0],
-        )
-
-        context.update(
-            {
-                "countries": country_choices,
-                "phone_codes": phone_code_choices,
-                "detected_country": detected_country,
-                "detected_phone_code": detected_phone_code,
-                "session_referral_code": self.request.session.get("referral_code", ""),
-            }
-        )
+        context["session_referral_code"] = self.request.session.get("referral_code", "")
 
         return context
 
@@ -840,10 +829,7 @@ def profile_view(request: HttpRequest) -> HttpResponse:
     """Render the user profile overview page with inline updates."""
     from django_countries import countries
 
-    from apps.users.services import (
-        detect_country,
-        get_phone_code_for_country,
-    )
+    from apps.users.services import get_phone_code_for_country
 
     user = current_user(request)
 
@@ -918,21 +904,12 @@ def profile_view(request: HttpRequest) -> HttpResponse:
     # Load extended profile
     profile_obj = Profile.objects.filter(user=user).first()
 
-    detected_country = user.country or ""
-    if not detected_country and request.method == "GET":
-        detected_country = detect_country(request) or ""
-
-    detected_phone_code = user.phone_country_code or ""
-    country_name = ""
-    if detected_country:
-        country_name = str(dict(countries).get(detected_country, detected_country))
-        detected_phone_code = detected_phone_code or get_phone_code_for_country(
-            detected_country
-        )
-
-    # Build country/phone choices for the edit form
-    country_choices = country_form_choices()[1:]
-    phone_code_choices = phone_code_form_choices()[1:]
+    # Nothing is saved until the form is posted; an unsaved country is only a hint.
+    hint = None if user.country else hint_from_request(request)
+    country_code = user.country or (hint.country if hint else "")
+    phone_code = user.phone_country_code or (
+        get_phone_code_for_country(country_code) if country_code else ""
+    )
 
     # Firmware download history
     download_sessions: list[Any] = []
@@ -955,12 +932,11 @@ def profile_view(request: HttpRequest) -> HttpResponse:
     download_sessions = list(sessions_qs[:20])
 
     device_summary = None
-    devices_api = AppService.get("devices")
-    get_device_summary = getattr(devices_api, "get_device_registration_summary", None)
+    get_device_summary = AppService.export("devices", "get_device_registration_summary")
     if callable(get_device_summary):
         try:
             device_summary = get_device_summary(user)
-        except Exception:
+        except _DEVICE_CHECK_ERRORS:
             logger.exception(
                 "Device registration summary unavailable for user_id=%s", user.pk
             )
@@ -973,11 +949,13 @@ def profile_view(request: HttpRequest) -> HttpResponse:
             "profile_completed": profile_completed,
             "unlocked_features": _get_platform_features() if profile_completed else [],
             "profile_obj": profile_obj,
-            "country_name": country_name,
-            "countries": country_choices,
-            "phone_codes": phone_code_choices,
-            "detected_country": detected_country,
-            "detected_phone_code": detected_phone_code,
+            "country_code": country_code,
+            "country_display": country_label(country_code),
+            "phone_code": phone_code,
+            "phone_display": calling_code_label(phone_code, country_code),
+            "detected": "true" if hint else "",
+            "detected_source": hint.source if hint else "",
+            "locale_hint_url": reverse("users:locale_hint"),
             "download_sessions": download_sessions,
             "download_stats": download_stats,
             "device_summary": device_summary,
@@ -1011,28 +989,26 @@ def tell_us_about_you(request: HttpRequest) -> HttpResponse:
       • Password (for social accounts without password)
     Shows locked features gallery to motivate completion.
     """
-    from django_countries import countries
-
-    from apps.users.services import detect_country, get_phone_code_for_country
+    from apps.users.services import get_phone_code_for_country
 
     user = current_user(request)
+    next_url = safe_next_url(
+        request, request.POST.get("next") or request.GET.get("next")
+    )
 
     # Allow re-editing even after profile completion
     editing_completed = getattr(user, "profile_completed", False)
 
-    detected_country = user.country or None
-    detected_phone_code = user.phone_country_code or None
-    detected_country_name = ""
-
-    if not detected_country and request.method == "GET":
-        detected_country = detect_country(request)
-
-    if detected_country:
-        detected_phone_code = detected_phone_code or get_phone_code_for_country(
-            detected_country
-        )
-        # Resolve country name from django-countries
-        detected_country_name = str(dict(countries).get(detected_country, ""))
+    # Suggest a location only when nothing is saved; a GET never persists it.
+    hint = (
+        None if user.country or request.method == "POST" else hint_from_request(request)
+    )
+    detected_country = user.country or (hint.country if hint else "")
+    detected_phone_code = user.phone_country_code or (
+        get_phone_code_for_country(detected_country) if detected_country else ""
+    )
+    detected_country_name = country_label(detected_country)
+    detected_source = hint.source if hint else ""
 
     # Determine if we need password fields
     show_password_fields = not user.has_usable_password()
@@ -1116,6 +1092,7 @@ def tell_us_about_you(request: HttpRequest) -> HttpResponse:
             )
 
             if profile_ready:
+                reward_profile_completion(user)
                 messages.success(
                     request,
                     _(
@@ -1129,10 +1106,7 @@ def tell_us_about_you(request: HttpRequest) -> HttpResponse:
                         "Progress saved. Please fill all required fields to unlock features."
                     ),
                 )
-            return redirect("users:dashboard")
-        else:
-            # Form has errors - will be shown in template
-            pass
+            return redirect(next_url or "users:dashboard")
     else:
         # GET request - initialize form with user data
         initial_data: dict[str, Any] = {
@@ -1150,11 +1124,12 @@ def tell_us_about_you(request: HttpRequest) -> HttpResponse:
                 else []
             ),
         }
-        form = TellUsAboutYouForm(initial=initial_data, user=user, request=request)
-
-    # Build country choices list
-    country_choices = country_form_choices()[1:]
-    phone_code_choices = phone_code_form_choices()[1:]
+        form = TellUsAboutYouForm(
+            initial=initial_data,
+            user=user,
+            request=request,
+            detected_fields=("country", "phone_country_code") if hint else (),
+        )
 
     # ----- Locked features data (from all apps) -----
     locked_features = _get_platform_features()
@@ -1181,11 +1156,12 @@ def tell_us_about_you(request: HttpRequest) -> HttpResponse:
     context: dict[str, Any] = {
         "user": user,
         "form": form,
-        "countries": country_choices,
-        "phone_codes": phone_code_choices,
-        "detected_country": detected_country,
-        "detected_country_name": detected_country_name,
-        "detected_phone_code": detected_phone_code,
+        "detected_country": detected_country if hint else "",
+        "detected_country_name": detected_country_name if hint else "",
+        "detected_phone_code": detected_phone_code if hint else "",
+        "detected_source": detected_source,
+        "locale_hint_url": reverse("users:locale_hint"),
+        "next_url": next_url,
         "show_password_fields": show_password_fields,
         "locked_features": locked_features,
         "completion_percent": completion_percent,
@@ -1193,6 +1169,20 @@ def tell_us_about_you(request: HttpRequest) -> HttpResponse:
         "editing_completed": editing_completed,
     }
     return render(request, "users/tell_us_about_you.html", context)
+
+
+@require_GET
+@never_cache
+def locale_hint(request: HttpRequest) -> JsonResponse:
+    """Resolve the browser's time zone / language region to a country suggestion.
+
+    Pure lookup in the static tables (no IP, no storage). The caller fills only
+    empty fields; an unknown zone and language answer ``{"detected": false}``.
+    """
+    hint = hint_from_browser(request.GET.get("tz"), request.GET.get("lang"))
+    if hint is None:
+        return JsonResponse({"detected": False})
+    return JsonResponse({"detected": True, **hint.as_dict()})
 
 
 # ============================================================

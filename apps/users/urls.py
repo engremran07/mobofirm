@@ -7,7 +7,14 @@ from allauth.account.views import LogoutView
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from . import api, api_auth, api_social, mfa_views, views_notifications
+from . import (
+    api,
+    api_auth,
+    api_social,
+    mfa_views,
+    views_announcements,
+    views_notifications,
+)
 from .views import (
     EnterpriseLoginView,
     EnterpriseSignupView,
@@ -20,6 +27,7 @@ from .views import (
     device_eviction,
     device_mfa_challenge,
     devices_view,
+    locale_hint,
     notification_settings,
     profile_view,
     push_subscription,
@@ -75,6 +83,7 @@ urlpatterns = [
     path("verify-email/status/", verify_email_status, name="verify_email_status"),
     path("verify-email/required/", verify_email_required, name="verify_email_required"),
     path("tell-us-about-you/", tell_us_about_you, name="tell_us_about_you"),
+    path("locale-hint/", locale_hint, name="locale_hint"),
     path(
         "accounts/resend-verification/", resend_verification, name="resend_verification"
     ),
@@ -111,6 +120,11 @@ urlpatterns = [
     ),
     path("notifications/push/subscribe/", push_subscription, name="push_subscription"),
     path("notifications/push/unsubscribe/", unsubscribe_push, name="unsubscribe_push"),
+    path(
+        "announcements/<int:pk>/dismiss/",
+        views_announcements.dismiss_announcement,
+        name="dismiss_announcement",
+    ),
 ]
 
 # Admin API endpoints (add to main admin URLconf via the platform/urls.py)

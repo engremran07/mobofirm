@@ -15,7 +15,7 @@ from urllib.parse import quote, urlsplit
 
 from django.conf import settings
 from django.contrib import messages
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db.models import CharField, Count, F, Q, QuerySet, Value
 from django.http import (
@@ -32,6 +32,10 @@ from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 
 from . import catalog
+from .access import (
+    check_download_access,
+    finalize_served_download,
+)
 from .catalog import (
     FIRMWARE_TYPE_DISPLAY,
     FIRMWARE_TYPES,
@@ -55,7 +59,6 @@ from .download_service import (
     countdown_remaining,
     create_download_token,
     generate_signed_url,
-    record_entitlement_download,
     seconds_until,
     sign_token,
     validate_download_token,
@@ -184,8 +187,6 @@ def library_hub(request: HttpRequest) -> HttpResponse:
     if search_query:
         brands = brands.filter(name__icontains=search_query)
 
-    from .models import GSMArenaDevice
-
     context = {
         "brands": brands,
         "featured_brands": featured_brands,
@@ -193,7 +194,7 @@ def library_hub(request: HttpRequest) -> HttpResponse:
         "total_brands": Brand.objects.count(),
         "total_models": Model.objects.filter(is_active=True).count(),
         "total_firmwares": total_public_firmware(),
-        "total_specs": GSMArenaDevice.objects.filter(review_status="approved").count(),
+        "total_chipsets": Chipset.objects.count(),
         "latest_models": Model.objects.filter(is_active=True)
         .select_related("brand")
         .order_by("-created_at", "brand__name", "name")[:6],
@@ -635,6 +636,9 @@ def firmware_detail(
         "related_blog_posts": related_blog_posts,
         "file_size_display": catalog.format_file_size(firmware.file_size),
         "external_host": _external_host(firmware),
+        "access": check_download_access(request.user, firmware),
+        "changelog": (firmware.metadata or {}).get("changelog", ""),
+        "login_url": f"{reverse('users:account_login')}?next={quote(request.path)}",
     }
     return render(request, "firmwares/firmware_detail.html", context)
 
@@ -763,6 +767,15 @@ def firmware_download_start(
             firmware_id=firmware_id,
         )
 
+    decision = check_download_access(request.user, firmware)
+    if not decision.allowed:
+        messages.error(request, decision.reason)
+        return redirect(
+            "firmwares:firmware_detail",
+            firmware_type=firmware_type,
+            firmware_id=firmware_id,
+        )
+
     try:
         token = consume_download_token(token_str, firmware, request)
     except TokenError as error:
@@ -782,7 +795,6 @@ def firmware_download_start(
     model_class.objects.filter(id=firmware_id).update(
         download_count=F("download_count") + 1
     )
-    record_entitlement_download(request, firmware)
     logger.info(
         "Firmware download: %s by %s (token=%s)",
         firmware.original_file_name,
@@ -793,6 +805,7 @@ def firmware_download_start(
     if firmware.is_external:
         if not firmware.external_url:
             raise Http404("Firmware has no external download link")
+        finalize_served_download(request.user, firmware)
         return redirect(firmware.external_url)
     signed_url = generate_signed_url(firmware, token)
     if signed_url is None:
@@ -863,6 +876,11 @@ def serve_local_file(request: HttpRequest, firmware_id: str) -> HttpResponseBase
     if path is None:
         logger.error("Stored firmware file missing or outside storage: %s", firmware_id)
         raise Http404
+
+    decision = check_download_access(token.user, firmware)
+    if not decision.allowed:
+        raise PermissionDenied(decision.reason)
+    finalize_served_download(token.user, firmware)
 
     session = token.sessions.order_by("-started_at").first()
     if session is not None:

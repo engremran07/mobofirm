@@ -13,6 +13,7 @@ from django.db.models.signals import post_delete, post_save, pre_save
 
 from . import jobs
 from .contentsources import ContentSource, content_sources
+from .managers import default_manager
 from .services.internal_linking.engine import refresh_linkable_entity
 
 logger = logging.getLogger(__name__)
@@ -33,7 +34,7 @@ def _remember(sender: type[models.Model], instance: Any, **kwargs: Any) -> None:
     source = content_sources().get(sender._meta.label_lower)
     if source is None or instance.pk is None:
         return
-    stored = sender._default_manager.filter(pk=instance.pk).first()
+    stored = default_manager(sender).filter(pk=instance.pk).first()
     if stored is not None:
         _previous_store()[(source.label, str(instance.pk))] = _state(source, stored)
 

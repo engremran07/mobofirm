@@ -6,6 +6,6 @@
 <a class="site-nav-link" href="{% url 'blog:post_list' %}"{% if nav_current == "blog" %} aria-current="page"{% endif %}>Blog</a>
 {% if ecosystem.shop %}<a class="site-nav-link" href="{% url 'shop:pricing' %}"{% if nav_current == "shop" %} aria-current="page"{% endif %}>Shop</a>{% endif %}
 {% if ecosystem.marketplace %}<a class="site-nav-link" href="{% url 'marketplace:listing_browse' %}"{% if nav_current == "marketplace" %} aria-current="page"{% endif %}>Marketplace</a>{% endif %}
-{% if ecosystem.filemanager and user.is_authenticated %}<a class="site-nav-link" href="{% url 'filemanager:browser' %}"{% if nav_current == "files" %} aria-current="page"{% endif %}>Files</a>{% endif %}
+{% if user.is_authenticated %}<a class="site-nav-link" href="{% url 'library:my_files' %}"{% if nav_current == "files" %} aria-current="page"{% endif %}>My files</a>{% endif %}
 {% if ecosystem.pages %}<a class="site-nav-link" href="{% url 'pages:index' %}"{% if nav_current == "pages" %} aria-current="page"{% endif %}>Help</a>{% endif %}
 {% if user.is_staff %}<a class="site-nav-link" href="{% url 'admin:index' %}">Admin</a>{% endif %}

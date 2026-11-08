@@ -5,7 +5,8 @@ from __future__ import annotations
 import hashlib
 
 from django import template
-from django.utils.safestring import mark_safe
+from django.utils.html import format_html
+from django.utils.safestring import SafeString
 
 register = template.Library()
 
@@ -46,7 +47,7 @@ def brand_logo_svg(
     size: int = 48,
     logo_url: str = "",
     extra_class: str = "",
-) -> str:
+) -> SafeString:
     """Render an inline SVG brand logo or fall back to an <img> if logo_url exists.
 
     Usage:
@@ -54,34 +55,47 @@ def brand_logo_svg(
         {% brand_logo_svg brand.name size=56 logo_url=brand.logo_url %}
     """
     if logo_url:
-        return mark_safe(
-            f'<img src="{logo_url}" alt="{brand_name}" '
-            f'width="{size}" height="{size}" '
-            f'class="rounded-lg object-contain {extra_class}" '
-            f'loading="lazy" decoding="async" '
-            f"onerror=\"this.style.display='none';this.nextElementSibling.style.display='flex'\">"
-            f"{_fallback_svg(brand_name, size, extra_class)}"
+        return format_html(
+            '<img src="{}" alt="{}" width="{}" height="{}" '
+            'class="rounded-lg object-contain {}" loading="lazy" decoding="async" '
+            "onerror=\"this.style.display='none';this.nextElementSibling.style.display='flex'\">"
+            "{}",
+            logo_url,
+            brand_name,
+            size,
+            size,
+            extra_class,
+            _fallback_svg(brand_name, size, extra_class),
         )
-    return mark_safe(_svg_logo(brand_name, size, extra_class))
+    return _svg_logo(brand_name, size, extra_class)
 
 
-def _svg_logo(name: str, size: int, extra_class: str) -> str:
+def _svg_logo(name: str, size: int, extra_class: str) -> SafeString:
     bg = _brand_color(name)[0]
     initials = _brand_initials(name)
     fs = round(size * 0.38)
     r = round(size * 0.167)
-    return (
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" '
-        f'viewBox="0 0 {size} {size}" class="rounded-lg shrink-0 {extra_class}" '
-        f'role="img" aria-label="{name}">'
-        f'<rect width="{size}" height="{size}" rx="{r}" fill="{bg}"/>'
-        f'<text x="50%" y="50%" dominant-baseline="central" text-anchor="middle" '
-        f'fill="white" font-family="Inter,system-ui,sans-serif" '
-        f'font-weight="700" font-size="{fs}">{initials}</text>'
-        f"</svg>"
+    return format_html(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" '
+        'viewBox="0 0 {size} {size}" class="rounded-lg shrink-0 {extra_class}" '
+        'role="img" aria-label="{name}">'
+        '<rect width="{size}" height="{size}" rx="{r}" fill="{bg}"/>'
+        '<text x="50%" y="50%" dominant-baseline="central" text-anchor="middle" '
+        'fill="white" font-family="Inter,system-ui,sans-serif" '
+        'font-weight="700" font-size="{fs}">{initials}</text>'
+        "</svg>",
+        size=size,
+        extra_class=extra_class,
+        name=name,
+        r=r,
+        bg=bg,
+        fs=fs,
+        initials=initials,
     )
 
 
-def _fallback_svg(name: str, size: int, extra_class: str) -> str:
+def _fallback_svg(name: str, size: int, extra_class: str) -> SafeString:
     """Hidden SVG fallback shown when logo_url image fails to load."""
-    return f'<span style="display:none">{_svg_logo(name, size, extra_class)}</span>'
+    return format_html(
+        '<span style="display:none">{}</span>', _svg_logo(name, size, extra_class)
+    )

@@ -52,7 +52,7 @@ def ensure_singletons() -> None:
 
 
 @receiver(post_migrate)
-def seed_singletons(sender, **kwargs):  # pragma: no cover - signal hook
+def seed_singletons(**kwargs):  # pragma: no cover - signal hook
     ensure_singletons()
 
 

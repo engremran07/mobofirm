@@ -1,13 +1,13 @@
-from importlib.metadata import version
-
 from django.test import TestCase
 from django.urls import reverse
+
+from app.version import app_version
 
 
 class ReleaseMetadataTests(TestCase):
     def test_public_shell_renders_the_installed_release_version(self):
         response = self.client.get(reverse("home"))
-        release_version = version("mobofirm")
+        release_version = app_version()
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(
@@ -30,4 +30,4 @@ class ReleaseMetadataTests(TestCase):
         response = self.client.get(reverse("admin:index"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, f"v{version('mobofirm')}")
+        self.assertContains(response, f"v{app_version()}")

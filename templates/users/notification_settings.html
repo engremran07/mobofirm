@@ -1,7 +1,10 @@
 {% extends "base.html" %}
 {% block title %}Notification preferences | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block content %}
-<div class="site-container py-5"><p class="section-eyebrow">Account settings</p><h1 class="h2 mb-4">Notification preferences</h1>
+<div class="site-container py-5">
+  {% url 'users:dashboard' as account_url %}
+  {% include "components/breadcrumbs.html" with current="Notification preferences" parent_label="Account" parent_url=account_url %}
+  <p class="section-eyebrow">Account settings</p><h1 class="h2 mb-4">Notification preferences</h1>
   <form method="post" class="surface-card p-4">{% csrf_token %}
     <fieldset class="mb-4"><legend class="h5">Email</legend>
       <label class="form-check"><input class="form-check-input" type="checkbox" name="email_comments"{% if preferences.email_comments %} checked{% endif %}> Comments</label>

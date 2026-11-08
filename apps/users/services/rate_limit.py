@@ -73,14 +73,11 @@ def reset_rate_limit(key: str) -> None:
         logger.warning("Failed to reset rate limit for %s", key, exc_info=True)
 
 
-def get_attempt_count(
-    key: str, window_seconds: int = 300, fail_open: bool = True
-) -> int:
+def get_attempt_count(key: str, fail_open: bool = True) -> int:
     """
     Return the attempts counted in the current window for ``key``.
 
-    ``window_seconds`` is accepted for API compatibility; the window is set when
-    the first attempt is counted.
+    The window is set when the first attempt is counted.
     """
     try:
         value = cache.get(key, 0)

@@ -9,6 +9,8 @@ from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.db import models
 from django.db.models import Q
+from django.db.models.functions import Lower
+from django.utils import timezone
 
 from .constants import MAIN_CATEGORIES, RESERVED_BRAND_SLUGS
 
@@ -28,6 +30,86 @@ class FirmwarePackageFormat(models.TextChoices):
 class FirmwareSourceType(models.TextChoices):
     STORED = "stored", "Stored file"
     EXTERNAL = "external", "External download"
+
+
+class AccessTier(models.TextChoices):
+    FREE = "free", "Free"
+    PAID = "paid", "Paid"
+    FEATURED = "featured", "Featured"
+
+
+PRICE_CURRENCY = "USD"
+
+
+def price_constraint(name: str) -> models.CheckConstraint:
+    """An approved price exists only for paid files and is always positive."""
+    return models.CheckConstraint(
+        condition=Q(approved_price__isnull=True)
+        | (Q(access_tier=AccessTier.PAID) & Q(approved_price__gt=0)),
+        name=name,
+    )
+
+
+class TieredAccess(models.Model):
+    """Access tier and price contract shared by pending and published firmware.
+
+    ``proposed_price`` is the uploader's suggestion; only staff set
+    ``approved_price`` (the price a purchase is charged at).
+    """
+
+    access_tier = models.CharField(
+        max_length=16,
+        choices=AccessTier.choices,
+        default=AccessTier.FREE,
+        help_text="Free for everyone, paid per file, or featured for plan holders",
+    )
+    proposed_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Price suggested by an approved seller (paid files only)",
+    )
+    approved_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Price set by staff; a paid file is not purchasable until set",
+    )
+    price_reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="%(class)s_price_reviews",
+    )
+    price_reviewed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        abstract = True
+
+    @property
+    def is_free(self) -> bool:
+        return self.access_tier == AccessTier.FREE
+
+    @property
+    def is_paid(self) -> bool:
+        return self.access_tier == AccessTier.PAID
+
+    @property
+    def is_featured(self) -> bool:
+        return self.access_tier == AccessTier.FEATURED
+
+    @property
+    def tier_label(self) -> str:
+        if self.access_tier == AccessTier.PAID:
+            if self.approved_price is None:
+                return "Paid · price pending"
+            return f"Paid · {PRICE_CURRENCY} {self.approved_price:.2f}"
+        if self.access_tier == AccessTier.FEATURED:
+            return "Featured · members"
+        return "Free"
 
 
 def source_constraint(name: str) -> models.CheckConstraint:
@@ -53,6 +135,19 @@ class Timestamped(models.Model):
 
     class Meta:
         abstract = True
+
+
+def _validate_tier_fields(instance) -> None:
+    """Admin/form validation of the access tier and price combination."""
+    from django.core.exceptions import ValidationError
+
+    if instance.access_tier not in AccessTier.values:
+        raise ValidationError("Unsupported access tier.")
+    price = instance.approved_price
+    if instance.access_tier != AccessTier.PAID and price is not None:
+        raise ValidationError("Only paid files can have an approved price.")
+    if price is not None and price <= 0:
+        raise ValidationError("The approved price must be greater than zero.")
 
 
 def _validate_source_fields(instance) -> None:
@@ -428,67 +523,11 @@ class Variant(Timestamped):
         super().save(*args, **kwargs)
 
 
-class BrandSchema(Timestamped):
-    brand = models.OneToOneField(Brand, on_delete=models.CASCADE, related_name="schema")
-    schema_json = models.JSONField(default=dict)
-    approved_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="approved_brand_schemas",
-    )
-    approved_at = models.DateTimeField(null=True, blank=True)
-
-    class Meta:
-        verbose_name = "Brand Schema"
-        verbose_name_plural = "Brand Schemas"
-
-    def __str__(self) -> str:
-        return f"Schema for {self.brand}"
-
-
-class SchemaUpdateProposal(Timestamped):
-    brand = models.ForeignKey(
-        Brand, on_delete=models.CASCADE, related_name="schema_proposals"
-    )
-    proposed_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        on_delete=models.SET_NULL,
-        null=True,
-        related_name="schema_proposals_created",
-    )
-    schema_json = models.JSONField(default=dict)
-    status = models.CharField(
-        max_length=16,
-        choices=[
-            ("pending", "pending"),
-            ("approved", "approved"),
-            ("rejected", "rejected"),
-        ],
-        default="pending",
-    )
-    reviewed_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        related_name="schema_proposal_reviews",
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-    )
-    reviewed_at = models.DateTimeField(null=True, blank=True)
-    notes = models.TextField(blank=True, default="")
-
-    class Meta:
-        verbose_name = "Schema Update Proposal"
-        verbose_name_plural = "Schema Update Proposals"
-        ordering: ClassVar[list[str]] = ["-created_at"]
-
-    def __str__(self) -> str:
-        return f"Proposal #{self.pk} for {self.brand}"
-
-
 class BrandCreationRequest(Timestamped):
     name = models.CharField(max_length=128)
+    details = models.TextField(
+        blank=True, default="", max_length=1000, help_text="Why it is needed, links"
+    )
     requested_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -516,9 +555,16 @@ class BrandCreationRequest(Timestamped):
     notes = models.TextField(blank=True, default="")
 
     class Meta:
-        verbose_name = "Brand Creation Request"
-        verbose_name_plural = "Brand Creation Requests"
+        verbose_name = "Brand request"
+        verbose_name_plural = "Brand requests (review)"
         ordering: ClassVar[list[str]] = ["-created_at"]
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                Lower("name"),
+                condition=Q(status="pending"),
+                name="brand_request_pending_name_unique",
+            )
+        ]
 
     def __str__(self) -> str:
         return f"Brand Request: {self.name}"
@@ -529,6 +575,16 @@ class ModelCreationRequest(Timestamped):
         Brand, on_delete=models.CASCADE, related_name="model_creation_requests"
     )
     name = models.CharField(max_length=128)
+    model_code = models.CharField(max_length=64, blank=True, default="")
+    chipset = models.ForeignKey(
+        Chipset,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="model_creation_requests",
+        help_text="Optional chipset the requested model uses",
+    )
+    details = models.TextField(blank=True, default="", max_length=1000)
     requested_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -556,9 +612,17 @@ class ModelCreationRequest(Timestamped):
     notes = models.TextField(blank=True, default="")
 
     class Meta:
-        verbose_name = "Model Creation Request"
-        verbose_name_plural = "Model Creation Requests"
+        verbose_name = "Model request"
+        verbose_name_plural = "Model requests (review)"
         ordering: ClassVar[list[str]] = ["-created_at"]
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                "brand",
+                Lower("name"),
+                condition=Q(status="pending"),
+                name="model_request_pending_name_unique",
+            )
+        ]
 
     def __str__(self) -> str:
         return f"Model Request: {self.name}"
@@ -569,6 +633,9 @@ class VariantCreationRequest(Timestamped):
         Model, on_delete=models.CASCADE, related_name="variant_creation_requests"
     )
     name = models.CharField(max_length=128)
+    model_code = models.CharField(max_length=64, blank=True, default="")
+    region = models.CharField(max_length=64, blank=True, default="")
+    details = models.TextField(blank=True, default="", max_length=1000)
     requested_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,
@@ -596,15 +663,72 @@ class VariantCreationRequest(Timestamped):
     notes = models.TextField(blank=True, default="")
 
     class Meta:
-        verbose_name = "Variant Creation Request"
-        verbose_name_plural = "Variant Creation Requests"
+        verbose_name = "Variant request"
+        verbose_name_plural = "Variant requests (review)"
         ordering: ClassVar[list[str]] = ["-created_at"]
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                "model",
+                Lower("name"),
+                condition=Q(status="pending"),
+                name="variant_request_pending_name_unique",
+            )
+        ]
 
     def __str__(self) -> str:
         return f"Variant Request: {self.name}"
 
 
-class PendingFirmware(Timestamped):
+class ChipsetCreationRequest(Timestamped):
+    vendor = models.CharField(max_length=64, help_text="e.g. MediaTek, Qualcomm")
+    name = models.CharField(max_length=128, help_text="e.g. Helio G100 Ultra")
+    family = models.CharField(max_length=64, blank=True, default="")
+    aliases = models.JSONField(default=list, blank=True)
+    details = models.TextField(blank=True, default="", max_length=1000)
+    requested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name="chipset_creation_requests",
+    )
+    ai_suggestion = models.JSONField(default=dict)
+    status = models.CharField(
+        max_length=16,
+        choices=[
+            ("pending", "pending"),
+            ("approved", "approved"),
+            ("rejected", "rejected"),
+        ],
+        default="pending",
+    )
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        related_name="chipset_creation_reviews",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    notes = models.TextField(blank=True, default="")
+
+    class Meta:
+        verbose_name = "Chipset request"
+        verbose_name_plural = "Chipset requests (review)"
+        ordering: ClassVar[list[str]] = ["-created_at"]
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                Lower("vendor"),
+                Lower("name"),
+                condition=Q(status="pending"),
+                name="chipset_request_pending_name_unique",
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"Chipset Request: {self.vendor} {self.name}"
+
+
+class PendingFirmware(TieredAccess, Timestamped):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     original_file_name = models.CharField(max_length=255)
     source_type = models.CharField(
@@ -696,6 +820,7 @@ class PendingFirmware(Timestamped):
         ordering: ClassVar[list[str]] = ["-created_at"]
         constraints: ClassVar[list[models.BaseConstraint]] = [
             source_constraint("pending_fw_exactly_one_source"),
+            price_constraint("pending_fw_approved_price_paid_only"),
         ]
         indexes: ClassVar[list[models.Index]] = [
             models.Index(
@@ -709,9 +834,10 @@ class PendingFirmware(Timestamped):
     def clean(self):
         super().clean()
         _validate_source_fields(self)
+        _validate_tier_fields(self)
 
 
-class BaseFirmware(Timestamped):
+class BaseFirmware(TieredAccess, Timestamped):
     objects = models.Manager()
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -824,6 +950,7 @@ class BaseFirmware(Timestamped):
     def clean(self):
         super().clean()
         _validate_source_fields(self)
+        _validate_tier_fields(self)
 
     @property
     def download_tokens(self):
@@ -833,6 +960,7 @@ class BaseFirmware(Timestamped):
 def _firmware_meta_constraints(prefix: str) -> list:
     return [
         source_constraint(f"{prefix}_exactly_one_source"),
+        price_constraint(f"{prefix}_approved_price_paid_only"),
         models.UniqueConstraint(
             fields=["variant", "original_file_name", "build_number"],
             condition=Q(variant__isnull=False),
@@ -933,87 +1061,6 @@ class UnclassifiedFirmware(BaseFirmware):
 
 # Import tracking models so Django registers them in app registry
 import_module(".tracking_models", __package__)
-
-# =============================================================================
-# GSMArena device synchronization
-# =============================================================================
-
-
-class GSMArenaDevice(models.Model):
-    """Cached GSMArena device spec record — links specs to local firmware models."""
-
-    class ReviewStatus(models.TextChoices):
-        PENDING = "pending", "Pending Review"
-        APPROVED = "approved", "Approved"
-        REJECTED = "rejected", "Rejected"
-
-    gsmarena_id = models.CharField(max_length=100, unique=True, db_index=True)
-    brand = models.CharField(max_length=100, db_index=True)
-    model_name = models.CharField(max_length=200)
-    url = models.URLField(max_length=500, blank=True, default="")
-    specs = models.JSONField(default=dict, blank=True)
-    image_url = models.URLField(max_length=500, blank=True, default="")
-    last_synced_at = models.DateTimeField(null=True, blank=True)
-    local_device = models.ForeignKey(
-        "devices.Device",
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="gsmarena_records",
-    )
-
-    # Review workflow
-    review_status = models.CharField(
-        max_length=10,
-        choices=ReviewStatus.choices,
-        default=ReviewStatus.PENDING,
-        db_index=True,
-    )
-    reviewed_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="reviewed_gsmarena_devices",
-    )
-    reviewed_at = models.DateTimeField(null=True, blank=True)
-
-    # Enriched spec fields — extracted from specs JSON for quick access
-    marketed_as = models.CharField(
-        max_length=500,
-        blank=True,
-        default="",
-        help_text="Marketed/alternate names",
-    )
-    model_codes = models.CharField(
-        max_length=500,
-        blank=True,
-        default="",
-        help_text="Variant model codes (comma-separated)",
-    )
-    chipset = models.CharField(max_length=300, blank=True, default="")
-    os_version = models.CharField(
-        max_length=200,
-        blank=True,
-        default="",
-        help_text="Android version at launch",
-    )
-    os_upgradeable_to = models.CharField(
-        max_length=200,
-        blank=True,
-        default="",
-        help_text="Latest upgradeable OS version",
-    )
-
-    class Meta:
-        db_table = "gsmarena_sync_gsmarenadevice"
-        verbose_name = "GSMArena Device"
-        verbose_name_plural = "GSMArena Devices"
-        ordering: ClassVar[list[str]] = ["brand", "model_name"]
-
-    def __str__(self) -> str:
-        return f"{self.brand} {self.model_name}"
-
 
 # =============================================================================
 # Firmware verification models
@@ -1152,7 +1199,7 @@ class VerificationCredit(models.Model):
 # =============================================================================
 
 
-def _gen_token() -> str:
+def gen_token() -> str:
     import secrets
 
     return secrets.token_urlsafe(32)
@@ -1188,7 +1235,7 @@ class DownloadToken(models.Model):
         related_name="download_tokens",
     )
     token = models.CharField(
-        max_length=64, unique=True, default=_gen_token, db_index=True
+        max_length=64, unique=True, default=gen_token, db_index=True
     )
     ad_gate_required = models.BooleanField(default=True)
     ad_gate_completed = models.BooleanField(default=False)
@@ -1315,6 +1362,53 @@ class HotlinkBlock(models.Model):
 
     def __str__(self) -> str:
         return f"{self.domain} [{'active' if self.is_active else 'inactive'}]"
+
+
+class ServedDownload(models.Model):
+    """The single record of a file served to a signed-in user (their library).
+
+    One row per (user, firmware): serving the same file again only refreshes
+    ``last_served_at`` and ``times_served`` and never charges a second time.
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="served_downloads",
+    )
+    content_type = models.ForeignKey(
+        ContentType, on_delete=models.CASCADE, related_name="+"
+    )
+    object_id = models.UUIDField()
+    firmware = GenericForeignKey("content_type", "object_id")
+    tier = models.CharField(
+        max_length=16, choices=AccessTier.choices, default=AccessTier.FREE
+    )
+    paid_amount = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True
+    )
+    charged_quota = models.BooleanField(
+        default=False, help_text="Counted against the user's package quota"
+    )
+    served_at = models.DateTimeField(auto_now_add=True)
+    last_served_at = models.DateTimeField(default=timezone.now)
+    times_served = models.PositiveIntegerField(default=1)
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ["-served_at"]
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=["user", "content_type", "object_id"],
+                name="served_download_user_file_unique",
+            )
+        ]
+        indexes: ClassVar[list[models.Index]] = [
+            models.Index(fields=["user", "-served_at"], name="served_user_idx"),
+            models.Index(fields=["content_type", "object_id"], name="served_file_idx"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user_id} ← {self.content_type_id}/{self.object_id} [{self.tier}]"
 
 
 # ---------------------------------------------------------------------------

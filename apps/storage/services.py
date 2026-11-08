@@ -15,6 +15,8 @@ from django.db import transaction
 from django.db.models import Count, Model, QuerySet, Sum
 from django.utils import timezone
 
+from apps.core.utils.managers import default_manager
+
 from . import providers
 from .models import FirmwareStorageLocation
 
@@ -169,7 +171,7 @@ class SyncReport:
 def sync_all_firmware() -> SyncReport:
     seen = synced = 0
     for model_class in firmware_models():
-        for firmware in model_class._default_manager.iterator():
+        for firmware in default_manager(model_class).iterator():
             seen += 1
             with transaction.atomic():
                 if sync_firmware_location(firmware) is not None:

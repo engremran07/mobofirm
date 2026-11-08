@@ -1,0 +1,8 @@
+{% extends "admin/staff_dialog.html" %}
+{# Ads-owned content of the "Place an ad" dialog; the fields render from the form. #}
+{% block dialog_body %}
+  <p>
+    {% if template_path %}Place an ad on <code class="mf-ui-code">{{ template_path }}</code>.{% else %}Place an ad that fills the zone on <strong>every page</strong> of the shared layout (account, error and consent pages never show ads).{% endif %}
+    The template is not edited: the page already declares its zones, this only decides what fills them.
+  </p>
+{% endblock %}

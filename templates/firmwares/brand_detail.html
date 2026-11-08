@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load ad_tags seo_tags %}
 {% block title %}{{ brand.name }} firmware, chipsets and devices | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block meta_description %}{{ brand.name }} device models, chipsets, flashing tools, guides and approved firmware downloads.{% endblock %}
 {% block content %}
@@ -60,8 +61,13 @@
       {% include "firmwares/includes/pagination.html" with page=models label="Device model pages" query="" %}
     {% else %}
       <p class="empty-state p-4">No active device models are listed for this brand.</p>
+      {% include "components/request_cta.html" with kind="model" brand=brand heading="Is a "|add:brand.name|add:" model missing?" %}
+    {% endif %}
+    {% if models and models.paginator.count < 3 %}
+      {% include "components/request_cta.html" with kind="model" brand=brand heading="Is a "|add:brand.name|add:" model missing?" %}
     {% endif %}
   </section>
+  {% ad_zone "in_content" %}
 
   {% if chipsets %}
   <section class="mb-5" aria-labelledby="brand-chipsets-title">
@@ -109,5 +115,6 @@
     <p class="mb-0">{% for other in other_brands %}<a class="me-3" href="{% url 'firmwares:brand_detail' slug=other.slug %}">{{ other.name }}</a>{% endfor %}</p>
   </section>
   {% endif %}
+  {% related_links brand %}
 </div>
 {% endblock %}

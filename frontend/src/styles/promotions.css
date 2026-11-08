@@ -1,0 +1,51 @@
+/* Campaigns: the site-wide announcement banner and offer pages.
+   Tokens come from tokens.css; nothing here sets inline styles or colours. */
+
+.site-banners {
+  border-bottom: 1px solid var(--mf-border);
+  background: var(--mf-surface-soft);
+}
+
+.site-banner + .site-banner {
+  border-top: 1px solid var(--mf-border);
+}
+
+.site-banner__inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  padding-block: 0.6rem;
+}
+
+.site-banner__text {
+  flex: 1 1 18rem;
+  min-width: 0;
+}
+
+.site-banner__text span {
+  color: var(--mf-text-muted);
+}
+
+.site-banner__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.site-banner__actions form {
+  margin: 0;
+}
+
+.promo-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 1.1rem 1.25rem;
+}
+
+.promo-effect {
+  color: var(--mf-accent-strong);
+}

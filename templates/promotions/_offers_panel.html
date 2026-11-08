@@ -1,0 +1,14 @@
+{# Contract: offers (list of apps.promotions.api.OfferCard, may be empty), bare (optional: no card wrapper, for use inside another card). Renders nothing when empty or the promotions app is off. #}
+{% if offers %}
+  <section class="{% if bare %}mt-3 pt-3 border-top{% else %}surface-card p-3 p-md-4 mt-3{% endif %}" aria-labelledby="active-offers-heading{% if bare %}-bare{% endif %}">
+    <h2 class="h5" id="active-offers-heading{% if bare %}-bare{% endif %}">Active offers</h2>
+    <ul class="list-unstyled mb-0 d-grid gap-2">
+      {% for offer in offers %}
+        <li>
+          <a class="fw-semibold" href="{{ offer.url }}">{{ offer.name }}</a>
+          <span class="muted small d-block">{{ offer.effect }}{% if offer.progress_text %} · {{ offer.progress_text }}{% endif %}{% if offer.ends_at %} · ends {{ offer.ends_at|date:"j M" }}{% endif %}</span>
+        </li>
+      {% endfor %}
+    </ul>
+  </section>
+{% endif %}

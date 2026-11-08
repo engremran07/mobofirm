@@ -24,21 +24,8 @@ from apps.firmwares.models import (
 )
 from apps.firmwares.tasks import catchup_missing_blog_posts
 
-NO_AUTOFILL = (
-    "apps.firmwares.admin_autofill.FirmwareAutoFill.autofill_brand",
-    "apps.firmwares.admin_autofill.FirmwareAutoFill.autofill_model",
-    "apps.firmwares.admin_autofill.FirmwareAutoFill.autofill_variant",
-)
 
-
-class AutofillPatchedTestCase(TestCase):
-    def setUp(self):
-        super().setUp()
-        for target in NO_AUTOFILL:
-            patcher = patch(target, return_value={})
-            patcher.start()
-            self.addCleanup(patcher.stop)
-
+class CatalogTestCase(TestCase):
     def commit(self):
         return self.captureOnCommitCallbacks(execute=True)
 
@@ -63,7 +50,7 @@ class AutofillPatchedTestCase(TestCase):
 
 
 @override_settings(FIRMWARE_BLOG_AUTOGENERATION_ASYNC=False)
-class AutomatedModelBlogTests(AutofillPatchedTestCase):
+class AutomatedModelBlogTests(CatalogTestCase):
     def test_new_model_creates_exactly_one_published_post_by_the_system_author(self):
         self.assertFalse(get_user_model().objects.filter(is_staff=True).exists())
 
@@ -186,7 +173,7 @@ class AutomatedModelBlogTests(AutofillPatchedTestCase):
 
 
 @override_settings(FIRMWARE_BLOG_AUTOGENERATION_ASYNC=False)
-class AutomatedBrandAndChipsetBlogTests(AutofillPatchedTestCase):
+class AutomatedBrandAndChipsetBlogTests(CatalogTestCase):
     def test_brand_post_lists_firmware_by_category_and_updates_in_place(self):
         with self.commit():
             model = self.make_model()
@@ -248,7 +235,7 @@ class AutomatedBrandAndChipsetBlogTests(AutofillPatchedTestCase):
         self.assertIn("variant-build.zip", link.post.body)
 
 
-class AutomationDispatchTests(AutofillPatchedTestCase):
+class AutomationDispatchTests(CatalogTestCase):
     @override_settings(FIRMWARE_BLOG_AUTOGENERATION_ASYNC=True)
     def test_async_generation_is_explicitly_opt_in(self):
         with (
@@ -306,7 +293,7 @@ class AutomationDispatchTests(AutofillPatchedTestCase):
         self.assertIn("Blog sync finished", output.getvalue())
 
 
-class BlogInventoryRenderingTests(AutofillPatchedTestCase):
+class BlogInventoryRenderingTests(CatalogTestCase):
     def publish(self, post):
         Post.objects.filter(pk=post.pk).update(
             status=PostStatus.PUBLISHED,

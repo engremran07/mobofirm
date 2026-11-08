@@ -2,6 +2,8 @@
 {% block title %}Your Mobofirm account | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block content %}
 <div class="site-container py-5">
+  {% include "components/breadcrumbs.html" with current="Account" %}
+  
   <section class="hero-panel p-4 p-md-5">
     <p class="hero-eyebrow">Your account</p>
     <h1 class="hero-title">A better way to follow your devices.</h1>

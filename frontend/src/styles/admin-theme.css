@@ -1,0 +1,98 @@
+/* Header theme switcher of the Unfold admin (light / dark / system).
+   Colours come from Unfold's own scale variables, which `app/settings/unfold.py`
+   anchors on the public design tokens, so the control follows both themes. */
+@import "./admin-ui.css";
+
+.admin-theme-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--color-base-200);
+  border-radius: var(--border-radius, 6px);
+  background: var(--color-base-50);
+}
+
+.dark .admin-theme-switch {
+  border-color: var(--color-base-700);
+  background: var(--color-base-800);
+}
+
+.admin-theme-switch__option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border: 0;
+  border-radius: calc(var(--border-radius, 6px) - 2px);
+  background: transparent;
+  color: var(--color-base-500);
+  cursor: pointer;
+}
+
+.admin-theme-switch__option .material-symbols-outlined {
+  font-size: 1.25rem;
+}
+
+.admin-theme-switch__option:hover {
+  background: var(--color-base-100);
+  color: var(--color-base-700);
+}
+
+.admin-theme-switch__option:focus-visible {
+  outline: 2px solid var(--color-primary-600);
+  outline-offset: 1px;
+}
+
+.admin-theme-switch__option[aria-pressed="true"] {
+  background: var(--color-primary-600);
+  color: #fff;
+}
+
+.dark .admin-theme-switch__option {
+  color: var(--color-base-300);
+}
+
+.dark .admin-theme-switch__option:hover {
+  background: var(--color-base-700);
+  color: var(--color-base-100);
+}
+
+.dark .admin-theme-switch__option:focus-visible {
+  outline-color: var(--color-primary-300);
+}
+
+.dark .admin-theme-switch__option[aria-pressed="true"] {
+  background: var(--color-primary-500);
+  color: #fff;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .admin-theme-switch__option {
+    transition: background-color 0.15s ease, color 0.15s ease;
+  }
+}
+
+.admin-release-stamp {
+  color: var(--color-base-500);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.dark .admin-release-stamp {
+  color: var(--color-base-300);
+}
+
+@media (max-width: 479px) {
+  .admin-release-stamp {
+    display: none;
+  }
+}
+
+@media (max-width: 1535px) {
+  .admin-release-stamp__build {
+    display: none;
+  }
+}

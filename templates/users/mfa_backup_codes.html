@@ -2,6 +2,9 @@
 {% block title %}Save recovery codes | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block content %}
 <div class="site-container py-5">
+  {% url 'users:dashboard' as account_url %}
+  {% include "components/breadcrumbs.html" with current="Recovery codes" parent_label="Account" parent_url=account_url %}
+  
   <section class="surface-card auth-card p-4" aria-labelledby="mfa-backup-title">
     <p class="section-eyebrow">Account security</p>
     <h1 id="mfa-backup-title" class="h2">Save your recovery codes</h1>

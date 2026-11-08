@@ -1,23 +1,86 @@
 {% extends "base.html" %}
+{% load mf_ui %}
+{% block title %}Become a seller · Mobofirm{% endblock %}
 {% block content %}
 {% url 'marketplace:listing_browse' as market_url %}
 <div class="site-container py-4 py-lg-5">
   {% include "components/breadcrumbs.html" with current="Become a seller" parent_label="Marketplace" parent_url=market_url %}
-  {% include "components/page_header.html" with eyebrow="Marketplace" title="Become a seller" lead="Selling is open to verified accounts. Staff review sellers and every listing." %}
+  {% include "components/page_header.html" with eyebrow="Marketplace" title="Become a seller" lead="Your profile is already complete. Tell staff what you offer and where you share your work." %}
+
   <div class="row g-4">
-    <div class="col-12 col-lg-5">
-      <ol class="eco-list" aria-label="How selling works">
-        <li class="surface-card p-3"><strong>1. Create your profile.</strong><span class="d-block small muted">Choose a display name and write a short bio.</span></li>
-        <li class="surface-card p-3"><strong>2. Ask for verification.</strong><span class="d-block small muted">Share public links or a description that lets staff confirm who you are.</span></li>
-        <li class="surface-card p-3"><strong>3. Submit listings.</strong><span class="d-block small muted">Each listing is reviewed by staff before it appears. Payment is arranged outside the site.</span></li>
+    <div class="col-12 col-lg-4">
+      <ol class="mkt-steps" aria-label="How selling works">
+        <li class="surface-card"><div><strong>Complete profile</strong><span class="d-block small muted">Done. Your name and country come from your account.</span></div></li>
+        <li class="surface-card"><div><strong>Seller application</strong><span class="d-block small muted">What you offer, your specialities and where you post your work.</span></div></li>
+        <li class="surface-card"><div><strong>Staff review</strong><span class="d-block small muted">Staff approve or reject with a reason, and you get a notification.</span></div></li>
+        <li class="surface-card"><div><strong>Paid and featured uploads</strong><span class="d-block small muted">Approved sellers can mark uploads as paid or featured. Staff approve every price.</span></div></li>
       </ol>
+      <div class="mt-3">{% include "components/notice.html" with icon="info" message="Online card checkout is not available. Buyers pay for paid files with credits or through site staff, and approved sellers are credited when a sale completes." %}</div>
     </div>
-    <div class="col-12 col-lg-7">
-      <form method="post" class="surface-card p-4">
+
+    <div class="col-12 col-lg-8">
+      {% if status and status.code == "rejected" %}
+        <div class="mb-3">{% include "components/notice.html" with tone="danger" icon="info" heading="Your last application was not approved." message=status.reason|default:"No reason was given. Update your details and apply again." %}</div>
+      {% endif %}
+      <p class="mkt-meta">Your public seller name is your profile name{% if display_name %}: <strong>{{ display_name }}</strong>{% endif %}.</p>
+
+      <form method="post" id="seller-form" class="d-grid gap-4" aria-label="Seller application">
         {% csrf_token %}
         {% include "components/form_errors.html" with form=form %}
-        {% for field in form %}{% include "components/form_field.html" with field=field %}{% endfor %}
-        <button type="submit" class="btn btn-primary">Create seller profile</button>
+
+        <section class="surface-card p-4" aria-labelledby="about-heading">
+          <h2 class="h5" id="about-heading">About your work</h2>
+          {% include "components/form_field.html" with field=form.bio %}
+        </section>
+
+        <section class="surface-card p-4" aria-labelledby="specialities-heading">
+          <h2 class="h5" id="specialities-heading">Specialities</h2>
+          <p class="mkt-meta">Search and tick the brands and chipsets you work with. Optional.</p>
+          {% for picker in pickers %}
+            {% include "marketplace/fragments/picker.html" with picker=picker %}
+          {% endfor %}
+          {% for field in form %}{% if field.name == "brands" or field.name == "chipsets" %}{% if field.errors %}<div class="invalid-feedback d-block" role="alert">{% for error in field.errors %}<p class="mb-0">{{ error }}</p>{% endfor %}</div>{% endif %}{% endif %}{% endfor %}
+        </section>
+
+        <section class="surface-card p-4" aria-labelledby="links-heading">
+          <h2 class="h5" id="links-heading">Where you post your work</h2>
+          <p class="mkt-meta">Up to {{ max_links }} public pages on YouTube, Telegram, Facebook, X, Instagram, TikTok, GitHub, XDA or elsewhere. Links must start with https://.</p>
+          {{ links.management_form }}
+          {% if links.non_form_errors %}<div class="alert alert-danger" role="alert">{% for error in links.non_form_errors %}<p class="mb-0">{{ error }}</p>{% endfor %}</div>{% endif %}
+          <div class="d-grid gap-3 mb-3">
+            {% for row in links %}
+              <div class="mkt-link-row">
+                <div>
+                  <label class="visually-hidden" for="{{ row.platform.id_for_label }}">Platform for link {{ forloop.counter }}</label>
+                  {{ row.platform|mf_widget }}
+                </div>
+                <div>
+                  <label class="visually-hidden" for="{{ row.url.id_for_label }}">Link {{ forloop.counter }}</label>
+                  {{ row.url|mf_widget }}
+                  {% if row.url.errors %}<div class="invalid-feedback d-block" id="{{ row.url.auto_id }}_errors" role="alert">{% for error in row.url.errors %}<p class="mb-0">{{ error }}</p>{% endfor %}</div>{% endif %}
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+          {% include "components/form_field.html" with field=form.website %}
+        </section>
+
+        <section class="surface-card p-4" aria-labelledby="terms-heading">
+          <h2 class="h5" id="terms-heading">Contact and terms</h2>
+          {% include "components/form_field.html" with field=form.contact_preference %}
+          {% include "components/form_field.html" with field=form.accept_terms %}
+          <p class="small muted">
+            {% if terms_links %}Read the
+              {% for label, url in terms_links %}<a href="{{ url }}" target="_blank" rel="noopener">{{ label }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}
+              before you apply.
+            {% else %}Seller terms are published by staff on the pages section.{% endif %}
+          </p>
+        </section>
+
+        <div class="d-flex flex-wrap gap-2">
+          <button type="submit" class="btn btn-primary">{% if status and status.code == "rejected" %}Send application again{% else %}Send application{% endif %}</button>
+          <a class="btn btn-outline-secondary" href="{{ market_url }}">Cancel</a>
+        </div>
       </form>
     </div>
   </div>

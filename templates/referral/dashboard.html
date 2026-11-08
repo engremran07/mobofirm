@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% load mf_ui %}
+{% block title %}Invite friends{% endblock %}
+{% block content %}
+<div class="site-container py-4 py-lg-5">
+  {% include "components/breadcrumbs.html" with current="Invite friends" %}
+  {% include "components/page_header.html" with eyebrow="Account" title="Invite friends" lead="Share your link. You are rewarded after your friend verifies their email and gets a first contribution approved." %}
+
+  <section class="surface-card p-4 mb-4" aria-labelledby="link-title">
+    <h2 class="h5" id="link-title">Your personal link</h2>
+    <label class="form-label" for="referral-link">Share this link</label>
+    <input id="referral-link" class="form-control mb-2" type="text" readonly value="{{ link }}" aria-describedby="referral-code-help">
+    <p class="muted small mb-0" id="referral-code-help">Select the link and copy it. Your code is <strong>{{ summary.code.code }}</strong>; friends can also add <code>?ref={{ summary.code.code }}</code> to any page address.</p>
+  </section>
+
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">{% include "components/stat_tile.html" with label="Invited" value=summary.invited %}</div>
+    <div class="col-6 col-md-3">{% include "components/stat_tile.html" with label="Rewarded" value=summary.rewarded %}</div>
+    <div class="col-6 col-md-3">{% include "components/stat_tile.html" with label="Waiting" value=summary.pending hint="Not verified yet" %}</div>
+    <div class="col-6 col-md-3">{% include "components/stat_tile.html" with label="Credits earned" value=summary.credits_earned %}</div>
+  </div>
+
+  <section class="mb-5" aria-labelledby="rules-title">
+    <h2 class="h5" id="rules-title">How rewards work</h2>
+    {% if not cfg.enabled %}
+      {% include "components/notice.html" with tone="warning" message="Referral rewards are switched off right now. Links still work once they are back on." %}
+    {% else %}
+      <ul>
+        {% if referrer_rule and referrer_rule.enabled %}<li>You earn <strong>{{ referrer_rule.credits }} credits</strong> for each friend who qualifies.</li>{% endif %}
+        {% if welcome_rule and welcome_rule.enabled and welcome_rule.credits %}<li>Your friend gets <strong>{{ welcome_rule.credits }} credits</strong> as a welcome bonus.</li>{% endif %}
+        <li>The friend must verify their email{% if cfg.require_qualifying_action %} and have a first contribution approved{% endif %}.</li>
+        <li>One reward per friend. Using your own link or the same network does not count.</li>
+        {% if cfg.max_rewarded_per_referrer %}<li>Up to {{ cfg.max_rewarded_per_referrer }} rewarded friends in total{% if cfg.max_rewarded_per_referrer_per_day %}, {{ cfg.max_rewarded_per_referrer_per_day }} per day{% endif %}.</li>{% endif %}
+      </ul>
+      <p><a href="{{ earn_url }}">See every way to earn credits</a></p>
+    {% endif %}
+  </section>
+
+  <section aria-labelledby="invited-title">
+    <h2 class="h5" id="invited-title">Friends you invited</h2>
+    {% if invitees %}
+      {% table_scroll "Friends you invited" %}
+      <table class="table align-middle">
+        <thead><tr><th scope="col">Friend</th><th scope="col">Joined</th><th scope="col">Status</th><th scope="col" class="text-end">Reward</th></tr></thead>
+        <tbody>
+          {% for item in invitees %}
+            <tr>
+              <td>{{ item.invitee.username }}</td>
+              <td>{{ item.created_at|date:"j M Y" }}</td>
+              <td>
+                {% if item.status == "rewarded" %}{% include "components/status_pill.html" with label="Rewarded" tone="success" %}
+                {% elif item.status == "rejected" %}{% include "components/status_pill.html" with label="Not rewarded" tone="danger" %}
+                {% else %}{% include "components/status_pill.html" with label="Waiting" tone="warning" %}{% endif %}
+              </td>
+              <td class="text-end">{% if item.status == "rewarded" %}+{{ item.reward_credits }}{% else %}&mdash;{% endif %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% endtable_scroll %}
+    {% else %}
+      {% include "components/empty_state.html" with title="Nobody has joined with your link yet" message="Share it with friends who flash or repair phones." %}
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

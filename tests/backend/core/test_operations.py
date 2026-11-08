@@ -226,6 +226,9 @@ class NotificationServiceTests(TestCase):
 
 
 class CelerySchedulingTests(SimpleTestCase):
+    # Importing the task modules lets Celery's Django fixup run model checks.
+    databases = "__all__"
+
     def test_scheduled_tasks_exist_in_the_celery_registry(self):
         from django.conf import settings
 

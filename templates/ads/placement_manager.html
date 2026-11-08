@@ -1,0 +1,131 @@
+{% extends "admin/staff_page.html" %}
+{% block mf_actions %}
+  <form method="post" action="{% url 'ads:run_scan' %}">
+    {% csrf_token %}
+    <button type="submit" class="mf-ui-btn mf-ui-btn--primary">{% if scan_count %}Scan templates again{% else %}Scan templates{% endif %}</button>
+  </form>
+  <form method="post" action="{% url 'ads:test_profile' %}">
+    {% csrf_token %}
+    <input type="hidden" name="state" value="{% if profile %}off{% else %}on{% endif %}">
+    <button type="submit" class="mf-ui-btn">{% if profile %}Test profile: on (switch off){% else %}Test profile: off (switch on){% endif %}</button>
+  </form>
+{% endblock %}
+{% block mf_nav %}{% include "ads/_nav.html" %}{% endblock %}
+{% block mf_body %}
+<p class="mf-ui-note">
+  Pages declare ad <strong>zones</strong> (header, sidebar, in content, after content, between items, footer). Placing an ad here creates data only: the template is never edited. A new placement starts switched off; assign a creative to it, then switch it on. Visitors see a labelled “Advertisement” only when ads are on, they allowed advertising cookies and the zone has an eligible creative.
+</p>
+
+<section class="mf-ui-ads-section" aria-labelledby="site-wide-title">
+  <h2 class="mf-ui-ads-section__title" id="site-wide-title">Site-wide zones</h2>
+  <p class="mf-ui-help">Declared by the shared layout. A site-wide placement fills the zone on every public page that has none of its own (sign-in, account, error and consent pages are never used).</p>
+  <div class="mf-ui-table-wrap" role="region" aria-label="Site-wide zones" tabindex="0">
+    <table class="mf-ui-table">
+      <thead><tr><th scope="col">Zone</th><th scope="col">Default size</th><th scope="col">Placement</th><th scope="col"><span class="mf-ui-ads-sr">Actions</span></th></tr></thead>
+      <tbody>
+        {% for zone, placement in site_wide %}
+          <tr>
+            <th scope="row">{{ zone.label }}<br><span class="mf-ui-help">{{ zone.description }}</span></th>
+            <td>{{ zone.default_size }}</td>
+            <td>
+              {% if placement %}
+                <a href="{% url 'admin:ads_adplacement_change' placement.pk %}">{{ placement.name }}</a>
+                {% if placement.is_enabled %}<span class="mf-ui-badge mf-ui-badge--success">On</span>{% else %}<span class="mf-ui-badge mf-ui-badge--warning">Off</span>{% endif %}
+              {% else %}<span class="mf-ui-help">Not placed</span>{% endif %}
+            </td>
+            <td>
+              <div class="mf-ui-row">
+                {% if placement %}
+                  <form method="post" action="{% url 'ads:toggle_placement' placement.pk %}">{% csrf_token %}<button class="mf-ui-btn mf-ui-btn--small" name="action" value="{% if placement.is_enabled %}disable{% else %}enable{% endif %}" type="submit">{% if placement.is_enabled %}Switch off{% else %}Switch on{% endif %}</button></form>
+                  <a class="mf-ui-btn mf-ui-btn--small mf-ui-btn--danger" href="{% url 'ads:remove_placement' placement.pk %}" hx-get="{% url 'ads:remove_placement' placement.pk %}" hx-target="#dialog-slot" hx-swap="innerHTML">Remove</a>
+                {% else %}
+                  <a class="mf-ui-btn mf-ui-btn--small" href="{% url 'ads:place_ad' %}?zone={{ zone.code }}" hx-get="{% url 'ads:place_ad' %}?zone={{ zone.code }}" hx-target="#dialog-slot" hx-swap="innerHTML">Place ad here</a>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="mf-ui-ads-section" aria-labelledby="templates-title">
+  <h2 class="mf-ui-ads-section__title" id="templates-title">Scanned templates</h2>
+  <form method="get" class="mf-ui-ads-filter" role="search" aria-label="Filter templates">
+    <div class="mf-ui-field"><label class="mf-ui-ads-sr" for="ads-q">Template path</label><input type="search" id="ads-q" name="q" value="{{ query }}" placeholder="Template path" maxlength="120"></div>
+    <div class="mf-ui-field"><label class="mf-ui-ads-sr" for="ads-type">Template type</label><select id="ads-type" name="type"><option value="">All types</option>{% for value, label in types %}<option value="{{ value }}"{% if value == type_filter %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+    <div class="mf-ui-field"><label class="mf-ui-ads-sr" for="ads-state">State</label>
+      <select id="ads-state" name="state">
+        <option value="">Any state</option>
+        <option value="open"{% if state_filter == "open" %} selected{% endif %}>Has a free zone</option>
+        <option value="placed"{% if state_filter == "placed" %} selected{% endif %}>Has a placement</option>
+        <option value="blocked"{% if state_filter == "blocked" %} selected{% endif %}>Excluded from ads</option>
+      </select>
+    </div>
+    <button type="submit" class="mf-ui-btn">Filter</button>
+  </form>
+
+  {% if rows %}
+    <div class="mf-ui-table-wrap" role="region" aria-label="Scanned templates" tabindex="0">
+      <table class="mf-ui-table mf-ui-ads-templates">
+        <thead><tr><th scope="col">Template</th><th scope="col">Zones it declares</th><th scope="col">Placements</th><th scope="col">Best candidate</th><th scope="col"><span class="mf-ui-ads-sr">Actions</span></th></tr></thead>
+        <tbody>
+          {% for row in rows %}
+            <tr>
+              <th scope="row">
+                <code class="mf-ui-code">{{ row.path }}</code><br>
+                <span class="mf-ui-badge">{{ row.type_label }}</span>
+                <span class="mf-ui-badge {% if row.traffic == 'high' %}mf-ui-badge--info{% endif %}">{{ row.traffic|capfirst }} traffic</span>
+                <span class="mf-ui-help">score {{ row.score|floatformat:0 }}</span>
+                {% if row.excluded %}<span class="mf-ui-badge mf-ui-badge--danger">Excluded</span>{% endif %}
+              </th>
+              <td>{% for zone in row.declared %}<span class="mf-ui-badge mf-ui-badge--info" title="{{ zone.description }}">{{ zone.label }}</span> {% empty %}<span class="mf-ui-help">None: the page declares no ad zone</span>{% endfor %}</td>
+              <td>
+                {% for placement in row.placements %}
+                  <div class="mf-ui-ads-line">
+                    <a href="{% url 'admin:ads_adplacement_change' placement.pk %}">{{ placement.get_zone_display|default:placement.name }}</a>
+                    {% if placement.is_enabled %}<span class="mf-ui-badge mf-ui-badge--success">On</span>{% else %}<span class="mf-ui-badge mf-ui-badge--warning">Off</span>{% endif %}
+                    <form method="post" action="{% url 'ads:toggle_placement' placement.pk %}" class="mf-ui-ads-inline">{% csrf_token %}<button class="mf-ui-btn mf-ui-btn--small" name="action" value="{% if placement.is_enabled %}disable{% else %}enable{% endif %}" type="submit">{% if placement.is_enabled %}Off{% else %}On{% endif %}</button></form>
+                    <a class="mf-ui-btn mf-ui-btn--small mf-ui-btn--danger" href="{% url 'ads:remove_placement' placement.pk %}" hx-get="{% url 'ads:remove_placement' placement.pk %}" hx-target="#dialog-slot" hx-swap="innerHTML">Remove</a>
+                  </div>
+                {% empty %}<span class="mf-ui-help">None</span>{% endfor %}
+              </td>
+              <td>
+                {% with top=row.suggestions.0 %}
+                  {% if top %}<strong>{{ top.code }}</strong> <span class="mf-ui-help">({{ top.confidence|floatformat:0 }}%{% if top.zone %}, zone {{ top.zone }}{% endif %})</span><br><span class="mf-ui-help">{{ top.rationale|truncatechars:110 }}</span>{% else %}<span class="mf-ui-help">{{ row.rationale|default:"No suggestion" }}</span>{% endif %}
+                {% endwith %}
+                {% if row.pending %}<br><a href="{% url 'ads:discoveries' %}?q={{ row.path|urlencode }}">{{ row.pending }} pending suggestion{{ row.pending|pluralize }}</a>{% endif %}
+              </td>
+              <td>
+                <div class="mf-ui-row">
+                  {% if row.free_zones and not row.excluded %}
+                    <a class="mf-ui-btn mf-ui-btn--small mf-ui-btn--primary" href="{% url 'ads:place_ad' %}?template={{ row.path|urlencode }}" hx-get="{% url 'ads:place_ad' %}?template={{ row.path|urlencode }}" hx-target="#dialog-slot" hx-swap="innerHTML">Place ad here</a>
+                  {% endif %}
+                  {% if row.preview %}
+                    <a class="mf-ui-btn mf-ui-btn--small" href="{{ row.preview }}" target="_blank" rel="noopener">Preview with test ads</a>
+                  {% elif row.declared %}
+                    <span class="mf-ui-help">Needs an item: switch the test profile on and open any page that uses it.</span>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if page.paginator.num_pages > 1 %}
+      <nav class="mf-ui-row" aria-label="Pages">
+        {% if page.has_previous %}<a class="mf-ui-btn mf-ui-btn--small" href="?q={{ query|urlencode }}&amp;type={{ type_filter }}&amp;state={{ state_filter }}&amp;page={{ page.previous_page_number }}">Previous</a>{% endif %}
+        <span class="mf-ui-help">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+        {% if page.has_next %}<a class="mf-ui-btn mf-ui-btn--small" href="?q={{ query|urlencode }}&amp;type={{ type_filter }}&amp;state={{ state_filter }}&amp;page={{ page.next_page_number }}">Next</a>{% endif %}
+      </nav>
+    {% endif %}
+  {% elif scan_count %}
+    <p class="mf-ui-empty">No scanned template matches these filters.</p>
+  {% else %}
+    <p class="mf-ui-empty">No templates have been scanned yet. Use <strong>Scan templates</strong> to list every public template and its ad candidates.</p>
+  {% endif %}
+</section>
+{% include "admin/staff_dialog_slot.html" %}
+{% endblock %}

@@ -295,7 +295,7 @@ def scan_templates_for_placements() -> dict[str, Any]:
         if "fragments" in relative.parts:
             continue
 
-        relative_path = str(relative)
+        relative_path = relative.as_posix()
 
         # Skip admin-excluded templates
         if relative_path in excluded_paths:
@@ -365,9 +365,7 @@ def scan_templates_for_placements() -> dict[str, Any]:
             continue
 
         # ── Generate placement suggestions ──
-        suggestion_list = _suggest_placements(
-            content_analysis, relative_path, viewport_zones, estimated_traffic
-        )
+        suggestion_list = _suggest_placements(content_analysis, estimated_traffic)
 
         # ── Create/update scan result ──
         scan_result, _ = AutoAdsScanResult.objects.update_or_create(
@@ -474,29 +472,44 @@ def approve_discovery(discovery_id: int, user: Any) -> dict[str, Any]:
 
     from django.utils import timezone
 
+    from apps.ads.zones import zone_for_suggestion
+
     slug = slugify(discovery.placement_code)
     scan = discovery.scan_result
+    zone = zone_for_suggestion(discovery.placement_code)
 
-    # Create AdPlacement from discovery data
-    placement, created = AdPlacement.objects.get_or_create(
-        slug=slug,
-        defaults={
-            "code": discovery.placement_code,
-            "name": discovery.placement_name,
-            "description": discovery.description,
-            "allowed_types": discovery.allowed_types,
-            "allowed_sizes": discovery.allowed_sizes,
-            "context": (
-                scan.template_path.split("/")[0]
-                if "/" in scan.template_path
-                else "global"
-            ),
-            "page_context": scan.template_path,
-            "template_reference": scan.template_path,
-            "is_enabled": True,
-            "is_active": True,
-        },
+    # Two suggestions of one template can map to the same layout zone; the zone is
+    # filled once, so the later approval links to the placement that already exists.
+    existing = (
+        AdPlacement.objects.filter(
+            template_reference=scan.template_path, zone=zone, is_deleted=False
+        ).first()
+        if zone
+        else None
     )
+    if existing is not None:
+        placement, created = existing, False
+    else:
+        placement, created = AdPlacement.objects.get_or_create(
+            slug=slug,
+            defaults={
+                "code": discovery.placement_code,
+                "name": discovery.placement_name,
+                "description": discovery.description,
+                "allowed_types": discovery.allowed_types,
+                "allowed_sizes": discovery.allowed_sizes,
+                "context": (
+                    scan.template_path.split("/")[0]
+                    if "/" in scan.template_path
+                    else "global"
+                ),
+                "page_context": scan.template_path,
+                "template_reference": scan.template_path,
+                "zone": zone,
+                "is_enabled": True,
+                "is_active": True,
+            },
+        )
 
     discovery.status = "approved"
     discovery.reviewed_by = user
@@ -786,8 +799,6 @@ def _estimate_traffic(relative_path: str, template_type: str) -> str:
 
 def _suggest_placements(
     content_analysis: dict[str, int],
-    template_path: str,
-    viewport_zones: list[str],
     estimated_traffic: str,
 ) -> list[dict[str, str]]:
     """Generate placement suggestions based on template content analysis."""

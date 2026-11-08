@@ -691,88 +691,6 @@ html:not(.js) .device-registration-dialog[open] {
   min-width: 0;
 }
 
-.site-search-indicator {
-  position: absolute;
-  top: 50%;
-  right: 0.75rem;
-  transform: translateY(-50%);
-}
-
-.site-search-results {
-  position: absolute;
-  z-index: 30;
-  top: calc(100% + 0.35rem);
-  inset-inline: 0;
-  max-height: min(24rem, 70vh);
-  overflow-y: auto;
-  padding: 0.35rem;
-  border: 1px solid var(--mf-border);
-  border-radius: var(--mf-radius-md);
-  background: var(--mf-surface-raised);
-  box-shadow: var(--mf-shadow);
-}
-
-.site-search-results[hidden] {
-  display: none;
-}
-
-.mobile-nav-panel .site-search-results {
-  position: static;
-  margin-top: 0.5rem;
-  box-shadow: none;
-}
-
-.site-search-option {
-  display: grid;
-  grid-template-columns: 5.5rem 1fr;
-  gap: 0.1rem 0.65rem;
-  align-items: baseline;
-  padding: 0.5rem 0.65rem;
-  border-radius: var(--mf-radius-sm);
-  color: var(--mf-text);
-  text-decoration: none;
-}
-
-.site-search-option:hover,
-.site-search-option[aria-selected="true"] {
-  background: var(--mf-surface-soft);
-}
-
-.site-search-option[aria-selected="true"] {
-  outline: 0.15rem solid var(--mf-focus);
-}
-
-.site-search-type {
-  color: var(--mf-accent);
-  font-size: 0.68rem;
-  font-weight: 750;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.site-search-name {
-  overflow-wrap: anywhere;
-  font-weight: 600;
-}
-
-.site-search-subtitle {
-  grid-column: 2;
-  color: var(--mf-text-muted);
-  font-size: 0.82rem;
-}
-
-.site-search-all {
-  display: block;
-  color: var(--mf-accent);
-  font-weight: 600;
-}
-
-.site-search-empty {
-  margin: 0;
-  padding: 0.65rem;
-  color: var(--mf-text-muted);
-}
-
 /* ---- Tables, dialogs, pagination ---- */
 .table-scroll {
   position: relative;
@@ -788,24 +706,6 @@ html:not(.js) .device-registration-dialog[open] {
 
 .table-scroll > table {
   margin-bottom: 0;
-}
-
-.app-dialog {
-  width: min(30rem, calc(100vw - 2rem));
-  padding: 0;
-  border: 1px solid var(--mf-border);
-  border-radius: var(--mf-radius-lg);
-  background: var(--mf-surface);
-  color: var(--mf-text);
-  box-shadow: var(--mf-shadow);
-}
-
-.app-dialog::backdrop {
-  background: rgb(10 18 32 / 62%);
-}
-
-.app-dialog__body {
-  padding: clamp(1.25rem, 4vw, 1.75rem);
 }
 
 .pagination {

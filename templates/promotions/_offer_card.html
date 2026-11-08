@@ -1,0 +1,15 @@
+{# Contract: card (apps.promotions.offers.OfferCard). One offer in a list. #}
+<article class="surface-card promo-card h-100" aria-labelledby="offer-{{ card.slug }}">
+  <div class="d-flex flex-wrap align-items-center gap-2">
+    <h2 class="h5 mb-0" id="offer-{{ card.slug }}">{{ card.name }}</h2>
+    {% if card.state == "ended" %}{% include "components/status_pill.html" with label=card.state_label %}
+    {% elif card.state == "claimed" %}{% include "components/status_pill.html" with label=card.state_label tone="success" icon="check" %}
+    {% elif card.state == "available" or card.state == "ready" %}{% include "components/status_pill.html" with label=card.state_label tone="accent" %}
+    {% else %}{% include "components/status_pill.html" with label=card.state_label %}{% endif %}
+  </div>
+  {% if card.headline %}<p class="mb-1">{{ card.headline }}</p>{% endif %}
+  <p class="promo-effect fw-semibold mb-1">{{ card.effect }}</p>
+  {% if card.progress_text %}<p class="small mb-1">{{ card.progress_text }}</p>{% endif %}
+  {% if card.ends_at %}<p class="small muted mb-2">{% if card.state == "ended" %}Ended{% else %}Ends{% endif %} {{ card.ends_at|date:"j M Y" }}</p>{% endif %}
+  <a class="btn btn-outline-primary mt-auto align-self-start" href="{{ card.url }}">View the offer<span class="visually-hidden"> {{ card.name }}</span></a>
+</article>

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from unittest.mock import patch
-
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
@@ -17,20 +15,10 @@ from apps.firmwares.models import (
 )
 from apps.tags.models import Tag
 
-NO_AUTOFILL = (
-    "apps.firmwares.admin_autofill.FirmwareAutoFill.autofill_brand",
-    "apps.firmwares.admin_autofill.FirmwareAutoFill.autofill_model",
-    "apps.firmwares.admin_autofill.FirmwareAutoFill.autofill_variant",
-)
-
 
 @override_settings(FIRMWARE_BLOG_AUTOGENERATION_ASYNC=False)
 class BlogHubTests(TestCase):
     def setUp(self):
-        for target in NO_AUTOFILL:
-            patcher = patch(target, return_value={})
-            patcher.start()
-            self.addCleanup(patcher.stop)
         self.brand = Brand.objects.create(
             name="Hubphone", slug="hubphone", description="A brand for hub tests."
         )

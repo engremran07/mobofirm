@@ -1,0 +1,130 @@
+/* Combobox (templates/components/combobox.html) and the search surfaces built on it. */
+.combobox {
+  position: relative;
+  min-width: 0;
+}
+
+.combobox-control .form-control {
+  min-width: 0;
+}
+
+.combobox-control .input-group-text {
+  border-color: var(--mf-border);
+  background: var(--mf-surface);
+  color: var(--mf-text-muted);
+}
+
+.combobox-indicator {
+  position: absolute;
+  top: 0.55rem;
+  right: 3rem;
+  pointer-events: none;
+}
+
+.combobox-navigate .combobox-indicator {
+  right: 3rem;
+}
+
+.combobox-listbox {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 0.35rem);
+  inset-inline: 0;
+  max-height: min(22rem, 60vh);
+  overflow-y: auto;
+  padding: 0.35rem;
+  border: 1px solid var(--mf-border);
+  border-radius: var(--mf-radius-md);
+  background: var(--mf-surface-raised);
+  box-shadow: var(--mf-shadow);
+}
+
+.combobox-listbox[hidden] {
+  display: none;
+}
+
+.mobile-nav-panel .combobox-listbox {
+  position: static;
+  margin-top: 0.5rem;
+  box-shadow: none;
+}
+
+.combobox-option {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.1rem 0.65rem;
+  align-items: baseline;
+  padding: 0.5rem 0.65rem;
+  border-radius: var(--mf-radius-sm);
+  color: var(--mf-text);
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.combobox-navigate .combobox-option {
+  grid-template-columns: 6rem minmax(0, 1fr);
+}
+
+.combobox-option:hover,
+.combobox-option[aria-selected="true"] {
+  background: var(--mf-surface-soft);
+  color: var(--mf-text);
+}
+
+.combobox-option[aria-selected="true"] {
+  outline: 0.15rem solid var(--mf-focus);
+  outline-offset: -0.15rem;
+}
+
+.combobox-kind {
+  color: var(--mf-accent);
+  font-size: 0.68rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.combobox-title {
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+
+.combobox-subtitle {
+  grid-column: 1 / -1;
+  color: var(--mf-text-muted);
+  font-size: 0.82rem;
+}
+
+.combobox-navigate .combobox-subtitle {
+  grid-column: 2;
+}
+
+.combobox-all {
+  display: block;
+  color: var(--mf-accent);
+  font-weight: 600;
+}
+
+.combobox-empty {
+  margin: 0;
+  padding: 0.65rem;
+  color: var(--mf-text-muted);
+}
+
+.search-hit a {
+  text-decoration: none;
+}
+
+.mfa-qr {
+  display: block;
+  width: min(100%, 15rem);
+  height: auto;
+  padding: 0.5rem;
+  border-radius: var(--mf-radius-md);
+  background: #fff;
+}
+
+.mfa-setup-key {
+  overflow-wrap: anywhere;
+  user-select: all;
+}

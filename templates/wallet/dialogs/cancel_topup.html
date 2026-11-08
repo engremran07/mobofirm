@@ -1,0 +1,7 @@
+{# Contract: topup (TopUpRequest). Wallet-owned confirmation for cancelling a pending top-up; opens from [data-dialog-open="cancel-topup-<pk>"]. #}
+{% url 'wallet:cancel_topup' pk=topup.pk as cancel_url %}
+{% with pk_text=topup.pk|stringformat:"s" %}
+  {% with dialog_name="cancel-topup-"|add:pk_text %}
+    {% include "components/confirm_dialog.html" with dialog_id=dialog_name title="Cancel this top-up request?" message="The request is withdrawn and no credits are added. You can ask again at any time." action=cancel_url confirm_label="Cancel top-up" danger=True %}
+  {% endwith %}
+{% endwith %}

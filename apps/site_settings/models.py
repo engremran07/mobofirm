@@ -362,7 +362,7 @@ class SiteSettings(SingletonModel):
 
         self.site_url = self.site_url.rstrip("/")
         for field in ("primary_color", "secondary_color"):
-            value: str = getattr(self, field)
+            value = str(getattr(self, field))
             if value and re.fullmatch(validators.HEX_COLOR_PATTERN, value):
                 value = value.lower()
                 setattr(self, field, value)

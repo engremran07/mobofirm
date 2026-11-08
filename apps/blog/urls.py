@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import feeds, views, views_api, views_manage
+from . import dialogs, feeds, views, views_api, views_manage, views_requests
 
 app_name = "blog"
 
@@ -13,6 +13,11 @@ urlpatterns = [
         "manage/<slug:slug>/workflow/",
         views_manage.post_workflow,
         name="post_workflow",
+    ),
+    path(
+        "manage/<slug:slug>/<str:action>/dialog/",
+        dialogs.PostWorkflowDialog.as_view(),
+        name="post_workflow_dialog",
     ),
     path(
         "manage/<slug:slug>/history/",
@@ -52,6 +57,21 @@ urlpatterns = [
     ),
     path("chipset/<slug:slug>/", views.chipset_posts, name="chipset_posts"),
     path("search/", views.blog_search, name="blog_search"),
+    path("purchased/", views.purchased, name="purchased"),
+    path("requests/", views_requests.request_list, name="request_list"),
+    path("requests/new/", views_requests.request_create, name="request_create"),
+    path("requests/mine/", views_requests.request_mine, name="request_mine"),
+    path("requests/<int:pk>/", views_requests.request_detail, name="request_detail"),
+    path(
+        "requests/<int:pk>/cancel/",
+        dialogs.CancelGuideRequestDialog.as_view(),
+        name="request_cancel_dialog",
+    ),
+    path(
+        "<slug:slug>/unlock/",
+        dialogs.PurchasePostDialog.as_view(),
+        name="purchase_dialog",
+    ),
     # Post detail — MUST be last (catch-all slug)
     path("<slug:slug>/", views.post_detail, name="post_detail"),
 ]

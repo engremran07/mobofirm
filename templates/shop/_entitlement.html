@@ -1,25 +1,18 @@
-{# Contract: entitlement (apps.shop.services.EntitlementSummary). Download allowance meters and category access. #}
-{% load mf_ui %}
-{% if entitlement.tier %}
-  <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
-    <h3 class="h5 mb-0">{{ entitlement.tier.name }}</h3>
-    {% if entitlement.is_default_tier %}{% include "components/status_pill.html" with label="Included with every account" %}{% endif %}
-    {% if entitlement.package %}{% include "components/status_pill.html" with label=entitlement.package.get_status_display tone="success" %}{% endif %}
-  </div>
-  <div class="row g-3">
-    {% for meter in entitlement.meters %}
-      <div class="col-12 col-md-6">{% include "components/meter.html" with id=meter.dom_id label=meter.label percent=meter.percent text=meter.text %}</div>
-    {% endfor %}
-  </div>
-  <h3 class="h6 mt-4">Firmware categories</h3>
-  <ul class="eco-feature-list">
-    {% for label, allowed in entitlement.type_access %}
-      <li{% if not allowed %} class="is-off"{% endif %}><i class="icon" data-lucide="{% if allowed %}check{% else %}x{% endif %}" aria-hidden="true"></i><span>{{ label }}{% if not allowed %} <span class="visually-hidden">not included</span>{% endif %}</span></li>
-    {% endfor %}
-  </ul>
-  {% if not entitlement.enforced %}
-    <p class="small muted mt-3 mb-0">These allowances are shown for reference. Package limits are not applied to downloads on this site at the moment.</p>
-  {% endif %}
-{% else %}
-  <p class="muted mb-0">No package is configured for this account yet.</p>
-{% endif %}
+{# Contract: entitlement (apps.shop.entitlements.EntitlementSummary). Package, allowance meters, devices and perks for the live or default package. #}
+<div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+  <h3 class="h5 mb-0">{{ entitlement.package_name }}</h3>
+  {% if entitlement.is_default_allowance %}{% include "components/status_pill.html" with label="Included with every account" %}{% endif %}
+  {% if entitlement.package %}{% include "components/status_pill.html" with label=entitlement.package.get_status_display tone="success" %}{% endif %}
+</div>
+<p class="small mb-1">{{ entitlement.plan_summary }}</p>
+<p class="small muted mb-3">{{ entitlement.sources|join:" + " }}</p>
+<div class="row g-3">
+  {% for meter in entitlement.windows %}
+    <div class="col-12 col-md-6">
+      {% include "components/meter.html" with id=meter.dom_id label=meter.label percent=meter.percent text=meter.text %}
+      <p class="small muted mb-0 mt-1">{{ meter.remaining_text }}{% if meter.resets_at %} · resets {{ meter.resets_at|date:"j M Y, H:i" }}{% endif %}</p>
+    </div>
+  {% endfor %}
+</div>
+<p class="small mt-3 mb-1"><strong>Devices:</strong> {{ entitlement.devices_text }}{% if entitlement.perks %} · <strong>Perks:</strong> {{ entitlement.perks|join:", " }}{% endif %}</p>
+<p class="small muted mb-0">Each file counts once, the first time it is served to you; downloading it again is free. Paid files you bought count in these figures when your package covers them, but are never blocked by them.</p>

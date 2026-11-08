@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% load mf_ui %}
+{% block title %}Credit history{% endblock %}
+{% block content %}
+{% url 'wallet:dashboard' as wallet_url %}
+{% url 'wallet:earn' as earn_url %}
+<div class="site-container py-4 py-lg-5">
+  {% include "components/breadcrumbs.html" with current="History" parent_label="Wallet" parent_url=wallet_url %}
+  {% include "components/page_header.html" with eyebrow="Account" title="Credit history" %}
+  {% include "wallet/_subnav.html" %}
+  <form method="get" class="row g-3 align-items-end mb-4" role="search" aria-label="Filter credit history"
+        hx-get="{% url 'wallet:ledger' %}" hx-target="#ledger-results" hx-trigger="change" hx-push-url="true">
+    <div class="col-12 col-sm-4">{% include "components/form_field.html" with field=form.direction %}</div>
+    <div class="col-12 col-sm-4">{% include "components/form_field.html" with field=form.reason %}</div>
+    <div class="col-12 col-sm-4 mb-3"><button type="submit" class="btn btn-outline-secondary">Apply filters</button></div>
+  </form>
+  <div id="ledger-results" aria-live="polite">
+    {% include "wallet/_ledger_results.html" %}
+  </div>
+</div>
+{% endblock %}

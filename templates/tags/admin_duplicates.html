@@ -1,18 +1,21 @@
-{% extends "base.html" %}
-{% block content %}
-<div class="site-container py-4 py-lg-5">
-  {% include "components/page_header.html" with eyebrow="Staff tools" title="Review similar tags" lead="Pairs among the most used tags with similar names. Choose a pair to review the merge." %}
+{% extends "admin/staff_page.html" %}
+{% block mf_actions %}
+  <a class="mf-ui-btn" href="{% url 'tags:manage' %}">Tag manager</a>
+  <a class="mf-ui-btn" href="{% url 'tags:keyword_review' %}">Keyword suggestions</a>
+{% endblock %}
+{% block mf_body %}
+<div class="mf-ui-stack">
   {% for pair in pairs %}
-    <article class="surface-card p-3 mb-3">
-      <h2 class="h5">{{ pair.a }} ↔ {{ pair.b }}</h2>
-      <p class="muted mb-2">Similarity {{ pair.score }}</p>
-      <div class="d-flex flex-wrap gap-2">
-        <a class="btn btn-sm btn-outline-secondary" href="{% url 'tags:merge' %}?source={{ pair.b_slug|urlencode }}&amp;target={{ pair.a_slug|urlencode }}">Keep “{{ pair.a }}”</a>
-        <a class="btn btn-sm btn-outline-secondary" href="{% url 'tags:merge' %}?source={{ pair.a_slug|urlencode }}&amp;target={{ pair.b_slug|urlencode }}">Keep “{{ pair.b }}”</a>
+    <article class="mf-ui-card" aria-labelledby="pair-{{ forloop.counter }}">
+      <h2 class="mf-ui-card__title" id="pair-{{ forloop.counter }}">{{ pair.a }} ↔ {{ pair.b }}</h2>
+      <p class="mf-ui-section__lead">Similarity {{ pair.score }}</p>
+      <div class="mf-ui-row">
+        <a class="mf-ui-btn mf-ui-btn--small" href="{% url 'tags:merge' %}?source={{ pair.b_slug|urlencode }}&amp;target={{ pair.a_slug|urlencode }}">Keep “{{ pair.a }}”</a>
+        <a class="mf-ui-btn mf-ui-btn--small" href="{% url 'tags:merge' %}?source={{ pair.a_slug|urlencode }}&amp;target={{ pair.b_slug|urlencode }}">Keep “{{ pair.b }}”</a>
       </div>
     </article>
   {% empty %}
-    {% include "components/empty_state.html" with title="No similar tags need review" %}
+    <p class="mf-ui-empty">No similar tags need review.</p>
   {% endfor %}
 </div>
 {% endblock %}

@@ -20,8 +20,8 @@ class PublishedPagesSitemap(Sitemap):
     def lastmod(self, obj: Page):
         return obj.updated_at
 
-    def location(self, obj: Page) -> str:
-        return obj.get_absolute_url()
+    def location(self, item: Page) -> str:
+        return item.get_absolute_url()
 
     def changefreq(self, obj: Page) -> str:
         return obj.changefreq

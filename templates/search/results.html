@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% load ad_tags %}
+{% block title %}{% if query %}Search: {{ query }}{% else %}Search{% endif %} | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block content %}
+<div class="site-container py-4 py-lg-5">
+  {% include "components/breadcrumbs.html" with current="Search" %}
+  {% include "components/page_header.html" with eyebrow="Search" title="Search Mobofirm" lead="Devices, brands, chipsets, tools, firmware builds, articles, tags and pages." %}
+  <form class="mb-4" role="search" method="get" action="{% url 'search:results' %}"
+        hx-get="{% url 'search:results' %}" hx-trigger="submit, input changed delay:300ms from:find #results-query"
+        hx-target="#search-results" hx-swap="innerHTML" hx-push-url="true" hx-indicator="#results-query-indicator">
+    {% for kind in selected %}<input type="hidden" name="kinds" value="{{ kind }}">{% endfor %}
+    <label class="visually-hidden" for="results-query">Search</label>
+    <div class="input-group">
+      <input id="results-query" class="form-control form-control-lg" type="search" name="q" value="{{ query }}" autocomplete="off" enterkeyhint="search" placeholder="Search Mobofirm">
+      <button class="btn btn-primary" type="submit">Search</button>
+    </div>
+    <span id="results-query-indicator" class="htmx-indicator align-items-center gap-2 muted small mt-1" role="status">
+      <span class="spinner-border spinner-border-sm" aria-hidden="true"></span><span>Searching</span>
+    </span>
+  </form>
+  <div id="search-results" aria-live="polite">{% include "search/_results.html" %}</div>
+  {% ad_zone "between_items" %}
+</div>
+{% endblock %}

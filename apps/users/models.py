@@ -2,12 +2,12 @@
 """
 apps/users/models.py
 
-Unified foundation layer — absorbs core abstract base models and consent models.
+Unified foundation layer — absorbs the core abstract base models.
 
 Contains:
 - Abstract base models (TimestampedModel, SoftDeleteModel, AuditFieldsModel)
 - CustomUser, MFA, SecurityQuestion, NotificationPreferences
-- Consent models (ConsentPolicy, ConsentDecision, ConsentEvent)
+Consent models live in ``apps.consent``.
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ from __future__ import annotations
 import logging
 import re
 import secrets
+from importlib import import_module
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from cryptography.fernet import Fernet, InvalidToken
@@ -25,6 +26,7 @@ from django.contrib.auth.models import (
     BaseUserManager,
     PermissionsMixin,
 )
+from django.core.exceptions import ValidationError
 from django.db import DatabaseError, IntegrityError, models, transaction
 from django.utils import timezone
 from django.utils.encoding import force_bytes
@@ -63,10 +65,8 @@ class SoftDeleteModel(models.Model):
         abstract = True
 
     def soft_delete(self, user=None, commit: bool = True) -> None:
-        from django.utils import timezone as tz
-
         self.is_deleted = True
-        self.deleted_at = tz.now()
+        self.deleted_at = timezone.now()
         if user and not self.deleted_by:
             self.deleted_by = user
         if commit:
@@ -483,18 +483,19 @@ class Notification(models.Model):
     def to_json(self) -> dict[str, Any]:
         return self.to_dict()
 
-    def author_schema(self) -> dict[str, Any]:
-        """Basic author schema info for SEO."""
-        return {
-            "@type": "Person",
-            "name": self.full_name or self.username or self.email,  # type: ignore[attr-defined]
-            "url": getattr(self, "profile_url", None) or "",
-        }
-
 
 # --------------------------------------------------------------------------
 # Announcement
 # --------------------------------------------------------------------------
+def validate_announcement_link(value: str) -> None:
+    """A banner button may point to a path on this site or to an https URL."""
+    if value.startswith("/") and not value.startswith("//") and "\\" not in value:
+        return
+    if value.startswith("https://") and " " not in value:
+        return
+    raise ValidationError("Use a path on this site (/offers/...) or an https:// link.")
+
+
 class Announcement(models.Model):
     """Global or segmented announcements for users or staff."""
 
@@ -518,6 +519,19 @@ class Announcement(models.Model):
     start_at = models.DateTimeField(default=timezone.now)
     created_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField(null=True, blank=True)
+    cta_label = models.CharField(
+        max_length=60,
+        blank=True,
+        default="",
+        help_text="Button text of the site banner; needs a link.",
+    )
+    cta_url = models.CharField(
+        max_length=300,
+        blank=True,
+        default="",
+        validators=[validate_announcement_link],
+        help_text="Where the banner button goes: a path on this site or an https link.",
+    )
 
     class Meta:
         ordering: ClassVar[list[str]] = ["-created_at"]
@@ -716,7 +730,6 @@ class MFADevice(models.Model):
 
         from cryptography.hazmat.primitives import hashes
         from cryptography.hazmat.primitives.kdf.hkdf import HKDF
-        from django.conf import settings
         from django.core.exceptions import ImproperlyConfigured
 
         # A dedicated key lets SECRET_KEY rotate without invalidating MFA secrets.
@@ -984,117 +997,6 @@ class PushSubscription(models.Model):
         }
 
 
-# ===========================================================================
-# Consent Models
-# ===========================================================================
-
-
-class ConsentPolicy(models.Model):
-    """GDPR/CCPA consent policy version with banner text and categories snapshot."""
-
-    version = models.CharField(max_length=50, unique=True)
-    site_domain = models.CharField(max_length=255, blank=True, default="")
-    is_active = models.BooleanField(default=False)
-    banner_text = models.TextField(blank=True, default="")
-    manage_text = models.TextField(blank=True, default="")
-    cache_ttl_seconds = models.IntegerField(default=86400)
-    text = models.TextField(blank=True, default="")
-    categories_snapshot = models.JSONField(default=dict, blank=True)
-    public_slug = models.SlugField(max_length=100, blank=True, default="")
-    public_url = models.URLField(blank=True, default="")
-    effective_from = models.DateTimeField(default=timezone.now)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering: ClassVar[list[str]] = ["-created_at"]
-        verbose_name = "Consent Policy"
-        verbose_name_plural = "Consent Policies"
-
-    def __str__(self) -> str:
-        return f"Policy {self.version} ({'active' if self.is_active else 'inactive'})"
-
-    @classmethod
-    def get_active(cls, domain: str = "") -> ConsentPolicy | None:
-        qs = cls.objects.filter(is_active=True)
-        if domain:
-            qs = qs.filter(site_domain__iexact=domain)
-        return qs.order_by("-effective_from").first()
-
-
-class ConsentDecision(models.Model):
-    """Records a user or session consent decision against a policy version."""
-
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL
-    )
-    session_id = models.CharField(max_length=64, blank=True, default="")
-    policy = models.ForeignKey(
-        ConsentPolicy, null=True, blank=True, on_delete=models.SET_NULL
-    )
-    categories = models.JSONField(default=dict, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    ip_hash = models.CharField(max_length=64, blank=True, default="")
-    user_agent_hash = models.CharField(max_length=64, blank=True, default="")
-
-    class Meta:
-        ordering: ClassVar[list[str]] = ["-created_at"]
-        verbose_name = "Consent Decision"
-
-    def set_hashes(self, ip: str = "", ua: str = "") -> None:
-        from apps.users.services.consent import hash_ip, hash_ua
-
-        self.ip_hash = hash_ip(ip)
-        self.user_agent_hash = hash_ua(ua)
-
-
-class ConsentEvent(models.Model):
-    """Audit event tied to a ConsentDecision."""
-
-    decision = models.ForeignKey(
-        ConsentDecision,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="events",
-    )
-    policy = models.ForeignKey(
-        ConsentPolicy, null=True, blank=True, on_delete=models.SET_NULL
-    )
-    categories = models.JSONField(default=dict, blank=True)
-    event_type = models.CharField(max_length=32, default="accepted")
-    created_at = models.DateTimeField(auto_now_add=True)
-    ip_hash = models.CharField(max_length=64, blank=True, default="")
-    user_agent_hash = models.CharField(max_length=64, blank=True, default="")
-
-    class Meta:
-        ordering: ClassVar[list[str]] = ["-created_at"]
-        verbose_name = "Consent Event"
-
-    def set_hashes(self, ip: str = "", ua: str = "") -> None:
-        from apps.users.services.consent import hash_ip, hash_ua
-
-        self.ip_hash = hash_ip(ip)
-        self.user_agent_hash = hash_ua(ua)
-
-
-class ConsentRecord(ConsentDecision):
-    """Proxy for admin/import backwards compatibility."""
-
-    class Meta:
-        proxy = True
-        verbose_name = "Consent Record"
-        verbose_name_plural = "Consent Records"
-
-
-class ConsentLog(ConsentEvent):
-    """Proxy for admin/import backwards compatibility."""
-
-    class Meta:
-        proxy = True
-        verbose_name = "Consent Log"
-        verbose_name_plural = "Consent Logs"
-
-
-from apps.users.models_social import SocialPostingAccount, SocialProviderConfig  # noqa: F401
-from apps.users.profile_models import ActivityFeed, Following, Profile, Reputation  # noqa: F401
+for _sibling_models in ("apps.users.models_social", "apps.users.profile_models"):
+    # Django only registers models whose module has been imported.
+    import_module(_sibling_models)

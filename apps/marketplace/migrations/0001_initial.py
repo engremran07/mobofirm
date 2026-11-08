@@ -12,7 +12,7 @@ class Migration(migrations.Migration):
     initial = True
 
     dependencies: ClassVar[list[tuple[str, str]]] = [
-        ("firmwares", "0017_prebuilt_flashing_tool_categories"),
+        ("firmwares", "0001_initial"),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
     ]
 

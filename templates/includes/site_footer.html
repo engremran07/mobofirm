@@ -4,7 +4,7 @@
       <div class="col-12 col-md-5">
         <a class="site-brand" href="{% url 'home' %}">{{ site_name|default:"Mobofirm" }}</a>
         {% if not site_settings.site_description %}<p class="mb-0 mt-2 small">Firmware discovery with clear model and review information.</p>{% endif %}
-        <p class="mb-0 mt-1 small">Version {{ release_version }}</p>
+        <p class="mb-0 mt-1 small" data-app-version="{{ release_version }}">Version {{ release_version }}{% if release_build.git_sha %} <span class="text-secondary">&middot; build {{ release_build.git_sha }}{% if release_build.build_date %} ({{ release_build.build_date }}){% endif %}</span>{% endif %}</p>
         {% include "site_settings/footer.html" %}
       </div>
       <nav class="col-6 col-md-3" aria-label="Footer catalogue navigation">
@@ -18,7 +18,7 @@
           <li><a href="{% url 'tags:list' %}">Topics</a></li>
           {% if ecosystem.shop %}<li><a href="{% url 'shop:pricing' %}">Shop</a></li>{% endif %}
           {% if ecosystem.marketplace %}<li><a href="{% url 'marketplace:listing_browse' %}">Marketplace</a></li>{% endif %}
-          {% if ecosystem.filemanager and user.is_authenticated %}<li><a href="{% url 'filemanager:browser' %}">My files</a></li>{% endif %}
+          {% if user.is_authenticated %}<li><a href="{% url 'library:my_files' %}">My files</a></li>{% endif %}
         </ul>
       </nav>
       <nav class="col-6 col-md-4" aria-label="Footer legal navigation">
@@ -26,6 +26,7 @@
         <ul class="list-unstyled mb-0 d-grid gap-1">
           {% for label, url in info_links %}<li><a href="{{ url }}">{{ label }}</a></li>{% endfor %}
           {% for label, url in legal_links %}<li><a href="{{ url }}">{{ label }}</a></li>{% endfor %}
+          <li><a href="{% url 'consent:privacy_centre' %}">Cookie settings</a></li>
           <li><a href="{% url 'health-live' %}" rel="nofollow" title="Machine-readable service status (JSON)">Service status</a></li>
         </ul>
       </nav>

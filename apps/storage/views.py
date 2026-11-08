@@ -6,10 +6,11 @@ from django.contrib import messages
 from django.contrib.admin.views.decorators import staff_member_required
 from django.core.paginator import Paginator
 from django.http import HttpRequest, HttpResponse
-from django.shortcuts import get_object_or_404, redirect, render
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import NoReverseMatch, reverse
 from django.views.decorators.http import require_GET, require_POST
 
+from apps.core.admin_pages import render_admin_page
 from apps.core.decorators import require_app_enabled
 from apps.firmwares.catalog import TYPE_KEY_BY_CLASS
 
@@ -78,10 +79,15 @@ def status(request: HttpRequest) -> HttpResponse:
     page = Paginator(locations.order_by("status", "-updated_at"), PAGE_SIZE).get_page(
         request.GET.get("page")
     )
-    return render(
+    return render_admin_page(
         request,
         "storage/status.html",
-        {
+        title="Storage status",
+        subtitle=(
+            "Where firmware files live, whether they can be reached, "
+            "and how much room is left."
+        ),
+        context={
             "providers": provider_statuses(),
             "overview": status_overview(),
             "page_obj": page,

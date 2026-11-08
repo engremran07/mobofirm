@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Add a bounty | {{ site_name }}{% endblock %}
+{% block content %}
+<div class="site-container py-4 py-lg-5">
+  {% include "components/breadcrumbs.html" with current="Add a bounty" parent_label="Bounties" parent_url="/bounty/" %}
+  <div class="row justify-content-center">
+    <div class="col-12 col-lg-8 col-xl-7">
+      {% include "components/page_header.html" with eyebrow="Bounty" title="Add a bounty" lead="Your credits are held in escrow. They are paid to whoever uploads a firmware staff approve for this, or returned to you if nobody does." %}
+      {% if not available %}<div class="alert alert-warning" role="status">{{ paused_reason }}</div>{% endif %}
+      <form method="post" class="surface-card p-4" novalidate>
+        {% csrf_token %}
+        {% include "components/form_errors.html" with form=form %}
+        {% if target %}
+          <p class="mb-3"><span class="muted">For:</span> <strong>{{ target.label }}</strong></p>
+        {% else %}
+          <p class="alert alert-info">Open this page from a firmware request, model or variant to choose what the bounty is for. <a href="/firmwares/requests/">Browse requests</a></p>
+        {% endif %}
+        {% include "components/form_field.html" with field=form.kind %}
+        {% include "components/form_field.html" with field=form.object_id %}
+        {% include "components/form_field.html" with field=form.credits %}
+        {% include "components/form_field.html" with field=form.days %}
+        {% include "components/form_field.html" with field=form.note %}
+        <div class="d-flex flex-wrap gap-2">
+          <button class="btn btn-primary" type="submit"{% if not available or not target %} disabled{% endif %}>Escrow credits and post</button>
+          <a class="btn btn-outline-secondary" href="{% url 'bounty:list' %}">Cancel</a>
+          <a class="btn btn-link" href="{% url 'wallet:earn' %}">Ways to earn credits</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

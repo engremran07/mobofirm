@@ -1,0 +1,28 @@
+{% load i18n %}
+{# Source of truth for JavaScript-initiated confirms (Dialogs.confirm, data-confirm-dialog, the htmx:confirm replacement, the unsaved-changes guard). Cloned into #dialog-slot by modules/dialogs.js; text is set with textContent. #}
+<template id="app-dialog-template">
+  <dialog class="app-dialog app-dialog--sm" x-data="appDialog" data-app-dialog data-dialog-backdrop="close" aria-labelledby="app-js-dialog-title" aria-describedby="app-js-dialog-message" @cancel="onCancel" @close="onClosed" @input="onInput" @keydown="trapFocus" @mousedown="rememberPress" @click="onBackdrop">
+    <form method="dialog" class="app-dialog__form" novalidate @submit="validate">
+      <header class="app-dialog__header">
+        <h2 id="app-js-dialog-title" class="app-dialog__title" data-dialog-title></h2>
+        <button type="button" class="btn-close" aria-label="{% trans 'Close' %}" @click="requestClose"></button>
+      </header>
+      <div class="app-dialog__body">
+        <p id="app-js-dialog-message" class="app-dialog__message" data-dialog-message></p>
+        <div class="mb-3" data-dialog-reason hidden>
+          <label class="form-label" for="app-js-dialog-reason" data-dialog-reason-label></label>
+          <textarea class="form-control" id="app-js-dialog-reason" name="reason" rows="3" maxlength="1000" aria-describedby="app-js-dialog-reason-error"></textarea>
+          <p class="invalid-feedback d-block" id="app-js-dialog-reason-error" role="alert" data-dialog-reason-error hidden></p>
+        </div>
+        <div class="mb-3" data-dialog-phrase-field hidden>
+          <label class="form-label" for="app-js-dialog-phrase" data-dialog-phrase-label></label>
+          <input class="form-control" id="app-js-dialog-phrase" name="confirmation" autocomplete="off" autocapitalize="off">
+        </div>
+      </div>
+      <footer class="app-dialog__footer">
+        <button type="submit" value="cancel" class="btn btn-outline-secondary" formnovalidate data-dialog-cancel data-dialog-initial-focus>{% trans "Cancel" %}</button>
+        <button type="submit" value="confirm" class="btn btn-primary" data-dialog-confirm :disabled="submitBlocked">{% trans "Confirm" %}</button>
+      </footer>
+    </form>
+  </dialog>
+</template>

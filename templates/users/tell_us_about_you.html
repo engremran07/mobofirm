@@ -1,33 +1,27 @@
 {% extends "base.html" %}
-{% load mf_ui %}
 {% block title %}Complete your profile | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block content %}
 <div class="site-container py-5">
+  {% url 'users:dashboard' as dashboard_url %}
+  {% include "components/breadcrumbs.html" with current="Complete your profile" parent_label="Account" parent_url=dashboard_url %}
   {% include "components/page_header.html" with eyebrow="Account setup" title="Tell us about yourself" %}
   <p class="muted">Profile completion: {{ completion_percent }}%</p>
-  <form method="post" class="surface-card p-4">{% csrf_token %}
+  <form method="post" class="surface-card p-4" x-data="profileLocale"
+        data-hint-url="{{ locale_hint_url }}" data-country-id="id_country" data-code-id="id_phone_country_code"
+        data-detected-source="{{ detected_source }}"
+        data-detected-text="{% if detected_country_name %}Detected: {{ detected_country_name }}{% if detected_phone_code %}, {{ detected_phone_code }}{% endif %} —{% endif %}"
+        @combobox:select="onSelect">
+    {% csrf_token %}
+    {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
     {% include "components/form_errors.html" %}
     {% for field in form %}
-      {% if field.is_hidden %}
-        {{ field }}
-      {% else %}
-        <div class="mb-3">
-          <label class="form-label"{% if field|mf_is_group %} id="{{ field.auto_id }}_label"{% endif %} for="{{ field.id_for_label }}">{{ field.label }}</label>
-          {% if field.name == "country" %}
-            <label class="visually-hidden" for="country-search">Search countries by name or ISO code</label>
-            <input id="country-search" class="form-control mb-2" type="search" data-country-search-for="{{ field.id_for_label }}" aria-controls="{{ field.id_for_label }}" placeholder="Search country or code" autocomplete="off">
-            <p id="country-search-status" class="form-text" role="status" aria-live="polite"></p>
-            {% if detected_country_name %}<p class="form-text">Suggested from your network location: {{ detected_country_name }}. You can change this selection.</p>{% endif %}
-          {% elif field.name == "phone_country_code" %}
-            <label class="visually-hidden" for="phone-code-search">Search countries or calling codes</label>
-            <input id="phone-code-search" class="form-control mb-2" type="search" data-country-search-for="{{ field.id_for_label }}" aria-controls="{{ field.id_for_label }}" placeholder="Search country, ISO code, or calling code" autocomplete="off">
-            <p id="phone-code-search-status" class="form-text" role="status" aria-live="polite"></p>
-          {% endif %}
-          {{ field|mf_widget }}
-          {% if field.errors %}<div class="invalid-feedback d-block" id="{{ field.auto_id }}_errors" role="alert">{% for error in field.errors %}<p class="mb-0">{{ error }}</p>{% endfor %}</div>{% endif %}
-          {% if field.help_text %}<div class="form-text" id="{{ field.auto_id }}_help">{{ field.help_text }}</div>{% endif %}
-        </div>
+      {% if field.name == "country" %}
+        <p class="form-text mb-2" data-locale-hint role="status" :hidden="hintHidden"{% if not detected_country_name %} hidden{% endif %}>
+          <span x-text="hintText">{% if detected_country_name %}Detected: {{ detected_country_name }}{% if detected_phone_code %}, {{ detected_phone_code }}{% endif %} —{% endif %}</span>
+          <button type="button" class="btn btn-link btn-sm p-0 align-baseline" @click="change">change</button>
+        </p>
       {% endif %}
+      {% include "components/form_field.html" %}
     {% endfor %}
     <button class="btn btn-primary" type="submit">Save and continue</button>
   </form>

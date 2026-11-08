@@ -1,0 +1,8 @@
+{% if links %}
+<nav class="related-links mt-4" aria-labelledby="related-links-title">
+  <h2 id="related-links-title" class="h5 mb-2">Related pages</h2>
+  <ul class="list-unstyled d-flex flex-wrap gap-3 mb-0">
+    {% for link in links %}<li><a href="{{ link.url }}">{{ link.anchor }}</a></li>{% endfor %}
+  </ul>
+</nav>
+{% endif %}

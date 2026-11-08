@@ -1,0 +1,62 @@
+{% extends "admin/staff_page.html" %}
+{% block mf_actions %}
+  <a class="mf-ui-btn" href="{% url 'ads:placement_manager' %}">Placement manager</a>
+{% endblock %}
+{% block mf_nav %}{% include "ads/_nav.html" %}{% endblock %}
+{% block mf_body %}
+<ul class="mf-ui-tabs" aria-label="Suggestion status">
+  {% for value, label, count in status_tabs %}<li><a href="?status={{ value }}&amp;q={{ query|urlencode }}"{% if status == value %} aria-current="page"{% endif %}>{{ label }}{% if count is not None %} ({{ count }}){% endif %}</a></li>{% endfor %}
+</ul>
+
+<form method="get" class="mf-ui-ads-filter" role="search" aria-label="Filter suggestions">
+  <input type="hidden" name="status" value="{{ status }}">
+  <div class="mf-ui-field"><label class="mf-ui-ads-sr" for="sg-q">Template path</label><input type="search" id="sg-q" name="q" value="{{ query }}" placeholder="Template path" maxlength="120"></div>
+  <button type="submit" class="mf-ui-btn">Filter</button>
+</form>
+
+{% if discoveries %}
+  <form id="discoveries-form" method="get" action="{% url 'ads:reject_discoveries' %}">
+    <div class="mf-ui-row">
+      <button type="submit" class="mf-ui-btn mf-ui-btn--small mf-ui-btn--primary" formaction="{% url 'ads:approve_discoveries' %}" hx-get="{% url 'ads:approve_discoveries' %}" hx-include="#discoveries-form" hx-target="#dialog-slot" hx-swap="innerHTML">Approve selected</button>
+      <button type="submit" class="mf-ui-btn mf-ui-btn--small mf-ui-btn--danger" hx-get="{% url 'ads:reject_discoveries' %}" hx-include="#discoveries-form" hx-target="#dialog-slot" hx-swap="innerHTML">Reject selected</button>
+    </div>
+    <div class="mf-ui-table-wrap" role="region" aria-label="Suggested placements" tabindex="0">
+      <table class="mf-ui-table">
+        <thead><tr><th scope="col"><span class="mf-ui-ads-sr">Select</span></th><th scope="col">Template</th><th scope="col">Suggestion</th><th scope="col" class="is-number">Confidence</th><th scope="col">Status</th><th scope="col"><span class="mf-ui-ads-sr">Actions</span></th></tr></thead>
+        <tbody>
+          {% for discovery in discoveries %}
+            <tr>
+              <td>{% if discovery.status == "pending" %}<input type="checkbox" name="id" value="{{ discovery.pk }}" aria-label="Select {{ discovery.placement_name }}">{% endif %}</td>
+              <th scope="row"><code class="mf-ui-code">{{ discovery.scan_result.template_path }}</code></th>
+              <td><strong>{{ discovery.placement_name }}</strong><br><span class="mf-ui-help">{{ discovery.description }}</span>{% if discovery.rationale %}<br><span class="mf-ui-help">{{ discovery.rationale }}</span>{% endif %}</td>
+              <td class="is-number">{{ discovery.confidence|floatformat:0 }}%</td>
+              <td><span class="mf-ui-badge {% if discovery.status == 'approved' %}mf-ui-badge--success{% elif discovery.status == 'rejected' %}mf-ui-badge--danger{% else %}mf-ui-badge--warning{% endif %}">{{ discovery.get_status_display }}</span>{% if discovery.placement %}<br><a href="{% url 'admin:ads_adplacement_change' discovery.placement_id %}">Placement</a>{% endif %}</td>
+              <td>
+                {% if discovery.status == "pending" %}
+                  <div class="mf-ui-row">
+                    <button type="submit" class="mf-ui-btn mf-ui-btn--small" form="approve-{{ discovery.pk }}">Approve</button>
+                    <a class="mf-ui-btn mf-ui-btn--small mf-ui-btn--danger" href="{% url 'ads:reject_discoveries' %}?id={{ discovery.pk }}" hx-get="{% url 'ads:reject_discoveries' %}?id={{ discovery.pk }}" hx-target="#dialog-slot" hx-swap="innerHTML">Reject</a>
+                  </div>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </form>
+  {% for discovery in discoveries %}{% if discovery.status == "pending" %}
+    <form id="approve-{{ discovery.pk }}" method="post" action="{% url 'ads:approve_discovery' discovery.pk %}">{% csrf_token %}</form>
+  {% endif %}{% endfor %}
+  {% if page.paginator.num_pages > 1 %}
+    <nav class="mf-ui-row" aria-label="Pages">
+      {% if page.has_previous %}<a class="mf-ui-btn mf-ui-btn--small" href="?status={{ status }}&amp;q={{ query|urlencode }}&amp;page={{ page.previous_page_number }}">Previous</a>{% endif %}
+      <span class="mf-ui-help">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+      {% if page.has_next %}<a class="mf-ui-btn mf-ui-btn--small" href="?status={{ status }}&amp;q={{ query|urlencode }}&amp;page={{ page.next_page_number }}">Next</a>{% endif %}
+    </nav>
+  {% endif %}
+{% else %}
+  <p class="mf-ui-empty">{% if status == "pending" %}No suggestions are waiting. Run a scan in the <a href="{% url 'ads:placement_manager' %}">placement manager</a> to find new ad spots.{% else %}Nothing here.{% endif %}</p>
+{% endif %}
+{% include "admin/staff_dialog_slot.html" %}
+{% endblock %}

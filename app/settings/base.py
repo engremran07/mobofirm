@@ -60,7 +60,13 @@ INSTALLED_APPS = [
     "apps.pages.apps.PagesConfig",
     "apps.shop.apps.ShopConfig",
     "apps.marketplace.apps.MarketplaceConfig",
-    "apps.filemanager.apps.FileManagerConfig",
+    "apps.wallet.apps.WalletConfig",
+    "apps.referral.apps.ReferralConfig",
+    "apps.consent.apps.ConsentConfig",
+    "apps.gamification.apps.GamificationConfig",
+    "apps.bounty.apps.BountyConfig",
+    "apps.distribution.apps.DistributionConfig",
+    "apps.promotions.apps.PromotionsConfig",
     "apps.site_settings.apps.SiteSettingsConfig",
 ]
 
@@ -70,6 +76,7 @@ MIDDLEWARE = [
     "apps.core.middleware.admin_csp.AdminContentSecurityPolicyMiddleware",
     "apps.site_settings.middleware.SiteAnalyticsCspMiddleware",
     "apps.core.middleware.correlation.CorrelationIdMiddleware",
+    "apps.core.middleware.app_version.AppVersionHeaderMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "apps.site_settings.middleware.SiteLocaleMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -77,7 +84,9 @@ MIDDLEWARE = [
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "apps.core.middleware.maintenance.MaintenanceModeMiddleware",
     "apps.users.middleware.reset_throttle.PasswordResetThrottleMiddleware",
+    "apps.referral.middleware.ReferralCaptureMiddleware",
     "apps.devices.middleware.DeviceBrowserKeyCookieMiddleware",
+    "apps.shop.middleware.EntitlementCacheMiddleware",
     "allauth.account.middleware.AccountMiddleware",
     "apps.users.middleware.mfa_enforce.EnforceMfaMiddleware",
     "apps.users.middleware.profile_completion.EnforceProfileCompletionMiddleware",
@@ -106,6 +115,7 @@ TEMPLATES = [
                 "app.context_processors.release_metadata",
                 "apps.site_settings.context_processors.site_settings",
                 "app.context_processors.site_chrome",
+                "apps.users.context_processors.announcement_banners",
             ],
         },
     },
@@ -193,11 +203,11 @@ SITE_LOGO_URL = os.getenv("SITE_LOGO_URL", "")
 SITE_DARK_LOGO_URL = os.getenv("SITE_DARK_LOGO_URL", "")
 SITE_FAVICON_URL = os.getenv("SITE_FAVICON_URL", "")
 RECAPTCHA_SITE_KEY = os.getenv("RECAPTCHA_SITE_KEY", "")
-CONSENT_BANNER_ENABLED = os.getenv("CONSENT_BANNER_ENABLED", "false").lower() in {
-    "1",
-    "true",
-    "yes",
-}
+# Consent app (apps.consent): first-party cookie holding the visitor's choice, and
+# how long the anonymised audit records are kept.
+CONSENT_COOKIE_NAME = os.getenv("CONSENT_COOKIE_NAME", "mf_consent")
+CONSENT_COOKIE_MAX_AGE = int(os.getenv("CONSENT_COOKIE_MAX_AGE", str(365 * 24 * 3600)))
+CONSENT_RECORD_RETENTION_DAYS = int(os.getenv("CONSENT_RECORD_RETENTION_DAYS", "1095"))
 DEVICE_MAX_PENDING_PER_USER = int(os.getenv("DEVICE_MAX_PENDING_PER_USER", "10"))
 DEVICE_EVENT_RETENTION_DAYS = int(os.getenv("DEVICE_EVENT_RETENTION_DAYS", "90"))
 API_TOKEN_TTL_SECONDS = int(os.getenv("API_TOKEN_TTL_SECONDS", str(7 * 24 * 3600)))
@@ -406,17 +416,29 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.storage.tasks.verify_storage_locations",
         "schedule": 24 * 60 * 60,
     },
-    "filemanager-purge-expired-shares": {
-        "task": "apps.filemanager.tasks.purge_expired_shares",
+    "consent-purge-old-records": {
+        "task": "apps.consent.tasks.purge_old_records",
+        "schedule": 24 * 60 * 60,
+    },
+    "bounty-expire-due": {
+        "task": "apps.bounty.tasks.expire_bounties",
         "schedule": 60 * 60,
     },
-    "filemanager-purge-deleted-files": {
-        "task": "apps.filemanager.tasks.purge_deleted_files",
-        "schedule": 24 * 60 * 60,
+    "blog-reconcile-guide-fulfilments": {
+        "task": "apps.blog.tasks.reconcile_guide_fulfilments",
+        "schedule": 15 * 60,
+    },
+    "distribution-process-share-jobs": {
+        "task": "apps.distribution.tasks.process_share_jobs",
+        "schedule": 60,
     },
     "shop-expire-packages": {
         "task": "apps.shop.tasks.expire_packages",
         "schedule": 60 * 60,
+    },
+    "promotions-sync-statuses": {
+        "task": "apps.promotions.tasks.sync_statuses",
+        "schedule": 60,
     },
     "core-cleanup-old-data": {
         "task": "apps.core.tasks.cleanup_old_data",
@@ -425,6 +447,10 @@ CELERY_BEAT_SCHEDULE = {
     "seo-process-pending-jobs": {
         "task": "apps.seo.tasks.process_pending_jobs",
         "schedule": 60,
+    },
+    "seo-scheduled-scan": {
+        "task": "apps.seo.tasks.scheduled_scan",
+        "schedule": 6 * 60 * 60,
     },
     "seo-scheduled-crawl": {
         "task": "apps.seo.tasks.scheduled_crawl",
@@ -454,25 +480,16 @@ STORAGE_S3_ENABLED = os.getenv("STORAGE_S3_ENABLED", "false").lower() in {
     "true",
     "yes",
 }
-# Off by default: when true, signed-in firmware downloads also have to pass the
-# shop package checks (type access, daily/monthly quota); see
-# apps.firmwares.download_service.check_entitlement.
-SHOP_ENTITLEMENTS_ENFORCED = os.getenv(
-    "SHOP_ENTITLEMENTS_ENFORCED", "false"
-).lower() in {
-    "1",
-    "true",
-    "yes",
-}
+# Free-tier allowance (new files per calendar day / month) for accounts without a
+# package, used only while no active PackageTier is marked as the default tier;
+# the admin-editable default tier always wins. -1 means unlimited.
+SHOP_FREE_DAILY_DOWNLOADS = int(os.getenv("SHOP_FREE_DAILY_DOWNLOADS", "5"))
+SHOP_FREE_MONTHLY_DOWNLOADS = int(os.getenv("SHOP_FREE_MONTHLY_DOWNLOADS", "50"))
+SHOP_FREE_DEVICE_LIMIT = int(os.getenv("SHOP_FREE_DEVICE_LIMIT", "3"))
+# Share of each paid-file sale (in %) the platform keeps before crediting the seller.
+MARKETPLACE_COMMISSION_PERCENT = int(os.getenv("MARKETPLACE_COMMISSION_PERCENT", "0"))
 # External download links use the firmware catalogue allow-list
 # (FIRMWARE_EXTERNAL_URL_ALLOWED_HOSTS); storage does not keep a second one.
-FILEMANAGER_ROOT = BASE_DIR / "storage" / "filemanager"
-FILEMANAGER_MAX_UPLOAD_BYTES = int(
-    os.getenv("FILEMANAGER_MAX_UPLOAD_BYTES", str(512 * 1024 * 1024))
-)
-FILEMANAGER_USER_QUOTA_BYTES = int(
-    os.getenv("FILEMANAGER_USER_QUOTA_BYTES", str(5 * 1024 * 1024 * 1024))
-)
 
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SESSION_COOKIE_HTTPONLY = True

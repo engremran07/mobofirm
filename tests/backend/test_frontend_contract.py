@@ -116,7 +116,8 @@ def test_header_has_navigation_search_and_current_section(client):
     )
     assert 'aria-current="page">Firmware<' not in html
     assert 'role="search"' in html
-    assert f'hx-get="{reverse("firmwares:api_search_autocomplete")}"' in html
+    assert f'action="{reverse("search:results")}"' in html
+    assert f'hx-get="{reverse("search:suggest")}"' in html
     assert 'role="combobox"' in html
     assert 'id="global-feedback"' in html
     assert 'hx-indicator="#global-progress"' in html
@@ -262,7 +263,10 @@ def test_table_scroll_tag_creates_a_focusable_labelled_region():
 
 @pytest.mark.django_db
 def test_confirm_dialog_is_app_owned_and_csrf_protected():
-    """The confirmation dialog is a native dialog element posting with a CSRF token."""
+    """The confirmation dialog is a native dialog element posting with a CSRF token.
+
+    The pre-shell ``title``/``message``/``action`` parameter names stay supported.
+    """
     request = _request()
     html = render_to_string(
         "components/confirm_dialog.html",
@@ -282,7 +286,7 @@ def test_confirm_dialog_is_app_owned_and_csrf_protected():
     assert "<dialog" in html and "data-app-dialog" in html
     assert 'aria-labelledby="merge-confirm-title"' in html
     assert 'method="post"' in html and "csrfmiddlewaretoken" in html
-    assert "btn-danger" in html and "data-dialog-close" in html
+    assert "btn-danger" in html and '@click="requestClose"' in html
 
 
 @pytest.mark.django_db

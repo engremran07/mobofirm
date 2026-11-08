@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block meta_description %}{{ lead }}{% endblock %}
+{% block content %}
+{% url 'firmwares:requests_hub' as hub_url %}
+{% url 'firmwares:request_brand' as brand_request_url %}
+{% url 'firmwares:request_model' as model_request_url %}
+{% url 'firmwares:request_chipset' as chipset_request_url %}
+<div class="site-container py-5">
+  {% include "components/breadcrumbs.html" with current=title parent_label="Requests" parent_url=hub_url %}
+  <div class="row justify-content-center">
+    <div class="col-12 col-lg-8 col-xl-7">
+      {% include "components/page_header.html" with eyebrow="Catalogue request" title=title lead=lead %}
+      <form method="post" class="surface-card p-4" novalidate data-request-form="{{ kind }}">
+        {% csrf_token %}
+        {% include "components/form_errors.html" with form=form %}
+        {% if kind == "model" or kind == "variant" or kind == "firmware" %}
+          {% include "firmwares/includes/catalog_field.html" with field=form.brand input_id="request-brand" label="Brand" kinds="brand" display=brand_label placeholder="Search brands…" required=True request_url=brand_request_url request_text="Request this brand" %}
+        {% endif %}
+        {% if kind == "variant" %}
+          {% include "firmwares/includes/catalog_field.html" with field=form.model input_id="request-model" label="Model" kinds="model" display=model_label depends_on="request-brand" depends_param="brand" placeholder="Search models…" required=True request_url=model_request_url request_text="Request this model" request_context="brand=request-brand" %}
+        {% elif kind == "firmware" %}
+          {% include "firmwares/includes/catalog_field.html" with field=form.model input_id="request-model" label="Model" kinds="model" display=model_label depends_on="request-brand" depends_param="brand" placeholder="Search models…" optional=True request_url=model_request_url request_text="Request this model" request_context="brand=request-brand" %}
+        {% endif %}
+        {% if kind == "model" %}
+          {% include "firmwares/includes/catalog_field.html" with field=form.chipset input_id="request-chipset" label="Chipset" kinds="chipset" display=chipset_label placeholder="Search chipsets…" optional=True request_url=chipset_request_url request_text="Request this chipset" %}
+        {% endif %}
+        {% for field in form %}
+          {% if field.name != "brand" and field.name != "model" and field.name != "chipset" %}
+            {% include "components/form_field.html" with field=field %}
+          {% endif %}
+        {% endfor %}
+        {% if kind != "firmware" %}<div id="request-check" class="mb-3" aria-live="polite"></div>{% endif %}
+        <div class="d-flex flex-wrap gap-2">
+          <button class="btn btn-primary" type="submit">{{ button }}</button>
+          <a class="btn btn-outline-secondary" href="{{ hub_url }}">Cancel</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,48 @@
+{% load i18n %}
+{# Generic dialog shell (core owns the shell, apps own the content). Extend it and fill the blocks, or include it. #}
+{# Context: dialog_id (default app-dialog), dialog_title (required), dialog_message, dialog_size (sm|md|lg), danger, #}
+{# static_backdrop (backdrop click does not close), esc_blocked, auto_open (open on insert, for HTMX), dialog_inline (render open in the page, no JS), #}
+{# dialog_action (POST URL; wraps the body in a CSRF form), dialog_hx (submit with HTMX and swap this dialog), unsaved_guard, confirm_phrase, #}
+{# confirm_label, cancel_label, cancel_url. title/message/action are accepted as aliases of dialog_title/dialog_message/dialog_action for older includes. Blocks: dialog_body, dialog_footer. #}
+{% firstof dialog_title title as dialog_title %}{% firstof dialog_message message as dialog_message %}{% firstof dialog_action action as dialog_action %}
+{% with dialog_id=dialog_id|default:"app-dialog" %}
+<dialog class="app-dialog app-dialog--{{ dialog_size|default:'sm' }}{% if danger %} app-dialog--danger{% endif %}{% if dialog_inline %} app-dialog--inline{% endif %}"
+  id="{{ dialog_id }}" x-data="appDialog"
+  aria-labelledby="{{ dialog_id }}-title"{% if dialog_message %} aria-describedby="{{ dialog_id }}-message"{% endif %}
+  data-app-dialog data-dialog-backdrop="{% if static_backdrop or static_backdrop is None and danger %}static{% else %}close{% endif %}"
+  {% if esc_blocked %}data-dialog-esc="block"{% endif %}
+  {% if confirm_phrase %}data-dialog-phrase="{{ confirm_phrase }}"{% endif %}
+  {% if auto_open %}data-dialog-auto-open{% endif %}
+  {% if dialog_inline %}open data-dialog-inline{% endif %}
+  @cancel="onCancel" @close="onClosed" @input="onInput" @keydown="trapFocus" @mousedown="rememberPress" @click="onBackdrop">
+  {% if dialog_action %}
+  <form method="post" action="{{ dialog_action }}" class="app-dialog__form" novalidate
+    {% if dialog_hx %}hx-post="{{ dialog_action }}" hx-target="closest dialog" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]"{% endif %}
+    {% if unsaved_guard %}data-unsaved-guard{% endif %}>
+    {% csrf_token %}
+  {% else %}
+  <div class="app-dialog__form">
+  {% endif %}
+    <header class="app-dialog__header">
+      <h2 id="{{ dialog_id }}-title" class="app-dialog__title">{{ dialog_title }}</h2>
+      {% if not dialog_inline %}<button type="button" class="btn-close" aria-label="{% trans 'Close' %}" @click="requestClose"></button>{% endif %}
+    </header>
+    <div class="app-dialog__body">
+      {% if dialog_message %}<p id="{{ dialog_id }}-message" class="app-dialog__message">{{ dialog_message }}</p>{% endif %}
+      {% block dialog_body %}{% endblock %}
+    </div>
+    <footer class="app-dialog__footer">
+      {% block dialog_footer %}
+        {% if dialog_inline and cancel_url %}
+          <a class="btn btn-outline-secondary" href="{{ cancel_url }}">{{ cancel_label|default:_("Cancel") }}</a>
+        {% else %}
+          <button type="button" class="btn btn-outline-secondary" @click="requestClose"{% if danger %} data-dialog-initial-focus{% endif %}>{{ cancel_label|default:_("Cancel") }}</button>
+        {% endif %}
+        {% if dialog_action %}
+          <button type="submit" class="btn {% if danger %}btn-danger{% else %}btn-primary{% endif %}"{% if not danger %} data-dialog-initial-focus{% endif %}{% if confirm_phrase %} :disabled="submitBlocked"{% endif %}>{{ confirm_label|default:_("Confirm") }}</button>
+        {% endif %}
+      {% endblock %}
+    </footer>
+  {% if dialog_action %}</form>{% else %}</div>{% endif %}
+</dialog>
+{% endwith %}

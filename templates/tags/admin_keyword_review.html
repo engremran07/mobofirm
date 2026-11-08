@@ -1,15 +1,18 @@
-{% extends "base.html" %}
-{% block content %}
-<div class="site-container py-4 py-lg-5">
-  {% include "components/page_header.html" with eyebrow="Staff tools" title="Keyword suggestions" lead="Keywords added in the admin as suggestions. Creating a tag from one makes it a curated tag immediately." %}
+{% extends "admin/staff_page.html" %}
+{% block mf_actions %}
+  <a class="mf-ui-btn" href="{% url 'tags:manage' %}">Tag manager</a>
+  <a class="mf-ui-btn" href="{% url 'tags:duplicates_review' %}">Similar tags</a>
+{% endblock %}
+{% block mf_body %}
+<div class="mf-ui-stack">
   {% for suggestion in suggestions %}
-    <article class="surface-card p-3 mb-3">
-      <h2 class="h5">{{ suggestion.keyword }}</h2>
-      <p class="muted">{{ suggestion.provider }} · Score {{ suggestion.score }}</p>
-      <form method="post" action="{% url 'tags:apply_keyword' %}">{% csrf_token %}<input type="hidden" name="id" value="{{ suggestion.pk }}"><button class="btn btn-primary" type="submit">Create tag from suggestion</button></form>
+    <article class="mf-ui-card" aria-labelledby="keyword-{{ suggestion.pk }}">
+      <h2 class="mf-ui-card__title" id="keyword-{{ suggestion.pk }}">{{ suggestion.keyword }}</h2>
+      <p class="mf-ui-section__lead">{{ suggestion.provider }} · Score {{ suggestion.score }}</p>
+      <form method="post" action="{% url 'tags:apply_keyword' %}">{% csrf_token %}<input type="hidden" name="id" value="{{ suggestion.pk }}"><button class="mf-ui-btn mf-ui-btn--primary" type="submit">Create tag from suggestion</button></form>
     </article>
   {% empty %}
-    {% include "components/empty_state.html" with title="No keyword suggestions are waiting" %}
+    <p class="mf-ui-empty">No keyword suggestions are waiting.</p>
   {% endfor %}
 </div>
 {% endblock %}

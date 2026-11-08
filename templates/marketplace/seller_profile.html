@@ -1,11 +1,59 @@
 {% extends "base.html" %}
+{% block title %}{{ seller.display_name }} · Verified seller · Mobofirm{% endblock %}
 {% block content %}
 {% url 'marketplace:listing_browse' as market_url %}
 <div class="site-container py-4 py-lg-5">
   {% include "components/breadcrumbs.html" with current=seller.display_name parent_label="Marketplace" parent_url=market_url %}
   {% include "components/page_header.html" with eyebrow="Verified seller" title=seller.display_name %}
   <p class="d-flex flex-wrap gap-2 align-items-center">{% include "components/status_pill.html" with label="Verified by staff" tone="success" icon="badge-check" %} <span class="small muted">Member since {{ seller.created_at|date:"F Y" }}</span></p>
-  {% if seller.bio %}<p class="eco-prose">{{ seller.bio|linebreaksbr }}</p>{% endif %}
+
+  <div class="row g-4 mb-4">
+    <section class="col-12 col-lg-8" aria-labelledby="about-heading">
+      <div class="surface-card p-4 h-100">
+        <h2 class="h5" id="about-heading">About this seller</h2>
+        {% if seller.bio %}<p class="eco-prose">{{ seller.bio|linebreaksbr }}</p>{% else %}<p class="muted">The seller has not added a description.</p>{% endif %}
+        {% if seller.brands.all or seller.chipsets.all %}
+          <h3 class="h6">Specialities</h3>
+          <ul class="mkt-chip-list" aria-label="Specialities">
+            {% for brand in seller.brands.all %}<li>{% include "components/status_pill.html" with label=brand.name %}</li>{% endfor %}
+            {% for chipset in seller.chipsets.all %}<li>{% include "components/status_pill.html" with label=chipset.display_name icon="cpu" %}</li>{% endfor %}
+          </ul>
+        {% endif %}
+      </div>
+    </section>
+    <section class="col-12 col-lg-4" aria-labelledby="links-heading">
+      <div class="surface-card p-4 h-100">
+        <h2 class="h5" id="links-heading">Find their work</h2>
+        {% if website or social_links %}
+          <ul class="mkt-link-list">
+            {% if website %}<li><i class="icon" data-lucide="external-link" aria-hidden="true"></i> Website: <a href="{{ website }}" target="_blank" rel="nofollow noopener noreferrer">{{ website }}</a></li>{% endif %}
+            {% for label, url in social_links %}<li><i class="icon" data-lucide="external-link" aria-hidden="true"></i> {{ label }}: <a href="{{ url }}" target="_blank" rel="nofollow noopener noreferrer">{{ url }}</a></li>{% endfor %}
+          </ul>
+        {% else %}
+          <p class="muted mb-0">No public links added.</p>
+        {% endif %}
+        <p class="small muted mt-3 mb-0">Preferred contact: {{ seller.get_contact_preference_display }}. Online checkout is not available.</p>
+      </div>
+    </section>
+  </div>
+
+  <h2 class="h4">Approved files</h2>
+  {% if files %}
+    <div class="row g-3 mb-4">
+      {% for file in files %}
+        <div class="col-12 col-md-6 col-lg-4">
+          <article class="surface-card eco-listing" aria-labelledby="file-{{ forloop.counter }}">
+            <div class="d-flex flex-wrap gap-2">{% include "components/status_pill.html" with label=file.category %}{% include "components/status_pill.html" with label=file.tier_label %}</div>
+            <h3 class="h6 mb-0" id="file-{{ forloop.counter }}"><a href="{{ file.url }}">{{ file.title }}</a></h3>
+            <p class="small muted mb-0">{{ file.file_name }}</p>
+          </article>
+        </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="mb-4">{% include "components/empty_state.html" with title="No approved files yet" message="Files this seller uploads appear here after staff approve them." %}</div>
+  {% endif %}
+
   <h2 class="h4 mt-4">Listings</h2>
   <div class="row g-3">{% include "marketplace/fragments/listing_grid.html" %}</div>
 </div>

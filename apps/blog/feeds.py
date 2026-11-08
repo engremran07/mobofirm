@@ -4,11 +4,13 @@ from django.contrib.syndication.views import Feed
 from django.http import Http404, HttpRequest, JsonResponse
 from django.urls import reverse
 from django.utils.feedgenerator import Atom1Feed, Rss201rev2Feed, SyndicationFeed
+from django.utils.html import escape
 
 from apps.blog import selectors
 from apps.blog.access import blog_enabled_for
 from apps.blog.models import Post
-from apps.blog.rendering import plain_excerpt, render_article
+from apps.blog.paywall import public_excerpt, teaser_text
+from apps.blog.rendering import render_article
 
 FEED_LIMIT = 50
 
@@ -39,7 +41,7 @@ class LatestRssFeed(Feed):
         return item.title
 
     def item_description(self, item: Post):
-        return item.summary or plain_excerpt(item.body, 240)
+        return public_excerpt(item, 240)
 
     def item_link(self, item: Post):
         return item.get_absolute_url()
@@ -65,6 +67,13 @@ class LatestAtomFeed(LatestRssFeed):
         return reverse("blog:feed_atom")
 
 
+def _feed_html(post: Post) -> str:
+    """Full article for open posts; only the teaser for featured and paid ones."""
+    if post.is_gated:
+        return f"<p>{escape(teaser_text(post))}</p>"
+    return str(render_article(post.body).html)
+
+
 def json_feed(request: HttpRequest) -> JsonResponse:
     if not blog_enabled_for(request.user):
         raise Http404
@@ -73,8 +82,9 @@ def json_feed(request: HttpRequest) -> JsonResponse:
             "id": post.slug,
             "url": request.build_absolute_uri(post.get_absolute_url()),
             "title": post.title,
-            "summary": post.summary or plain_excerpt(post.body, 240),
-            "content_html": str(render_article(post.body).html),
+            "summary": public_excerpt(post, 240),
+            "content_html": _feed_html(post),
+            "_access": post.access,
             "date_published": post.published_at.isoformat()
             if post.published_at
             else None,

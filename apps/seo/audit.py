@@ -14,10 +14,13 @@ from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import urlsplit
 
+from django.utils import timezone
+
 from apps.site_settings.services import get_site_settings
 
-from .inventory import build_inventory, resolve_path
+from .inventory import build_inventory, locate, resolve_path
 from .models import CrawlRun, Issue, PageObservation
+from .rules import SCAN_CODES
 from .siteurls import is_absolute_http
 
 ERROR, WARNING, INFO = Issue.Severity.ERROR, Issue.Severity.WARNING, Issue.Severity.INFO
@@ -34,11 +37,33 @@ class Finding:
     message: str
     key: str = ""
     details: dict[str, Any] = field(default_factory=dict)
+    seo_field: str = ""
+    measured: str = ""
+    expected: str = ""
+    suggestion: dict[str, Any] = field(default_factory=dict)
+    fixable: bool = False
+    group: str = ""
+    object_label: str = ""
+    object_pk: str = ""
+    object_title: str = ""
 
     @property
     def fingerprint(self) -> str:
         raw = f"{self.code}|{self.url}|{self.key}"
         return hashlib.sha256(raw.encode()).hexdigest()
+
+    def review_fields(self) -> dict[str, Any]:
+        return {
+            "seo_field": self.seo_field,
+            "measured": self.measured[:500],
+            "expected": self.expected[:500],
+            "suggestion": self.suggestion,
+            "fixable": self.fixable,
+            "group": self.group,
+            "object_label": self.object_label,
+            "object_pk": self.object_pk,
+            "object_title": self.object_title[:255],
+        }
 
 
 def _noindex(observation: PageObservation) -> bool:
@@ -390,6 +415,60 @@ def analyze_inventory() -> list[Finding]:
 INVENTORY_CODES = frozenset({"inventory_conflict", "site_url_missing"})
 
 
+def upsert_findings(run: CrawlRun | None, findings: list[Finding]) -> set[str]:
+    """Create or refresh one ``Issue`` per fingerprint; return the fingerprints seen.
+
+    A resolved issue that reproduces is reopened; an ignored one stays ignored.
+    """
+    located: dict[str, dict[str, str]] = {}
+    seen: set[str] = set()
+    for finding in findings:
+        if not finding.group and finding.url:
+            path = _path(finding.url)
+            if path not in located:
+                located[path] = locate(path)
+            where = located[path]
+            finding.group = where["group"]
+            finding.object_label = where["object_label"]
+            finding.object_pk = where["object_pk"]
+            finding.object_title = where["object_title"]
+        seen.add(finding.fingerprint)
+        fields = finding.review_fields()
+        issue, created = Issue.objects.get_or_create(
+            fingerprint=finding.fingerprint,
+            defaults={
+                "code": finding.code,
+                "severity": finding.severity,
+                "url": finding.url,
+                "message": finding.message[:500],
+                "details": finding.details,
+                "first_seen_run": run,
+                "last_seen_run": run,
+                **fields,
+            },
+        )
+        if created:
+            continue
+        reopened = issue.status == Issue.Status.RESOLVED
+        issue.message = finding.message[:500]
+        issue.severity = finding.severity
+        issue.details = finding.details
+        issue.last_seen_run = run
+        for name, value in fields.items():
+            setattr(issue, name, value)
+        if reopened:
+            issue.status = Issue.Status.OPEN
+            issue.resolved_at = None
+        issue.save()
+    return seen
+
+
+def resolve_issue(issue: Issue) -> None:
+    issue.status = Issue.Status.RESOLVED
+    issue.resolved_at = timezone.now()
+    issue.save()
+
+
 def sync_issues(
     run: CrawlRun | None,
     findings: list[Finding],
@@ -401,35 +480,12 @@ def sync_issues(
 
     Only issues from the same analyzer (inventory versus crawl) are resolved.
     """
-    seen: set[str] = set()
-    for finding in findings:
-        seen.add(finding.fingerprint)
-        issue, created = Issue.objects.get_or_create(
-            fingerprint=finding.fingerprint,
-            defaults={
-                "code": finding.code,
-                "severity": finding.severity,
-                "url": finding.url,
-                "message": finding.message[:500],
-                "details": finding.details,
-                "first_seen_run": run,
-                "last_seen_run": run,
-            },
-        )
-        if not created:
-            reopened = issue.status == Issue.Status.RESOLVED
-            issue.message = finding.message[:500]
-            issue.severity = finding.severity
-            issue.details = finding.details
-            issue.last_seen_run = run
-            if reopened:
-                issue.status = Issue.Status.OPEN
-            issue.save()
+    seen = upsert_findings(run, findings)
     stale = Issue.objects.filter(status=Issue.Status.OPEN).exclude(fingerprint__in=seen)
     stale = (
         stale.filter(code__in=INVENTORY_CODES)
         if inventory
-        else stale.exclude(code__in=INVENTORY_CODES)
+        else stale.exclude(code__in=INVENTORY_CODES | SCAN_CODES)
     )
     resolved = 0
     for issue in stale:
@@ -439,8 +495,7 @@ def sync_issues(
             or issue.url in observed
             or _path(issue.url) in observed
         ):
-            issue.status = Issue.Status.RESOLVED
-            issue.save()
+            resolve_issue(issue)
             resolved += 1
     return resolved
 

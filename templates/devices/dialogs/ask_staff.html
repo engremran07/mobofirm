@@ -1,0 +1,11 @@
+{% extends "components/dialog.html" %}
+{# Devices-owned content for the generic dialog shell: ask staff to release the approved browsers. #}
+{% block dialog_body %}
+  {% include "components/form_errors.html" with form=form %}
+  <p>You are using {{ options.active }} of {{ options.limit }} approved browser{{ options.limit|pluralize }}.</p>
+  {% if options.request_open %}
+    <p class="mb-0" role="status">You already have an open request. Staff will answer it in your notifications.</p>
+  {% else %}
+    {% for field in form %}{% include "components/form_field.html" with field=field %}{% endfor %}
+  {% endif %}
+{% endblock %}

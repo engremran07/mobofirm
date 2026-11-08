@@ -1,336 +1,152 @@
-"""Template tags for rendering ad placements in public templates."""
+"""Template tags for rendering ad zones and code-addressed slots in public templates."""
 
 from __future__ import annotations
 
 import logging
-import random
-import re
-from html.parser import HTMLParser
-from urllib.parse import urlsplit
 
 from django import template
-from django.utils.html import escape
-from django.utils.safestring import mark_safe
+from django.http import HttpRequest
+from django.utils.html import escape, format_html
+from django.utils.safestring import SafeString, mark_safe
 
-from apps.ads.constants import (
-    LOCAL_DEMO_CAMPAIGN_NAME,
-    LOCAL_DEMO_PLACEMENT_PREFIX,
+from apps.ads.models import AdPlacement, AdsSettings
+from apps.ads.services import zones as zone_service
+from apps.ads.services.markup import (
+    render_creative,
 )
-from apps.ads.models import AdNetwork, AdPlacement, PlacementAssignment
-from apps.ads.permissions import can_manage_ads
+from apps.ads.services.markup import (
+    safe_click_url as _safe_click_url,
+)
+from apps.ads.services.markup import (
+    validate_ad_creative_code as _validate_ad_creative_code,
+)
+from apps.ads.services.rotation.engine import choose_creative
+from apps.consent.constants import ADVERTISING
+from apps.consent.services import has_consent
 
 register = template.Library()
 logger = logging.getLogger(__name__)
 
-# FINDING-0018: Allowed origins for ad script tags. Admin-authored `script`
-# creatives may only reference these domains — anything else is rejected.
-_ALLOWED_AD_SCRIPT_DOMAINS = frozenset(
-    [
-        "pagead2.googlesyndication.com",
-        "adsby.googlesyndication.com",
-        "cdn.media.net",
-        "securepubads.g.doubleclick.net",
-        "static.ezoiccdn.com",
-        "ads.pubmatic.com",
-        "s.adroll.com",
-        "cdn.adnxs.com",
-        "c.amazon-adsystem.com",
-    ]
-)
+__all__ = ["_safe_click_url", "_validate_ad_creative_code", "ad_zone", "render_ad_slot"]
 
-_URL_ATTRIBUTES = frozenset({"href", "src", "action", "formaction", "data", "srcset"})
-_DANGEROUS_SCHEMES = ("javascript:", "vbscript:", "data:")
+_MODE_LABELS = {
+    "test": "TEST AD",
+    "paused": "PAUSED ZONE",
+    "unplaced": "EMPTY ZONE",
+}
 
 
-def _host_allowed(hostname: str) -> bool:
-    return any(
-        hostname == allowed or hostname.endswith("." + allowed)
-        for allowed in _ALLOWED_AD_SCRIPT_DOMAINS
+def _template_name(context: template.Context) -> str:
+    """The page template being rendered (an included partial reports its page)."""
+    current = getattr(context, "template", None)
+    return str(getattr(current, "name", "") or "")
+
+
+def _zone_markup(render: zone_service.ZoneRender, css_class: str) -> str:
+    zone = render.zone
+    classes = f"ad-zone ad-zone--{zone.code} ad-zone--s{render.size}"
+    if render.mode != "live":
+        classes += " ad-zone--test"
+    if css_class:
+        classes += f" {escape(css_class)}"
+    placement = render.placement
+    if render.mode == "live":
+        body = render.html
+        data = f'data-placement="{escape(placement.slug if placement else "")}"'
+    else:
+        detail = (
+            f"placement #{placement.pk}" if placement else "not placed on this template"
+        )
+        if render.mode == "paused":
+            detail += " (switched off)"
+        body = (
+            f'<span class="ad-zone__test" data-ad-test="{render.mode}">'
+            f"{_MODE_LABELS[render.mode]} &mdash; {escape(render.size)} "
+            f"&mdash; zone {escape(zone.code)} &mdash; {escape(detail)}</span>"
+        )
+        data = f'data-ad-test="{render.mode}"'
+    inner = (
+        f'<aside class="{classes}" aria-label="Advertisement" '
+        f'data-ad-zone="{escape(zone.code)}" {data}>'
+        f'<span class="ad-zone__label">Advertisement</span>'
+        f'<div class="ad-zone__body">{body}</div></aside>'
     )
-
-
-class _CreativeAuditor(HTMLParser):
-    """Collect policy violations from admin-authored creative markup."""
-
-    def __init__(self) -> None:
-        super().__init__(convert_charrefs=True)
-        self.violations: list[str] = []
-        self._in_script = False
-
-    def handle_starttag(self, tag: str, attrs) -> None:
-        values = {name.lower(): (value or "") for name, value in attrs}
-        for name, value in values.items():
-            if name.startswith("on") or name in {"style", "srcdoc"}:
-                self.violations.append(f"forbidden attribute {name}")
-            if name in _URL_ATTRIBUTES:
-                compact = re.sub(r"[\x00-\x20]", "", value).lower()
-                if compact.startswith(_DANGEROUS_SCHEMES):
-                    self.violations.append(f"dangerous URL in {name}")
-        if tag == "script":
-            self._in_script = True
-            parts = urlsplit(values.get("src", "").strip())
-            if parts.scheme != "https" or not parts.hostname:
-                self.violations.append("script without an absolute https src")
-            elif not _host_allowed(parts.hostname.lower()):
-                self.violations.append(f"script host not allowed: {parts.hostname}")
-
-    def handle_startendtag(self, tag: str, attrs) -> None:
-        self.handle_starttag(tag, attrs)
-        self.handle_endtag(tag)
-
-    def handle_endtag(self, tag: str) -> None:
-        if tag == "script":
-            self._in_script = False
-
-    def handle_data(self, data: str) -> None:
-        if self._in_script and data.strip():
-            self.violations.append("inline script content")
-
-
-def _validate_ad_creative_code(code: str) -> bool:
-    """Return True if code passes ad-creative allowlist validation.
-
-    FINDING-0018: Admin-controlled creative HTML/script is parsed (not pattern
-    matched) so a compromised or malicious staff member cannot inject arbitrary
-    JavaScript that would run on every page viewed by end users (stored XSS).
-
-    Rules:
-    - script elements need an absolute https ``src`` on an allowlisted ad host
-      and no inline body; protocol-relative and other schemes are rejected.
-    - Event-handler, ``style`` and ``srcdoc`` attributes are rejected.
-    - ``javascript:``, ``vbscript:`` and ``data:`` URLs are rejected.
-    """
-    if not code or not code.strip():
-        return True
-
-    auditor = _CreativeAuditor()
-    auditor.feed(code)
-    auditor.close()
-    if auditor.violations:
-        logger.warning("Ad creative rejected: %s", "; ".join(auditor.violations))
-        return False
-    return True
-
-
-def _safe_click_url(url: str) -> str:
-    """Return ``url`` only when it is an absolute http(s) URL."""
-    parts = urlsplit((url or "").strip())
-    return url.strip() if parts.scheme in {"http", "https"} and parts.netloc else ""
+    if zone.contained:
+        return f'<div class="site-container ad-zone-wrap">{inner}</div>'
+    return inner
 
 
 @register.simple_tag(takes_context=True)
-def render_ad_slot(
-    context: dict[str, object],
-    slot_code: str,
-    css_class: str = "",
-    preview: bool = False,
-) -> str:
-    """Render an ad slot — real creative or themed placeholder.
+def ad_zone(
+    context: template.Context, zone_code: str, css_class: str = ""
+) -> SafeString:
+    """Declare an ad zone. Renders nothing unless the zone is placed and allowed.
 
     Usage::
 
         {% load ad_tags %}
-        {% render_ad_slot "sidebar-top" %}
-        {% render_ad_slot "in-article-top" css_class="my-6" %}
+        {% ad_zone "after_content" %}
+        {% ad_zone "sidebar" css_class="my-4" %}
+
+    ``zone_code`` is one of ``apps.ads.zones.ZONES``. Which template shows which zone,
+    and which campaign fills it, is data managed in the placement manager.
     """
     request = context.get("request")
+    if not isinstance(request, HttpRequest):
+        return mark_safe("")
+    render = zone_service.resolve_zone(request, _template_name(context), zone_code)
+    if render is None:
+        return mark_safe("")
+    return mark_safe(_zone_markup(render, css_class))
 
-    if preview:
-        user = getattr(request, "user", None)
-        if not can_manage_ads(user) or not slot_code.startswith(
-            LOCAL_DEMO_PLACEMENT_PREFIX
-        ):
-            return ""
-        placement = (
-            AdPlacement.objects.filter(
-                code=slot_code,
-                is_active=False,
-                is_enabled=False,
-                is_deleted=False,
-            )
-            .only("pk", "name", "code", "allowed_sizes")
-            .first()
-        )
-    else:
-        placement = (
-            AdPlacement.objects.filter(
-                code=slot_code,
-                is_active=True,
-                is_enabled=True,
-                is_deleted=False,
-            )
-            .only("pk", "name", "code", "allowed_sizes")
-            .first()
-        )
+
+@register.simple_tag(takes_context=True)
+def render_ad_slot(
+    context: template.Context,
+    slot_code: str,
+    css_class: str = "",
+) -> str:
+    """Render a placement addressed by its code (used by the rewarded-ad page).
+
+    Prefer ``{% ad_zone %}`` for layout slots. Without a creative, advertising consent
+    or an enabled placement this renders a placeholder that the stylesheet hides.
+    """
+    request = context.get("request")
+    placement = AdPlacement.objects.filter(
+        code=slot_code, is_active=True, is_enabled=True, is_deleted=False
+    ).first()
     if not placement:
         return ""
-
-    if request is None:
+    if not isinstance(request, HttpRequest):
         return mark_safe(_render_placeholder(slot_code, placement.name, css_class))
-
-    if preview:
-        assignments = list(
-            PlacementAssignment.objects.filter(
-                placement=placement,
-                is_active=False,
-                is_enabled=False,
-                is_deleted=False,
-                creative__is_active=False,
-                creative__is_enabled=False,
-                creative__is_deleted=False,
-                creative__creative_type="html",
-                creative__campaign__name=LOCAL_DEMO_CAMPAIGN_NAME,
-                creative__campaign__type="house",
-                creative__campaign__is_active=False,
-                creative__campaign__is_deleted=False,
-                creative__campaign__locked=True,
-            )
-            .select_related("creative")
-            .only(
-                "weight",
-                "creative__html",
-                "creative__html_code",
-                "creative__image_url",
-                "creative__click_url",
-                "creative__creative_type",
-                "creative__script_code",
-            )
-        )
-        creative_html = ""
-        if assignments:
-            chosen = _weighted_pick(assignments)
-            creative_html = _render_creative(chosen.creative, preview=True)
-        if not creative_html:
-            return ""
-        return mark_safe(
-            f'<div class="ad-slot ad-slot--{escape(slot_code)} '
-            f'{escape(css_class)}" data-slot="{escape(slot_code)}" '
-            f'data-demo-preview="true">{creative_html}</div>'
-        )
-
-    from apps.users.services.consent import check as consent_check
-
-    if not consent_check("ads", request):
+    if not AdsSettings.get_solo().ads_enabled or not has_consent(request, ADVERTISING):
         return mark_safe(_render_placeholder(slot_code, placement.name, css_class))
-
-    # Check for assigned creatives with an active network
-    has_network = AdNetwork.objects.filter(is_enabled=True, is_deleted=False).exists()
-
-    creative_html = ""
-    if has_network:
-        assignments = list(
-            PlacementAssignment.objects.filter(
-                placement=placement,
-                is_active=True,
-                is_enabled=True,
-                is_deleted=False,
-                creative__is_active=True,
-                creative__is_enabled=True,
-                creative__is_deleted=False,
-                creative__campaign__is_active=True,
-                creative__campaign__is_deleted=False,
-            )
-            .select_related("creative", "creative__campaign")
-            .only(
-                "weight",
-                "creative__campaign__is_active",
-                "creative__campaign__start_at",
-                "creative__campaign__end_at",
-                "creative__html",
-                "creative__html_code",
-                "creative__image_url",
-                "creative__click_url",
-                "creative__creative_type",
-                "creative__script_code",
-            )
+    creative = choose_creative(placement, {"consent_ads": True})
+    creative_html = (
+        render_creative(
+            creative, click_href=zone_service.click_url(placement, creative)
         )
-        if assignments:
-            chosen = _weighted_pick(assignments)
-            if chosen.creative.campaign.is_live():
-                creative_html = _render_creative(chosen.creative)
-
+        if creative
+        else ""
+    )
     if creative_html:
-        return mark_safe(
-            f'<div class="ad-slot ad-slot--{escape(slot_code)} {escape(css_class)}" '
-            f'data-slot="{escape(slot_code)}">{creative_html}</div>'
+        return format_html(
+            '<div class="ad-slot ad-slot--{} {}" data-slot="{}">{}</div>',
+            slot_code,
+            css_class,
+            slot_code,
+            mark_safe(creative_html),
         )
-
-    # Placeholder
     return mark_safe(_render_placeholder(slot_code, placement.name, css_class))
 
 
-def _weighted_pick(assignments: list[PlacementAssignment]) -> PlacementAssignment:
-    """Weighted random pick from PlacementAssignment list."""
-    weights = [a.weight for a in assignments]
-    return random.choices(assignments, weights=weights, k=1)[0]
-
-
-def _render_creative(creative: object, preview: bool = False) -> str:
-    """Render a single AdCreative to HTML string.
-
-    FINDING-0018: HTML and script creatives are validated before rendering.
-    Invalid (potentially malicious) code returns an empty string and is logged.
-    """
-    from django.utils.html import escape
-
-    ct = getattr(creative, "creative_type", "")
-    html = getattr(creative, "html", "") or getattr(creative, "html_code", "")
-    if ct == "html" and html:
-        if preview and re.search(
-            r"<\s*(script|iframe|img|video|audio|source|object|embed)\b|\bsrc\s*=",
-            html,
-            re.IGNORECASE,
-        ):
-            logger.warning(
-                "Local ad preview rejected external or active media (id=%s)",
-                getattr(creative, "pk", "?"),
-            )
-            return ""
-        # FINDING-0018: Validate admin-authored HTML against allowlist
-        if not _validate_ad_creative_code(html):
-            logger.error(
-                "Ad creative HTML rejected by security validator (id=%s)",
-                getattr(creative, "pk", "?"),
-            )
-            return ""
-        return html
-    if ct == "script":
-        script = getattr(creative, "script_code", "")
-        if script:
-            # FINDING-0018: Validate script creative against domain allowlist
-            if not _validate_ad_creative_code(script):
-                logger.error(
-                    "Ad creative script rejected by security validator (id=%s)",
-                    getattr(creative, "pk", "?"),
-                )
-                return ""
-            return script
-    if ct == "banner":
-        img = getattr(creative, "image_url", "")
-        click = _safe_click_url(getattr(creative, "click_url", ""))
-        if img:
-            alt = escape(getattr(creative, "name", "Ad"))
-            if click:
-                return (
-                    f'<a href="{escape(click)}" target="_blank" rel="noopener sponsored">'
-                    f'<img src="{escape(img)}" alt="{alt}" class="w-full rounded">'
-                    f"</a>"
-                )
-            return f'<img src="{escape(img)}" alt="{alt}" class="w-full rounded">'
-    return ""
-
-
 def _render_placeholder(slot_code: str, name: str, css_class: str) -> str:
-    """Render a themed placeholder box for an empty ad slot."""
-    from django.utils.html import escape
-
-    label = escape(name)
+    """Themed, stylesheet-hidden placeholder for an unfilled code-addressed slot."""
     escaped_code = escape(slot_code)
-    escaped_css_class = escape(css_class)
     return (
-        f'<aside class="ad-placeholder ad-placeholder--{escaped_code} {escaped_css_class}" '
+        f'<aside class="ad-placeholder ad-placeholder--{escaped_code} {escape(css_class)}" '
         f'data-slot="{escaped_code}" '
-        f'aria-label="Advertisement: {label}">'
+        f'aria-label="Advertisement: {escape(name)}">'
         f'<span class="ad-placeholder__disclosure">Advertisement</span>'
         f'<span class="ad-placeholder__message">Space available</span>'
         f"</aside>"

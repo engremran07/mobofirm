@@ -226,7 +226,7 @@ class TagAdmin(ModelAdmin):
         ),
     )
     def approve(
-        self, request: HttpRequest, form: ConfirmForm, object_id: str
+        self, request: HttpRequest, _form: ConfirmForm, object_id: str
     ) -> HttpResponse:
         tag = self._get_tag(request, object_id)
         if not self._approve(Tag.objects.filter(pk=tag.pk)):
@@ -249,7 +249,7 @@ class TagAdmin(ModelAdmin):
         ),
     )
     def reject(
-        self, request: HttpRequest, form: ConfirmForm, object_id: str
+        self, request: HttpRequest, _form: ConfirmForm, object_id: str
     ) -> HttpResponse:
         tag = self._get_tag(request, object_id)
         self._reject(Tag.objects.filter(pk=tag.pk))

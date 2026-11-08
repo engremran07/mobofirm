@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}My uploads | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block content %}
+{% url 'library:my_files' as my_files_url %}
+<div class="site-container py-4 py-lg-5">
+  {% include "components/breadcrumbs.html" with current="My uploads" parent_label="My files" parent_url=my_files_url %}
+  {% include "components/page_header.html" with eyebrow="My files" title="My uploads" lead="Firmware you submitted, the device each one is linked to, and where review and pricing stand." %}
+  {% include "users/library/_tabs.html" %}
+
+  <form id="uploads-filters" class="row g-2 mb-4" method="get" action="{% url 'library:my_uploads' %}"
+        hx-get="{% url 'library:my_uploads' %}" hx-trigger="change, submit" hx-target="#uploads-results"
+        hx-include="this" hx-swap="innerHTML" hx-push-url="true" aria-label="Filter your uploads">
+    <div class="col-8 col-md-4">
+      <label class="form-label" for="uploads-status">Status</label>
+      <select id="uploads-status" class="form-select" name="status">
+        <option value="">All</option>
+        {% for value, label in statuses %}<option value="{{ value }}"{% if status == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="col-4 col-md-auto d-flex align-items-end"><button type="submit" class="btn btn-outline-secondary w-100">Apply</button></div>
+  </form>
+  <div id="uploads-results" aria-live="polite">{% include "users/library/_uploads_results.html" %}</div>
+</div>
+{% endblock %}

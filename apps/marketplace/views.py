@@ -1,20 +1,40 @@
 from __future__ import annotations
 
+from typing import Final
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import ValidationError
 from django.db.models import Q
+from django.forms import BaseFormSet
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from apps.core.decorators import require_app_enabled
 from apps.firmwares.catalog import get_public_firmware_queryset
 from apps.firmwares.models import OfficialFirmware
+from apps.pages.widgets import published_page_slugs
 from apps.users.request_user import current_user
+from apps.users.services.profile_completion import (
+    is_profile_complete,
+    missing_profile_fields,
+    profile_completion_url,
+)
+from apps.users.services.rate_limit import allow_action
 
-from . import services
-from .forms import ListingForm, SellerProfileForm, VerificationRequestForm
-from .models import Listing, SellerProfile
+from . import earnings, pickers, services, submissions
+from .forms import (
+    ListingForm,
+    PayoutRequestForm,
+    SellerApplicationForm,
+    SocialLinkForm,
+    SocialLinkFormSet,
+    application_data,
+)
+from .models import MAX_SOCIAL_LINKS, Listing, SellerProfile
+from .validators import validate_https_url
 
 SORTS = {
     "newest": "-created_at",
@@ -24,10 +44,23 @@ SORTS = {
 }
 SEARCH_LIMIT = 60
 VIEWED_SESSION_KEY = "marketplace_viewed_listings"
-
-
-def _seller_or_none(user) -> SellerProfile | None:
-    return SellerProfile.objects.filter(user=user, is_active=True).first()
+APPLY_ATTEMPTS: Final[int] = 8
+APPLY_WINDOW_SECONDS: Final[int] = 3600
+PAYOUT_ATTEMPTS: Final[int] = 10
+PAYOUT_WINDOW_SECONDS: Final[int] = 3600
+SOCIAL_PREFIX: Final[str] = "links"
+MISSING_FIELD_LABELS: Final[dict[str, str]] = {
+    "username": "a username that is not your email address",
+    "full_name": "your full name",
+    "country": "your country",
+    "interests": "at least one interest",
+    "profile_completed": "confirmation that your profile is complete",
+}
+TERMS_PAGES: Final[tuple[tuple[str, str], ...]] = (
+    ("seller-terms", "Seller terms"),
+    ("terms", "Terms of service"),
+    ("privacy", "Privacy policy"),
+)
 
 
 def _state_note(listing: Listing) -> str:
@@ -41,7 +74,37 @@ def _state_note(listing: Listing) -> str:
         return f"Staff did not approve this listing.{reason} It is only visible to you."
     if not listing.is_active:
         return "This listing is hidden. Show it again from your seller dashboard."
-    return "Your seller profile is not verified yet, so this listing is not public."
+    return "Your seller profile is not approved yet, so this listing is not public."
+
+
+def _terms_links() -> list[tuple[str, str]]:
+    live = published_page_slugs()
+    return [
+        (label, reverse("pages:page", kwargs={"slug": slug}))
+        for slug, label in TERMS_PAGES
+        if slug in live
+    ]
+
+
+def _safe_social_links(seller: SellerProfile) -> list[tuple[str, str]]:
+    """Social links that still pass https validation (defence in depth)."""
+    links: list[tuple[str, str]] = []
+    for link in seller.social_links.all():
+        try:
+            validate_https_url(link.url)
+        except ValidationError:
+            continue
+        links.append((link.get_platform_display(), link.url))
+    return links
+
+
+def _safe_website(seller: SellerProfile) -> str:
+    if not seller.website:
+        return ""
+    try:
+        return validate_https_url(seller.website)
+    except ValidationError:
+        return ""
 
 
 @require_GET
@@ -109,13 +172,43 @@ def listing_detail(request: HttpRequest, pk: int) -> HttpResponse:
 @require_GET
 @require_app_enabled("marketplace")
 def seller_profile(request: HttpRequest, pk: int) -> HttpResponse:
-    seller = get_object_or_404(SellerProfile, pk=pk, is_active=True, verified=True)
-    listings = services.public_listings().filter(seller=seller)
+    seller = get_object_or_404(
+        SellerProfile.objects.prefetch_related("brands", "chipsets", "social_links"),
+        pk=pk,
+        is_active=True,
+        verified=True,
+    )
     return render(
         request,
         "marketplace/seller_profile.html",
-        {"seller": seller, "listings": listings},
+        {
+            "seller": seller,
+            "listings": services.public_listings().filter(seller=seller),
+            "social_links": _safe_social_links(seller),
+            "website": _safe_website(seller),
+            "files": submissions.public_files_for(seller.user),
+        },
     )
+
+
+def _application_context(
+    request: HttpRequest,
+    form: SellerApplicationForm,
+    links: BaseFormSet[SocialLinkForm],
+    seller: SellerProfile | None,
+) -> dict[str, object]:
+    return {
+        "form": form,
+        "links": links,
+        "pickers": [
+            pickers.picker_context(name, [obj.pk for obj in form.selected(name)])
+            for name in ("brands", "chipsets")
+        ],
+        "terms_links": _terms_links(),
+        "status": services.application_status(seller) if seller else None,
+        "display_name": current_user(request).get_full_name(),
+        "max_links": MAX_SOCIAL_LINKS,
+    }
 
 
 @require_http_methods(["GET", "POST"])
@@ -123,28 +216,189 @@ def seller_profile(request: HttpRequest, pk: int) -> HttpResponse:
 @login_required
 def become_seller(request: HttpRequest) -> HttpResponse:
     user = current_user(request)
-    if SellerProfile.objects.filter(user=user).exists():
-        return redirect("marketplace:my_listings")
     if not user.is_verified:
         messages.error(request, "Verify your email address before becoming a seller.")
         return redirect("marketplace:listing_browse")
-    form = SellerProfileForm(request.POST or None)
-    if request.method == "POST" and form.is_valid():
-        seller = form.save(commit=False)
-        seller.user = request.user
-        seller.save()
-        messages.success(request, "Seller profile created.")
-        return redirect("marketplace:my_listings")
-    return render(request, "marketplace/become_seller.html", {"form": form})
+    if not is_profile_complete(user):
+        missing = [
+            MISSING_FIELD_LABELS.get(name, name)
+            for name in missing_profile_fields(user)
+        ]
+        messages.info(
+            request,
+            "Finish your profile before applying as a seller. Still needed: "
+            + ", ".join(missing)
+            + ". We will bring you back to the seller application afterwards.",
+        )
+        return redirect(profile_completion_url(reverse("marketplace:become_seller")))
+    seller = SellerProfile.objects.filter(user=user).first()
+    if seller is not None:
+        code = services.application_status(seller).code
+        if code == "approved":
+            return redirect("marketplace:dashboard")
+        if code in {"pending", "suspended"}:
+            return redirect("marketplace:application_status")
+
+    if request.method == "POST":
+        form = SellerApplicationForm(request.POST)
+        links = SocialLinkFormSet(request.POST, prefix=SOCIAL_PREFIX)
+        context = _application_context(request, form, links, seller)
+        if not allow_action(
+            f"marketplace-apply:{user.pk}", APPLY_ATTEMPTS, APPLY_WINDOW_SECONDS
+        ):
+            form.add_error(None, "Too many attempts. Try again later.")
+            return render(
+                request, "marketplace/become_seller.html", context, status=429
+            )
+        if form.is_valid() and links.is_valid():
+            try:
+                services.submit_application(user, application_data(form, links))
+            except services.MarketplaceError as exc:
+                messages.error(request, str(exc))
+            else:
+                messages.success(
+                    request, "Application sent. Staff will review it shortly."
+                )
+            return redirect("marketplace:application_status")
+        return render(request, "marketplace/become_seller.html", context)
+
+    initial: dict[str, object] = {}
+    link_initial: list[dict[str, str]] = []
+    if seller is not None:
+        initial = {
+            "bio": seller.bio,
+            "website": seller.website,
+            "contact_preference": seller.contact_preference,
+            "brands": list(seller.brands.values_list("pk", flat=True)),
+            "chipsets": list(seller.chipsets.values_list("pk", flat=True)),
+        }
+        link_initial = [
+            {"platform": link.platform, "url": link.url}
+            for link in seller.social_links.all()
+        ]
+    form = SellerApplicationForm(initial=initial)
+    links = SocialLinkFormSet(prefix=SOCIAL_PREFIX, initial=link_initial)
+    return render(
+        request,
+        "marketplace/become_seller.html",
+        _application_context(request, form, links, seller),
+    )
+
+
+@require_GET
+@require_app_enabled("marketplace")
+@login_required
+def application_status(request: HttpRequest) -> HttpResponse:
+    seller = SellerProfile.objects.filter(user=current_user(request)).first()
+    if seller is None:
+        return redirect("marketplace:become_seller")
+    return render(
+        request,
+        "marketplace/application_status.html",
+        {
+            "seller": seller,
+            "status": services.application_status(seller),
+            "social_links": _safe_social_links(seller),
+            "website": _safe_website(seller),
+            "brands": seller.brands.all(),
+            "chipsets": seller.chipsets.all(),
+        },
+    )
+
+
+@require_GET
+@require_app_enabled("marketplace")
+@login_required
+def picker(request: HttpRequest, kind: str) -> HttpResponse:
+    if not pickers.is_picker_kind(kind):
+        raise Http404
+    selected = pickers.clean_ids(request.GET.getlist(kind))
+    context = pickers.picker_context(kind, selected, request.GET.get("q", ""))
+    return render(request, "marketplace/fragments/picker_body.html", context)
+
+
+def _approved_seller_or_redirect(
+    request: HttpRequest,
+) -> tuple[SellerProfile | None, HttpResponse | None]:
+    seller = SellerProfile.objects.filter(user=current_user(request)).first()
+    if seller is None:
+        return None, redirect("marketplace:become_seller")
+    if not (seller.is_active and seller.verified):
+        return None, redirect("marketplace:application_status")
+    return seller, None
+
+
+@require_GET
+@require_app_enabled("marketplace")
+@login_required
+def dashboard(request: HttpRequest) -> HttpResponse:
+    seller, redirection = _approved_seller_or_redirect(request)
+    if seller is None:
+        return redirection or redirect("marketplace:become_seller")
+    user = current_user(request)
+    return render(
+        request,
+        "marketplace/dashboard.html",
+        {
+            "seller": seller,
+            "summary": services.seller_summary(seller),
+            "earnings": earnings.earnings_summary(seller),
+            "payout_form": PayoutRequestForm(),
+            "submission_summary": submissions.submission_summary(user),
+            "submissions": submissions.submissions_for(user),
+        },
+    )
+
+
+@require_http_methods(["GET", "POST"])
+@require_app_enabled("marketplace")
+@login_required
+def payout_request(request: HttpRequest) -> HttpResponse:
+    """Dialog target and no-JavaScript page for a staff-reviewed payout request."""
+    seller, redirection = _approved_seller_or_redirect(request)
+    if seller is None:
+        return redirection or redirect("marketplace:become_seller")
+    summary = earnings.earnings_summary(seller)
+    form = PayoutRequestForm(request.POST or None)
+    status = 200
+    if request.method == "POST":
+        if not allow_action(
+            f"marketplace-payout:{seller.user_id}",
+            PAYOUT_ATTEMPTS,
+            PAYOUT_WINDOW_SECONDS,
+        ):
+            form.add_error(None, "Too many requests. Try again later.")
+            status = 429
+        elif form.is_valid():
+            try:
+                earnings.request_payout(
+                    seller,
+                    form.cleaned_data["credits"],
+                    method=form.cleaned_data["method"],
+                    destination=form.cleaned_data["destination"],
+                )
+            except services.MarketplaceError as exc:
+                form.add_error(None, str(exc))
+            else:
+                messages.success(
+                    request, "Payout request sent. Staff will review it shortly."
+                )
+                return redirect("marketplace:dashboard")
+    return render(
+        request,
+        "marketplace/payout_request.html",
+        {"seller": seller, "earnings": summary, "payout_form": form},
+        status=status,
+    )
 
 
 @require_http_methods(["GET", "POST"])
 @require_app_enabled("marketplace")
 @login_required
 def my_listings(request: HttpRequest) -> HttpResponse:
-    seller = _seller_or_none(request.user)
+    seller, redirection = _approved_seller_or_redirect(request)
     if seller is None:
-        return redirect("marketplace:become_seller")
+        return redirection or redirect("marketplace:become_seller")
     form = ListingForm(request.POST or None)
     if request.method == "POST" and form.is_valid():
         listing = form.save(commit=False)
@@ -160,11 +414,6 @@ def my_listings(request: HttpRequest) -> HttpResponse:
             "listings": seller.listings.all(),
             "form": form,
             "summary": services.seller_summary(seller),
-            "verification_form": VerificationRequestForm(),
-            "latest_verification": seller.verifications.first(),
-            "pending_verification": seller.verifications.filter(
-                status="pending"
-            ).exists(),
         },
     )
 
@@ -173,30 +422,10 @@ def my_listings(request: HttpRequest) -> HttpResponse:
 @require_app_enabled("marketplace")
 @login_required
 def toggle_listing(request: HttpRequest, pk: int) -> HttpResponse:
-    seller = _seller_or_none(request.user)
+    seller = services.seller_for(current_user(request))
     listing = get_object_or_404(Listing, pk=pk, seller=seller) if seller else None
     if listing is None:
         raise Http404
     listing.is_active = not listing.is_active
     listing.save(update_fields=["is_active", "updated_at"])
-    return redirect("marketplace:my_listings")
-
-
-@require_POST
-@require_app_enabled("marketplace")
-@login_required
-def request_verification(request: HttpRequest) -> HttpResponse:
-    seller = _seller_or_none(request.user)
-    if seller is None:
-        return redirect("marketplace:become_seller")
-    form = VerificationRequestForm(request.POST)
-    if form.is_valid():
-        try:
-            services.request_verification(seller, form.cleaned_data["evidence"])
-        except services.MarketplaceError as exc:
-            messages.error(request, str(exc))
-        else:
-            messages.success(request, "Verification request submitted.")
-    else:
-        messages.error(request, "Provide evidence of up to 2000 characters.")
     return redirect("marketplace:my_listings")

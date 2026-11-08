@@ -1,0 +1,31 @@
+{# Contract: quota (library.QuotaPanel), compact (optional: headline meter only). Download allowance meter; says plainly when the shop is not available. #}
+{% load mf_ui %}
+<section class="surface-card p-3 p-md-4" aria-labelledby="quota-panel-heading{% if compact %}-compact{% endif %}">
+  <h2 class="h5" id="quota-panel-heading{% if compact %}-compact{% endif %}">Download quota</h2>
+  {% if quota.available %}
+    {% with headline=quota.headline %}
+      <p class="small mb-1"><strong>{{ headline.package_name }}</strong>{% if quota.plan_summary %} <span class="muted">· {{ quota.plan_summary }}</span>{% endif %}</p>
+      <p class="small muted mb-2" id="quota-sources{% if compact %}-compact{% endif %}">{{ quota.sources|join:" + " }}. Each new file counts once; downloading it again is free.</p>
+      {% if compact %}
+        {% include "components/meter.html" with id=headline.dom_id label=headline.label percent=headline.percent text=headline.text %}
+        <p class="small mb-0 mt-2">
+          {% if headline.unlimited %}Unlimited new files.{% else %}<strong>{{ headline.remaining }}</strong> left of {{ headline.limit }}{% if headline.resets_at %} · resets {{ headline.resets_at|date:"j M Y, H:i" }}{% endif %}.{% endif %}
+          <a href="{% url 'library:my_quota' %}">Quota details</a> · <a href="{{ quota.plans_url }}">Compare plans</a>
+        </p>
+      {% else %}
+        <div class="row g-3">
+          {% for window in quota.windows %}
+            <div class="col-12 col-md-6">
+              {% include "components/meter.html" with id=window.dom_id label=window.label percent=window.percent text=window.text %}
+              <p class="small muted mb-0 mt-1">{{ window.remaining_text }}{% if window.resets_at %} · resets {{ window.resets_at|date:"j M Y, H:i" }}{% endif %}</p>
+            </div>
+          {% endfor %}
+        </div>
+        <p class="small mb-0 mt-3"><a href="{{ quota.plans_url }}">Compare plans</a> · <a href="{{ quota.orders_url }}">Your orders</a></p>
+      {% endif %}
+    {% endwith %}
+  {% else %}
+    {% include "components/notice.html" with icon="info" message="Download quotas are not available on this site right now." %}
+  {% endif %}
+  {% include "promotions/_offers_panel.html" with offers=quota.offers bare=True %}
+</section>

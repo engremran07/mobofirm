@@ -1,7 +1,7 @@
 from django.urls import path
 from rest_framework.routers import DefaultRouter
 
-from . import views
+from . import dialogs, views
 from .api import BehaviorInsightViewSet, DeviceFingerprintViewSet
 
 app_name = "devices"
@@ -18,5 +18,16 @@ urlpatterns = [
     path("events/", views.device_events, name="device_events"),
     path("payload/", views.device_payload_view, name="device_payload"),
     path("acknowledge/", views.acknowledge_new_device, name="acknowledge_new_device"),
+    path("slots/ask-staff/", dialogs.AskStaffDialog.as_view(), name="slot_ask_staff"),
+    path(
+        "slots/pay-credits/",
+        dialogs.PayCreditsDialog.as_view(),
+        name="slot_pay_credits",
+    ),
+    path(
+        "slots/use-rewarded-reset/",
+        dialogs.UseRewardedResetDialog.as_view(),
+        name="slot_use_rewarded",
+    ),
     *router.urls,
 ]

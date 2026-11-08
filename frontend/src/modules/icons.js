@@ -51,6 +51,7 @@ import {
   FolderOpen,
   FolderPlus,
   Gauge,
+  Globe,
   HardDrive,
   History,
   House,
@@ -60,6 +61,7 @@ import {
   Lock,
   Megaphone,
   Package,
+  Phone,
   Plus,
   Receipt,
   RotateCcw,
@@ -71,6 +73,12 @@ import {
   Trash2,
   TriangleAlert,
   Upload,
+  Award,
+  Flame,
+  Gift,
+  Medal,
+  Star,
+  Trophy,
   createIcons,
 } from "lucide";
 
@@ -129,6 +137,7 @@ const iconSet = {
   FolderOpen,
   FolderPlus,
   Gauge,
+  Globe,
   HardDrive,
   History,
   House,
@@ -138,6 +147,7 @@ const iconSet = {
   Lock,
   Megaphone,
   Package,
+  Phone,
   Plus,
   Receipt,
   RotateCcw,
@@ -149,6 +159,12 @@ const iconSet = {
   Trash2,
   TriangleAlert,
   Upload,
+  Award,
+  Flame,
+  Gift,
+  Medal,
+  Star,
+  Trophy,
 };
 
 export function renderIcons() {

@@ -1,0 +1,5 @@
+{# Contract: bounty. #}
+{% if bounty.status == "open" %}{% include "components/status_pill.html" with label="Open" tone="success" %}
+{% elif bounty.status == "fulfilled" %}{% include "components/status_pill.html" with label="Fulfilled" tone="accent" icon="check" %}
+{% elif bounty.status == "review" %}{% include "components/status_pill.html" with label="In staff review" tone="warning" %}
+{% else %}{% include "components/status_pill.html" with label=bounty.get_status_display %}{% endif %}

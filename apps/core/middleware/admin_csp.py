@@ -11,7 +11,20 @@ from django.views.decorators.csp import csp_override
 # whole URL namespaces, and individual views by "namespace:name". They need the admin
 # policy because Unfold's Alpine build compiles expressions with ``new Function``.
 ADMIN_SHELL_NAMESPACES = frozenset({"admin", "seo"})
-ADMIN_SHELL_VIEWS = frozenset({"ads:dashboard", "ads:demo_preview"})
+ADMIN_SHELL_VIEWS = frozenset(
+    {
+        "ads:dashboard",
+        "tags:manage",
+        "tags:duplicates_review",
+        "tags:keyword_review",
+        "tags:merge",
+        "tags:reject_dialog",
+        "tags:merge_dialog",
+        "comments:moderation_queue",
+        "comments:moderation_dialog",
+        "storage:status",
+    }
+)
 
 
 class AdminContentSecurityPolicyMiddleware:

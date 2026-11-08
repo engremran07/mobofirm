@@ -16,7 +16,7 @@ from typing import Any
 from django.apps import apps
 from django.core.cache import cache
 from django.db import DatabaseError
-from django.db.models import Count, Q
+from django.db.models import Count, F, Q, Sum
 from django.http import HttpRequest
 from django.urls import reverse
 from django.utils import timezone
@@ -24,7 +24,7 @@ from django.utils.translation import gettext as _
 
 logger = logging.getLogger(__name__)
 
-CACHE_KEY = "admin:dashboard:metrics:v1"
+CACHE_KEY = "admin:dashboard:metrics:v2"
 CACHE_SECONDS = 60
 RECENT_ROWS = 5
 
@@ -122,15 +122,49 @@ def _recent_pending_firmware() -> list[dict[str, Any]]:
         return []
 
 
+def _promotion_totals() -> tuple[int | None, int | None]:
+    """Return (views, claims) summed over the running promotions."""
+    try:
+        totals = (
+            _model("promotions.Promotion")
+            .objects.filter(status="active")
+            .aggregate(
+                views=Sum(F("page_views") + F("banner_views")),
+                claims=Sum("claim_count"),
+            )
+        )
+    except (LookupError, DatabaseError):
+        logger.warning("Dashboard promotion metric unavailable", exc_info=True)
+        return None, None
+    return int(totals["views"] or 0), int(totals["claims"] or 0)
+
+
 def compute_metrics() -> dict[str, Any]:
     """Collect every dashboard number in one pass (uncached)."""
     week_ago = timezone.now() - timedelta(days=7)
     healthy, total = _storage_health()
+    promotion_views, promotion_claims = _promotion_totals()
     return {
+        "live_promotions": _count("promotions.Promotion", status="active"),
+        "promotion_views": promotion_views,
+        "promotion_claims": promotion_claims,
         "pending_firmware": _count(
             "firmwares.PendingFirmware", admin_decision="pending"
         ),
         "pending_comments": _count("comments.Comment", status="pending"),
+        "pending_brand_requests": _count(
+            "firmwares.BrandCreationRequest", status="pending"
+        ),
+        "pending_model_requests": _count(
+            "firmwares.ModelCreationRequest", status="pending"
+        ),
+        "pending_variant_requests": _count(
+            "firmwares.VariantCreationRequest", status="pending"
+        ),
+        "pending_chipset_requests": _count(
+            "firmwares.ChipsetCreationRequest", status="pending"
+        ),
+        "open_firmware_requests": _count("firmwares.FirmwareRequest", status="open"),
         "unapproved_tags": _count(
             "tags.Tag", is_curated=False, is_deleted=False, merge_into__isnull=True
         ),
@@ -145,6 +179,7 @@ def compute_metrics() -> dict[str, Any]:
         "pending_listings": _count("marketplace.Listing", status="pending"),
         "pending_sellers": _count("marketplace.SellerVerification", status="pending"),
         "pending_orders": _count("shop.Order", status="pending"),
+        "open_bounty_reports": _count("bounty.BountyDispute", status="open"),
         "signups_7d": _count("users.CustomUser", date_joined__gte=week_ago),
         "recent_signups": _recent_signups(),
         "recent_orders": _recent_orders(),
@@ -203,6 +238,22 @@ def build_kpis(metrics: dict[str, Any]) -> list[Kpi]:
             _changelist("comments.Comment", "status__exact=pending"),
             "warning",
             "comments.view_comment",
+        ),
+        Kpi(
+            "catalog_requests",
+            _("Catalog requests"),
+            _sum(
+                metrics["pending_brand_requests"],
+                metrics["pending_model_requests"],
+                metrics["pending_variant_requests"],
+                metrics["pending_chipset_requests"],
+                metrics["open_firmware_requests"],
+            ),
+            _("Brand, model, variant, chipset and firmware requests to review"),
+            "playlist_add",
+            _changelist("firmwares.ModelCreationRequest", "status__exact=pending"),
+            "warning",
+            "firmwares.view_modelcreationrequest",
         ),
         Kpi(
             "unapproved_tags",
@@ -279,6 +330,20 @@ def build_kpis(metrics: dict[str, Any]) -> list[Kpi]:
             _changelist("shop.Order", "status__exact=pending"),
             "warning",
             "shop.view_order",
+        ),
+        Kpi(
+            "promotions",
+            _("Campaigns running"),
+            metrics.get("live_promotions"),
+            _("%(claims)s claims and %(views)s offer views so far")
+            % {
+                "claims": metrics.get("promotion_claims") or 0,
+                "views": metrics.get("promotion_views") or 0,
+            },
+            "campaign",
+            _changelist("promotions.Promotion", "status__exact=active"),
+            "info",
+            "promotions.view_promotion",
         ),
         Kpi(
             "signups",

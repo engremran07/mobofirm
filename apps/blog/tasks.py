@@ -33,8 +33,19 @@ def publish_due_scheduled_posts() -> int:
     return published
 
 
+@shared_task(acks_late=True, soft_time_limit=60, time_limit=120)
+def reconcile_guide_fulfilments() -> int:
+    """Finish fulfilment of live solutions whose request is still approved.
+
+    Safe to repeat: covers a crash between publishing a solution and settling its
+    request and bounty. Schedule with beat (for example every 15 minutes).
+    """
+    from apps.blog import guide_requests
+
+    return guide_requests.reconcile_fulfilments()
+
+
 @shared_task(
-    bind=True,
     autoretry_for=(DatabaseError,),
     retry_backoff=True,
     max_retries=2,
@@ -42,7 +53,7 @@ def publish_due_scheduled_posts() -> int:
     soft_time_limit=300,
     time_limit=360,
 )
-def send_post_notifications_batched(self, post_id: int) -> int:
+def send_post_notifications_batched(post_id: int) -> int:
     """Tell active users about a new editorial post; at most once per post."""
     from apps.users.models import CustomUser, Notification
 

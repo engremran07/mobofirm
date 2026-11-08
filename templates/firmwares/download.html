@@ -15,6 +15,7 @@
           <dt class="col-sm-4 muted fw-normal">Model code</dt><dd class="col-sm-8 model-code">{{ firmware.model.model_code|default:"Not specified" }}</dd>
           <dt class="col-sm-4 muted fw-normal">Hosting</dt><dd class="col-sm-8">{% if firmware.is_external %}<span class="badge text-bg-secondary">External download</span> You will be sent to {{ external_host }}.{% else %}Hosted by Mobofirm{% endif %}</dd>
           <dt class="col-sm-4 muted fw-normal">Review</dt><dd class="col-sm-8">Verified</dd>
+          <dt class="col-sm-4 muted fw-normal">Access</dt><dd class="col-sm-8">{% include "firmwares/includes/tier_badge.html" with firmware=firmware %}</dd>
         </dl>
         {% if firmware.is_password_protected %}
           <p class="alert alert-warning">This archive is marked as password-protected. The password is not displayed on this page.</p>

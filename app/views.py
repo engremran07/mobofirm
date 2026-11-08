@@ -9,7 +9,9 @@ logger = logging.getLogger(__name__)
 
 
 def csrf_failure(request: HttpRequest, reason: str = "") -> HttpResponse:
-    logger.warning("CSRF validation rejected a request")
+    logger.warning(
+        "CSRF validation rejected a request: %s", reason or "no reason given"
+    )
     return render(request, "errors/csrf_failure.html", status=403)
 
 

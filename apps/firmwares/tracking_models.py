@@ -31,6 +31,20 @@ from django.contrib.contenttypes.models import ContentType
 from django.db import models
 from django.utils import timezone
 
+FIRMWARE_REQUEST_TYPES: list[tuple[str, str]] = [
+    ("official", "Official"),
+    ("engineering", "Engineering"),
+    ("readback", "Readback"),
+    ("modified", "Modified"),
+    ("other", "Other"),
+]
+FIRMWARE_REQUEST_URGENCIES: list[tuple[int, str]] = [
+    (1, "Low"),
+    (2, "Normal"),
+    (3, "High"),
+    (4, "Urgent"),
+]
+
 
 class FirmwareView(models.Model):
     """Track individual firmware views for analytics - optimized for high write volume"""
@@ -176,13 +190,7 @@ class FirmwareRequest(models.Model):
 
     firmware_type = models.CharField(
         max_length=50,
-        choices=[
-            ("official", "Official"),
-            ("engineering", "Engineering"),
-            ("readback", "Readback"),
-            ("modified", "Modified"),
-            ("other", "Other"),
-        ],
+        choices=FIRMWARE_REQUEST_TYPES,
         default="official",
     )
 
@@ -196,7 +204,7 @@ class FirmwareRequest(models.Model):
     description = models.TextField(blank=True, help_text="Additional details from user")
     urgency = models.IntegerField(
         default=1,
-        choices=[(1, "Low"), (2, "Normal"), (3, "High"), (4, "Urgent")],
+        choices=FIRMWARE_REQUEST_URGENCIES,
         help_text="User-indicated urgency",
     )
 
@@ -227,9 +235,19 @@ class FirmwareRequest(models.Model):
     fulfilled_firmware_id = models.UUIDField(null=True, blank=True)
     fulfilled_at = models.DateTimeField(null=True, blank=True)
     admin_notes = models.TextField(blank=True)
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="firmware_request_reviews",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         db_table = "firmwares_request"
+        verbose_name = "Firmware request"
+        verbose_name_plural = "Firmware requests (review)"
         indexes: ClassVar[list[models.Index]] = [
             models.Index(
                 fields=["status", "-request_count"]
@@ -247,7 +265,7 @@ class FirmwareRequest(models.Model):
         variant_str = f"/{self.variant_name}" if self.variant_name else ""
         return f"{self.brand.name}{model_str}{variant_str} ({self.firmware_type}) - {self.request_count} requests"
 
-    def increment_request(self, user=None):
+    def increment_request(self):
         """Increment request count when another user requests same firmware"""
         from django.db.models import F
 
@@ -255,6 +273,31 @@ class FirmwareRequest(models.Model):
             request_count=F("request_count") + 1, last_requested_at=timezone.now()
         )
         self.refresh_from_db()
+
+
+class FirmwareRequestSupport(models.Model):
+    """One signed-in user asking for a firmware request (the request's demand)."""
+
+    request = models.ForeignKey(
+        FirmwareRequest, on_delete=models.CASCADE, related_name="supporters"
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="firmware_request_supports",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ["-created_at"]
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=["request", "user"], name="firmware_request_support_unique"
+            )
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.user_id} supports request {self.request_id}"
 
 
 class FirmwareStats(models.Model):

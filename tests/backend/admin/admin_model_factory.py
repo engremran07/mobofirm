@@ -15,7 +15,6 @@ import itertools
 import uuid
 from typing import Any
 
-from django.contrib.auth import get_user_model
 from django.core.files.base import ContentFile
 from django.db import models
 from django.utils import timezone
@@ -34,10 +33,6 @@ def _external_source() -> dict[str, Any]:
     }
 
 
-def _user() -> Any:
-    return build(get_user_model())
-
-
 def _package_tier() -> Any:
     from apps.shop.models import PackageTier
 
@@ -54,7 +49,6 @@ FIELD_OVERRIDES: dict[str, dict[str, Any]] = {
     "firmwares.modifiedfirmware": _external_source(),
     "firmwares.otherfirmware": _external_source(),
     "firmwares.unclassifiedfirmware": _external_source(),
-    "filemanager.folderpermission": {"user": _user},
     "seo.redirect": {"source": "/old-path", "target": "/new-path"},
     "shop.product": {"package_tier": _package_tier},
     "storage.firmwarestoragelocation": {"relative_path": "firmware/file.bin"},
@@ -97,7 +91,8 @@ def _value_for(field: models.Field[Any, Any], depth: int) -> Any:
     if isinstance(field, models.FloatField):
         return 1.0
     if isinstance(field, models.IntegerField):
-        return 1
+        # Unique integers (e.g. seeded level numbers) must not collide with seed rows.
+        return next(_counter) + 10_000 if field.unique else 1
     if isinstance(field, models.JSONField):
         return {}
     if isinstance(field, models.BinaryField):

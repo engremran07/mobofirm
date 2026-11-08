@@ -222,6 +222,14 @@ def reattach_curated_tag(tag: Tag, limit: int = 500) -> int:
     return attached
 
 
+def reject_suggestion(tag: Tag) -> None:
+    """Retire a suggestion staff declined: out of the review queue and auto-curation."""
+    tag.is_curated = False
+    tag.is_active = False
+    tag.ai_suggested = False
+    tag.save(update_fields=["is_curated", "is_active", "ai_suggested", "updated_at"])
+
+
 def merge_tags(source: Tag, target: Tag, user=None) -> None:
     """Atomically move every post from ``source`` to ``target`` and retire ``source``."""
     if source.pk == target.pk:

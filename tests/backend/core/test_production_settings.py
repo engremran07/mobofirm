@@ -149,12 +149,17 @@ class HealthEndpointTests(TestCase):
     def setUp(self):
         cache.clear()
 
-    def test_liveness_and_readiness_report_only_a_status(self):
+    def test_liveness_and_readiness_report_status_and_release_version(self):
+        from app.version import app_version
+
         live = self.client.get(reverse("health-live"))
         ready = self.client.get(reverse("health-ready"))
 
-        self.assertEqual(live.json(), {"status": "ok"})
-        self.assertEqual(ready.json(), {"status": "ok"})
+        self.assertEqual(live.json(), {"status": "ok", "version": app_version()})
+        payload = ready.json()
+        self.assertEqual(payload["status"], "ok")
+        self.assertEqual(payload["version"], app_version())
+        self.assertEqual(set(payload["build"]), {"git_sha", "date"})
         self.assertIn("no-cache", ready["Cache-Control"])
 
     def test_probes_accept_head_but_not_writes(self):
@@ -182,21 +187,3 @@ class HealthEndpointTests(TestCase):
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.json(), {"status": "unavailable"})
         self.assertNotIn(b"secret-host", response.content)
-
-
-class ReleaseVersionContextTests(SimpleTestCase):
-    def test_source_checkout_without_installed_metadata_reads_pyproject(self):
-        from importlib.metadata import PackageNotFoundError
-
-        from app import context_processors
-
-        context_processors._release_version.cache_clear()
-        try:
-            with patch.object(
-                context_processors, "version", side_effect=PackageNotFoundError
-            ):
-                value = context_processors.release_metadata(None)["release_version"]
-        finally:
-            context_processors._release_version.cache_clear()
-
-        self.assertRegex(value, r"^\d+\.\d+\.\d+")

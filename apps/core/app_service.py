@@ -53,6 +53,15 @@ class AppService:
                 return None
         return None
 
+    @classmethod
+    def export(cls, app_label: str, name: str) -> Any | None:
+        """A public export of an app's contract, or ``None`` when it is unavailable."""
+        return _contract_attribute(cls.get(app_label), name)
+
+
+def _contract_attribute(contract: Any, name: str) -> Any | None:
+    return getattr(contract, name, None)
+
 
 def app_enabled(app_label: str) -> bool:
     """Return whether the AppRegistry flag for an installed app is switched on."""

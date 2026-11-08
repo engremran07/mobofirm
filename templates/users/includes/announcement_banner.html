@@ -1,0 +1,20 @@
+{# Contract: announcement_banners (context processor; empty unless an announcement is live for this visitor). Site-wide banner with an optional button and a dismiss form. #}
+{% if announcement_banners %}
+  <div class="site-banners" role="region" aria-label="Announcements">
+    {% for banner in announcement_banners %}
+      <div class="site-banner" id="site-banner-{{ banner.pk }}" data-banner-id="{{ banner.pk }}">
+        <div class="site-container site-banner__inner">
+          <p class="site-banner__text mb-0"><strong>{{ banner.title }}</strong>{% if banner.message %} <span>{{ banner.message|truncatechars:160 }}</span>{% endif %}</p>
+          <div class="site-banner__actions">
+            {% if banner.cta_url %}<a class="btn btn-sm btn-primary" href="{{ banner.cta_url }}">{{ banner.cta_label|default:"Learn more" }}</a>{% endif %}
+            <form method="post" action="{% url 'users:dismiss_announcement' pk=banner.pk %}" hx-post="{% url 'users:dismiss_announcement' pk=banner.pk %}" hx-target="#site-banner-{{ banner.pk }}" hx-swap="delete">
+              {% csrf_token %}
+              <input type="hidden" name="next" value="{{ request.get_full_path }}">
+              <button type="submit" class="btn btn-sm btn-outline-secondary" aria-label="Dismiss announcement: {{ banner.title }}">Dismiss</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% endif %}

@@ -15,12 +15,12 @@ FIRMWARE_MODELS = (
 )
 
 
-def sync_location_after_save(sender, instance, **kwargs) -> None:
+def sync_location_after_save(instance, **kwargs) -> None:
     """Mirror the firmware file reference once the firmware write has committed."""
     transaction.on_commit(lambda: sync_firmware_location(instance))
 
 
-def drop_locations_after_delete(sender, instance, **kwargs) -> None:
+def drop_locations_after_delete(instance, **kwargs) -> None:
     delete_locations(instance)
 
 

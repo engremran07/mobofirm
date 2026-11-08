@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Offers{% endblock %}
+{% block content %}
+<div class="site-container py-4 py-lg-5">
+  {% include "components/breadcrumbs.html" with current="Offers" %}
+  {% include "components/page_header.html" with eyebrow="Campaigns" title="Offers" lead="Time-limited ways to get more downloads, devices and credits. Terms are on each offer." %}
+  {% if running %}
+    <div class="row g-3 mb-5">
+      {% for card in running %}<div class="col-12 col-md-6 col-xl-4">{% include "promotions/_offer_card.html" %}</div>{% endfor %}
+    </div>
+  {% else %}
+    {% include "components/empty_state.html" with title="No offers are running right now" message="New offers appear here and as a banner when they start." %}
+  {% endif %}
+  {% if ended %}
+    <section class="mt-5" aria-labelledby="ended-offers">
+      <h2 class="h5" id="ended-offers">Recently ended</h2>
+      <div class="row g-3">
+        {% for card in ended %}<div class="col-12 col-md-6 col-xl-4">{% include "promotions/_offer_card.html" %}</div>{% endfor %}
+      </div>
+    </section>
+  {% endif %}
+</div>
+{% endblock %}

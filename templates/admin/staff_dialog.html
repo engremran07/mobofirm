@@ -1,0 +1,52 @@
+{% load i18n %}
+{# Staff-shell dialog (admin counterpart of components/dialog.html). Same context as DialogView; opened by Unfold's Alpine, so no extra script is loaded. #}
+{# Blocks: dialog_body. Form fields and errors render after it. Place #dialog-slot with admin/staff_dialog_slot.html. #}
+{% with dialog_id=dialog_id|default:"staff-dialog" %}
+<dialog class="mf-ui-dialog mf-ui-dialog--{{ dialog_size|default:'sm' }}{% if danger %} mf-ui-dialog--danger{% endif %}{% if dialog_inline %} mf-ui-dialog--inline{% endif %}"
+  id="{{ dialog_id }}" aria-labelledby="{{ dialog_id }}-title"{% if dialog_message %} aria-describedby="{{ dialog_id }}-message"{% endif %}
+  data-staff-dialog
+  {% if dialog_inline %}open{% else %}x-data="{ opener: document.activeElement }"
+  x-init="$el.showModal(); ($el.querySelector('textarea, input:not([type=hidden])') || $el.querySelector('[data-dialog-initial-focus]'))?.focus()"
+  @close="$el.remove(); if (opener &amp;&amp; opener.isConnected) opener.focus()"
+  {% if not static_backdrop %}@click.self="$el.close()"{% endif %}{% endif %}>
+  {% if dialog_action %}
+  <form method="post" action="{{ dialog_action }}" class="mf-ui-dialog__form" novalidate
+    {% if dialog_hx %}hx-post="{{ dialog_action }}" hx-target="closest dialog" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]"{% endif %}>
+    {% csrf_token %}
+  {% else %}
+  <div class="mf-ui-dialog__form">
+  {% endif %}
+    <header class="mf-ui-dialog__header">
+      <h2 id="{{ dialog_id }}-title" class="mf-ui-dialog__title">{{ dialog_title }}</h2>
+      {% if not dialog_inline %}<button type="button" class="mf-ui-dialog__close" aria-label="{% trans 'Close' %}" @click="$el.closest('dialog').close()"><span aria-hidden="true">&times;</span></button>{% endif %}
+    </header>
+    <div class="mf-ui-dialog__body">
+      {% if dialog_message %}<p id="{{ dialog_id }}-message" class="mf-ui-dialog__message">{{ dialog_message }}</p>{% endif %}
+      {% if form.non_field_errors %}
+        <div class="mf-ui-note mf-ui-note--danger" role="alert">{% for error in form.non_field_errors %}<p>{{ error }}</p>{% endfor %}</div>
+      {% endif %}
+      {% block dialog_body %}{% endblock %}
+      {% for field in form %}
+        {% if field.is_hidden %}{{ field }}{% else %}
+          <div class="mf-ui-field">
+            <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+            {{ field }}
+            {% if field.help_text %}<span class="mf-ui-help">{{ field.help_text }}</span>{% endif %}
+            {% for error in field.errors %}<p class="mf-ui-dialog__error" role="alert">{{ error }}</p>{% endfor %}
+          </div>
+        {% endif %}
+      {% endfor %}
+    </div>
+    <footer class="mf-ui-dialog__footer">
+      {% if dialog_inline and cancel_url %}
+        <a class="mf-ui-btn" href="{{ cancel_url }}">{{ cancel_label|default:_("Cancel") }}</a>
+      {% else %}
+        <button type="button" class="mf-ui-btn" @click="$el.closest('dialog').close()"{% if danger %} data-dialog-initial-focus{% endif %}>{{ cancel_label|default:_("Cancel") }}</button>
+      {% endif %}
+      {% if dialog_action %}
+        <button type="submit" class="mf-ui-btn {% if danger %}mf-ui-btn--danger mf-ui-btn--solid{% else %}mf-ui-btn--primary{% endif %}"{% if not danger %} data-dialog-initial-focus{% endif %}>{{ confirm_label|default:_("Confirm") }}</button>
+      {% endif %}
+    </footer>
+  {% if dialog_action %}</form>{% else %}</div>{% endif %}
+</dialog>
+{% endwith %}

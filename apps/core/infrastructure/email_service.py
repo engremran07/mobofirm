@@ -168,7 +168,7 @@ class EmailService:
                 pass
 
             if not text_message and not html_message:
-                logger.error(f"No email templates found for '{template_prefix}'")
+                logger.error("No email templates found for '%s'", template_prefix)
                 return 0
 
             return self.send_email(

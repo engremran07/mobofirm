@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Catalogue requests | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block meta_description %}Ask for a missing brand, model, variant, chipset or firmware and follow the decision.{% endblock %}
+{% block content %}
+<div class="site-container py-5">
+  {% include "components/breadcrumbs.html" with current="Requests" %}
+  {% include "components/page_header.html" with eyebrow="Community" title="Request something missing" lead="Can’t find a brand, model, variant, chipset or firmware? Ask for it. A reviewer checks every request and you are notified of the decision." %}
+  <div class="row g-3 mb-4">
+    {% for key, item in kinds.items %}
+      <div class="col-12 col-md-6 col-xl-4">
+        <div class="surface-card p-4 h-100 d-flex flex-column">
+          <h2 class="h5">{{ item.title }}</h2>
+          <p class="muted flex-grow-1">{{ item.lead }}</p>
+          {% with url_name="firmwares:request_"|add:key %}
+            <a class="btn btn-outline-primary align-self-start" href="{% url url_name %}" data-request-cta="{{ key }}">{% if user.is_authenticated %}{{ item.title }}{% else %}Sign in to request{% endif %}</a>
+          {% endwith %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+  <div class="d-flex flex-wrap gap-2">
+    <a class="btn btn-secondary" href="{% url 'firmwares:my_requests' %}"><i data-lucide="list" aria-hidden="true"></i><span class="ms-1">My requests{% if my_total %} ({{ my_total }}){% endif %}</span></a>
+    <a class="btn btn-outline-secondary" href="{% url 'firmwares:upload' %}"><i data-lucide="upload" aria-hidden="true"></i><span class="ms-1">Upload firmware</span></a>
+  </div>
+</div>
+{% endblock %}

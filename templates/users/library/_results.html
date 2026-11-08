@@ -1,0 +1,42 @@
+{# Contract: page_obj (LibraryEntry page), filters, total_served. HTMX fragment for #library-results; re-download always goes through the download gate page. #}
+{% load mf_ui %}
+{% if page_obj.object_list %}
+  <p class="small muted" role="status">{{ page_obj.paginator.count }} file{{ page_obj.paginator.count|pluralize }}{% if filters.active %} match these filters{% endif %}</p>
+  {% table_scroll "Files served to you" %}
+  <table class="table align-middle mb-0 library-table">
+    <thead><tr><th scope="col">File</th><th scope="col">Type</th><th scope="col">Access</th><th scope="col">First served</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
+    <tbody>
+      {% for entry in page_obj %}
+        <tr>
+          <td>
+            <span class="d-block fw-semibold library-file-name">{{ entry.name }}</span>
+            <span class="small muted">{% if entry.brand %}{{ entry.brand }}{% endif %}{% if entry.device %} · {{ entry.device }}{% endif %}{% if entry.variant %} · {{ entry.variant }}{% endif %}</span>
+          </td>
+          <td>{{ entry.type_label|default:"—" }}</td>
+          <td>
+            {% if entry.tier == "paid" %}{% include "components/status_pill.html" with label=entry.tier_label tone="accent" icon="receipt" %}
+            {% elif entry.tier == "featured" %}{% include "components/status_pill.html" with label=entry.tier_label tone="accent" icon="badge-check" %}
+            {% else %}{% include "components/status_pill.html" with label=entry.tier_label %}{% endif %}
+            {% if entry.paid_amount %}<span class="d-block small muted">USD {{ entry.paid_amount }}</span>{% endif %}
+          </td>
+          <td>{{ entry.served_at|date:"j M Y" }}{% if entry.times_served > 1 %}<span class="d-block small muted">{{ entry.times_served }} downloads</span>{% endif %}</td>
+          <td class="text-end">
+            {% if entry.available %}
+              <a class="btn btn-sm btn-outline-primary" href="{{ entry.download_url }}"><i class="icon" data-lucide="download" aria-hidden="true"></i> Download again<span class="visually-hidden">: {{ entry.name }}</span></a>
+            {% else %}
+              <span class="small muted">No longer available</span>
+            {% endif %}
+            {% if entry.detail_url %}<a class="btn btn-sm btn-link" href="{{ entry.detail_url }}">Details<span class="visually-hidden"> for {{ entry.name }}</span></a>{% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endtable_scroll %}
+  {% include "components/pagination.html" with page_obj=page_obj label="Library pages" hx_target="#library-results" %}
+{% elif filters.active and total_served %}
+  {% include "components/empty_state.html" with title="No files match these filters" message="Try a different brand, tier or date range, or clear the filters." %}
+{% else %}
+  {% url 'firmwares:browse' as browse_url %}
+  {% include "components/empty_state.html" with title="Nothing in your library yet" message="Files you download, including paid and featured ones, are kept here so you can fetch them again." action_label="Browse firmware" action_url=browse_url %}
+{% endif %}

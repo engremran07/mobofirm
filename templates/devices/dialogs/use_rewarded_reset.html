@@ -1,0 +1,12 @@
+{% extends "components/dialog.html" %}
+{# Devices-owned content for the generic dialog shell: spend an earned rewarded-ad reset. #}
+{% block dialog_body %}
+  {% include "components/form_errors.html" with form=form %}
+  {% for field in form %}{% include "components/form_field.html" with field=field %}{% endfor %}
+  {% if options.allowances %}
+    <p>You have {{ options.allowances }} unused reset{{ options.allowances|pluralize }} from rewarded ads. Using one sets all {{ options.active }} approved browser{{ options.active|pluralize }} back to “awaiting approval”; nothing is deleted.</p>
+    <p class="mb-0 muted">Resets left this month: {{ options.resets_left }} of {{ options.resets_cap }}.</p>
+  {% else %}
+    <p class="mb-0" role="status">You have no unused reset from a rewarded ad.</p>
+  {% endif %}
+{% endblock %}

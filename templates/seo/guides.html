@@ -1,0 +1,58 @@
+{% extends "admin/staff_page.html" %}
+{% block mf_actions %}
+  {% if can_generate %}
+    <form method="post" action="{% url 'seo:guides_generate' %}" class="mf-ui-seo-inline">
+      {% csrf_token %}<input type="hidden" name="kind" value="{{ kind }}"><input type="hidden" name="next" value="{{ next_url }}">
+      <button type="submit" class="mf-ui-btn mf-ui-btn--primary">Generate missing guides</button>
+    </form>
+  {% endif %}
+{% endblock %}
+{% block mf_nav %}{% include "seo/_tabs.html" %}{% endblock %}
+{% block mf_body %}
+<p class="mf-ui-help">The firmware automation owns exactly one post per model and per chipset; each carries a "How to flash firmware on ..." section with the usual tool, the recommended tools and the firmware list. This screen checks that every public model and every chipset with devices has one, that a supporting tool exists, and refreshes the posts through the automation (up to 25 per click).</p>
+
+<div class="mf-ui-grid">
+  <article class="mf-ui-card mf-ui-stat"><span class="mf-ui-stat__label">Public models</span><span class="mf-ui-stat__value">{{ summary.models }}</span><span class="mf-ui-stat__hint">{{ summary.models_missing }} need work</span></article>
+  <article class="mf-ui-card mf-ui-stat"><span class="mf-ui-stat__label">Chipsets with devices</span><span class="mf-ui-stat__value">{{ summary.chipsets }}</span><span class="mf-ui-stat__hint">{{ summary.chipsets_missing }} need work</span></article>
+</div>
+
+<nav class="mf-ui-seo-groups" aria-label="Guide type">
+  <ul class="mf-ui-tabs">
+    <li><a href="?kind=model{% if only_missing %}&amp;missing=1{% endif %}"{% if kind == 'model' %} aria-current="page"{% endif %}>Per model</a></li>
+    <li><a href="?kind=chipset{% if only_missing %}&amp;missing=1{% endif %}"{% if kind == 'chipset' %} aria-current="page"{% endif %}>Per chipset</a></li>
+    <li><a href="?kind={{ kind }}{% if not only_missing %}&amp;missing=1{% endif %}">{% if only_missing %}Show all{% else %}Only what needs work{% endif %}</a></li>
+  </ul>
+</nav>
+
+{% if page.object_list %}
+  <div class="mf-ui-table-wrap" role="region" aria-label="Flash guide coverage" tabindex="0">
+    <table class="mf-ui-table">
+      <thead><tr><th scope="col">{% if kind == 'model' %}Model{% else %}Chipset{% endif %}</th><th scope="col">Guide</th><th scope="col">Tools</th><th scope="col">Firmware list</th><th scope="col">Status</th><th scope="col" class="is-number">Issues</th>{% if can_generate %}<th scope="col"><span class="mf-ui-sr">Action</span></th>{% endif %}</tr></thead>
+      <tbody>
+        {% for row in page.object_list %}
+          <tr>
+            <td><a href="{{ row.url }}">{{ row.label }}</a>{% if not row.public %}<br><small>not indexable yet</small>{% endif %}</td>
+            <td>{% if row.guide_url %}<a href="{{ row.guide_url }}">{{ row.guide_title }}</a>{% else %}-{% endif %}</td>
+            <td>{{ row.tools|join:", "|default:"-" }}</td>
+            <td>{{ row.lists_firmware|yesno:"yes,-" }}</td>
+            <td><span class="mf-ui-badge{% if row.status == 'ok' %} mf-ui-badge--success{% else %} mf-ui-badge--warning{% endif %}">{{ row.status_label }}</span></td>
+            <td class="is-number">{% if row.open_issues %}<a href="{% url 'seo:issues' %}?q={{ row.url|urlencode }}">{{ row.open_issues }}</a>{% else %}0{% endif %}</td>
+            {% if can_generate %}
+              <td><form method="post" action="{% url 'seo:guides_generate' %}" class="mf-ui-seo-inline">{% csrf_token %}<input type="hidden" name="kind" value="{{ kind }}"><input type="hidden" name="pk" value="{{ row.pk }}"><input type="hidden" name="next" value="{{ next_url }}"><button type="submit" class="mf-ui-btn mf-ui-btn--small">{% if row.guide_url %}Refresh{% else %}Generate{% endif %}<span class="mf-ui-sr"> {{ row.label }}</span></button></form></td>
+            {% endif %}
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if page.has_other_pages %}
+    <nav class="mf-ui-seo-pager" aria-label="Guide pages">
+      {% if page.has_previous %}<a class="mf-ui-btn mf-ui-btn--small" href="?{{ filters }}&amp;page={{ page.previous_page_number }}">Previous</a>{% endif %}
+      <span>Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+      {% if page.has_next %}<a class="mf-ui-btn mf-ui-btn--small" href="?{{ filters }}&amp;page={{ page.next_page_number }}">Next</a>{% endif %}
+    </nav>
+  {% endif %}
+{% else %}
+  <p class="mf-ui-empty">Nothing to list: {% if only_missing %}every guide is covered.{% else %}no {{ kind }}s have been catalogued yet.{% endif %}</p>
+{% endif %}
+{% endblock %}

@@ -1,6 +1,6 @@
 """
 Firmwares API — DRF viewsets merged from dissolved apps:
-  download_links, fw_scraper, fw_verification, gsmarena_sync
+  download_links, fw_scraper, fw_verification
 """
 
 from __future__ import annotations
@@ -20,7 +20,6 @@ from .models import (
     DownloadSession,
     DownloadToken,
     FirmwareDiff,
-    GSMArenaDevice,
     HotlinkBlock,
     TestResult,
     TrustedTester,
@@ -224,24 +223,6 @@ class TrustedTesterViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = TrustedTester.objects.filter(is_active=True)
     serializer_class = TrustedTesterSerializer
     permission_classes = (permissions.IsAuthenticatedOrReadOnly,)
-
-
-# ---------------------------------------------------------------------------
-# GSMArena device synchronization
-# ---------------------------------------------------------------------------
-
-
-class GSMArenaDeviceSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = GSMArenaDevice
-        fields = ("id", "gsmarena_id", "brand", "model_name", "last_synced_at")
-        read_only_fields = fields
-
-
-class GSMArenaDeviceViewSet(viewsets.ReadOnlyModelViewSet):
-    queryset = GSMArenaDevice.objects.all()
-    serializer_class = GSMArenaDeviceSerializer
-    permission_classes = (permissions.IsAdminUser,)
 
 
 # ---------------------------------------------------------------------------

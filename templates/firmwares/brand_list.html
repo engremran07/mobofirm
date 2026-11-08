@@ -19,8 +19,12 @@
       {% endfor %}
       </div>
     </section>
-  {% empty %}
+{% empty %}
     <p class="empty-state p-4">No brands are available in the catalogue yet.</p>
+    {% include "components/request_cta.html" with kind="brand" %}
   {% endfor %}
+  {% if grouped_brands %}
+    {% include "components/request_cta.html" with kind="brand" heading="Is your brand missing from the list?" %}
+  {% endif %}
 </div>
 {% endblock %}

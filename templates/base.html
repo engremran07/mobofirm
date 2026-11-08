@@ -1,4 +1,4 @@
-{% load static i18n seo_tags %}
+{% load static i18n seo_tags consent_tags ad_tags %}
 <!doctype html>
 <html lang="{% get_current_language as LANGUAGE_CODE %}{{ LANGUAGE_CODE }}" data-bs-theme="light">
 <head>
@@ -17,6 +17,7 @@
   <a class="skip-link" href="#main-content">Skip to content</a>
   <div id="global-progress" class="global-progress" role="progressbar" aria-label="Loading" aria-hidden="true"></div>
   {% include "includes/site_header.html" %}
+  {% include "users/includes/announcement_banner.html" %}
   <div id="global-feedback" class="site-container" aria-live="polite" aria-atomic="true"></div>
   {% include "includes/messages.html" %}
   {% if request.session.device_registration_prompt %}
@@ -48,9 +49,15 @@
     </dialog>
   {% endif %}
   <main id="main-content" class="site-main" tabindex="-1">
+    {% ad_zone "header" %}
     {% block main %}{% block content %}{% endblock %}{% endblock %}
+    {% ad_zone "after_content" %}
   </main>
+  {% ad_zone "footer" %}
   {% include "includes/site_footer.html" %}
+  {% consent_banner %}
+  <div id="dialog-slot" data-dialog-slot></div>
+  {% include "components/dialog_js_template.html" %}
   <script type="module" src="{% static 'build/site.js' %}"></script>
   {% block extra_scripts %}{% endblock %}
 </body>

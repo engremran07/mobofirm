@@ -1,0 +1,21 @@
+{# Contract: title, what, credit_cost, credit_balance, missing, action, back_url, earn_url, error. Shop-owned confirm dialog body; rendered alone for HTMX and inside credits_confirm.html without JavaScript. #}
+<section class="surface-card p-4" role="group" aria-labelledby="credits-dialog-title" aria-describedby="credits-dialog-desc">
+  <h2 class="h5" id="credits-dialog-title">{{ title }}</h2>
+  <p id="credits-dialog-desc" class="mb-2">{{ what }}</p>
+  <dl class="eco-kv">
+    <dt>Price</dt><dd><strong>{{ credit_cost }} credits</strong></dd>
+    <dt>Your balance</dt><dd>{{ credit_balance }} credits</dd>
+  </dl>
+  {% if error %}<p class="status-unverified" role="alert">{{ error }}</p>{% endif %}
+  {% if missing %}
+    <p class="small" role="status">You need {{ missing }} more credits. <a href="{{ earn_url }}">See ways to earn credits</a>.</p>
+    <a class="btn btn-outline-secondary" href="{{ back_url }}">Back</a>
+  {% else %}
+    <form method="post" action="{{ action }}" class="d-flex flex-wrap gap-2">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-primary">Pay {{ credit_cost }} credits</button>
+      <a class="btn btn-outline-secondary" href="{{ back_url }}">Cancel</a>
+    </form>
+    <p class="small muted mt-2 mb-0">The credits are spent once and unlock this immediately.</p>
+  {% endif %}
+</section>

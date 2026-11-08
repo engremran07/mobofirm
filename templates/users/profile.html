@@ -2,6 +2,9 @@
 {% block title %}Profile | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block content %}
 <div class="site-container py-5">
+  {% url 'users:dashboard' as account_url %}
+  {% include "components/breadcrumbs.html" with current="Profile" parent_label="Account" parent_url=account_url %}
+  
   <header class="mb-4"><p class="section-eyebrow">Account settings</p><h1 class="h2">Your profile</h1></header>
   {% if profile_completed is not None %}<p class="muted">Profile status: {% if profile_completed %}Complete{% else %}In progress{% endif %}</p>{% endif %}
   {% if device_summary %}
@@ -11,11 +14,25 @@
       <a class="btn btn-outline-secondary" href="{% url 'devices:my_devices' %}">Review registered browsers</a>
     </section>
   {% endif %}
-  <form method="post" class="surface-card p-4 mb-4">{% csrf_token %}<input type="hidden" name="action" value="update_profile">
+  <form method="post" class="surface-card p-4 mb-4" x-data="profileLocale"
+        data-hint-url="{{ locale_hint_url }}" data-country-id="profile-country" data-code-id="profile-phone-code"
+        data-detected-source="{{ detected_source }}"
+        data-detected-text="{% if detected %}Detected: {{ country_display }}{% if phone_code %}, {{ phone_code }}{% endif %} —{% endif %}"
+        @combobox:select="onSelect">{% csrf_token %}<input type="hidden" name="action" value="update_profile">
     <div class="mb-3"><label class="form-label" for="full-name">Full name</label><input class="form-control" id="full-name" name="full_name" value="{{ user.full_name|default:'' }}" autocomplete="name"></div>
-    <div class="mb-3"><label class="form-label" for="profile-phone-code">Phone country code</label><label class="visually-hidden" for="profile-phone-code-search">Search countries or calling codes</label><input id="profile-phone-code-search" class="form-control mb-2" type="search" data-country-search-for="profile-phone-code" aria-controls="profile-phone-code" placeholder="Search country, ISO code, or calling code" autocomplete="off"><p id="profile-phone-code-search-status" class="form-text" role="status" aria-live="polite"></p><select class="form-select" id="profile-phone-code" name="phone_country_code"><option value="">Choose a code</option>{% for dial,label in phone_codes %}<option value="{{ dial }}"{% if detected_phone_code == dial %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+    <div class="mb-3">
+      <label class="form-label" for="profile-phone-code">Phone country code</label>
+      {% include "components/combobox.html" with input_id="profile-phone-code" name="phone_country_code" mode="pick" kinds="calling_code" value=phone_code display=phone_display name_label="Phone country code" placeholder="Country or calling code" detected=detected %}
+    </div>
     <div class="mb-3"><label class="form-label" for="profile-phone">Phone</label><input class="form-control" id="profile-phone" name="phone" value="{{ user.phone|default:'' }}" autocomplete="tel"></div>
-    <div class="mb-3"><label class="form-label" for="profile-country">Country</label><label class="visually-hidden" for="profile-country-search">Search countries by name or ISO code</label><input id="profile-country-search" class="form-control mb-2" type="search" data-country-search-for="profile-country" aria-controls="profile-country" placeholder="Search country or code" autocomplete="off"><p id="profile-country-search-status" class="form-text" role="status" aria-live="polite"></p><select class="form-select" id="profile-country" name="country"><option value="">Choose a country</option>{% for code,name in countries %}<option value="{{ code }}"{% if detected_country == code %} selected{% endif %}>{{ name }}</option>{% endfor %}</select>{% if country_name %}<p class="form-text">Suggested from your network location: {{ country_name }}. You can change this selection.</p>{% endif %}</div>
+    <div class="mb-3">
+      <label class="form-label" for="profile-country">Country</label>
+      <p class="form-text mb-2" role="status" :hidden="hintHidden"{% if not detected %} hidden{% endif %}>
+        <span x-text="hintText">{% if detected %}Detected: {{ country_display }}{% if phone_code %}, {{ phone_code }}{% endif %} —{% endif %}</span>
+        <button type="button" class="btn btn-link btn-sm p-0 align-baseline" @click="change">change</button>
+      </p>
+      {% include "components/combobox.html" with input_id="profile-country" name="country" mode="pick" kinds="country" value=country_code display=country_display name_label="Country" placeholder="Start typing a country" detected=detected %}
+    </div>
     <div class="mb-3"><label class="form-label" for="profile-bio">Bio</label><textarea class="form-control" id="profile-bio" name="bio" rows="4">{{ profile_obj.bio|default:'' }}</textarea></div>
     <div class="mb-3"><label class="form-label" for="profile-website">Website</label><input class="form-control" id="profile-website" type="url" name="website" value="{{ profile_obj.website|default:'' }}"></div>
     <div class="mb-3"><label class="form-label" for="profile-location">Location</label><input class="form-control" id="profile-location" name="location" value="{{ profile_obj.location|default:'' }}"></div>

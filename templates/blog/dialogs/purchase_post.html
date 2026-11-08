@@ -1,0 +1,19 @@
+{% extends "components/dialog.html" %}
+{# Blog-owned content for the generic dialog shell: price, balance and the earn-more link. #}
+{% block dialog_body %}
+  {% include "components/form_errors.html" with form=form %}
+  <p class="mb-2"><strong>{{ post.title }}</strong></p>
+  {% if gate.locked %}
+    <dl class="mb-3">
+      <dt>Price</dt><dd data-testid="blog-buy-price">{{ gate.credit_price }} credits</dd>
+      {% if balance is not None %}<dt>Your balance</dt><dd>{{ balance }} credits</dd>{% endif %}
+    </dl>
+    <p class="small text-muted">One payment unlocks this article for good. If the payment fails you are not charged.</p>
+    {% if insufficient %}
+      <p class="alert alert-warning" role="status">You need {{ gate.credit_price }} credits.{% if earn_url %} <a href="{{ earn_url }}">See how to earn credits</a>.{% endif %}</p>
+    {% endif %}
+    {% if gate.packages_url %}<p class="small"><a href="{{ gate.packages_url }}">Or see packages that include featured articles</a>.</p>{% endif %}
+  {% else %}
+    <p>You already have access to this article.</p>
+  {% endif %}
+{% endblock %}

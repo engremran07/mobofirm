@@ -126,7 +126,7 @@ class SyncBackend(QueueBackend):
     def enqueue_in(self, task: str, seconds: int, *args, **kwargs):
         """Cannot delay in sync mode - execute immediately with warning"""
         logger.warning(
-            f"Sync backend cannot delay tasks - executing {task} immediately"
+            "Sync backend cannot delay tasks - executing %s immediately", task
         )
         return self.enqueue(task, *args, **kwargs)
 
@@ -136,8 +136,6 @@ class SyncBackend(QueueBackend):
 
     def _resolve_task(self, task_path: str):
         """Import and return the task function"""
-        import importlib
-
         module_path, func_name = task_path.rsplit(".", 1)
         module = importlib.import_module(module_path)
         return getattr(module, func_name)
@@ -171,7 +169,7 @@ class QueueService:
             )
         self.backend = backends[resolved]()
         self.backend_name = resolved
-        logger.info(f"QueueService initialized with {resolved} backend")
+        logger.info("QueueService initialized with %s backend", resolved)
 
     def enqueue(self, task: str, *args, **kwargs) -> Any:
         """

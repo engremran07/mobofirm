@@ -7,7 +7,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
     dependencies = (
         ("blog", "0002_initial"),
-        ("firmwares", "0011_brand_description_brand_is_featured_and_more"),
+        ("firmwares", "0001_initial"),
     )
 
     operations = (

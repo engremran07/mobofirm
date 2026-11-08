@@ -25,5 +25,5 @@ class PublishedBlogPostsSitemap(Sitemap):
     def lastmod(self, obj: Post):
         return obj.updated_at or obj.publish_at or timezone.now()
 
-    def location(self, obj: Post):
-        return reverse("blog:post_detail", kwargs={"slug": obj.slug})
+    def location(self, item: Post):
+        return reverse("blog:post_detail", kwargs={"slug": item.slug})

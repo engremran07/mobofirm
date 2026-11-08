@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Quota | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block content %}
+{% url 'library:my_files' as my_files_url %}
+<div class="site-container py-4 py-lg-5">
+  {% include "components/breadcrumbs.html" with current="Quota" parent_label="My files" parent_url=my_files_url %}
+  {% include "components/page_header.html" with eyebrow="My files" title="Download quota" lead="How many new files you can download, how much you have used and when it resets." %}
+  {% include "users/library/_tabs.html" %}
+
+  <div class="d-grid gap-4">
+    {% include "users/library/_quota_panel.html" %}
+    {% if quota.available %}
+      <section class="surface-card p-3 p-md-4" aria-labelledby="purchased-heading">
+        <h2 class="h5" id="purchased-heading">Purchased — download available</h2>
+        {% if quota.purchased %}
+          <p class="small muted">Paid files you own and have not downloaded yet. They count in your quota the first time you download them, but are never blocked by it.</p>
+          <ul class="list-unstyled mb-0 d-grid gap-2">
+            {% for file in quota.purchased %}
+              <li class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                <span><strong>{{ file.label }}</strong> <span class="small muted">{{ file.price }} {{ file.currency }}{% if file.paid_at %} · paid {{ file.paid_at|date:"j M Y" }}{% endif %}</span></span>
+                {% if file.download_url %}<a class="btn btn-sm btn-primary" href="{{ file.download_url }}"><i class="icon" data-lucide="download" aria-hidden="true"></i> Download<span class="visually-hidden">: {{ file.label }}</span></a>{% endif %}
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="muted mb-0">No purchased files are waiting. Paid files you buy appear here until you download them.</p>
+        {% endif %}
+      </section>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

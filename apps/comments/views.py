@@ -15,7 +15,7 @@ from django.http import (
     HttpResponseForbidden,
     JsonResponse,
 )
-from django.shortcuts import get_object_or_404, redirect, render
+from django.shortcuts import get_object_or_404, redirect
 from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_GET, require_POST
 
@@ -33,6 +33,7 @@ from apps.comments.services import (
 from apps.comments.services import (
     report_comment as report_comment_service,
 )
+from apps.core.admin_pages import render_admin_page
 from apps.core.utils.ip import get_client_ip
 from apps.users.services.rate_limit import allow_action
 from apps.users.services.recaptcha import verify_recaptcha
@@ -372,10 +373,16 @@ def moderation_queue(request: HttpRequest) -> HttpResponse:
         ],
         is_deleted=False,
     ).select_related("user", "post")
-    return render(
+    return render_admin_page(
         request,
         "comments/moderation_panel.html",
-        {
+        title="Comment moderation",
+        subtitle=(
+            "Clean comments are approved automatically. These need a person: "
+            "suspicious wording, reports, edits and anything the screening "
+            "could not clear."
+        ),
+        context={
             "pending_comments": queued.order_by("-toxicity_score", "-created_at")[:50],
             "recent_comments": recent.order_by("-created_at")[:50],
             "can_moderate": request.user.has_perm("comments.change_comment"),

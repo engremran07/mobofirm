@@ -35,5 +35,5 @@ class PublishedTagsSitemap(Sitemap):
     def lastmod(self, obj: Tag):
         return obj.updated_at
 
-    def location(self, obj: Tag):
-        return reverse("tags:detail", kwargs={"slug": obj.slug})
+    def location(self, item: Tag):
+        return reverse("tags:detail", kwargs={"slug": item.slug})

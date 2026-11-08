@@ -626,7 +626,12 @@ class JobExecutionTests(TestCase):
             if name.startswith("seo-")
         }
         self.assertEqual(
-            scheduled, {tasks.process_pending_jobs.name, tasks.scheduled_crawl.name}
+            scheduled,
+            {
+                tasks.process_pending_jobs.name,
+                tasks.scheduled_crawl.name,
+                tasks.scheduled_scan.name,
+            },
         )
         self.assertEqual(tasks.process_pending_jobs.delay().get(), {"reclaimed": 0})
         with override_settings(SITE_URL=""):

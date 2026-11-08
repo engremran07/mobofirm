@@ -1,22 +1,40 @@
-{% extends "seo/base.html" %}
-{% block seo_content %}
-<form method="get" class="mf-seo-form" hx-get="{% url 'seo:issues' %}" hx-target="#seo-issue-rows" hx-trigger="change">
-  <label for="seo-severity">Severity</label>
-  <select id="seo-severity" name="severity">
-    <option value="">All</option>
-    <option value="error"{% if severity == "error" %} selected{% endif %}>Error</option>
-    <option value="warning"{% if severity == "warning" %} selected{% endif %}>Warning</option>
-    <option value="info"{% if severity == "info" %} selected{% endif %}>Info</option>
-  </select>
-  <label for="seo-code">Check</label>
-  <select id="seo-code" name="code">
-    <option value="">All</option>
-    {% for item in codes %}<option value="{{ item }}"{% if item == code %} selected{% endif %}>{{ item }}</option>{% endfor %}
-  </select>
-  <button type="submit" class="button">Filter</button>
+{% extends "admin/staff_page.html" %}
+{% block mf_actions %}
+  {% if can_fix and safe_total %}
+    <a class="mf-ui-btn" href="{% url 'seo:issues_bulk' %}?{{ query_string }}">Apply all safe suggestions ({{ safe_total }})</a>
+  {% endif %}
+  {% if can_scan %}
+    <form method="post" action="{% url 'seo:run_scan' %}" class="mf-ui-seo-inline">
+      {% csrf_token %}<input type="hidden" name="next" value="{{ next_url }}">
+      <button type="submit" class="mf-ui-btn mf-ui-btn--primary">Run scan now</button>
+    </form>
+  {% endif %}
+{% endblock %}
+{% block mf_nav %}{% include "seo/_tabs.html" %}{% endblock %}
+{% block mf_body %}
+<p class="mf-ui-help">
+  {% if latest_scan %}Last scan {{ latest_scan.finished_at|timesince }} ago covered {{ latest_scan.pages_crawled }} of {{ latest_scan.urls_total }} URLs.{% else %}No scan has completed yet: run one to list the posts, firmware, models, brands, chipsets, tools and pages that need work.{% endif %}
+  Fixes are written to the SEO override layer and recorded in the ledger with before and after values.
+</p>
+
+<form method="get" action="{% url 'seo:issues' %}" class="mf-ui-seo-filter" role="search" aria-label="Filter issues"
+      hx-get="{% url 'seo:issues' %}" hx-target="#seo-board-results" hx-push-url="true" hx-trigger="change, submit">
+  <div class="mf-ui-field"><label for="seo-q">Search</label><input type="search" id="seo-q" name="q" value="{{ flt.query }}" maxlength="100" placeholder="URL, title or message"></div>
+  <div class="mf-ui-field"><label for="seo-status">Status</label>
+    <select id="seo-status" name="status">{% for value, label in statuses %}<option value="{{ value }}"{% if value == flt.status %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+  <div class="mf-ui-field"><label for="seo-severity">Severity</label>
+    <select id="seo-severity" name="severity"><option value="">All</option>
+      <option value="error"{% if flt.severity == "error" %} selected{% endif %}>Error</option>
+      <option value="warning"{% if flt.severity == "warning" %} selected{% endif %}>Warning</option>
+      <option value="info"{% if flt.severity == "info" %} selected{% endif %}>Info</option></select></div>
+  <div class="mf-ui-field"><label for="seo-code">Check</label>
+    <select id="seo-code" name="code"><option value="">All</option>{% for code, label in codes %}<option value="{{ code }}"{% if code == flt.code %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+  <div class="mf-ui-field mf-ui-seo-check"><label for="seo-fixable"><input type="checkbox" id="seo-fixable" name="fixable" value="1"{% if flt.fixable %} checked{% endif %}> Fix available</label></div>
+  {% if flt.group %}<input type="hidden" name="group" value="{{ flt.group }}">{% endif %}
+  <button type="submit" class="mf-ui-btn">Filter</button>
 </form>
-<table class="mf-seo-table">
-  <thead><tr><th scope="col">Severity</th><th scope="col">Check</th><th scope="col">URL</th><th scope="col">Evidence</th></tr></thead>
-  <tbody id="seo-issue-rows">{% include "seo/partials/issue_rows.html" %}</tbody>
-</table>
+
+<div id="seo-board-results" aria-live="polite">
+  {% include "seo/partials/issue_rows.html" %}
+</div>
 {% endblock %}

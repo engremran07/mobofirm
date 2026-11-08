@@ -29,11 +29,19 @@ def marketplace_dashboard_tile(context: dict[str, Any]) -> dict[str, Any]:
             "icon": "store",
             "hint": "Apply for a seller profile",
         }
+    if not seller.verified:
+        return {
+            "url": reverse("marketplace:application_status"),
+            "label": "Marketplace",
+            "value": "Application",
+            "icon": "store",
+            "hint": "See your seller application status",
+        }
     count = seller.listings.count()
     return {
-        "url": reverse("marketplace:my_listings"),
-        "label": "My listings",
+        "url": reverse("marketplace:dashboard"),
+        "label": "Seller dashboard",
         "value": count,
         "icon": "store",
-        "hint": "Verified seller" if seller.verified else "Verification not complete",
+        "hint": "Listings · approved seller",
     }

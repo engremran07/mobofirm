@@ -1,0 +1,9 @@
+{% extends "admin/staff_page.html" %}
+{% block mf_actions %}<a class="mf-ui-btn" href="{{ next_url }}">Back to the board</a>{% endblock %}
+{% block mf_nav %}{% include "seo/_tabs.html" %}{% endblock %}
+{% block mf_body %}
+<div class="mf-ui-card">
+  <p><span class="mf-ui-badge{% if issue.severity == 'error' %} mf-ui-badge--danger{% elif issue.severity == 'warning' %} mf-ui-badge--warning{% else %} mf-ui-badge--info{% endif %}">{{ issue.get_severity_display }}</span> {{ issue.message }}</p>
+  {% include "seo/partials/fix_panel.html" %}
+</div>
+{% endblock %}

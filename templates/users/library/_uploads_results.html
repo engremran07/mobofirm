@@ -1,0 +1,31 @@
+{# Contract: page_obj (UploadEntry page), status. HTMX fragment for #uploads-results. #}
+{% load mf_ui %}
+{% if page_obj.object_list %}
+  {% table_scroll "Your firmware submissions" %}
+  <table class="table align-middle mb-0">
+    <thead><tr><th scope="col">File</th><th scope="col">Linked to</th><th scope="col">Status</th><th scope="col">Access and price</th><th scope="col">Submitted</th></tr></thead>
+    <tbody>
+      {% for upload in page_obj %}
+        <tr>
+          <td><span class="d-block fw-semibold">{{ upload.name }}</span>{% if upload.published_url %}<a class="small" href="{{ upload.published_url }}">View published file</a>{% endif %}</td>
+          <td>{% if upload.brand %}{{ upload.brand }}{% if upload.device %} · {{ upload.device }}{% endif %}{% if upload.variant %} · {{ upload.variant }}{% endif %}{% else %}<span class="muted">No device linked</span>{% endif %}</td>
+          <td>
+            {% if upload.status == "approved" %}{% include "components/status_pill.html" with label=upload.status_label tone="success" icon="check" %}
+            {% elif upload.status == "rejected" %}{% include "components/status_pill.html" with label=upload.status_label tone="danger" icon="x" %}
+            {% else %}{% include "components/status_pill.html" with label=upload.status_label tone="warning" icon="clock" %}{% endif %}
+            {% if upload.reviewer_note %}<span class="d-block small muted">Reviewer: {{ upload.reviewer_note }}</span>{% endif %}
+          </td>
+          <td>{{ upload.tier_label }}{% if upload.price_note %}<span class="d-block small muted">{{ upload.price_note }}</span>{% endif %}</td>
+          <td>{{ upload.submitted_at|date:"j M Y" }}{% if upload.reviewed_at %}<span class="d-block small muted">Reviewed {{ upload.reviewed_at|date:"j M Y" }}</span>{% endif %}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endtable_scroll %}
+  {% include "components/pagination.html" with page_obj=page_obj label="Upload pages" hx_target="#uploads-results" %}
+{% elif status %}
+  {% include "components/empty_state.html" with title="No submissions with this status" message="Choose another status to see the rest." %}
+{% else %}
+  {% url 'firmwares:firmware-upload' as upload_url %}
+  {% include "components/empty_state.html" with title="You have not uploaded any firmware" message="Submissions you send appear here with their review status." action_label="Upload firmware" action_url=upload_url %}
+{% endif %}

@@ -145,6 +145,39 @@ def test_every_sidebar_link_resolves_for_a_superuser(superuser):
 
 
 @pytest.mark.django_db
+def test_sidebar_highlights_exactly_one_entry_per_page(superuser):
+    client = _client_for(superuser)
+    for path in (
+        reverse("admin:index"),
+        reverse("admin:users_notification_changelist"),
+        reverse("admin:users_notification_dashboard"),
+        reverse("admin:distribution_channel_dashboard"),
+        reverse("admin:consent_consentdecision_stats"),
+    ):
+        response = client.get(path)
+        active = [
+            item["link"]
+            for group in response.context["sidebar_navigation"]
+            for item in group["items"]
+            if item.get("active")
+        ]
+        assert active == [path], (path, active)
+
+
+@pytest.mark.django_db
+def test_custom_admin_pages_keep_the_sidebar_branding(superuser):
+    client = _client_for(superuser)
+    for path in (
+        reverse("admin:users_notification_dashboard"),
+        reverse("admin:distribution_channel_dashboard"),
+        reverse("admin:consent_consentdecision_stats"),
+    ):
+        body = client.get(path).content.decode()
+        assert 'id="nav-sidebar-inner"' in body, path
+        assert "Mobofirm" in body.split('id="nav-sidebar-apps"')[0], path
+
+
+@pytest.mark.django_db
 def test_sidebar_hides_models_the_user_cannot_view(staff_without_permissions):
     request = (
         _client_for(staff_without_permissions).get(reverse("admin:index")).wsgi_request

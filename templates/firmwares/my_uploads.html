@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}My uploads | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block content %}
+{% load mf_ui %}
+{% url 'firmwares:upload' as upload_url %}
+<div class="site-container py-5">
+  {% include "components/breadcrumbs.html" with current="My uploads" parent_label="Upload" parent_url=upload_url %}
+  {% include "components/page_header.html" with eyebrow="Contribute" title="My uploads" lead="Your submissions with review status, the variant they belong to and the access tier." %}
+  <p><a class="btn btn-primary" href="{% url 'firmwares:upload' %}"><i data-lucide="upload" aria-hidden="true"></i><span class="ms-1">Upload firmware</span></a></p>
+  {% if submissions %}
+    {% table_scroll "My uploads" %}
+    <table class="table table-hover align-middle mb-0">
+      <thead><tr><th scope="col">File</th><th scope="col">Variant</th><th scope="col">Status</th><th scope="col">Access</th><th scope="col">Reviewer note</th></tr></thead>
+      <tbody>
+        {% for item in submissions %}
+          <tr>
+            <td><span class="build-code">{{ item.original_file_name }}</span><span class="d-block small muted">{{ item.created_at|date:"M j, Y" }} · {% if item.source_type == "external" %}External link{% else %}Stored file{% endif %}</span></td>
+            <td>{% if item.uploaded_variant %}{{ item.uploaded_brand.name }} {{ item.uploaded_model.display_name }} · {{ item.uploaded_variant.name }}{% elif item.uploaded_model %}{{ item.uploaded_model.display_name }}{% else %}Not specified{% endif %}</td>
+            <td><span class="badge {% if item.admin_decision == 'approved' %}text-bg-success{% elif item.admin_decision == 'rejected' %}text-bg-danger{% else %}text-bg-warning{% endif %}">{{ item.admin_decision|capfirst }}</span></td>
+            <td>
+              {% include "firmwares/includes/tier_badge.html" with firmware=item %}
+              {% if item.access_tier == "paid" %}<span class="d-block small muted">{% if item.approved_price %}Approved price {{ item.approved_price }}{% elif item.admin_decision == "rejected" %}No price{% else %}Proposed {{ item.proposed_price }} · awaiting price review{% endif %}</span>{% endif %}
+            </td>
+            <td>{{ item.admin_notes|default:"—" }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endtable_scroll %}
+  {% else %}
+    {% include "components/empty_state.html" with title="You have not uploaded anything yet" message="Pick a device variant and submit a file or link." %}
+  {% endif %}
+</div>
+{% endblock %}

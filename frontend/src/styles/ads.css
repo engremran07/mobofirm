@@ -1,0 +1,68 @@
+/* Public ad zones ({% ad_zone %}). A zone renders nothing unless it has an eligible ad, so
+   these rules only apply to real or staff test boxes. The size classes reserve the space of
+   the creative up front, so loading an ad never shifts the page (no CLS). */
+.ad-zone {
+  display: block;
+  margin-block: 1rem;
+  padding: 0.35rem 0.5rem 0.5rem;
+  border: 1px solid var(--mf-border);
+  border-radius: var(--mf-radius-md);
+  background: var(--mf-surface);
+  color: var(--mf-text-muted);
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.ad-zone__label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.ad-zone__body {
+  display: grid;
+  place-items: center;
+  margin-inline: auto;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.ad-zone__img,
+.ad-zone__body img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.ad-zone--test {
+  border-style: dashed;
+  border-color: var(--mf-warning);
+}
+
+.ad-zone__test {
+  padding: 0.5rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.ad-zone--s300x250 .ad-zone__body { width: 300px; min-height: 250px; }
+.ad-zone--s336x280 .ad-zone__body { width: 336px; min-height: 280px; }
+.ad-zone--s300x600 .ad-zone__body { width: 300px; min-height: 600px; }
+.ad-zone--s160x600 .ad-zone__body { width: 160px; min-height: 600px; }
+.ad-zone--s728x90 .ad-zone__body { width: 728px; min-height: 90px; }
+.ad-zone--s970x90 .ad-zone__body { width: 970px; min-height: 90px; }
+.ad-zone--s970x250 .ad-zone__body { width: 970px; min-height: 250px; }
+.ad-zone--s320x100 .ad-zone__body { width: 320px; min-height: 100px; }
+.ad-zone--s320x50 .ad-zone__body { width: 320px; min-height: 50px; }
+
+/* Wide units shrink on phones; the reserved height stays so the layout does not move. */
+@media (max-width: 767.98px) {
+  .ad-zone--s728x90 .ad-zone__body,
+  .ad-zone--s970x90 .ad-zone__body,
+  .ad-zone--s970x250 .ad-zone__body {
+    width: 100%;
+  }
+}

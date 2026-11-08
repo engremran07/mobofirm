@@ -57,14 +57,27 @@ class AppRegistryAdmin(SingletonModelAdmin):
             },
         ),
         (
-            _("Commerce & files"),
+            _("Commerce & storage"),
             {
                 "fields": (
                     "shop_enabled",
                     "marketplace_enabled",
-                    "filemanager_enabled",
+                    "wallet_enabled",
+                    "referral_enabled",
+                    "promotions_enabled",
                     "storage_enabled",
                     "ads_enabled",
+                )
+            },
+        ),
+        (
+            _("Community & compliance"),
+            {
+                "fields": (
+                    "consent_enabled",
+                    "gamification_enabled",
+                    "bounty_enabled",
+                    "distribution_enabled",
                 )
             },
         ),

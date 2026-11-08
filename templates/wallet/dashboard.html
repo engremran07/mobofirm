@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Wallet{% endblock %}
+{% block content %}
+<div class="site-container py-4 py-lg-5">
+  {% include "components/breadcrumbs.html" with current="Wallet" %}
+  {% include "components/page_header.html" with eyebrow="Account" title="Your credits" lead="Credits are earned by contributing and spent on packages, paid files and device slots." %}
+  {% include "wallet/_subnav.html" %}
+  {% if snapshot.is_frozen %}
+    <div class="mb-4">{% include "components/notice.html" with tone="danger" icon="lock" heading="This wallet is frozen." message="You cannot earn or spend credits until staff unfreeze it. Contact support if you think this is a mistake." %}</div>
+  {% endif %}
+  <div class="row g-3 mb-4">
+    <div class="col-12 col-md-4">{% include "components/stat_tile.html" with label="Available credits" value=snapshot.available hint="Ready to spend" %}</div>
+    <div class="col-6 col-md-4">{% include "components/stat_tile.html" with label="Held in escrow" value=snapshot.held hint="Reserved for bounties" %}</div>
+    <div class="col-6 col-md-4">{% include "components/stat_tile.html" with label="Withdrawable" value=snapshot.withdrawable hint="Earned from sales and bounties" %}</div>
+  </div>
+  <div class="mb-4">{% include "wallet/_payment_notice.html" %}</div>
+  <div class="d-flex flex-wrap gap-2 mb-5">
+    <a class="btn btn-primary" href="{% url 'wallet:earn' %}">Earn credits</a>
+    <a class="btn btn-outline-secondary" href="{% url 'wallet:spend' %}">Spend credits</a>
+    {% if cfg.topups_enabled %}<a class="btn btn-outline-secondary" href="{% url 'wallet:topup' %}">Request a top-up</a>{% endif %}
+    {% if cfg.payouts_enabled %}<a class="btn btn-outline-secondary" href="{% url 'wallet:payouts' %}">Request a payout</a>{% endif %}
+    <a class="btn btn-outline-secondary" href="{% url 'referral:dashboard' %}">Invite friends</a>
+  </div>
+
+  {% if open_topups or open_payouts %}
+    <section class="mb-5" aria-labelledby="open-requests-title">
+      <h2 class="h5" id="open-requests-title">Waiting for staff</h2>
+      <ul class="list-unstyled d-grid gap-2">
+        {% for item in open_topups %}<li class="surface-card p-3">Top-up #{{ item.pk }}: {{ item.credits }} credits ({{ item.price }} {{ item.currency_label }}) &middot; awaiting payment confirmation</li>{% endfor %}
+        {% for item in open_payouts %}<li class="surface-card p-3">Payout #{{ item.pk }}: {{ item.credits }} credits ({{ item.payout_amount }} {{ item.currency_label }}) &middot; {{ item.get_status_display }}</li>{% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+
+  <section aria-labelledby="recent-title">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h2 class="h5 mb-0" id="recent-title">Recent activity</h2>
+      <a href="{% url 'wallet:ledger' %}">Full history</a>
+    </div>
+    {% if recent %}
+      {% include "wallet/_ledger_table.html" with entries=recent %}
+    {% else %}
+      {% url 'wallet:earn' as earn_page %}
+      {% include "components/empty_state.html" with title="No credit activity yet" message="Contribute firmware, invite friends or earn badges to get your first credits." action_label="See ways to earn" action_url=earn_page %}
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

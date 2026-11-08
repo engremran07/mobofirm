@@ -49,6 +49,8 @@ _PAYLOAD_ERRORS: tuple[type[Exception], ...] = (
     ValueError,
     TypeError,
 )
+# Public form of the above for callers that wrap these helpers.
+AI_ERRORS: tuple[type[Exception], ...] = _PAYLOAD_ERRORS
 
 
 class AIRateLimiter:
@@ -61,8 +63,6 @@ class AIRateLimiter:
 
     def is_allowed(self, user_id: int | None = None) -> bool:
         """Check if request is allowed under rate limits."""
-        import time
-
         now = time.time()
         window_start = now - 60  # 1 minute window
 
@@ -103,8 +103,6 @@ class AICircuitBreaker:
 
     def is_open(self) -> bool:
         """Check if circuit breaker is open."""
-        import time
-
         if self.failure_count >= self.failure_threshold:
             if time.time() - self.last_failure_time < self.recovery_timeout:
                 return True
@@ -121,8 +119,6 @@ class AICircuitBreaker:
 
     def record_failure(self):
         """Record failed operation."""
-        import time
-
         self.failure_count += 1
         self.last_failure_time = time.time()
         cache.set(

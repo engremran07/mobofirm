@@ -200,7 +200,7 @@ class SiteSettingsAdmin(SingletonModelAdmin):
         return self._preview(obj.og_image, "share image")
 
     @admin.display(description="Effective values")
-    def effective_defaults(self, obj: SiteSettings) -> str:
+    def effective_defaults(self, _obj: SiteSettings) -> str:
         snapshot = get_site_settings()
         return format_html(
             "Name: <strong>{}</strong> &middot; URL: <strong>{}</strong> "
@@ -243,7 +243,7 @@ class SiteSettingsAdmin(SingletonModelAdmin):
         )
 
     @action(description=_("Save and send test email"), permissions=["change"])
-    def send_test_email(self, request: HttpRequest, obj: SiteSettings) -> None:
+    def send_test_email(self, request: HttpRequest, _obj: SiteSettings) -> None:
         recipient = getattr(request.user, "email", "")
         if not recipient:
             self.message_user(

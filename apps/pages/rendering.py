@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import html
+import importlib
 from dataclasses import dataclass
 from typing import Any
 
 import markdown
-import nh3
 from markdown.extensions.toc import slugify
+
+# Loaded dynamically: nh3 is a compiled extension that static analysis cannot read.
+nh3: Any = importlib.import_module("nh3")
 
 PAGE_TAGS = frozenset(
     {

@@ -1,7 +1,6 @@
 """Playwright checks for the journal: routes, console, overflow and key interactions."""
 
 from datetime import timedelta
-from unittest.mock import patch
 
 import pytest
 from django.conf import settings
@@ -19,11 +18,6 @@ from apps.firmwares.models import Brand, Chipset, Model
 from apps.tags.models import Tag
 
 VIEWPORTS = ((390, 844), (768, 1024), (1024, 768), (1365, 900))
-NO_AUTOFILL = (
-    "apps.firmwares.admin_autofill.FirmwareAutoFill.autofill_brand",
-    "apps.firmwares.admin_autofill.FirmwareAutoFill.autofill_model",
-    "apps.firmwares.admin_autofill.FirmwareAutoFill.autofill_variant",
-)
 ARTICLE_BODY = (
     "<h2>Preparing the device</h2><p>"
     + "Charge the battery above fifty percent and back up your data. " * 6
@@ -90,8 +84,9 @@ def assert_no_horizontal_overflow(page, label):
     assert not result["offenders"], f"Overflowing elements {label}: {result}"
 
 
-@pytest.fixture
-def journal(transactional_db):
+@pytest.fixture(name="journal")
+def seeded_journal(request):
+    request.getfixturevalue("transactional_db")
     user_model = get_user_model()
     author = user_model.objects.create_user(
         username="browser-journal-author",
@@ -125,21 +120,14 @@ def journal(transactional_db):
 
 
 def hub_urls():
-    with (
-        patch(NO_AUTOFILL[0], return_value={}),
-        patch(NO_AUTOFILL[1], return_value={}),
-        patch(NO_AUTOFILL[2], return_value={}),
-    ):
-        brand = Brand.objects.create(name="Browserphone", slug="browserphone")
-        chipset = Chipset.objects.create(
-            vendor="MediaTek", name="Helio G88", slug="mediatek-helio-g88"
-        )
-        model = Model.objects.create(
-            brand=brand, name="B1", slug="b1", chipset_ref=chipset
-        )
-        FirmwareBlogService.sync_model_post(model)
-        FirmwareBlogService.sync_brand_post(brand)
-        FirmwareBlogService.sync_chipset_post(chipset)
+    brand = Brand.objects.create(name="Browserphone", slug="browserphone")
+    chipset = Chipset.objects.create(
+        vendor="MediaTek", name="Helio G88", slug="mediatek-helio-g88"
+    )
+    model = Model.objects.create(brand=brand, name="B1", slug="b1", chipset_ref=chipset)
+    FirmwareBlogService.sync_model_post(model)
+    FirmwareBlogService.sync_brand_post(brand)
+    FirmwareBlogService.sync_chipset_post(chipset)
     return {
         "brand": reverse("blog:brand_posts", kwargs={"brand_slug": brand.slug}),
         "model": reverse(
@@ -194,7 +182,8 @@ def test_journal_routes_render_cleanly_at_every_width_and_theme(live_server, jou
 
 
 @pytest.mark.django_db(transaction=True)
-def test_journal_search_chips_and_paging_update_without_a_reload(live_server, journal):
+@pytest.mark.usefixtures("journal")
+def test_journal_search_chips_and_paging_update_without_a_reload(live_server):
     with sync_playwright() as playwright:
         browser = launch(playwright)
         page = browser.new_page(viewport={"width": 1365, "height": 900})

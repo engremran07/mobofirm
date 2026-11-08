@@ -27,7 +27,7 @@ def get_settings() -> dict[str, Any]:
         "basic_fingerprinting_enabled": bool(cfg.basic_fingerprinting_enabled),
         "enhanced_fingerprinting_enabled": bool(cfg.enhanced_fingerprinting_enabled),
         "strict_new_device_login": bool(cfg.strict_new_device_login),
-        "max_devices_default": int(cfg.max_devices_default or 3),
+        "slot_reset_monthly_cap": int(cfg.slot_reset_monthly_cap),
     }
 
 

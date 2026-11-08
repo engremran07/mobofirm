@@ -29,6 +29,8 @@ KIND_RISK: dict[str, str] = {
     "redirect_flatten": LOW,
     "redirect_retarget": HIGH,
     "redirect_delete": HIGH,
+    "metadata_fix_add": LOW,
+    "metadata_fix_rewrite": HIGH,
     "settings_change": PROTECTED,
 }
 

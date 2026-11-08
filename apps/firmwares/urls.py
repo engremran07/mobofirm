@@ -5,15 +5,9 @@ from .api import (
     ChangelogEntryViewSet,
     DownloadTokenViewSet,
     FirmwareDiffViewSet,
-    GSMArenaDeviceViewSet,
     HotlinkBlockViewSet,
     TrustedTesterViewSet,
     VerificationReportViewSet,
-)
-from .autofill_views import (
-    autofill_brand,
-    autofill_model,
-    autofill_variant,
 )
 from .public_views import (
     api_firmware_stats,
@@ -32,14 +26,26 @@ from .public_views import (
     serve_local_file,
     universal_search,
 )
+from .user_views import (
+    my_requests,
+    my_uploads,
+    request_brand,
+    request_check,
+    request_chipset,
+    request_firmware,
+    request_model,
+    request_variant,
+    requests_hub,
+    upload_page,
+)
 from .views import (
     BrandCreationRequestViewSet,
+    ChipsetCreationRequestViewSet,
     ExternalFirmwareSubmitView,
     FirmwareUploadView,
     ModelCreationRequestViewSet,
     ModerationView,
     PendingFirmwareViewSet,
-    SchemaUpdateProposalViewSet,
     VariantCreationRequestViewSet,
 )
 from .views_flashing import flashing_guides, flashing_tool_detail, flashing_tools
@@ -49,9 +55,6 @@ app_name = "firmwares"
 router = DefaultRouter()
 router.register("pending", PendingFirmwareViewSet, basename="pending-firmware")
 router.register(
-    "schema-proposals", SchemaUpdateProposalViewSet, basename="schema-proposals"
-)
-router.register(
     "brand-requests", BrandCreationRequestViewSet, basename="brand-requests"
 )
 router.register(
@@ -60,6 +63,9 @@ router.register(
 router.register(
     "variant-requests", VariantCreationRequestViewSet, basename="variant-requests"
 )
+router.register(
+    "chipset-requests", ChipsetCreationRequestViewSet, basename="chipset-requests"
+)
 # Merged from dissolved apps
 router.register("download-tokens", DownloadTokenViewSet, basename="download-tokens")
 router.register("hotlink-blocks", HotlinkBlockViewSet, basename="hotlink-blocks")
@@ -67,7 +73,6 @@ router.register(
     "verification-reports", VerificationReportViewSet, basename="verification-reports"
 )
 router.register("trusted-testers", TrustedTesterViewSet, basename="trusted-testers")
-router.register("gsmarena-devices", GSMArenaDeviceViewSet, basename="gsmarena-devices")
 router.register(
     "changelog-entries", ChangelogEntryViewSet, basename="changelog-entries"
 )
@@ -87,21 +92,24 @@ urlpatterns = [
     path("tools/<slug:slug>/", flashing_tool_detail, name="flashing_tool_detail"),
     path("guides/", flashing_guides, name="flashing_guides"),
     # Admin/upload endpoints
-    path("upload/", FirmwareUploadView.as_view(), name="firmware-upload"),
+    path("upload/", upload_page, name="upload"),
+    path("upload/mine/", my_uploads, name="my_uploads"),
+    path("api/upload/", FirmwareUploadView.as_view(), name="firmware-upload"),
     path(
-        "upload/external/",
+        "api/upload/external/",
         ExternalFirmwareSubmitView.as_view(),
         name="firmware-upload-external",
     ),
     path("moderate/<uuid:pk>/", ModerationView.as_view(), name="firmware-moderate"),
-    # Auto-fill endpoints (autofill/ prefix avoids brand slug collision)
-    path("autofill/brand/<int:brand_id>/", autofill_brand, name="autofill-brand"),
-    path("autofill/model/<int:model_id>/", autofill_model, name="autofill-model"),
-    path(
-        "autofill/variant/<int:variant_id>/",
-        autofill_variant,
-        name="autofill-variant",
-    ),
+    # End-user catalogue requests and the cascading catalogue pickers
+    path("requests/", requests_hub, name="requests_hub"),
+    path("requests/mine/", my_requests, name="my_requests"),
+    path("requests/brand/", request_brand, name="request_brand"),
+    path("requests/model/", request_model, name="request_model"),
+    path("requests/variant/", request_variant, name="request_variant"),
+    path("requests/firmware/", request_firmware, name="request_firmware"),
+    path("requests/chipset/", request_chipset, name="request_chipset"),
+    path("requests/check/", request_check, name="request_check"),
     # Firmware detail & download (file/ prefix avoids brand/model slug collision)
     path(
         "file/<str:firmware_type>/<uuid:firmware_id>/",

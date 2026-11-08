@@ -20,11 +20,9 @@ from apps.devices.models import (
     DeviceConfig,
     DeviceEvent,
 )
-from apps.devices.models_quota import UserDeviceQuota
 from apps.devices.services import (
     DevicePolicyError,
     enforce_device_policy_for_login,
-    get_device_limit,
     hash_browser_key,
     mark_device_trusted,
     promote_from_device_event,
@@ -117,20 +115,9 @@ class RegistrationQuotaTests(DeviceEnforcementBase):
 
         self.assertEqual(error.exception.reason, "limit_reached")
 
-    def test_per_user_override_changes_the_limit_and_window_quota(self):
-        UserDeviceQuota.objects.create(user=self.user, max_devices=1, window="3m")
-        self.assertEqual(get_device_limit(self.user), 1)
-        self.register("a" * 43)
-
-        with self.assertRaises(DevicePolicyError) as error:
-            self.register("b" * 43)
-
-        self.assertEqual(error.exception.reason, "user_window_quota")
-
     def test_superusers_are_exempt_from_registration_quotas(self):
         self.user.is_superuser = True
         self.user.save(update_fields=["is_superuser"])
-        UserDeviceQuota.objects.create(user=self.user, max_devices=1, window="3m")
         self.configure(monthly_device_quota=1)
 
         self.register("a" * 43)
@@ -235,8 +222,8 @@ class NewDevicePolicyTests(DeviceEnforcementBase):
 
 
 class MarkTrustedTests(DeviceEnforcementBase):
+    @override_settings(SHOP_FREE_DEVICE_LIMIT=1)
     def test_marking_trusted_respects_the_device_limit_and_writes_an_event(self):
-        self.configure(max_devices_default=1)
         first = self.register("a" * 43)
         second = self.register("b" * 43)
 
@@ -373,8 +360,8 @@ class DeviceAdminAuditTests(DeviceEnforcementBase):
         event = DeviceEvent.objects.get(device=device, reason="blocked_by_admin")
         self.assertEqual(event.metadata["admin_user_id"], self.staff.pk)
 
+    @override_settings(SHOP_FREE_DEVICE_LIMIT=1)
     def test_mark_trusted_action_cannot_bypass_the_device_limit(self):
-        self.configure(max_devices_default=1)
         first = self.register("a" * 43)
         second = self.register("b" * 43)
 

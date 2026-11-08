@@ -266,7 +266,7 @@ Return ONLY valid JSON, no markdown formatting.
             file_path = pending_firmware.stored_file_path
 
             if not Path(file_path).exists():
-                logger.warning(f"Firmware file not found: {file_path}")
+                logger.warning("Firmware file not found: %s", file_path)
                 return False
 
             # Run analysis
@@ -284,8 +284,10 @@ Return ONLY valid JSON, no markdown formatting.
             confidence = result.get("confidence", 0.0)
 
             logger.info(
-                f"Firmware analysis completed for {pending_firmware.id}: "
-                f"confidence={confidence:.2f}, method={result.get('method')}"
+                "Firmware analysis completed for %s: confidence=%.2f, method=%s",
+                pending_firmware.id,
+                confidence,
+                result.get("method"),
             )
 
             return True

@@ -10,13 +10,13 @@ MAIN_CATEGORIES = (
 # Brand slugs that would collide with fixed /firmwares/<prefix>/ routes.
 RESERVED_BRAND_SLUGS = (
     "api",
-    "autofill",
     "brands",
     "browse",
     "chipsets",
     "file",
     "guides",
     "moderate",
+    "requests",
     "search",
     "serve",
     "tools",

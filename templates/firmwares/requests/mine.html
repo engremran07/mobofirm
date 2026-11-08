@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}My requests | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block content %}
+{% url 'firmwares:requests_hub' as hub_url %}
+<div class="site-container py-5">
+  {% include "components/breadcrumbs.html" with current="My requests" parent_label="Requests" parent_url=hub_url %}
+  {% include "components/page_header.html" with eyebrow="Requests" title="My requests" lead="Everything you asked for, with the reviewer’s decision and reason." %}
+  {% if not mine.total %}
+    {% include "components/empty_state.html" with title="You have not sent any requests yet" message="Ask for a missing brand, model, variant, chipset or firmware." action_label="Make a request" action_url=hub_url %}
+  {% endif %}
+
+  {% if mine.brands %}
+    <section class="mb-4" aria-labelledby="mine-brands"><h2 id="mine-brands" class="h5">Brands</h2>
+      {% include "firmwares/requests/_mine_table.html" with rows=mine.brands kind="brand" %}
+    </section>
+  {% endif %}
+  {% if mine.models %}
+    <section class="mb-4" aria-labelledby="mine-models"><h2 id="mine-models" class="h5">Models</h2>
+      {% include "firmwares/requests/_mine_table.html" with rows=mine.models kind="model" %}
+    </section>
+  {% endif %}
+  {% if mine.variants %}
+    <section class="mb-4" aria-labelledby="mine-variants"><h2 id="mine-variants" class="h5">Variants</h2>
+      {% include "firmwares/requests/_mine_table.html" with rows=mine.variants kind="variant" %}
+    </section>
+  {% endif %}
+  {% if mine.chipsets %}
+    <section class="mb-4" aria-labelledby="mine-chipsets"><h2 id="mine-chipsets" class="h5">Chipsets</h2>
+      {% include "firmwares/requests/_mine_table.html" with rows=mine.chipsets kind="chipset" %}
+    </section>
+  {% endif %}
+  {% if mine.firmware %}
+    <section class="mb-4" aria-labelledby="mine-firmware"><h2 id="mine-firmware" class="h5">Firmware</h2>
+      {% include "firmwares/requests/_mine_table.html" with rows=mine.firmware kind="firmware" %}
+    </section>
+  {% endif %}
+</div>
+{% endblock %}

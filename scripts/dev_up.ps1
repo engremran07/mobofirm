@@ -62,6 +62,12 @@ Invoke-Step 'Migration consistency check' { & $python manage.py makemigrations -
 if ($Migrate) {
     Invoke-Step 'Apply migrations (target: the database in .env)' { & $python manage.py migrate --noinput }
 }
+else {
+    & $python manage.py migrate --check *> $null
+    if ($LASTEXITCODE -ne 0) {
+        throw 'The database has unapplied migrations (pages would fail with "column ... does not exist"). Run: .\scripts\dev_up.ps1 -Migrate  (back up first with scripts\backup_db.ps1).'
+    }
+}
 if ($Bootstrap) {
     Invoke-Step 'Bootstrap site data' { & $python manage.py bootstrap_site }
 }

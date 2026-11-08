@@ -110,10 +110,14 @@ class DeviceConfig(SingletonModel):
     basic_fingerprinting_enabled = models.BooleanField(default=True)
     enhanced_fingerprinting_enabled = models.BooleanField(default=False)
     enterprise_device_management_enabled = models.BooleanField(default=False)
-    max_devices_default = models.PositiveIntegerField(
-        default=3,
-        validators=[MinValueValidator(1)],
-        help_text="Maximum approved browser profiles per account before bonus slots.",
+    slot_reset_monthly_cap = models.PositiveIntegerField(
+        default=2,
+        help_text=(
+            "Self-service slot resets (credits or rewarded ads) one account may use "
+            "per calendar month. 0 disables self-service resets; staff resets are "
+            "never counted. The device limit itself comes from the account's "
+            "download package."
+        ),
     )
     monthly_device_quota = models.PositiveIntegerField(
         null=True,
@@ -124,10 +128,6 @@ class DeviceConfig(SingletonModel):
         null=True,
         blank=True,
         help_text="Maximum new devices per user per calendar year (None = unlimited).",
-    )
-    ad_unlock_enabled = models.BooleanField(
-        default=False,
-        help_text="Allow users to unlock device quota by completing rewarded ads.",
     )
     strict_new_device_login = models.BooleanField(default=False)
     require_mfa_on_new_device = models.BooleanField(default=False)
@@ -176,10 +176,6 @@ class AppPolicy(models.Model):
         blank=True,
         help_text="Maximum new devices per user per calendar year for this app (None = use global).",
     )
-    ad_unlock_enabled = models.BooleanField(
-        default=False,
-        help_text="Allow ad-based unlocks for device quota in this app.",
-    )
 
     class Meta:
         verbose_name = "App Policy"
@@ -206,6 +202,7 @@ class DeviceEvent(models.Model):
         ("mfa_failed", "MFA Failed"),
         ("mfa_passed", "MFA Passed"),
         ("service_access", "Service Access"),
+        ("slot_reset", "Slot Reset"),
     )
 
     device = models.ForeignKey(
@@ -308,27 +305,6 @@ class TrustScore(models.Model):
         return f"{self.fingerprint.fingerprint_hash[:16]}… score={self.score}"
 
 
-class QuotaTier(models.Model):
-    """Download quota tier assigned by trust level."""
-
-    name = models.CharField(max_length=64, unique=True)
-    min_trust_score = models.FloatField(default=0.0)
-    max_trust_score = models.FloatField(default=100.0)
-    daily_download_limit = models.PositiveIntegerField(default=5)
-    hourly_download_limit = models.PositiveIntegerField(default=2)
-    requires_ad = models.BooleanField(default=False)
-    can_bypass_captcha = models.BooleanField(default=False)
-
-    class Meta:
-        db_table = "device_registry_quotatier"
-        verbose_name = "Quota Tier"
-        verbose_name_plural = "Quota Tiers"
-        ordering: ClassVar[list[str]] = ["min_trust_score"]
-
-    def __str__(self) -> str:
-        return self.name
-
-
 class RegistryEvent(models.Model):
     """Fingerprint-level event log (visit, download, etc.)."""
 
@@ -416,4 +392,130 @@ class BehaviorInsight(models.Model):
         return f"{self.severity} insight [{self.status}]"
 
 
-# (GSMArena Sync models live in apps.firmwares — see apps/firmwares/models.py)
+# =============================================================================
+# Device slot resets: freeing approved-browser slots (staff, credits, rewarded ad)
+# =============================================================================
+
+
+class DeviceSlotReset(models.Model):
+    """Durable audit and idempotency record of one slot reset.
+
+    ``DeviceEvent`` rows are purged after the retention window; this row is the
+    permanent account of who released which account's browsers, how and for what.
+    ``key`` is unique, so a retried request can never reset or charge twice.
+    """
+
+    class Method(models.TextChoices):
+        STAFF = "staff", "Staff"
+        CREDITS = "credits", "Credits"
+        REWARDED_AD = "rewarded_ad", "Rewarded ad"
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="device_slot_resets",
+    )
+    method = models.CharField(max_length=12, choices=Method.choices, db_index=True)
+    key = models.CharField(max_length=200, unique=True)
+    devices_released = models.PositiveIntegerField(default=0)
+    credits_spent = models.PositiveIntegerField(default=0)
+    ledger_key = models.CharField(max_length=200, blank=True, default="")
+    allowance_key = models.CharField(max_length=200, blank=True, default="")
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    reason = models.CharField(max_length=255, blank=True, default="")
+    created_at = models.DateTimeField(default=timezone.now, db_index=True)
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ["-created_at"]
+        permissions = (
+            ("reset_device_slots", "Can reset an account's registered browsers"),
+        )
+        indexes = (
+            models.Index(fields=["user", "created_at"], name="slotreset_user_idx"),
+        )
+
+    def __str__(self) -> str:
+        return f"{self.get_method_display()} reset for {self.user_id}"
+
+
+class DeviceSlotRequest(models.Model):
+    """A user at the device limit asking staff to free a slot."""
+
+    class Status(models.TextChoices):
+        OPEN = "open", "Open"
+        RESOLVED = "resolved", "Reset done"
+        DECLINED = "declined", "Declined"
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="device_slot_requests",
+    )
+    message = models.CharField(max_length=500, blank=True, default="")
+    status = models.CharField(
+        max_length=10, choices=Status.choices, default=Status.OPEN, db_index=True
+    )
+    created_at = models.DateTimeField(default=timezone.now)
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    resolved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    resolution_note = models.CharField(max_length=255, blank=True, default="")
+    reset = models.OneToOneField(
+        DeviceSlotReset,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="request",
+    )
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ["-created_at"]
+        constraints = (
+            models.UniqueConstraint(
+                fields=["user"],
+                condition=Q(status="open"),
+                name="devices_one_open_slot_request",
+                violation_error_message="You already have an open request.",
+            ),
+        )
+
+    def __str__(self) -> str:
+        return f"Slot request from {self.user_id} [{self.status}]"
+
+
+class DeviceResetAllowance(models.Model):
+    """A single-use right to one slot reset, earned for example by a rewarded ad.
+
+    ``key`` is unique per earning event, so replaying the event grants nothing new.
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="device_reset_allowances",
+    )
+    key = models.CharField(max_length=200, unique=True)
+    source = models.CharField(max_length=32)
+    created_at = models.DateTimeField(default=timezone.now)
+    expires_at = models.DateTimeField(db_index=True)
+    consumed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ["created_at"]
+        indexes = (
+            models.Index(fields=["user", "consumed_at"], name="resetallow_user_idx"),
+        )
+
+    def __str__(self) -> str:
+        return f"Reset allowance for {self.user_id} ({self.source})"

@@ -1,0 +1,12 @@
+<nav class="mf-ui-ads-nav" aria-label="Ad management">
+  <ul class="mf-ui-tabs">
+    <li><a href="{% url 'ads:dashboard' %}"{% if ads_tab == "dashboard" %} aria-current="page"{% endif %}>Dashboard</a></li>
+    {% if perms.ads.change_adplacement %}
+      <li><a href="{% url 'ads:placement_manager' %}"{% if ads_tab == "placements" %} aria-current="page"{% endif %}>Placement manager</a></li>
+      <li><a href="{% url 'ads:discoveries' %}"{% if ads_tab == "discoveries" %} aria-current="page"{% endif %}>Scan suggestions</a></li>
+    {% endif %}
+    <li><a href="{% url 'admin:ads_campaign_changelist' %}">Campaigns</a></li>
+    <li><a href="{% url 'admin:ads_adcreative_changelist' %}">Creatives</a></li>
+    <li><a href="{% url 'admin:ads_adssettings_changelist' %}">Settings</a></li>
+  </ul>
+</nav>

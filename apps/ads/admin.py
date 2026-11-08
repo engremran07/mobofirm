@@ -5,8 +5,9 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from typing import Any, ClassVar
 
+from django import forms
 from django.contrib import admin, messages
-from django.db.models import QuerySet
+from django.db.models import Count, Q, QuerySet
 from django.forms import ModelForm
 from django.http import Http404, HttpRequest, HttpResponse
 from django.utils.translation import gettext_lazy as _
@@ -18,7 +19,8 @@ from unfold.contrib.filters.admin import (
 )
 from unfold.enums import ActionVariant
 
-from apps.ads.services import scanner
+from apps.ads import rewarded
+from apps.ads.services import markup, placement_manager, scanner
 from apps.core.admin_base import (
     BADGE_APPROVAL,
     ConfirmForm,
@@ -53,6 +55,7 @@ from .models import (
     Campaign,
     PlacementAssignment,
     RewardedAdConfig,
+    RewardedAdGrant,
     RewardedAdView,
     ScanDiscovery,
     TemplateAdExclusion,
@@ -73,6 +76,14 @@ BADGE_VIEW_STATUS: dict[str, str] = {
     "completed": "success",
     "failed": "danger",
     "skipped": "warning",
+    "expired": "warning",
+    "rejected": "danger",
+    "error": "danger",
+}
+BADGE_LIVE_STATE: dict[str, str] = {
+    "live": "success",
+    "setup": "warning",
+    "off": "danger",
 }
 BADGE_STATE: dict[str, str] = {
     "enabled": "success",
@@ -105,15 +116,154 @@ def _on_off(enabled: bool) -> tuple[str, str]:
 # --------------------------------------------------------------------------
 # Placements, campaigns and creatives
 # --------------------------------------------------------------------------
+class PlacementAssignmentInline(TabularInline):
+    """Creatives that fill this placement; weight sets how often each is shown."""
+
+    model = PlacementAssignment
+    fk_name = "placement"
+    extra = 0
+    tab = True
+    fields = ("creative", "weight", "is_enabled", "is_active", "locked")
+    raw_id_fields = ("creative",)
+
+    def get_queryset(self, request: HttpRequest) -> QuerySet[PlacementAssignment]:
+        return super().get_queryset(request).filter(is_deleted=False)
+
+
+class AdPlacementForm(forms.ModelForm):
+    """A zone is only valid where the template (or the shared layout) declares it."""
+
+    def clean(self) -> dict[str, Any]:
+        cleaned: dict[str, Any] = super().clean() or {}
+        zone = cleaned.get("zone")
+        template_path = (cleaned.get("template_reference") or "").strip()
+        if zone:
+            declared = (
+                placement_manager.declared_zones(template_path)
+                if template_path
+                else placement_manager.site_wide_zones()
+            )
+            if zone not in declared:
+                self.add_error(
+                    "zone",
+                    _(
+                        "%(where)s does not declare this zone, so an ad would never "
+                        "show. Pick a zone it declares or change the template."
+                    )
+                    % {"where": template_path or _("The shared layout")},
+                )
+        return cleaned
+
+
 @admin.register(AdPlacement)
 class AdPlacementAdmin(AuditedModelAdmin):
-    list_display = ("name", "code", "context", "is_active", "locked", "updated_at")
+    form = AdPlacementForm
+    list_display = (
+        "name",
+        "zone",
+        "template_reference",
+        "device_target",
+        "placement_state",
+        "live_creatives",
+        "updated_at",
+    )
     list_filter = (
+        ("zone", ChoicesDropdownFilter),
+        ("device_target", ChoicesDropdownFilter),
+        ("is_enabled", BooleanRadioFilter),
         ("is_active", BooleanRadioFilter),
         ("locked", BooleanRadioFilter),
         "context",
     )
-    search_fields = ("name", "slug", "code", "context", "page_context")
+    search_fields = (
+        "name",
+        "slug",
+        "code",
+        "context",
+        "page_context",
+        "template_reference",
+    )
+    inlines = (PlacementAssignmentInline,)
+    raw_id_fields = ("fallback_creative",)
+    prepopulated_fields: ClassVar[dict[str, tuple[str, ...]]] = {"slug": ("name",)}
+    actions = ("switch_on", "switch_off")
+    fieldsets = (
+        (
+            None,
+            {
+                "fields": (
+                    "name",
+                    "code",
+                    "slug",
+                    "description",
+                    ("is_enabled", "is_active", "locked"),
+                )
+            },
+        ),
+        (
+            _("Where it shows"),
+            {
+                "classes": ("tab",),
+                "description": _(
+                    "Pages declare layout zones. Choose the zone and, to limit it to one "
+                    "page, its template path (empty = every page that declares the zone). "
+                    "The Placement manager lists the templates and their zones."
+                ),
+                "fields": ("zone", "template_reference", "device_target"),
+            },
+        ),
+        (
+            _("Content"),
+            {
+                "classes": ("tab",),
+                "fields": (
+                    "allowed_types",
+                    "allowed_sizes",
+                    "fallback_creative",
+                    "context",
+                    "page_context",
+                ),
+            },
+        ),
+        AUDIT_FIELDSET,
+    )
+
+    def get_queryset(self, request: HttpRequest) -> QuerySet[AdPlacement]:
+        return (
+            super()
+            .get_queryset(request)
+            .filter(is_deleted=False)
+            .annotate(
+                live_creative_count=Count(
+                    "assignments",
+                    filter=Q(
+                        assignments__is_enabled=True,
+                        assignments__is_active=True,
+                        assignments__is_deleted=False,
+                    ),
+                )
+            )
+        )
+
+    @display(description=_("State"), ordering="is_enabled", label=BADGE_STATE)
+    def placement_state(self, obj: AdPlacement) -> tuple[str, str]:
+        if obj.locked:
+            return "locked", str(_("Locked"))
+        return _on_off(obj.is_enabled and obj.is_active)
+
+    @display(description=_("Creatives"), ordering="live_creative_count")
+    def live_creatives(self, obj: Any) -> int:
+        return int(getattr(obj, "live_creative_count", 0))
+
+    @action(description=_("Switch on selected placements"), permissions=["change"])
+    def switch_on(self, request: HttpRequest, queryset: QuerySet[AdPlacement]) -> None:
+        count = queryset.update(is_enabled=True)
+        self.message_user(request, _("%(n)d placements switched on.") % {"n": count})
+
+    @action(description=_("Switch off selected placements"), permissions=["change"])
+    def switch_off(self, request: HttpRequest, queryset: QuerySet[AdPlacement]) -> None:
+        count = queryset.update(is_enabled=False)
+        self.message_user(request, _("%(n)d placements switched off.") % {"n": count})
 
 
 @admin.register(Campaign)
@@ -121,9 +271,11 @@ class CampaignAdmin(AuditedModelAdmin):
     list_display = (
         "name",
         "type",
-        "is_active",
+        "campaign_state",
         "priority",
         "weight",
+        "daily_cap",
+        "total_cap",
         "start_at",
         "end_at",
     )
@@ -134,10 +286,93 @@ class CampaignAdmin(AuditedModelAdmin):
         ("start_at", RangeDateTimeFilter),
     )
     search_fields = ("name",)
+    raw_id_fields = ("promotion",)
+    actions = ("activate", "pause")
+    fieldsets = (
+        (None, {"fields": ("name", "type", "ad_network", "is_active", "locked")}),
+        (
+            _("Schedule and limits"),
+            {
+                "classes": ("tab",),
+                "fields": (
+                    "start_at",
+                    "end_at",
+                    "daily_cap",
+                    "total_cap",
+                    "budget",
+                    "priority",
+                    "weight",
+                ),
+            },
+        ),
+        (
+            _("Targeting and offer"),
+            {"classes": ("tab",), "fields": ("targeting_rules", "promotion")},
+        ),
+        AUDIT_FIELDSET,
+    )
+
+    @display(description=_("State"), ordering="is_active", label=BADGE_LIVE_STATE)
+    def campaign_state(self, obj: Campaign) -> tuple[str, str]:
+        if obj.is_live():
+            return "live", str(_("Live"))
+        return (
+            ("setup", str(_("Scheduled")))
+            if obj.is_active
+            else (
+                "off",
+                str(_("Paused")),
+            )
+        )
+
+    @action(description=_("Activate selected campaigns"), permissions=["change"])
+    def activate(self, request: HttpRequest, queryset: QuerySet[Campaign]) -> None:
+        self.message_user(
+            request,
+            _("%(n)d campaigns activated.") % {"n": queryset.update(is_active=True)},
+        )
+
+    @action(description=_("Pause selected campaigns"), permissions=["change"])
+    def pause(self, request: HttpRequest, queryset: QuerySet[Campaign]) -> None:
+        self.message_user(
+            request,
+            _("%(n)d campaigns paused.") % {"n": queryset.update(is_active=False)},
+        )
+
+
+class AdCreativeForm(forms.ModelForm):
+    """Each creative type needs its own content, and markup must pass the allowlist."""
+
+    def clean(self) -> dict[str, Any]:
+        cleaned: dict[str, Any] = super().clean() or {}
+        kind = cleaned.get("creative_type")
+        html = cleaned.get("html") or cleaned.get("html_code") or ""
+        script = cleaned.get("script_code") or ""
+        if kind == "banner" and not cleaned.get("image_url"):
+            self.add_error("image_url", _("A banner needs an image URL."))
+        if kind in {"html", "native"} and not html.strip():
+            self.add_error("html", _("This creative type needs HTML."))
+        if kind == "script" and not script.strip():
+            self.add_error("script_code", _("A script creative needs script code."))
+        for name, value in (
+            ("html", cleaned.get("html")),
+            ("html_code", cleaned.get("html_code")),
+            ("script_code", script),
+        ):
+            if value and not markup.validate_ad_creative_code(value):
+                self.add_error(
+                    name,
+                    _(
+                        "Rejected: scripts must be https from an approved ad host, and "
+                        "event handlers, style attributes and javascript: URLs are not allowed."
+                    ),
+                )
+        return cleaned
 
 
 @admin.register(AdCreative)
 class AdCreativeAdmin(AuditedModelAdmin):
+    form = AdCreativeForm
     list_display = (
         "name",
         "campaign",
@@ -154,18 +389,65 @@ class AdCreativeAdmin(AuditedModelAdmin):
     )
     search_fields = ("name", "campaign__name")
     raw_id_fields = ("campaign",)
+    fieldsets = (
+        (
+            None,
+            {
+                "fields": (
+                    "campaign",
+                    "name",
+                    "creative_type",
+                    "weight",
+                    ("is_enabled", "is_active", "locked"),
+                )
+            },
+        ),
+        (
+            _("Banner"),
+            {
+                "classes": ("tab",),
+                "fields": ("image_url", "click_url", "tracking_params"),
+            },
+        ),
+        (
+            _("HTML or script"),
+            {"classes": ("tab",), "fields": ("html", "html_code", "script_code")},
+        ),
+        AUDIT_FIELDSET,
+    )
 
 
 @admin.register(PlacementAssignment)
 class PlacementAssignmentAdmin(AuditedModelAdmin):
-    list_display = ("placement", "creative", "weight", "is_active", "locked")
+    list_display = (
+        "placement",
+        "placement_zone",
+        "creative",
+        "weight",
+        "is_enabled",
+        "is_active",
+        "locked",
+    )
     list_filter = (
         ("placement", RelatedDropdownFilter),
         ("creative", RelatedDropdownFilter),
+        ("is_enabled", BooleanRadioFilter),
         ("is_active", BooleanRadioFilter),
         ("locked", BooleanRadioFilter),
     )
     raw_id_fields = ("placement", "creative")
+
+    @display(description=_("Zone"), ordering="placement__zone")
+    def placement_zone(self, obj: PlacementAssignment) -> str:
+        return obj.placement.get_zone_display() or "-"
+
+    def get_queryset(self, request: HttpRequest) -> QuerySet[PlacementAssignment]:
+        return (
+            super()
+            .get_queryset(request)
+            .filter(is_deleted=False)
+            .select_related("placement", "creative")
+        )
 
 
 @admin.register(AffiliateSource)
@@ -330,13 +612,16 @@ class AdUnitAdmin(AuditedModelAdmin):
 # --------------------------------------------------------------------------
 @admin.register(RewardedAdConfig)
 class RewardedAdConfigAdmin(AuditedModelAdmin):
+    """Disabled by default: a rewarded ad needs a placement before it can go live."""
+
     list_display = (
         "name",
         "reward_type",
         "reward_amount",
-        "is_enabled",
+        "live_state",
         "cooldown_minutes",
         "daily_limit_per_user",
+        "monthly_limit_per_user",
     )
     list_filter = (
         ("reward_type", ChoicesDropdownFilter),
@@ -345,16 +630,31 @@ class RewardedAdConfigAdmin(AuditedModelAdmin):
     )
     search_fields = ("name", "reward_description")
     raw_id_fields = ("placement", "network", "ad_unit")
+    readonly_fields = (*AuditedModelAdmin.readonly_fields, "availability")
     fieldsets = (
         (
             None,
-            {"fields": ("name", "placement", "network", "ad_unit", "is_enabled")},
+            {
+                "fields": (
+                    "name",
+                    "placement",
+                    "network",
+                    "ad_unit",
+                    "is_enabled",
+                    "availability",
+                )
+            },
         ),
         (
             _("Reward"),
             {
                 "classes": ("tab",),
-                "fields": ("reward_type", "reward_amount", "reward_description"),
+                "fields": (
+                    "reward_type",
+                    "reward_amount",
+                    "reward_description",
+                    "valid_hours",
+                ),
             },
         ),
         (
@@ -362,53 +662,99 @@ class RewardedAdConfigAdmin(AuditedModelAdmin):
             {
                 "classes": ("tab",),
                 "fields": (
+                    "min_watch_seconds",
                     "cooldown_minutes",
                     "daily_limit_per_user",
-                    "min_watch_seconds",
+                    "monthly_limit_per_user",
                 ),
             },
         ),
         AUDIT_FIELDSET,
     )
 
+    @display(description=_("State"), label=BADGE_LIVE_STATE)
+    def live_state(self, obj: RewardedAdConfig) -> tuple[str, str]:
+        if not obj.is_enabled:
+            return "off", str(_("Disabled"))
+        if rewarded.unavailable_reason(obj):
+            return "setup", str(_("Not configured"))
+        return "live", str(_("Live"))
+
+    @display(description=_("Availability to users"))
+    def availability(self, obj: RewardedAdConfig) -> str:
+        if obj.pk is None:
+            return str(_("Save first."))
+        return rewarded.unavailable_reason(obj) or str(
+            _("Live: users can start this rewarded ad.")
+        )
+
 
 @admin.register(RewardedAdView)
 class RewardedAdViewAdmin(ReadOnlyModelAdmin):
+    """Every watch with its server-measured time and abuse flags."""
+
     list_display = (
         "user",
         "config",
         "status_badge",
         "reward_granted",
+        "reward_type",
         "reward_amount",
-        "watch_duration_seconds",
+        "watched_seconds",
+        "is_flagged",
         "created_at",
     )
     list_filter = (
         ("status", ChoicesDropdownFilter),
         ("reward_granted", BooleanRadioFilter),
+        ("is_flagged", BooleanRadioFilter),
         ("config", RelatedDropdownFilter),
         ("created_at", RangeDateTimeFilter),
     )
     search_fields = ("user__email", "user__username")
+    list_select_related = ("user", "config")
     readonly_fields = (
         "user",
         "config",
         "started_at",
+        "expires_at",
+        "last_heartbeat_at",
+        "heartbeat_count",
+        "accrued_ms",
+        "early_attempts",
         "completed_at",
         "watch_duration_seconds",
         "status",
         "reward_granted",
         "reward_type",
         "reward_amount",
+        "reward_note",
+        "flags",
+        "is_flagged",
         "ip_address",
         "user_agent",
         "page_url",
         "created_at",
     )
+    exclude = ("token_digest",)
 
     @display(description=_("Status"), ordering="status", label=BADGE_VIEW_STATUS)
     def status_badge(self, obj: RewardedAdView) -> tuple[str, str]:
         return obj.status, obj.get_status_display()
+
+    @display(description=_("Watched (s)"), ordering="accrued_ms")
+    def watched_seconds(self, obj: RewardedAdView) -> int:
+        return obj.accrued_ms // 1000
+
+
+@admin.register(RewardedAdGrant)
+class RewardedAdGrantAdmin(ReadOnlyModelAdmin):
+    """Extra downloads and ad-free periods earned by rewarded ads."""
+
+    list_display = ("user", "kind", "amount", "expires_at", "created_at")
+    list_filter = (("kind", ChoicesDropdownFilter), ("expires_at", RangeDateTimeFilter))
+    search_fields = ("user__email", "user__username")
+    list_select_related = ("user",)
 
 
 # --------------------------------------------------------------------------
@@ -535,7 +881,7 @@ class ScanDiscoveryAdmin(ModelAdmin):
         ),
     )
     def approve(
-        self, request: HttpRequest, form: ConfirmForm, object_id: str
+        self, request: HttpRequest, _form: ConfirmForm, object_id: str
     ) -> HttpResponse:
         return self._review(
             request, object_id, scanner.approve_discovery, str(_("Placement approved."))
@@ -548,7 +894,7 @@ class ScanDiscoveryAdmin(ModelAdmin):
         dialog=confirm_dialog(_("Reject this placement?"), submit=_("Reject")),
     )
     def reject(
-        self, request: HttpRequest, form: ConfirmForm, object_id: str
+        self, request: HttpRequest, _form: ConfirmForm, object_id: str
     ) -> HttpResponse:
         return self._review(
             request, object_id, scanner.reject_discovery, str(_("Placement rejected."))
@@ -873,12 +1219,11 @@ class AdsSettingsAdmin(SingletonModelAdmin):
             _("Rewarded ads"),
             {
                 "classes": ("tab",),
-                "fields": (
-                    "rewarded_ads_enabled",
-                    "rewarded_ads_reward_type",
-                    "rewarded_ads_reward_value",
-                    "rewarded_ads_cooldown_minutes",
-                    "rewarded_ads_daily_limit",
+                "fields": ("rewarded_ads_enabled",),
+                "description": _(
+                    "Master switch only. What each rewarded ad gives, its limits and "
+                    "the watch time are set per Rewarded Ad Config; credits are set in "
+                    "Credits economy → Reward rules."
                 ),
             },
         ),
@@ -957,10 +1302,6 @@ class AdsSettingsAdmin(SingletonModelAdmin):
             {
                 "classes": ("tab",),
                 "fields": (
-                    "require_consent",
-                    "consent_mode_default",
-                    "show_ads_without_consent",
-                    "tcf_enabled",
                     "max_ads_per_page",
                     "min_content_between_ads",
                     "refresh_interval_seconds",

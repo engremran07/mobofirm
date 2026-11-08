@@ -5,12 +5,15 @@ from typing import ClassVar
 
 from cryptography.fernet import InvalidToken
 from django.conf import settings
-from django.core.exceptions import ImproperlyConfigured
+from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.db import models
+from django.db.models import Q
 from django.utils import timezone
 from solo.models import SingletonModel
 
 from apps.core.models import AuditFieldsModel, SoftDeleteModel, TimestampedModel
+
+from .zones import DEVICE_ALL, DEVICE_CHOICES, ZONE_CHOICES
 
 logger = logging.getLogger(__name__)
 
@@ -251,20 +254,19 @@ class AdUnit(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
 
 class RewardedAdConfig(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
     """
-    Configuration for rewarded ad placements.
+    Configuration for one rewarded ad: what a user is given for watching it.
 
-    Rewarded ads are video ads that users voluntarily watch in exchange
-    for some benefit (extra downloads, points, premium access, etc.).
+    The watch is proven by a server-controlled timer (no third-party SDK); every
+    reward is granted through the owning app's contract: credits through the
+    wallet's reward rule, slot resets through ``apps.devices.slots``, extra downloads
+    and ad-free time through entitlements. Disabled by default.
     """
 
-    REWARD_TYPES: ClassVar[list[tuple[str, str]]] = [
-        ("download", "Extra Download"),
-        ("points", "Points/Credits"),
-        ("premium", "Temporary Premium Access"),
-        ("ad_free", "Ad-Free Period"),
-        ("unlock", "Content Unlock"),
-        ("custom", "Custom Reward"),
-    ]
+    class RewardType(models.TextChoices):
+        CREDITS = "credits", "Credits (wallet reward rule)"
+        DEVICE_RESET = "device_reset", "Device slot reset"
+        DOWNLOAD_BONUS = "download_bonus", "Extra downloads"
+        AD_FREE = "ad_free", "Ad-free period"
 
     name = models.CharField(max_length=100, unique=True)
     placement = models.ForeignKey(
@@ -273,6 +275,7 @@ class RewardedAdConfig(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
         related_name="rewarded_configs",
         null=True,
         blank=True,
+        help_text="Required to enable: the placement whose creative is shown while the timer runs.",
     )
     network = models.ForeignKey(
         AdNetwork,
@@ -293,14 +296,25 @@ class RewardedAdConfig(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
 
     # Reward Configuration
     reward_type = models.CharField(
-        max_length=20, choices=REWARD_TYPES, default="download"
+        max_length=20, choices=RewardType.choices, default=RewardType.CREDITS
     )
-    reward_amount = models.PositiveIntegerField(default=1)
+    reward_amount = models.PositiveIntegerField(
+        default=1,
+        help_text=(
+            "Device reset: resets granted (1-3). Extra downloads: files added to the "
+            "allowance. Ad-free: hours. Credits: ignored; the amount is the wallet's "
+            "reward rule 'Watch a rewarded ad' (Credits economy → Reward rules)."
+        ),
+    )
     reward_description = models.CharField(
         max_length=255,
         blank=True,
         default="",
         help_text="User-facing description of the reward.",
+    )
+    valid_hours = models.PositiveIntegerField(
+        default=24,
+        help_text="Extra downloads: how long the added allowance stays valid.",
     )
 
     # Limits
@@ -308,12 +322,20 @@ class RewardedAdConfig(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
         default=30, help_text="Minutes between rewarded ad views per user."
     )
     daily_limit_per_user = models.PositiveIntegerField(
-        default=5, help_text="Maximum rewarded ads per user per day."
+        default=5, help_text="Maximum rewarded ads per user per day (0 = no daily cap)."
+    )
+    monthly_limit_per_user = models.PositiveIntegerField(
+        default=30,
+        help_text="Maximum rewarded ads per user per calendar month (0 = no monthly cap).",
     )
 
-    # Video Requirements
+    # Watch requirement
     min_watch_seconds = models.PositiveIntegerField(
-        default=0, help_text="Minimum seconds user must watch (0 = full video)."
+        default=0,
+        help_text=(
+            "Seconds the server must see the user stay on the ad. 0 uses the site "
+            "default (15 s). The server never accepts less than its floor."
+        ),
     )
 
     class Meta:
@@ -323,13 +345,39 @@ class RewardedAdConfig(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
     def __str__(self) -> str:
         return f"{self.name} ({self.get_reward_type_display()})"
 
+    def clean(self) -> None:
+        limits: dict[str, tuple[int, int, str]] = {
+            self.RewardType.DEVICE_RESET: (1, 3, "resets"),
+            self.RewardType.DOWNLOAD_BONUS: (1, 50, "files"),
+            self.RewardType.AD_FREE: (1, 72, "hours"),
+        }
+        if self.reward_type in limits:
+            low, high, unit = limits[self.reward_type]
+            if not low <= self.reward_amount <= high:
+                raise ValidationError(
+                    {"reward_amount": f"Use {low}-{high} {unit} for this reward."}
+                )
+        if self.is_enabled and self.placement_id is None:
+            raise ValidationError(
+                {"placement": "Choose a placement before enabling this rewarded ad."}
+            )
+
 
 class RewardedAdView(TimestampedModel):
     """
-    Tracks when users watch rewarded ads and receive rewards.
+    One rewarded-ad watch: the server-side proof, the audit trail and the analytics row.
 
-    Used to enforce rate limits and provide analytics on rewarded ad performance.
+    Only the keyed digest of the single-use token is stored. ``accrued_seconds`` is
+    measured by the server from heartbeat timestamps, never from client claims.
     """
+
+    class Status(models.TextChoices):
+        STARTED = "started", "Started"
+        COMPLETED = "completed", "Completed"
+        EXPIRED = "expired", "Expired"
+        REJECTED = "rejected", "Rejected"
+        SKIPPED = "skipped", "Skipped"
+        ERROR = "error", "Error"
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -339,25 +387,36 @@ class RewardedAdView(TimestampedModel):
     config = models.ForeignKey(
         RewardedAdConfig, on_delete=models.SET_NULL, null=True, related_name="views"
     )
+    token_digest = models.CharField(
+        max_length=64, blank=True, default="", db_index=True
+    )
 
     # View Details
     started_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField(null=True, blank=True)
+    last_heartbeat_at = models.DateTimeField(null=True, blank=True)
+    heartbeat_count = models.PositiveIntegerField(default=0)
+    early_attempts = models.PositiveSmallIntegerField(default=0)
+    accrued_ms = models.PositiveBigIntegerField(
+        default=0,
+        help_text="Time the server saw the user on the ad, from heartbeat timestamps.",
+    )
     completed_at = models.DateTimeField(null=True, blank=True)
     watch_duration_seconds = models.PositiveIntegerField(default=0)
 
-    # Status
-    STATUS_CHOICES: ClassVar[list[tuple[str, str]]] = [
-        ("started", "Started"),
-        ("completed", "Completed"),
-        ("skipped", "Skipped"),
-        ("error", "Error"),
-    ]
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="started")
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.STARTED
+    )
 
     # Reward
     reward_granted = models.BooleanField(default=False)
     reward_type = models.CharField(max_length=20, blank=True, default="")
     reward_amount = models.PositiveIntegerField(default=0)
+    reward_note = models.CharField(max_length=255, blank=True, default="")
+
+    # Abuse signals (impossible durations, too frequent, replays, too-early completion)
+    flags = models.JSONField(default=list, blank=True)
+    is_flagged = models.BooleanField(default=False, db_index=True)
 
     # Request Info
     ip_address = models.GenericIPAddressField(null=True, blank=True)
@@ -370,9 +429,53 @@ class RewardedAdView(TimestampedModel):
             models.Index(fields=["user", "created_at"]),
             models.Index(fields=["config", "status"]),
         )
+        constraints = (
+            models.UniqueConstraint(
+                fields=["user"],
+                condition=Q(status="started"),
+                name="ads_one_active_rewarded_view_per_user",
+            ),
+        )
 
     def __str__(self) -> str:
         return f"{self.user} - {self.config} @ {self.created_at}"
+
+
+class RewardedAdGrant(TimestampedModel):
+    """A time-boxed benefit earned by a rewarded ad that entitlements and ads read.
+
+    Credits and slot resets are granted through the wallet and devices contracts and
+    leave no row here; extra downloads and ad-free time live here until they expire.
+    """
+
+    class Kind(models.TextChoices):
+        DOWNLOAD_BONUS = "download_bonus", "Extra downloads"
+        AD_FREE = "ad_free", "Ad-free period"
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="rewarded_ad_grants",
+    )
+    view = models.OneToOneField(
+        RewardedAdView, on_delete=models.CASCADE, related_name="grant"
+    )
+    kind = models.CharField(max_length=20, choices=Kind.choices)
+    amount = models.PositiveIntegerField(
+        help_text="Files added to the allowance, or hours of ad-free time."
+    )
+    expires_at = models.DateTimeField(db_index=True)
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ["-expires_at"]
+        indexes = (
+            models.Index(
+                fields=["user", "kind", "expires_at"], name="adgrant_active_idx"
+            ),
+        )
+
+    def __str__(self) -> str:
+        return f"{self.get_kind_display()} for {self.user_id} until {self.expires_at}"
 
 
 # ==================== AUTO ADS SCAN RESULTS ====================
@@ -1136,7 +1239,42 @@ class AdPlacement(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
         help_text="Page context e.g. blog_detail, blog_list, homepage",
     )
     page_context = models.CharField(max_length=100, blank=True, default="")
-    template_reference = models.CharField(max_length=255, blank=True, default="")
+    template_reference = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text=(
+            "Template path this placement is limited to (e.g. blog/post_detail.html). "
+            "Empty = the zone is filled on every page that declares it."
+        ),
+    )
+    zone = models.CharField(
+        max_length=30,
+        blank=True,
+        default="",
+        choices=ZONE_CHOICES,
+        help_text=(
+            "Layout zone this placement fills. Pages declare zones with "
+            "{% ad_zone %}; a placement without a zone is only served by code."
+        ),
+    )
+    device_target = models.CharField(
+        max_length=10,
+        choices=DEVICE_CHOICES,
+        default=DEVICE_ALL,
+        help_text="Serve to every device, or only desktop or only mobile visitors.",
+    )
+    fallback_creative = models.ForeignKey(
+        "AdCreative",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="fallback_for_placements",
+        help_text=(
+            "Shown (with consent) when no assigned creative is eligible. "
+            "Empty = the zone collapses and takes no space."
+        ),
+    )
     is_enabled = models.BooleanField(default=True)
     is_active = models.BooleanField(default=True)
     locked = models.BooleanField(
@@ -1145,6 +1283,13 @@ class AdPlacement(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
 
     class Meta:
         ordering: ClassVar[list[str]] = ["name"]
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=["template_reference", "zone"],
+                condition=Q(is_deleted=False) & ~Q(zone=""),
+                name="ads_placement_one_per_template_zone",
+            )
+        ]
 
     def __str__(self) -> str:
         return self.name
@@ -1221,12 +1366,26 @@ class Campaign(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
     end_at = models.DateTimeField(null=True, blank=True)
     targeting_rules = models.JSONField(default=dict, blank=True)
     locked = models.BooleanField(default=False)
+    promotion = models.ForeignKey(
+        "promotions.Promotion",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="ad_campaigns",
+        help_text="Optional offer this campaign promotes; it stops serving when the offer is not running.",
+    )
 
     class Meta:
         ordering: ClassVar[list[str]] = ["name"]
 
     def __str__(self) -> str:
         return self.name
+
+    @property
+    def offer_url(self) -> str:
+        """Landing page of the promoted offer, empty when none is linked."""
+        promotion = self.promotion
+        return promotion.get_absolute_url() if promotion is not None else ""
 
     def is_live(self) -> bool:
         """
@@ -1236,6 +1395,7 @@ class Campaign(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
         1. is_active is True
         2. Either start_at is None or in the past (campaign has started)
         3. Either end_at is None or in the future (campaign hasn't ended)
+        4. A linked promotion, if any, is running
 
         Returns:
             bool: True if campaign is active and within its scheduled window, False otherwise.
@@ -1251,7 +1411,10 @@ class Campaign(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
         now = timezone.now()
         if self.start_at and self.start_at > now:
             return False
-        return not (self.end_at and self.end_at < now)
+        if self.end_at and self.end_at < now:
+            return False
+        promotion = self.promotion
+        return promotion is None or promotion.is_live
 
 
 class AdCreative(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
@@ -1729,28 +1892,11 @@ class AdsSettings(SingletonModel):
 
     # ==================== REWARDED ADS ====================
     rewarded_ads_enabled = models.BooleanField(
-        default=False, help_text="Enable rewarded video ads (users watch for rewards)."
-    )
-    rewarded_ads_reward_type = models.CharField(
-        max_length=50,
-        choices=[
-            ("points", "Points/Credits"),
-            ("downloads", "Extra Downloads"),
-            ("premium_access", "Temporary Premium Access"),
-            ("ad_free", "Ad-Free Period"),
-            ("custom", "Custom Reward"),
-        ],
-        default="downloads",
-        help_text="Type of reward given after watching ad.",
-    )
-    rewarded_ads_reward_value = models.PositiveIntegerField(
-        default=1, help_text="Amount of reward (e.g., 1 download, 100 points)."
-    )
-    rewarded_ads_cooldown_minutes = models.PositiveIntegerField(
-        default=30, help_text="Minutes between rewarded ad views per user."
-    )
-    rewarded_ads_daily_limit = models.PositiveIntegerField(
-        default=5, help_text="Maximum rewarded ads per user per day."
+        default=False,
+        help_text=(
+            "Master switch for rewarded ads. Each reward (credits, device reset, "
+            "extra downloads, ad-free) is configured per Rewarded Ad Config."
+        ),
     )
 
     # ==================== AD NETWORK CONFIGURATIONS ====================
@@ -1872,26 +2018,8 @@ class AdsSettings(SingletonModel):
         default=False, help_text="AI adjusts floor prices and bidding strategies."
     )
 
-    # ==================== CONSENT & PRIVACY ====================
-    require_consent = models.BooleanField(
-        default=True,
-        help_text="Require user consent before showing personalized ads (GDPR/CCPA).",
-    )
-    consent_mode_default = models.CharField(
-        max_length=20,
-        choices=[
-            ("denied", "Denied until consent"),
-            ("granted", "Granted (non-EU default)"),
-        ],
-        default="denied",
-    )
-    show_ads_without_consent = models.BooleanField(
-        default=True, help_text="Show non-personalized ads when consent not given."
-    )
-    tcf_enabled = models.BooleanField(
-        default=False,
-        help_text="Enable IAB Transparency & Consent Framework integration.",
-    )
+    # Consent is owned by apps.consent: ads are measured and personalised only after
+    # the visitor allows the "advertising" category (see apps.consent.services).
 
     # ==================== FREQUENCY & LIMITS ====================
     max_ads_per_page = models.PositiveIntegerField(
@@ -2053,6 +2181,12 @@ class AdsSettings(SingletonModel):
         """Check if ads should be shown for this user/page combination."""
         if not self.ads_enabled:
             return False
+
+        if user and user.is_authenticated:
+            from apps.ads.rewarded import user_is_ad_free
+
+            if user_is_ad_free(user):
+                return False
 
         # Check excluded user roles
         if user and user.is_authenticated:

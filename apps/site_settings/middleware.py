@@ -12,6 +12,9 @@ from django.middleware.locale import LocaleMiddleware
 from django.urls import NoReverseMatch, reverse
 from django.utils import timezone, translation
 
+from apps.consent.constants import ANALYTICS
+from apps.consent.services import has_consent
+
 from .services import get_site_settings
 
 logger = logging.getLogger(__name__)
@@ -98,7 +101,9 @@ class SiteAnalyticsCspMiddleware:
             request, response
         ):
             return response
-        if not get_site_settings().analytics.enabled:
+        if not get_site_settings().analytics.enabled or not has_consent(
+            request, ANALYTICS
+        ):
             return response
         policy: dict[str, list[str]] = {}
         for name, values in settings.SECURE_CSP.items():

@@ -1,0 +1,12 @@
+{# Contract: payout_form, earnings. Open with <button type="button" data-dialog-open="payout-dialog">. The POST target also renders a full page, so it works without JavaScript. #}
+<dialog class="app-dialog" id="payout-dialog" aria-labelledby="payout-dialog-title" aria-describedby="payout-dialog-lead" data-app-dialog>
+  <form method="post" action="{% url 'marketplace:payout_request' %}" class="app-dialog__body">
+    <h2 id="payout-dialog-title" class="h4">Request a payout</h2>
+    <p id="payout-dialog-lead" class="small muted">Ask staff to pay out credits you earned from sales.</p>
+    {% include "marketplace/dialogs/_payout_fields.html" %}
+    <div class="d-flex flex-wrap justify-content-end gap-2">
+      <button type="button" class="btn btn-outline-secondary" data-dialog-close autofocus>Cancel</button>
+      <button type="submit" class="btn btn-primary">Send request</button>
+    </div>
+  </form>
+</dialog>

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load ad_tags seo_tags %}
 {% block title %}{{ model.display_name }} firmware | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block meta_description %}Device specifications, model variants, and approved firmware for {{ model.display_name }}.{% endblock %}
 {% block content %}
@@ -33,6 +34,7 @@
           <h3 class="h6 mt-4">Model variants</h3>
           <ul class="list-unstyled mb-0">{% for variant in variants %}<li>{{ variant.name }}{% if variant.region %}<span class="muted"> · {{ variant.region }}</span>{% endif %}{% if variant.model_code %}<span class="d-block small model-code">{{ variant.model_code }}</span>{% endif %}</li>{% endfor %}</ul>
         {% endif %}
+        {% include "components/request_cta.html" with kind="variant" brand=brand model=model heading=variants|yesno:"Is a variant of this model missing?,No variants are listed yet." %}
       </div>
       {% if tools %}
         <div class="surface-card p-4 mt-4">
@@ -79,8 +81,11 @@
         {% endfor %}
       {% else %}
         <p class="empty-state p-4">No approved firmware is available for this model yet.</p>
+        {% ad_zone "in_content" %}
+        {% include "components/request_cta.html" with kind="firmware" brand=brand model=model heading="Need firmware for this model?" %}
       {% endif %}
     </section>
   </div>
+  {% related_links model %}
 </div>
 {% endblock %}

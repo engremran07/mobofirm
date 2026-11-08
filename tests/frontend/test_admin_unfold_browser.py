@@ -44,7 +44,13 @@ def _go(page: Page, live_server, path: str, failures: list[str]) -> None:
 def _no_overflow(page: Page, label: str, failures: list[str]) -> None:
     dimensions = overflow(page)
     if dimensions["document"] > dimensions["viewport"] + 1:
-        failures.append(f"{label}: horizontal overflow {dimensions}")
+        culprits = page.evaluate(
+            """() => [...document.querySelectorAll('body *')]
+                .filter(e => e.getBoundingClientRect().right > window.innerWidth + 1)
+                .slice(0, 2)
+                .map(e => { const c = []; let n = e; for (let i = 0; i < 6 && n; i++, n = n.parentElement) c.push(n.tagName + '.' + String(n.className).slice(0, 60) + ' w' + Math.round(n.getBoundingClientRect().width) + ' x' + Math.round(n.getBoundingClientRect().left)); return c.join(' < '); })"""
+        )
+        failures.append(f"{label}: horizontal overflow {dimensions} {culprits}")
 
 
 @pytest.mark.django_db(transaction=True)
@@ -153,8 +159,7 @@ def test_admin_shell_workflow_theme_and_layout(live_server):
         expect(page.get_by_text("Published.")).to_be_visible()
 
         # Dark mode is user-selectable and applied to the document.
-        page.locator("[x-data*='openUserLinks'] div.cursor-pointer").first.click()
-        page.locator("[x-on\\:click*=\"switchTheme('dark')\"]").click()
+        page.locator("button[data-admin-theme-choice='dark']").click()
         expect(page.locator("html")).to_have_class(re.compile("dark"))
 
         # Layout at phone, tablet and desktop widths.

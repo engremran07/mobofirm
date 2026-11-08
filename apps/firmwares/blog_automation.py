@@ -695,7 +695,7 @@ class FirmwareBlogService:
     # -- backwards-compatible entry points ---------------------------------
 
     @classmethod
-    def generate_firmware_post(cls, model: Model, force_update: bool = False):
+    def generate_firmware_post(cls, model: Model):
         return cls.sync_model_post(model)
 
     @classmethod

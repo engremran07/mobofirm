@@ -12,4 +12,8 @@
   </div>
 {% else %}
   <p class="empty-state p-4 mb-0">No brands match this search.</p>
+  {% include "components/request_cta.html" with kind="brand" query=search_query %}
+{% endif %}
+{% if search_query and brands|length > 0 and brands|length < 3 %}
+  {% include "components/request_cta.html" with kind="brand" query=search_query heading="Not the brand you were looking for?" %}
 {% endif %}

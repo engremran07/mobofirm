@@ -6,6 +6,7 @@ import secrets
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
+from django.apps import apps as django_apps
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import DatabaseError, transaction
@@ -18,7 +19,6 @@ from apps.core.utils.ip import get_client_ip
 if TYPE_CHECKING:
     from apps.devices.models import BehaviorInsight
 from apps.devices.models import AppPolicy, Device, DeviceConfig, DeviceEvent
-from apps.devices.models_quota import UserDeviceQuota
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +26,7 @@ Policy = dict[str, Any]
 Identity = dict[str, Any]
 DEVICE_COOKIE_NAME = "mobofirm_device"
 DEVICE_COOKIE_MAX_AGE = 365 * 24 * 60 * 60
+UNLIMITED_DEVICES = 999999
 _BROWSER_KEY_PATTERN = re.compile(r"^[A-Za-z0-9_-]{40,128}$")
 
 
@@ -38,13 +39,13 @@ class DevicePolicyError(Exception):
 
 def ensure_browser_key(request) -> str:
     """Resolve or create the random first-party browser-profile key for this request."""
-    key = getattr(request, "_device_browser_key", None) or request.COOKIES.get(
+    key = getattr(request, "device_browser_key", None) or request.COOKIES.get(
         DEVICE_COOKIE_NAME, ""
     )
     if not isinstance(key, str) or not _BROWSER_KEY_PATTERN.fullmatch(key):
         key = secrets.token_urlsafe(32)
-        request._device_browser_key_needs_cookie = True
-    request._device_browser_key = key
+        request.device_browser_key_needs_cookie = True
+    request.device_browser_key = key
     return key
 
 
@@ -57,35 +58,40 @@ def hash_browser_key(key: str) -> str:
     ).hexdigest()
 
 
-def get_active_device_count(user) -> int:
+def active_devices_queryset(user):
+    """The browsers that occupy a slot: approved, registered, unblocked, not revoked."""
     return Device.objects.filter(
         user=user,
         browser_key_hash__gt="",
         is_trusted=True,
         is_blocked=False,
         revoked_at__isnull=True,
-    ).count()
-
-
-_WINDOW_DAYS = {"3m": 90, "6m": 180, "12m": 365}
-
-
-def _user_quota(user) -> UserDeviceQuota | None:
-    return (
-        UserDeviceQuota.objects.filter(user=user, max_devices__isnull=False)
-        .order_by("-pk")
-        .first()
     )
 
 
+def get_active_device_count(user) -> int:
+    return active_devices_queryset(user).count()
+
+
+def _entitled_device_limit(user) -> int | None:
+    """The account's device allowance from the one entitlement resolver.
+
+    ``None`` means unlimited. Without the shop app there is no package system, so
+    ``DEVICE_FALLBACK_LIMIT`` (default 3) is the single allowance for everyone.
+    """
+    if not django_apps.is_installed("apps.shop"):
+        return int(getattr(settings, "DEVICE_FALLBACK_LIMIT", 3))
+    from apps.shop.entitlements import effective_entitlements
+
+    return effective_entitlements(user).device_limit
+
+
 def get_device_limit(user) -> int:
+    """Approved browsers allowed for ``user``: package + staff override + campaigns."""
     if getattr(user, "is_superuser", False):
-        return 999999
-    override = _user_quota(user)
-    if override is not None and override.max_devices:
-        return int(override.max_devices)
-    config = DeviceConfig.get_solo()
-    return int(config.max_devices_default)
+        return UNLIMITED_DEVICES
+    limit = _entitled_device_limit(user)
+    return UNLIMITED_DEVICES if limit is None else int(limit)
 
 
 def get_device_registration_summary(user) -> dict[str, int]:
@@ -158,12 +164,11 @@ def mark_device_trusted(device_id, user_id) -> bool:
 
 def attach_device_cookie(
     response: HttpResponse,
-    device: Device | None = None,
     max_age_days: int = 365,
     request=None,
 ) -> HttpResponse:
-    key = getattr(request, "_device_browser_key", None) if request else None
-    if response and key and getattr(request, "_device_browser_key_needs_cookie", False):
+    key = getattr(request, "device_browser_key", None) if request else None
+    if response and key and getattr(request, "device_browser_key_needs_cookie", False):
         response.set_cookie(
             DEVICE_COOKIE_NAME,
             key,
@@ -193,10 +198,9 @@ def get_effective_policy(request, user=None, service_name: str | None = None) ->
         "device_locking_mode": "none",
         "mfa_requirement": "none",
         "ai_risk_scoring": bool(getattr(config, "ai_risk_scoring_enabled", False)),
-        "max_devices": int(getattr(config, "max_devices_default", 3)),
+        "max_devices": get_device_limit(user),
         "monthly_quota": getattr(config, "monthly_device_quota", None),
         "yearly_quota": getattr(config, "yearly_device_quota", None),
-        "ad_unlock_enabled": bool(getattr(config, "ad_unlock_enabled", False)),
         "strict_new_device_login": bool(
             getattr(config, "strict_new_device_login", False)
         ),
@@ -226,8 +230,6 @@ def get_effective_policy(request, user=None, service_name: str | None = None) ->
                 or policy["monthly_quota"],
                 "yearly_quota": app_policy.yearly_device_quota
                 or policy["yearly_quota"],
-                "ad_unlock_enabled": app_policy.ad_unlock_enabled
-                or policy["ad_unlock_enabled"],
             }
         )
 
@@ -237,7 +239,7 @@ def get_effective_policy(request, user=None, service_name: str | None = None) ->
     # Superusers get unlimited devices to avoid lockout scenarios.
     # Regular staff/users are subject to normal policy limits.
     if user and user.is_authenticated and user.is_superuser:
-        policy["max_devices"] = 999999
+        policy["max_devices"] = UNLIMITED_DEVICES
         policy["monthly_quota"] = None
         policy["yearly_quota"] = None
         policy["device_locking_mode"] = "none"
@@ -305,19 +307,6 @@ def _enforce_registration_limits(user, policy: Policy, now) -> None:
         first_seen_at__gte=now - timedelta(days=365)
     ).count() >= int(yearly):
         raise DevicePolicyError("yearly_device_quota", {"limit": int(yearly)})
-
-    override = None if getattr(user, "is_superuser", False) else _user_quota(user)
-    if override is not None:
-        window_start = max(
-            override.last_reset_at,
-            now - timedelta(days=_WINDOW_DAYS.get(override.window, 180)),
-        )
-        if registrations.filter(first_seen_at__gte=window_start).count() >= int(
-            override.max_devices or 0
-        ):
-            raise DevicePolicyError(
-                "user_window_quota", {"limit": int(override.max_devices or 0)}
-            )
 
 
 def resolve_or_create_device(

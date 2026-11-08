@@ -22,7 +22,7 @@
 
   <aside class="surface-card p-4 mt-5" aria-labelledby="sell-heading">
     <h2 class="h5" id="sell-heading"><i class="icon" data-lucide="store" aria-hidden="true"></i> Sell on {{ site_name|default:"Mobofirm" }}</h2>
-    <p class="mb-3">Create a seller profile, ask staff to verify it, then submit listings for review.</p>
+    <p class="mb-3">Complete your profile, send a short seller application and wait for staff approval. Approved sellers can mark uploads as paid or featured and publish showcase listings.</p>
     <a class="btn btn-primary" href="{% url 'marketplace:become_seller' %}">{% if user.is_authenticated %}Open seller tools{% else %}Become a seller{% endif %}</a>
   </aside>
 </div>

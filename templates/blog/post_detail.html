@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load ad_tags %}
+{% load ad_tags seo_tags %}
 {% block content %}
 <article class="article-page">
   <div class="site-container py-4 py-lg-5">
@@ -14,9 +14,10 @@
       <div class="alert alert-warning" role="status"><strong>Preview.</strong> This article is {{ post.get_status_display|lower }} and not visible to readers yet.</div>
     {% endif %}
     <header class="article-header">
-      <p class="section-eyebrow mb-2">{% if post.category %}{{ post.category.name }}{% else %}{{ card.kind }}{% endif %}</p>
+      <p class="section-eyebrow mb-2">{% if post.category %}{{ post.category.name }}{% else %}{{ card.kind }}{% endif %}{% if post.is_gated %} <span class="badge text-bg-warning ms-2">{{ post.get_access_display }}</span>{% endif %}</p>
       <h1 class="article-title">{{ post.title }}</h1>
       {% if post.summary %}<p class="article-dek">{{ post.summary }}</p>{% endif %}
+      {% if post.guide_request_id %}<p class="muted small" data-testid="solution-of">Solution to the request <a href="{{ post.guide_request.get_absolute_url }}">{{ post.guide_request.title }}</a>.</p>{% endif %}
       <div class="article-meta">
         <span class="avatar avatar--sm avatar--v{{ card.variant }}" aria-hidden="true">{{ author_initials }}</span>
         <span class="article-meta__author">{{ card.author }}</span>
@@ -34,16 +35,17 @@
     {% endif %}
     <div class="article-layout">
       <div class="article-main">
-        {% if article.toc %}
+        {% if article.toc and not gate.locked %}
           <details class="toc toc--inline d-lg-none">
             <summary><i data-lucide="list" class="icon" aria-hidden="true"></i> In this article</summary>
             <ol class="toc__list">{% for entry in article.toc %}<li class="toc__item toc__item--h{{ entry.level }}"><a href="#{{ entry.anchor }}">{{ entry.text }}</a></li>{% endfor %}</ol>
           </details>
         {% endif %}
-        {% render_ad_slot "in-article-top" %}
-        <div class="article-body">{{ article.html }}</div>
-        {% render_ad_slot "in-article-mid" %}
-        {% if show_inventory %}{% include "blog/partials/firmware_inventory.html" %}{% endif %}
+        {% if not gate.locked %}{% render_ad_slot "in-article-top" %}{% endif %}
+        <div class="article-body{% if gate.locked %} article-body--teaser{% endif %}">{{ article.html }}</div>
+        {% if gate.locked %}{% include "blog/partials/paywall.html" %}{% else %}{% render_ad_slot "in-article-mid" %}
+        {% ad_zone "in_content" %}{% endif %}
+        {% if show_inventory and not gate.locked %}{% include "blog/partials/firmware_inventory.html" %}{% endif %}
         {% if tags %}
           <ul class="tag-row" aria-label="Article tags">
             {% for tag in tags %}<li><a class="tag-pill" href="{% url 'tags:detail' slug=tag.slug %}"><i data-lucide="hash" class="icon" aria-hidden="true"></i>{{ tag.name }}</a></li>{% endfor %}
@@ -52,6 +54,7 @@
         {% include "blog/partials/share.html" %}
         {% include "blog/partials/author_box.html" %}
         {% include "blog/partials/post_nav.html" %}
+        {% if not gate.locked %}{% related_links post %}{% endif %}
         {% if related %}
           <section class="related" aria-labelledby="related-title">
             <h2 class="section-heading" id="related-title">Related articles</h2>
@@ -63,7 +66,7 @@
         {% if comments_open %}{% include "comments/section.html" %}{% elif post.allow_comments %}<p class="muted small mt-5">Comments are switched off for now.</p>{% endif %}
       </div>
       <aside class="article-aside" aria-label="Article sidebar">
-        {% if article.toc %}
+        {% ad_zone "sidebar" %}        {% if article.toc %}
           <nav class="toc toc--sticky d-none d-lg-block" aria-label="Table of contents">
             <h2 class="toc__title"><i data-lucide="list" class="icon" aria-hidden="true"></i> In this article</h2>
             <ol class="toc__list">{% for entry in article.toc %}<li class="toc__item toc__item--h{{ entry.level }}"><a href="#{{ entry.anchor }}">{{ entry.text }}</a></li>{% endfor %}</ol>

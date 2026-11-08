@@ -1,0 +1,12 @@
+{% if show %}
+<section class="user-badges" aria-label="Level and badges">
+  <p class="mb-2">
+    {% if progress.level %}<strong>Level {{ progress.level.number }}</strong> · {{ progress.level.name }} · {% endif %}{{ progress.xp }} XP
+  </p>
+  {% if held %}
+    <ul class="list-unstyled d-flex flex-wrap gap-2 mb-0">
+      {% for award in held %}<li class="badge-chip" title="{{ award.badge.description }}"><i class="icon" data-lucide="{{ award.badge.icon }}" aria-hidden="true"></i>{{ award.badge.name }}</li>{% endfor %}
+    </ul>
+  {% endif %}
+</section>
+{% endif %}

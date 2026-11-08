@@ -119,11 +119,37 @@ cookies, and sends `Authorization` only to an explicitly allow-listed first host
   characters), loops and over-long chains on every save; the middleware serves only
   GET/HEAD, only safe stored targets, and only when the view returned 404.
 
-## Crawler and audit
+## Content scan
 
-`run_crawl()` crawls from `/` and the sitemap through SafeFetcher: robots-aware,
-same-origin, bounded by `crawl_max_pages` and delay, raw HTTP HTML only (no browser
-rendering). It stores `CrawlRun` / `PageObservation` and upserts `Issue` rows by
+`apps/seo/scan.py` (`manage.py seo_scan`, the **Run scan now** buttons, Celery
+`apps.seo.tasks.scheduled_scan` every 6 hours) audits every public URL with no HTTP, no
+`SITE_URL` reachability and no Celery: parameterless routes with a registered provider
+plus every item of every sitemap section (pages, posts, brands, chipsets, models,
+firmware, tools, tags) are resolved in-process by the same resolver that builds the
+real page head. Each URL is checked against the standards in `apps/seo/rules.py`:
+title length (25-60) and generic or missing titles, description length (70-160),
+generic, truncated and duplicate titles and descriptions, canonical not self, noindex
+on public content (thin pages are `info`), social image, JSON-LD presence and required
+properties, slug quality, sitemap URLs without a route, and the object-aware checks in
+`object_checks.py`: thin posts and pages, images without `alt`, `<h1>` in a post body,
+missing summary, duplicate opening text, model without chipset, tool linked to no
+chipset or brand, brand without description, and flash-guide coverage per model and
+chipset. A scan is bounded by a time budget (25 s from the screen, 10 minutes in the
+background); when it stops early the run is `partial` and the next run resumes at its
+cursor. Issues are upserted by fingerprint, reopened when they reproduce, ignored ones
+stay ignored, and fixed or removed pages are resolved automatically. `PageSnapshot`
+stores the last measured head per URL (the inventory).
+
+## Render crawl and audit
+
+`run_crawl()` crawls from `/` and the sitemap: robots-aware, same-origin, bounded by
+`crawl_max_pages`, raw HTML only (no browser rendering). When the origin is one of this
+deployment's `ALLOWED_HOSTS` (or `SEO_CRAWL_TRANSPORT = "inprocess"`) pages are served
+in-process through Django's request handler (`apps/seo/inprocess.py`), so it works from
+a dev server and needs no network; any other host goes through SafeFetcher
+(`SEO_CRAWL_TRANSPORT = "http"` forces that). A crawl fetches pages like a visitor, so
+it also bumps view counters, and it records measured inbound/outbound link counts on
+the inventory. It stores `CrawlRun` / `PageObservation` and upserts `Issue` rows by
 fingerprint (closed when no longer reproduced). Checks: fetch failures, sitemap URL
 errors/redirects, redirect chains and links to redirects, broken internal links,
 missing/duplicate/multiple titles and descriptions, missing/multiple/relative/offsite
@@ -131,8 +157,56 @@ canonicals, canonical-to-error and sitemap/canonical conflicts, noindex or
 robots-blocked URLs in the sitemap, multiple robots tags, missing/multiple `<h1>`,
 invalid JSON-LD, missing image `alt`, slow responses, orphan pages, hreflang
 reciprocity/validity/self-reference, and `head_mismatch` (served head versus resolver
-intent). The only health figure is the share of crawled pages without an
-error-level issue; there is no SERP or ranking score.
+intent). The only health figure is the share of crawled pages without an error-level
+issue; there is no SERP or ranking score.
+
+## Review and fix workflow
+
+The issues board (`/seo/issues/`) groups open issues by object type (Posts, Firmware,
+Models, Brands, Chipsets, Tools & guides, Pages & tags, Site-wide) with search,
+severity, check and "fix available" filters, HTMX updates and pagination. **Review and
+fix** opens an inline panel (a full page without JavaScript) with the measured value,
+the standard, a proposal composed only from the object's own stored data
+(`proposals.py`), an editable value validated against the standard, **Apply fix**,
+**Re-audit this page** and **Ignore with reason**.
+
+- Applying writes `seo.Metadata` (the explicit override the resolver already prefers)
+  through a `ChangeLedger` entry (`metadata_fix_add` fills a missing value,
+  `metadata_fix_rewrite` changes an existing one) with before/after values, then
+  re-audits the object so a fixed issue closes. Rolling back from the ledger removes
+  the override and reopens the issue.
+- **Apply all safe suggestions** previews and applies only the "add" fixes (missing
+  titles and descriptions) in the current filter; rewrites are never part of the bulk.
+- After each scan the autonomy mode decides: `suggest` applies nothing,
+  `safe_autopilot` applies the "add" fixes, `full` also the rewrites, `off` disables
+  scans and fixes. Staff pressing Apply is the approval and works in every mode but `off`.
+- Findings that the override layer cannot fix (thin content, missing guide or tool,
+  duplicates) link to the object's admin edit page.
+
+## Interlinking
+
+`apps/seo/interlinking.py` proposes links only from real relations in the entity graph
+(brand has model, model uses chipset, tool supports chipset or brand, post covers brand
+or model) plus model to the tools of its chipset and chipset to its flashing-guide
+post. Each proposal stores the relation, a reason and an anchor rotated per target; it
+is capped by a per-source link budget, never links a source to itself or twice to the
+same target, and honours `InterlinkExclusion`. `/seo/links/` lists proposals to accept,
+reject or reopen (single and bulk); rejected pairs are never proposed again. Accepted
+links reach templates through `{% load seo_tags %}{% related_links object %}` and
+`apps.seo.api.related_links`; `apps.seo.api.link_body_html` inserts accepted links into
+a post body and adds `rel="nofollow noopener noreferrer"` to external links. Using the
+tag in the public model, brand, chipset and tool templates and `link_body_html` in the
+blog renderer belongs to those apps.
+
+## Flash guides
+
+The firmware automation owns one post per model and per chipset with a "How to flash
+firmware on ..." section, recommended tools and the firmware list. `/seo/guides/`
+audits that coverage (guide present, supporting tool, chipset link, firmware list) and
+refreshes the posts through the registered task
+`apps.firmwares.tasks.sync_automated_blogs`, run synchronously so no broker is needed.
+The issue codes `model_missing_flash_guide`, `chipset_missing_flash_guide` and
+`chipset_no_tool` feed the board.
 
 ## Autonomy engine
 
@@ -175,12 +249,15 @@ Bing is notified by IndexNow). Secrets come from the environment, not the databa
 
 ## Control Center (staff)
 
-`/seo/dashboard/`, `inventory/`, `inspect/`, `issues/`, `ledger/`, `jobs/`,
-`settings/`. Read views need `is_staff`; actions need `seo.run_crawl`,
-`seo.approve_changeledger`, `seo.rollback_changeledger`, `seo.change_seojob` or
-`seo.change_seosettings`. Views are thin; templates extend `admin/base_site.html` and
-load `build/seo.css`, so the planned admin migration can restyle them without logic
-changes. All POST forms carry CSRF tokens and redirect after success.
+`/seo/dashboard/`, `scan/`, `issues/` (with `issues/<id>/` panels, `issues/bulk/`),
+`links/`, `guides/`, `inventory/`, `inspect/`, `ledger/`, `jobs/`, `settings/`. Every
+screen renders in the Unfold admin shell (`render_admin_page`, `mf-ui` kit,
+`admin-ui-seo.css`). Read views need `is_staff` plus the model view permission; actions
+need `seo.run_crawl` (scan, crawl), `seo.change_metadata` (apply fixes),
+`seo.change_issue` (ignore, restore, re-audit, generate guides),
+`seo.change_linksuggestion`, `seo.approve_changeledger`, `seo.rollback_changeledger`,
+`seo.change_seojob` (**Process queue now** drains the outbox without Celery) or
+`seo.change_seosettings`. All POST forms carry CSRF tokens and redirect after success.
 
 ## Phases and acceptance gates
 

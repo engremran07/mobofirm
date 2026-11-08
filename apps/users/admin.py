@@ -31,6 +31,8 @@ from unfold.forms import UserCreationForm as UnfoldUserCreationForm
 
 from apps.core.admin_base import (
     ModelAdmin,
+    RelatedLink,
+    RelatedOverviewMixin,
     SingletonModelAdmin,
     action,
     display,
@@ -116,10 +118,21 @@ class CustomUserChangeForm(UnfoldUserChangeForm):
 
 
 @admin.register(CustomUser)
-class CustomUserAdmin(BaseUserAdmin, ModelAdmin):
+class CustomUserAdmin(RelatedOverviewMixin, BaseUserAdmin, ModelAdmin):
     form = CustomUserChangeForm
     add_form = CustomUserCreationForm
     change_password_form = AdminPasswordChangeForm
+
+    related_links = (
+        RelatedLink("devices.Device", "user", "Devices"),
+        RelatedLink("shop.UserPackage", "user", "Packages"),
+        RelatedLink("shop.Order", "user", "Orders"),
+        RelatedLink("wallet.Wallet", "user", "Wallet"),
+        RelatedLink("marketplace.SellerProfile", "user", "Seller profile"),
+        RelatedLink("firmwares.PendingFirmware", "uploader", "Firmware uploads"),
+        RelatedLink("comments.Comment", "user", "Comments"),
+        RelatedLink("users.Notification", "recipient", "Notifications"),
+    )
 
     list_display = (
         "email",
@@ -142,7 +155,7 @@ class CustomUserAdmin(BaseUserAdmin, ModelAdmin):
     )
     search_fields = ("email", "username", "full_name", "phone")
     ordering = ("-date_joined",)
-    readonly_fields = ("date_joined", "last_unlock", "last_login")
+    readonly_fields = ("date_joined", "last_unlock", "last_login", "related_overview")
     filter_horizontal = ("groups", "user_permissions")
     actions = ("mark_email_verified", "clear_email_verification")
 
@@ -174,6 +187,10 @@ class CustomUserAdmin(BaseUserAdmin, ModelAdmin):
                 ),
                 "classes": ("tab",),
             },
+        ),
+        (
+            _("Activity"),
+            {"fields": ("related_overview",), "classes": ("tab",)},
         ),
     )
     add_fieldsets = (
@@ -429,7 +446,7 @@ class UsersSettingsAdmin(SingletonModelAdmin):
     readonly_fields = ("notification_stats",)
 
     @display(description=_("Notification system"))
-    def notification_stats(self, obj: UsersSettings) -> str:
+    def notification_stats(self, _obj: UsersSettings) -> str:
         total_users = CustomUser.objects.filter(is_active=True).count()
         prefs = NotificationPreferences.objects.count()
         push = PushSubscription.objects.filter(is_active=True).count()

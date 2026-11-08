@@ -6,6 +6,10 @@ from django.shortcuts import redirect
 from django.urls import Resolver404, resolve, reverse
 
 from apps.site_settings.services import get_site_settings
+from apps.users.services.profile_completion import (
+    profile_completion_url,
+    safe_next_url,
+)
 
 
 class EnforceProfileCompletionMiddleware:
@@ -22,6 +26,7 @@ class EnforceProfileCompletionMiddleware:
 
     SAFE_URL_NAMES: Iterable[str] = {
         PROFILE_URL_NAME,
+        "users:locale_hint",
         "account_login",
         "account_logout",
         "account_signup",
@@ -78,4 +83,10 @@ class EnforceProfileCompletionMiddleware:
         if request.content_type == "application/json":
             return self.get_response(request)
 
-        return redirect(self.PROFILE_URL_NAME)
+        # Return the user to the page they asked for once onboarding is done.
+        next_url = (
+            safe_next_url(request, request.get_full_path())
+            if request.method == "GET"
+            else ""
+        )
+        return redirect(profile_completion_url(next_url))

@@ -9,7 +9,32 @@ import logging
 from collections.abc import Callable
 from typing import Any, ClassVar
 
+from django.core.exceptions import ObjectDoesNotExist, ValidationError
+from django.db import DatabaseError
+
 logger = logging.getLogger(__name__)
+
+
+class DomainError(Exception):
+    """Base for business errors that an event subscriber may legitimately raise."""
+
+
+# Failures a subscriber may raise; they are logged so one bad handler never blocks
+# the publisher or the remaining subscribers.
+HANDLER_ERRORS: tuple[type[Exception], ...] = (
+    DomainError,
+    DatabaseError,
+    ObjectDoesNotExist,
+    ValidationError,
+    ArithmeticError,
+    AttributeError,
+    ImportError,
+    LookupError,
+    OSError,
+    RuntimeError,
+    TypeError,
+    ValueError,
+)
 
 
 class EventBus:
@@ -56,7 +81,7 @@ class EventBus:
                 self._handlers[event_type] = []
 
             self._handlers[event_type].append(func)
-            logger.debug(f"Subscribed {func.__name__} to {event_type}")
+            logger.debug("Subscribed %s to %s", func.__name__, event_type)
             return func
 
         if handler is not None:
@@ -74,15 +99,15 @@ class EventBus:
         handlers = self._handlers.get(event_type, [])
 
         if not handlers:
-            logger.debug(f"No handlers for event '{event_type}'")
+            logger.debug("No handlers for event '%s'", event_type)
             return
 
-        logger.info(f"Publishing event '{event_type}' to {len(handlers)} handlers")
+        logger.info("Publishing event '%s' to %s handlers", event_type, len(handlers))
 
         for handler in handlers:
             try:
                 handler(data)
-            except Exception:
+            except HANDLER_ERRORS:
                 logger.exception(
                     "Event handler %s failed for %s", handler.__name__, event_type
                 )
@@ -98,7 +123,7 @@ class EventBus:
         if event_type in self._handlers:
             try:
                 self._handlers[event_type].remove(handler)
-                logger.debug(f"Unsubscribed {handler.__name__} from {event_type}")
+                logger.debug("Unsubscribed %s from %s", handler.__name__, event_type)
             except ValueError:
                 pass
 
@@ -111,7 +136,7 @@ class EventBus:
         """
         if event_type:
             self._handlers.pop(event_type, None)
-            logger.debug(f"Cleared handlers for {event_type}")
+            logger.debug("Cleared handlers for %s", event_type)
         else:
             self._handlers.clear()
             logger.debug("Cleared all event handlers")

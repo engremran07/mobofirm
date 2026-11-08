@@ -77,8 +77,8 @@ UNFOLD: dict[str, Any] = {
     "ENVIRONMENT": "apps.core.admin_branding.environment_label",
     "BORDER_RADIUS": "6px",
     "COLORS": {"base": _BASE, "primary": _PRIMARY},
-    "STYLES": [],
-    "SCRIPTS": [],
+    "STYLES": ["apps.core.admin_branding.theme_styles"],
+    "SCRIPTS": ["apps.core.admin_branding.theme_scripts"],
     "DASHBOARD_CALLBACK": "apps.core.admin_dashboard.dashboard_callback",
     "ACCOUNT": {
         "navigation": "apps.core.admin_navigation.account_links",
@@ -98,7 +98,6 @@ UNFOLD: dict[str, Any] = {
             "pages.page",
             "shop.order",
             "marketplace.listing",
-            "filemanager.fileitem",
         ],
         "show_history": True,
     },

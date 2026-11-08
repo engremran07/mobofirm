@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}My progress | {{ site_name }}{% endblock %}
+{% block content %}
+<div class="site-container py-4 py-lg-5">
+  {% include "components/breadcrumbs.html" with current="My progress" parent_label="Leaderboard" parent_url="/leaderboard/" %}
+  {% include "components/page_header.html" with eyebrow="Community" title="My progress" lead="XP comes from approved contributions. It is your reputation score everywhere on the site." %}
+
+  <section class="surface-card p-4 mb-4" aria-labelledby="level-title">
+    <h2 class="h5" id="level-title">{% if progress.level %}Level {{ progress.level.number }}: {{ progress.level.name }}{% else %}Getting started{% endif %}</h2>
+    <p class="mb-2"><strong>{{ progress.xp }}</strong> XP{% if streak %} · {{ streak.count }}-day streak (best {{ streak.longest }}){% endif %}</p>
+    {% if progress.next_level %}
+      <label class="small muted d-block" for="level-meter">Next: {{ progress.next_level.name }} at {{ progress.next_level.min_xp }} XP</label>
+      <progress id="level-meter" class="community-meter" max="{{ progress.span }}" value="{{ progress.into_level }}">{{ progress.into_level }} of {{ progress.span }} XP</progress>
+    {% else %}
+      <p class="small muted mb-0">You have reached the highest level.</p>
+    {% endif %}
+  </section>
+
+  <section class="mb-4" aria-labelledby="mine-title">
+    <h2 class="h5" id="mine-title">My badges</h2>
+    {% if earned %}
+      <ul class="list-unstyled d-flex flex-wrap gap-2 mb-0">
+        {% for award in earned %}
+          <li class="badge-chip" title="{{ award.badge.description }}"><i class="icon" data-lucide="{{ award.badge.icon }}" aria-hidden="true"></i>{{ award.badge.name }}</li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      {% include "components/empty_state.html" with title="No badges yet" message="Your first approved upload earns one." action_label="See all badges" action_url="/community/badges/" %}
+    {% endif %}
+  </section>
+
+  <section class="surface-card p-4" aria-labelledby="recent-title">
+    <h2 class="h5" id="recent-title">Recent XP</h2>
+    {% if recent %}
+      <ul class="list-unstyled mb-0 d-grid gap-1">
+        {% for entry in recent %}<li><span class="tabular-nums">{{ entry.xp|stringformat:"+d" }} XP</span> <span class="muted">{{ entry.event_key }} · {{ entry.created_at|date:"j M Y" }}</span></li>{% endfor %}
+      </ul>
+    {% else %}
+      <p class="muted mb-0">Nothing yet.</p>
+    {% endif %}
+  </section>
+</div>
+{% endblock %}

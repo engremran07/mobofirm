@@ -1,0 +1,42 @@
+{# Contract: options (devices.slots.SlotOptions). Shown when the approved browsers fill the device limit: ask staff, pay credits, or watch a rewarded ad. Every choice opens a devices-owned dialog (works without JavaScript as a full page). #}
+<section class="surface-card p-4 my-4" id="slot-options" aria-labelledby="slot-options-title">
+  <h2 class="h5" id="slot-options-title">Free a browser slot</h2>
+  <p class="mb-3">You use {{ options.active }} of {{ options.limit }} approved browser{{ options.limit|pluralize }}. A reset sets your approved browsers back to “awaiting approval” so you can approve the ones you use now. Nothing is deleted.</p>
+  <div class="row g-3">
+    <div class="col-md-4">
+      <h3 class="h6">Ask staff</h3>
+      {% if options.request_open %}
+        <p class="small muted mb-0" role="status">Your request is open. Staff will answer in your notifications.</p>
+      {% else %}
+        <p class="small muted">Staff can reset your slots after a quick check.</p>
+        <a class="btn btn-outline-primary" href="{% url 'devices:slot_ask_staff' %}" hx-get="{% url 'devices:slot_ask_staff' %}" hx-target="#dialog-slot" hx-swap="innerHTML">Ask staff to reset</a>
+      {% endif %}
+    </div>
+    <div class="col-md-4">
+      <h3 class="h6">Pay with credits</h3>
+      {% if options.credits_price is None %}
+        <p class="small muted mb-0">Paying with credits is not available right now.</p>
+      {% elif options.cap_reached %}
+        <p class="small muted mb-0">You used all {{ options.resets_cap }} self-service reset{{ options.resets_cap|pluralize }} this month.</p>
+      {% else %}
+        <p class="small muted">Balance: {{ options.balance }} credits · {{ options.resets_left }} of {{ options.resets_cap }} reset{{ options.resets_cap|pluralize }} left this month.</p>
+        <a class="btn btn-primary" href="{% url 'devices:slot_pay_credits' %}" hx-get="{% url 'devices:slot_pay_credits' %}" hx-target="#dialog-slot" hx-swap="innerHTML">Pay {{ options.credits_price }} credits</a>
+        {% if options.missing_credits %}<p class="small mt-2 mb-0" role="status">You need {{ options.missing_credits }} more credits. <a href="{{ options.earn_url }}">Ways to earn</a></p>{% endif %}
+      {% endif %}
+    </div>
+    <div class="col-md-4">
+      <h3 class="h6">Watch a rewarded ad</h3>
+      {% if options.cap_reached %}
+        <p class="small muted mb-0">You used all {{ options.resets_cap }} self-service reset{{ options.resets_cap|pluralize }} this month.</p>
+      {% elif options.allowances %}
+        <p class="small muted">You earned {{ options.allowances }} reset{{ options.allowances|pluralize }}.</p>
+        <a class="btn btn-primary" href="{% url 'devices:slot_use_rewarded' %}" hx-get="{% url 'devices:slot_use_rewarded' %}" hx-target="#dialog-slot" hx-swap="innerHTML">Use my earned reset</a>
+      {% elif options.rewarded %}
+        <p class="small muted">{{ options.rewarded.description|default:"Watch a short ad to earn one reset." }}</p>
+        <a class="btn btn-outline-primary" href="{{ options.rewarded.url }}">Watch a rewarded ad</a>
+      {% else %}
+        <p class="small muted mb-0">Rewarded ads are not available right now.</p>
+      {% endif %}
+    </div>
+  </div>
+</section>

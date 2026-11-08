@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 @receiver(post_save, sender=Campaign)
-def notify_campaign_status_change(sender, instance, created, **kwargs):
+def notify_campaign_status_change(instance, created, **kwargs):
     """
     Notify campaign creator when campaign status changes (e.g. approved/active).
     """

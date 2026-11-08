@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load seo_tags %}
 {% block title %}{{ tool.name }} | Flashing tools{% endblock %}
 {% block content %}
 <div class="site-container py-5"><nav aria-label="Breadcrumb"><a href="{% url 'firmwares:flashing_tools' %}">Flashing tools</a> / {{ tool.name }}</nav>
@@ -8,5 +9,6 @@
     {% if chipsets %}<h2 class="h4 mt-4">Supported chipsets</h2><ul>{% for chipset in chipsets %}<li><a href="{% url 'firmwares:chipset_detail' slug=chipset.slug %}">{{ chipset.display_name }}</a></li>{% endfor %}</ul>{% endif %}
     {% if related_guides %}<h2 class="h4 mt-4">Related guides</h2><ul>{% for guide in related_guides %}<li><a href="{{ guide.post.get_absolute_url }}">{{ guide.post.title }}</a></li>{% endfor %}</ul>{% endif %}
   </article>
+  {% related_links tool %}
 </div>
 {% endblock %}

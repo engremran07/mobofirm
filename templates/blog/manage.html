@@ -75,10 +75,11 @@
                     <form method="post" action="{% url 'blog:post_workflow' slug=post.slug %}">{% csrf_token %}<input type="hidden" name="action" value="request_review"><button class="btn btn-sm btn-outline-secondary" type="submit">Request review</button></form>
                   {% endif %}
                   {% if can_moderate and post.status != "published" and post.status != "archived" %}
-                    <form method="post" action="{% url 'blog:post_workflow' slug=post.slug %}">{% csrf_token %}<input type="hidden" name="action" value="publish"><button class="btn btn-sm btn-primary" type="submit">Publish</button></form>
+                    <a class="btn btn-sm btn-primary" href="{% url 'blog:post_workflow_dialog' slug=post.slug action='publish' %}" hx-get="{% url 'blog:post_workflow_dialog' slug=post.slug action='publish' %}" hx-target="#dialog-slot" hx-swap="innerHTML">Publish</a>
+                    <a class="btn btn-sm btn-outline-secondary" href="{% url 'blog:post_workflow_dialog' slug=post.slug action='schedule' %}" hx-get="{% url 'blog:post_workflow_dialog' slug=post.slug action='schedule' %}" hx-target="#dialog-slot" hx-swap="innerHTML">Schedule</a>
                   {% endif %}
                   {% if can_moderate and post.status != "archived" %}
-                    <form method="post" action="{% url 'blog:post_workflow' slug=post.slug %}">{% csrf_token %}<input type="hidden" name="action" value="archive"><button class="btn btn-sm btn-outline-secondary" type="submit">Archive</button></form>
+                    <a class="btn btn-sm btn-outline-secondary" href="{% url 'blog:post_workflow_dialog' slug=post.slug action='archive' %}" hx-get="{% url 'blog:post_workflow_dialog' slug=post.slug action='archive' %}" hx-target="#dialog-slot" hx-swap="innerHTML">Archive</a>
                   {% endif %}
                 </div>
               </td>
@@ -87,7 +88,7 @@
         </tbody>
       </table>
       {% endtable_scroll %}
-      {% if can_moderate %}<button class="btn btn-outline-secondary mt-3" type="submit" form="bulk-form">Publish selected</button>{% endif %}
+      {% if can_moderate %}<button class="btn btn-outline-secondary mt-3" type="submit" form="bulk-form" data-confirm-dialog="Publish every selected post? Only posts you are permitted to publish go live." data-confirm-title="Publish selected posts?" data-confirm-label="Publish selected">Publish selected</button>{% endif %}
       {% include "components/pagination.html" with page_obj=page_obj label="Post pages" %}
     {% else %}
       {% url 'blog:post_create' as create_url %}

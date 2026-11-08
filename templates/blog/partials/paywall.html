@@ -1,0 +1,14 @@
+{# Shown instead of the body when a featured or paid article is locked for this reader. #}
+<section class="article-paywall surface-card p-4 my-4" id="paywall" aria-labelledby="paywall-title">
+  <h2 class="h5" id="paywall-title"><i data-lucide="lock" class="icon" aria-hidden="true"></i> {% if post.access == "paid" %}Paid article{% else %}Featured article{% endif %}</h2>
+  <p class="mb-3">The rest of this article is available to members with access.{% if gate.credit_price %} Unlock it once for <strong>{{ gate.credit_price }} credits</strong> and keep it forever.{% endif %}</p>
+  {% if gate.reason and not gate.needs_login %}<p class="text-muted small" role="status">{{ gate.reason }}</p>{% endif %}
+  <div class="d-flex flex-wrap gap-2">
+    {% if gate.needs_login %}
+      <a class="btn btn-primary" href="{% url 'users:account_login' %}?next={{ request.path|urlencode }}">Sign in to read</a>
+    {% elif gate.can_buy %}
+      <a class="btn btn-primary" id="buy-article" href="{% url 'blog:purchase_dialog' slug=post.slug %}" hx-get="{% url 'blog:purchase_dialog' slug=post.slug %}" hx-target="#dialog-slot" hx-swap="innerHTML"><i data-lucide="star" class="icon" aria-hidden="true"></i> Unlock for {{ gate.credit_price }} credits</a>
+    {% endif %}
+    {% if gate.packages_url %}<a class="btn btn-outline-secondary" href="{{ gate.packages_url }}">See packages</a>{% endif %}
+  </div>
+</section>

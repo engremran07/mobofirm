@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+{% url 'shop:pricing' as shop_url %}
+<div class="site-container py-4 py-lg-5">
+  {% include "components/breadcrumbs.html" with current="Pay with credits" parent_label="Shop" parent_url=shop_url %}
+  <div class="row"><div class="col-12 col-lg-6">{% include "shop/dialogs/pay_with_credits.html" %}</div></div>
+</div>
+{% endblock %}
