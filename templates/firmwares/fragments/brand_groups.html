@@ -1,0 +1,23 @@
+{# Brand groups by letter. Swapped into #brand-results by HTMX. Context: grouped_brands, search_* (list_search_context). #}
+{% include "components/search_feedback.html" with noun="brand" %}
+{% if grouped_brands %}
+  <nav aria-label="Jump to letter"><ul class="alpha-nav">{% for letter, letter_brands in grouped_brands %}<li><a href="#brand-letter-{{ forloop.counter }}">{{ letter }}</a></li>{% endfor %}</ul></nav>
+{% endif %}
+{% for letter, letter_brands in grouped_brands %}
+  <section aria-labelledby="brand-letter-{{ forloop.counter }}">
+    <h2 id="brand-letter-{{ forloop.counter }}" class="letter-head">{{ letter }}</h2>
+    <div class="card-grid card-grid--tiles">
+    {% for brand in letter_brands %}{% include "firmwares/includes/brand_tile.html" with brand=brand %}{% endfor %}
+    </div>
+  </section>
+{% empty %}
+  <div class="empty-ui empty-state" role="status">
+    <span class="empty-ui__icon"><i data-lucide="building-2" aria-hidden="true"></i></span>
+    <p class="empty-ui__title">{% if search_query %}No brands match this search.{% else %}No brands are available in the catalogue yet.{% endif %}</p>
+    <p class="mb-0">Check the spelling or ask us to add the manufacturer.</p>
+  </div>
+  {% include "components/request_cta.html" with kind="brand" query=search_query %}
+{% endfor %}
+{% if grouped_brands %}
+  {% include "components/request_cta.html" with kind="brand" query=search_query heading="Is your brand missing from the list?" %}
+{% endif %}

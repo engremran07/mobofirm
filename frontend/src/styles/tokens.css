@@ -18,8 +18,16 @@
   --mf-danger: #a43838;
   --mf-danger-ink: #ffffff;
   --mf-focus: #07595d;
+  --mf-info: #1d5a96;
+  --mf-shadow-rgb: 49 54 46;
   --mf-shadow: 0 1.25rem 3.5rem rgb(49 54 46 / 12%);
   --mf-card-shadow: 0 0.25rem 1rem rgb(49 54 46 / 5%);
+  --mf-glass-bg: color-mix(in srgb, var(--mf-surface-raised) 72%, transparent);
+  --mf-glass-bg-strong: color-mix(in srgb, var(--mf-surface-raised) 90%, transparent);
+  --mf-glass-border: color-mix(in srgb, var(--mf-border) 60%, transparent);
+  --mf-overlay: rgb(14 22 28 / 52%);
+  --mf-skeleton-base: #e7e1d6;
+  --mf-skeleton-shine: #f6f2ea;
   --bs-body-bg: var(--mf-page);
   --bs-body-bg-rgb: 245, 242, 235;
   --bs-body-color: var(--mf-text);
@@ -59,8 +67,16 @@
   --mf-danger: #ff9292;
   --mf-danger-ink: #2b0d0d;
   --mf-focus: #a8eee5;
+  --mf-info: #8fc2f5;
+  --mf-shadow-rgb: 0 0 0;
   --mf-shadow: 0 1.25rem 3.5rem rgb(0 0 0 / 28%);
   --mf-card-shadow: 0 0.25rem 1rem rgb(0 0 0 / 15%);
+  --mf-glass-bg: color-mix(in srgb, var(--mf-surface) 68%, transparent);
+  --mf-glass-bg-strong: color-mix(in srgb, var(--mf-surface) 88%, transparent);
+  --mf-glass-border: color-mix(in srgb, #fff 9%, transparent);
+  --mf-overlay: rgb(4 8 12 / 66%);
+  --mf-skeleton-base: #293740;
+  --mf-skeleton-shine: #34454f;
   --bs-body-bg: var(--mf-page);
   --bs-body-bg-rgb: 21, 28, 36;
   --bs-body-color: var(--mf-text);
@@ -89,4 +105,52 @@
   --mf-transition: 160ms ease;
   --bs-border-radius: var(--mf-radius-sm);
   --bs-border-radius-lg: var(--mf-radius-md);
+}
+
+/* High-contrast option (data-contrast="high", set by the appearance controls or the
+   operating-system "more contrast" preference). It only re-points colour tokens. */
+:root[data-contrast="high"][data-bs-theme="light"] {
+  --mf-page: #ffffff;
+  --mf-surface: #ffffff;
+  --mf-surface-raised: #ffffff;
+  --mf-surface-soft: #efefef;
+  --mf-border: #1a1a1a;
+  --mf-text: #000000;
+  --mf-text-muted: #2b2b2b;
+  --mf-accent: #00494c;
+  --mf-accent-strong: #00383a;
+  --mf-accent-ink: #ffffff;
+  --mf-success: #0e4d2e;
+  --mf-warning: #5c3a00;
+  --mf-danger: #8a1010;
+  --mf-danger-ink: #ffffff;
+  --mf-focus: #0033cc;
+  --mf-info: #0b3d75;
+  --mf-skeleton-base: #dcdcdc;
+  --mf-skeleton-shine: #f2f2f2;
+  --bs-body-bg-rgb: 255, 255, 255;
+  --bs-body-color-rgb: 0, 0, 0;
+}
+
+:root[data-contrast="high"][data-bs-theme="dark"] {
+  --mf-page: #000000;
+  --mf-surface: #0b0b0b;
+  --mf-surface-raised: #141414;
+  --mf-surface-soft: #1c1c1c;
+  --mf-border: #e6e6e6;
+  --mf-text: #ffffff;
+  --mf-text-muted: #e0e0e0;
+  --mf-accent: #8ff5e8;
+  --mf-accent-strong: #6fe6d8;
+  --mf-accent-ink: #00201e;
+  --mf-success: #9af0b9;
+  --mf-warning: #ffd98a;
+  --mf-danger: #ffb4b4;
+  --mf-danger-ink: #2b0000;
+  --mf-focus: #ffe14d;
+  --mf-info: #b8dcff;
+  --mf-skeleton-base: #262626;
+  --mf-skeleton-shine: #3a3a3a;
+  --bs-body-bg-rgb: 0, 0, 0;
+  --bs-body-color-rgb: 255, 255, 255;
 }

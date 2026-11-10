@@ -2,16 +2,37 @@
 {% block title %}Flashing tools and guides | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block meta_description %}Flashing tools by category and step-by-step flashing guides for mobile devices.{% endblock %}
 {% block content %}
-<div class="site-container py-5"><header class="hero-panel p-4 mb-4"><p class="hero-eyebrow">Device maintenance</p><h1 class="hero-title">Flashing tools and guides</h1><p class="hero-copy">{{ total_tools }} active tools in the catalogue. Review compatibility and vendor guidance before use.</p>
-  <form method="get" class="d-flex gap-2"><label class="visually-hidden" for="platform-filter">Platform</label><select class="form-select" id="platform-filter" name="platform"><option value="">All platforms</option>{% for value,label in platform_choices %}<option value="{{ value }}"{% if current_platform == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select><button class="btn btn-primary">Filter</button></form>
-</header>
-  {% if latest_guides %}
-  <section class="mb-5" aria-labelledby="latest-guides-title">
-    <div class="d-flex justify-content-between align-items-end gap-2 mb-3"><h2 id="latest-guides-title" class="h3 mb-0">Latest flashing guides</h2><a href="{% url 'firmwares:flashing_guides' %}">All guides</a></div>
-    <div class="row g-3">{% for guide in latest_guides %}<div class="col-12 col-md-6 col-xl-4"><article class="surface-card p-3 h-100"><p class="section-eyebrow mb-1">{{ guide.template.get_guide_type_display }}</p><h3 class="h5"><a href="{{ guide.post.get_absolute_url }}">{{ guide.post.title }}</a></h3><p class="small muted mb-0">{{ guide.brand.name }}{% if guide.model %} · {{ guide.model.name }}{% endif %}</p></article></div>{% endfor %}</div>
-  </section>
-  {% endif %}
-  {% if featured_tools %}<section class="mb-5"><h2 class="h3">Featured tools</h2><div class="row g-3">{% for tool in featured_tools %}<div class="col-12 col-md-6 col-xl-4"><article class="surface-card p-3"><p class="section-eyebrow">{{ tool.get_platform_display }}</p><h3 class="h5"><a href="{% url 'firmwares:flashing_tool_detail' slug=tool.slug %}">{{ tool.name }}</a></h3><p class="muted">{{ tool.description|truncatewords:30 }}</p></article></div>{% endfor %}</div></section>{% endif %}
-  {% for category in categories %}{% if category.active_tools %}<section class="mb-5"><h2 class="h3">{{ category.name }}</h2><div class="row g-3">{% for tool in category.active_tools %}<div class="col-12 col-md-6 col-xl-4"><article class="surface-card p-3"><h3 class="h5"><a href="{% url 'firmwares:flashing_tool_detail' slug=tool.slug %}">{{ tool.name }}</a></h3><p class="small muted">{{ tool.get_platform_display }}</p><p class="mb-0">{{ tool.description|truncatewords:25 }}</p></article></div>{% endfor %}</div></section>{% endif %}{% empty %}<p class="empty-state p-4">No tool categories are configured.</p>{% include "components/request_cta.html" with kind="chipset" heading="Tools missing for your chipset?" %}{% endfor %}
+{% url 'firmwares:flashing_tools' as tools_url %}
+<div class="site-container cat-page">
+  {% include "components/breadcrumbs.html" with current="Tools and guides" %}
+  <header class="hero-panel cat-head">
+    <div class="cat-head__main">
+      <p class="hero-eyebrow"><i class="icon" data-lucide="wrench" aria-hidden="true"></i> Device maintenance</p>
+      <h1 class="cat-head__title">Flashing <span class="text-gradient">tools and guides</span></h1>
+      <p class="cat-head__text">{{ total_tools }} active tools in the catalogue. Review compatibility and vendor guidance before use.</p>
+    </div>
+    <div class="cat-head__actions">
+      <a class="btn btn-soft" href="{% url 'firmwares:flashing_guides' %}"><i data-lucide="book-open" aria-hidden="true"></i><span class="ms-1">Browse flashing guides</span></a>
+    </div>
+  </header>
+  <form id="tool-filters" class="filter-bar cat-filters" role="search" method="get" action="{{ tools_url }}" data-catalog-filters
+        hx-get="{{ tools_url }}" hx-trigger="change, submit" hx-include="this" hx-target="#tool-results"
+        hx-swap="innerHTML" hx-push-url="true" hx-sync="this:replace" hx-indicator="#tool-indicator">
+    <div class="cat-filters__field cat-filters__field--search">
+      <label class="visually-hidden" for="tool-query">Search tools</label>
+      <i data-lucide="search" aria-hidden="true"></i>
+      <input id="tool-query" class="form-control" type="search" name="q" value="{{ search_query }}" maxlength="100" autocomplete="off" enterkeyhint="search" data-live-search
+             placeholder="Odin, SP Flash Tool, MiFlash, QFIL…"
+             hx-get="{{ tools_url }}" hx-trigger="input changed delay:250ms, search" hx-include="closest form"
+             hx-target="#tool-results" hx-swap="innerHTML" hx-push-url="true" hx-sync="closest form:replace" hx-indicator="#tool-indicator">
+    </div>
+    <div class="cat-filters__field">
+      <label class="visually-hidden" for="platform-filter">Platform</label>
+      <select class="form-select" id="platform-filter" name="platform"><option value="">All platforms</option>{% for value, label in platform_choices %}<option value="{{ value }}"{% if current_platform == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+    </div>
+    <div class="cat-filters__actions"><button class="btn btn-primary" type="submit">Search</button></div>
+    <span id="tool-indicator" class="htmx-indicator cat-filters__status align-items-center gap-2 muted" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span><span>Searching</span></span>
+  </form>
+  <div id="tool-results" class="skeleton-host" aria-live="polite">{% include "firmwares/fragments/tool_results.html" %}</div>
 </div>
 {% endblock %}

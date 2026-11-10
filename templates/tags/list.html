@@ -9,12 +9,12 @@
   </div>
   {% if cloud and not q %}
     <section class="tag-cloud-card" aria-labelledby="popular-topics-title">
-      <h2 class="side-widget__title" id="popular-topics-title">Popular topics</h2>
+      <h2 class="side-widget__title" id="popular-topics-title"><i data-lucide="flame" class="icon" aria-hidden="true"></i>Popular topics</h2>
       <ul class="tag-cloud">
         {% for tag in cloud %}<li><a class="tag-cloud__tag tag-cloud__tag--{{ tag.weight }}" href="{% url 'tags:detail' slug=tag.slug %}">#{{ tag.name }}</a></li>{% endfor %}
       </ul>
     </section>
   {% endif %}
-  <div id="tag-results">{% include "tags/partials/tag_results.html" %}</div>
+  <div id="tag-results" class="skeleton-host" aria-live="polite">{% include "tags/partials/tag_results.html" %}</div>
 </div>
 {% endblock %}

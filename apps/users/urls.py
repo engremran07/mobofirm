@@ -38,6 +38,7 @@ from .views import (
     verify_email_status,
     verify_email_view,
 )
+from .views_password import password_rules_check
 
 profile_api_router = DefaultRouter()
 profile_api_router.register("profiles", api.ProfileViewSet, basename="profiles")
@@ -83,6 +84,7 @@ urlpatterns = [
     path("verify-email/status/", verify_email_status, name="verify_email_status"),
     path("verify-email/required/", verify_email_required, name="verify_email_required"),
     path("tell-us-about-you/", tell_us_about_you, name="tell_us_about_you"),
+    path("password-rules/", password_rules_check, name="password_rules"),
     path("locale-hint/", locale_hint, name="locale_hint"),
     path(
         "accounts/resend-verification/", resend_verification, name="resend_verification"

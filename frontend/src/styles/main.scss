@@ -1,0 +1,24 @@
+// Public site stylesheet entry (compiled by Vite to static/build/site.css).
+// Layer order: tokens -> base -> legacy (page-level rules awaiting migration) ->
+// layout -> components -> utilities -> themes. Colour themes live in tokens.css.
+@use "tokens/scale";
+@use "base/base";
+@use "legacy/site";
+@use "layout/shell";
+@use "components/buttons";
+@use "components/forms";
+@use "components/cards";
+@use "components/badges-nav-feedback";
+@use "components/data";
+@use "components/content";
+@use "components/overlays";
+@use "components/catalog";
+@use "components/home";
+@use "components/consent";
+@use "components/dialog";
+@use "components/commerce";
+@use "components/auth";
+@use "components/share";
+@use "utilities/utilities";
+@use "themes/themes";
+@use "themes/motion";

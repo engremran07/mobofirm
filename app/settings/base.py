@@ -73,6 +73,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.middleware.csp.ContentSecurityPolicyMiddleware",
+    "apps.core.editor.csp.video_embed_csp_middleware",
     "apps.core.middleware.admin_csp.AdminContentSecurityPolicyMiddleware",
     "apps.site_settings.middleware.SiteAnalyticsCspMiddleware",
     "apps.core.middleware.correlation.CorrelationIdMiddleware",
@@ -412,6 +413,14 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.firmwares.tasks.cleanup_old_tracking_data",
         "schedule": 7 * 24 * 60 * 60,
     },
+    "firmwares-purge-package-history": {
+        "task": "apps.firmwares.tasks.purge_package_history",
+        "schedule": 24 * 60 * 60,
+    },
+    "firmwares-auto-feature-popular": {
+        "task": "apps.firmwares.tasks.auto_feature_popular_firmware",
+        "schedule": 24 * 60 * 60,
+    },
     "storage-verify-locations": {
         "task": "apps.storage.tasks.verify_storage_locations",
         "schedule": 24 * 60 * 60,
@@ -442,6 +451,10 @@ CELERY_BEAT_SCHEDULE = {
     },
     "core-cleanup-old-data": {
         "task": "apps.core.tasks.cleanup_old_data",
+        "schedule": 24 * 60 * 60,
+    },
+    "site-settings-cleanup-editor-images": {
+        "task": "apps.site_settings.tasks.cleanup_editor_images",
         "schedule": 24 * 60 * 60,
     },
     "seo-process-pending-jobs": {

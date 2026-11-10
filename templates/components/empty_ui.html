@@ -1,0 +1,12 @@
+{# Contract: title (required); message; icon (Lucide name registered in modules/icons.js, default "search"); action_label + action_url; secondary_label + secondary_url. The illustrated empty state of the content pages. #}
+<div class="empty-ui" role="status">
+  <span class="empty-ui__icon"><i data-lucide="{{ icon|default:'search' }}" aria-hidden="true"></i></span>
+  <p class="empty-ui__title">{{ title }}</p>
+  {% if message %}<p class="empty-ui__message mb-0">{{ message }}</p>{% endif %}
+  {% if action_label and action_url or secondary_label and secondary_url %}
+    <div class="empty-ui__actions">
+      {% if action_label and action_url %}<a class="btn btn-primary" href="{{ action_url }}">{{ action_label }}</a>{% endif %}
+      {% if secondary_label and secondary_url %}<a class="btn btn-soft" href="{{ secondary_url }}">{{ secondary_label }}</a>{% endif %}
+    </div>
+  {% endif %}
+</div>

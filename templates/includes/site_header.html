@@ -14,8 +14,11 @@
       <div class="site-header-search d-none d-lg-block flex-grow-1">
         {% include "includes/site_search.html" with search_id="site-search" %}
       </div>
-      <div class="d-none d-lg-flex align-items-center gap-2 ms-auto flex-shrink-0">
-        <button class="btn btn-outline-secondary" type="button" data-theme-toggle aria-label="Switch to dark theme">
+      <div class="site-header-actions d-none d-lg-flex">
+        <button class="btn btn-outline-secondary btn-icon" type="button" data-command-palette-open aria-haspopup="dialog" aria-keyshortcuts="Control+K Meta+K" aria-label="Open the command menu" title="Command menu (Ctrl+K)">
+          <i data-lucide="command" aria-hidden="true"></i>
+        </button>
+        <button class="btn btn-outline-secondary btn-icon" type="button" data-theme-toggle aria-label="Switch to dark theme">
           <i data-lucide="moon" data-theme-icon="dark" aria-hidden="true"></i>
           <i data-lucide="sun" data-theme-icon="light" aria-hidden="true"></i>
         </button>
@@ -33,7 +36,10 @@
           <a class="btn btn-outline-secondary" href="{% url 'users:account_signup' %}">Create account</a>
         {% endif %}
       </div>
-      <button class="btn btn-outline-secondary d-lg-none ms-auto mobile-nav-toggle" type="button"
+      <button class="btn btn-outline-secondary btn-icon d-lg-none ms-auto" type="button" data-command-palette-open aria-haspopup="dialog" aria-label="Open the command menu">
+        <i data-lucide="search" aria-hidden="true"></i>
+      </button>
+      <button class="btn btn-outline-secondary btn-icon d-lg-none mobile-nav-toggle" type="button"
               @click="mobileOpen = !mobileOpen"
               :aria-expanded="mobileOpen.toString()"
               aria-controls="mobile-navigation"
@@ -42,7 +48,7 @@
       </button>
     </div>
     <nav id="primary-navigation" class="site-primary-nav d-none d-lg-flex align-items-center gap-4 pt-2" aria-label="Main navigation">
-      {% include "includes/nav_links.html" %}
+      {% include "includes/nav_mega.html" %}
     </nav>
     <nav id="mobile-navigation" class="mobile-nav-panel d-lg-none mt-3" aria-label="Mobile navigation"
          x-cloak :hidden="!mobileOpen">

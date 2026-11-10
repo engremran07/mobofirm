@@ -6,32 +6,47 @@
 {% url 'firmwares:request_model' as model_request_url %}
 {% url 'firmwares:request_variant' as variant_request_url %}
 {% url 'firmwares:browse' as browse_url %}
-<div class="site-container py-5">
+<div class="site-container cat-page" data-upload-wizard>
   {% include "components/breadcrumbs.html" with current="Upload firmware" parent_label="Firmware" parent_url=browse_url %}
   <div class="row justify-content-center">
     <div class="col-12 col-xl-9">
       {% include "components/page_header.html" with eyebrow="Contribute" title="Upload firmware" lead="Pick the exact device variant, then add the file or an approved download link. A reviewer checks every submission; once approved it is published under that variant and you are notified." %}
       <p class="small muted">Files up to {{ max_upload_mb }} MB. {% if not seller %}Your uploads are free for everyone to download.{% endif %} <a href="{% url 'firmwares:my_uploads' %}">My uploads</a></p>
-      <form method="post" enctype="multipart/form-data" class="surface-card p-4" novalidate x-data="uploadForm" x-on:change="onChange" data-upload-form>
+      <ol class="stepper-ui wizard-steps" data-wizard-steps aria-label="Upload progress">
+        <li data-step="brand" class="is-current"><a href="#step-device">Brand</a></li>
+        <li data-step="model"><a href="#step-device">Model</a></li>
+        <li data-step="variant"><a href="#step-device">Variant</a></li>
+        <li data-step="file"><a href="#step-file">File</a></li>
+        <li data-step="review"><a href="#step-review">Review</a></li>
+      </ol>
+      <form method="post" enctype="multipart/form-data" novalidate x-data="uploadForm" x-on:change="onChange" x-on:combobox:select="onPick" x-on:combobox:clear="onPick" x-on:htmx:after-swap="onSwap" data-upload-form>
         {% csrf_token %}
         {% include "components/form_errors.html" with form=form %}
-        <fieldset class="mb-4">
-          <legend class="h5">Device</legend>
+        <fieldset id="step-device" class="wizard-step">
+          <legend class="visually-hidden">Device</legend>
+          <div class="wizard-step__head">
+            <span class="wizard-step__num" aria-hidden="true"><i data-lucide="smartphone"></i></span>
+            <div><h2 class="wizard-step__title">Device</h2><p class="wizard-step__hint">Brand, model and, when the model has variants, the exact variant. For example: Xiaomi → Redmi Note 13 Pro 5G → AI2401_A.</p></div>
+          </div>
           <div class="row g-3">
             <div class="col-12 col-md-4">
-              {% include "firmwares/includes/catalog_field.html" with field=form.brand input_id="upload-brand" label="Brand" kinds="brand" display=brand_label placeholder="Search brands…" required=True request_url=brand_request_url request_text="Request this brand" %}
+              {% include "firmwares/includes/catalog_field.html" with field=form.brand input_id="upload-brand" label="Brand" kinds="brand" display=brand_label placeholder="e.g. Xiaomi" help="Start typing and pick the manufacturer." required=True request_url=brand_request_url request_text="Request this brand" %}
             </div>
             <div class="col-12 col-md-4">
-              {% include "firmwares/includes/catalog_field.html" with field=form.model input_id="upload-model" label="Model" kinds="model" display=model_label depends_on="upload-brand" depends_param="brand" placeholder="Search models…" required=True request_url=model_request_url request_text="Request this model" request_context="brand=upload-brand" %}
+              {% include "firmwares/includes/catalog_field.html" with field=form.model input_id="upload-model" label="Model" kinds="model" display=model_label depends_on="upload-brand" depends_param="brand" placeholder="e.g. Redmi Note 13 Pro 5G" help="Choose the brand first, then the device model." required=True request_url=model_request_url request_text="Request this model" request_context="brand=upload-brand" %}
             </div>
-            <div class="col-12 col-md-4">
-              {% include "firmwares/includes/catalog_field.html" with field=form.variant input_id="upload-variant" label="Variant" kinds="variant" display=variant_label depends_on="upload-model" depends_param="model" placeholder="Search variants…" required=True request_url=variant_request_url request_text="Request this variant" request_context="brand=upload-brand,model=upload-model" %}
+            <div class="col-12 col-md-4" id="upload-variant-region" hx-get="{% url 'firmwares:upload_variant_field' %}" hx-trigger="variant:refresh" hx-include="#upload-model-value, #upload-variant-value" hx-target="this" hx-swap="innerHTML" hx-sync="this:queue last" aria-live="polite">
+              {% include "firmwares/fragments/upload_variant.html" %}
             </div>
           </div>
         </fieldset>
 
-        <fieldset class="mb-4">
-          <legend class="h5">File</legend>
+        <fieldset id="step-file" class="wizard-step">
+          <legend class="visually-hidden">File and release details</legend>
+          <div class="wizard-step__head">
+            <span class="wizard-step__num" aria-hidden="true"><i data-lucide="file-archive"></i></span>
+            <div><h2 class="wizard-step__title">File and release details</h2><p class="wizard-step__hint">Upload the archive or give an approved download link, then describe the build. Example build: A546EXXU3AWK1.</p></div>
+          </div>
           {% include "components/form_field.html" with field=form.source %}
           <div data-source-panel="file" x-bind:hidden="fileHidden">
             {% include "components/form_field.html" with field=form.file %}
@@ -41,11 +56,7 @@
           </div>
           {% include "components/form_field.html" with field=form.is_password_protected %}
           <div x-bind:hidden="passwordHidden">{% include "components/form_field.html" with field=form.archive_password %}</div>
-        </fieldset>
-
-        <fieldset class="mb-4">
-          <legend class="h5">Release details</legend>
-          <div class="row g-3">
+          <div class="row g-3 mt-1">
             <div class="col-12 col-md-6">{% include "components/form_field.html" with field=form.build_number %}</div>
             <div class="col-12 col-md-6">{% include "components/form_field.html" with field=form.android_version %}</div>
             <div class="col-12">{% include "components/form_field.html" with field=form.package_format %}</div>
@@ -54,19 +65,35 @@
           </div>
         </fieldset>
 
-        {% if seller %}
-          <fieldset class="mb-4">
-            <legend class="h5">Access and price</legend>
-            <p class="small muted">As an approved seller you can offer this file as paid or featured. Reviewers set the final price and confirm the tier.</p>
+        <fieldset id="step-review" class="wizard-step">
+          <legend class="visually-hidden">Review and submit</legend>
+          <div class="wizard-step__head">
+            <span class="wizard-step__num" aria-hidden="true"><i data-lucide="send"></i></span>
+            <div><h2 class="wizard-step__title">Review and submit</h2><p class="wizard-step__hint">Check the summary. A reviewer verifies the file before it is published.</p></div>
+          </div>
+          <section class="upload-access" aria-labelledby="upload-access-title">
+            <h3 id="upload-access-title" class="upload-access__title">Access control</h3>
+            {% if seller %}
+              <p class="small muted">As an approved seller you can offer this file as free, featured or paid. Reviewers set the final price and confirm the tier.</p>
+            {% else %}
+              <p class="small muted upload-access__note" data-upload-access-note>Only approved sellers can offer paid or featured files{% if become_seller_url %} — <a href="{{ become_seller_url }}">Become a seller</a>{% endif %}</p>
+            {% endif %}
             {% include "components/form_field.html" with field=form.access_tier %}
-            <div x-bind:hidden="priceHidden">{% include "components/form_field.html" with field=form.proposed_price %}</div>
-          </fieldset>
-        {% endif %}
-
-        <noscript><p class="alert alert-warning">JavaScript is needed to search the device lists.</p></noscript>
-        <div class="d-flex flex-wrap gap-2">
+            {% if seller %}<div x-bind:hidden="priceHidden" data-price-field>{% include "components/form_field.html" with field=form.proposed_price %}</div>{% endif %}
+          </section>
+          <dl class="wizard-review" data-wizard-review aria-label="Upload summary">
+            <div><dt>Brand</dt><dd data-review="brand">—</dd></div>
+            <div><dt>Model</dt><dd data-review="model">—</dd></div>
+            <div><dt>Variant</dt><dd data-review="variant">—</dd></div>
+            <div><dt>File</dt><dd data-review="file">—</dd></div>
+            <div><dt>Build</dt><dd data-review="build">—</dd></div>
+            <div><dt>Access</dt><dd data-review="access">—</dd></div>
+          </dl>
+          <noscript><p class="alert alert-warning">JavaScript is needed to search the device lists.</p></noscript>
+        </fieldset>
+        <div class="wizard-actions">
           <button class="btn btn-primary" type="submit"><i data-lucide="upload" aria-hidden="true"></i><span class="ms-1">Submit for review</span></button>
-          <a class="btn btn-outline-secondary" href="{% url 'firmwares:requests_hub' %}">Can’t find your device?</a>
+          <a class="btn btn-ghost" href="{% url 'firmwares:requests_hub' %}">Can’t find your device?</a>
         </div>
       </form>
     </div>

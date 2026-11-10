@@ -1,0 +1,389 @@
+@use "../abstracts" as *;
+
+// ---- Skeletons ----
+.skeleton {
+  display: block;
+  min-height: 1em;
+  border-radius: var(--mf-radius-sm);
+  background: var(--mf-skeleton-base);
+
+  @include motion {
+    background:
+      linear-gradient(100deg, transparent 20%, var(--mf-skeleton-shine) 50%, transparent 80%) 0 0 / 220% 100% no-repeat,
+      var(--mf-skeleton-base);
+    animation: mf-shimmer 1.4s linear infinite;
+  }
+}
+
+.skeleton--text {
+  height: 0.9em;
+  margin-block: 0.45em;
+}
+
+.skeleton--title {
+  width: 60%;
+  height: 1.3em;
+  margin-block: 0.4em;
+}
+
+.skeleton--media {
+  aspect-ratio: 16 / 9;
+  border-radius: 0;
+}
+
+.skeleton--avatar {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+}
+
+.skeleton--pill {
+  width: 4.5rem;
+  height: 1.4rem;
+  border-radius: var(--mf-radius-pill);
+}
+
+// A region whose content is being replaced by HTMX: dim it and show a shimmer sweep.
+// Usage: <div id="results" class="skeleton-host" hx-indicator="#results"> (no JavaScript).
+.skeleton-host {
+  position: relative;
+  transition: opacity var(--mf-duration-base) linear;
+
+  &.htmx-request,
+  &[data-loading] {
+    opacity: 0.55;
+    pointer-events: none;
+
+    &::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background: linear-gradient(100deg, transparent 20%, color-mix(in srgb, var(--mf-skeleton-shine) 55%, transparent) 50%, transparent 80%) 0 0 / 220% 100% no-repeat;
+      animation: mf-shimmer 1.2s linear infinite;
+    }
+  }
+}
+
+// Inline template skeleton: hidden until its htmx request runs.
+.skeleton-swap {
+  display: none;
+}
+
+.htmx-request .skeleton-swap,
+[data-loading] .skeleton-swap,
+.skeleton-swap.htmx-request {
+  display: block;
+}
+
+.htmx-request .skeleton-swap ~ *,
+[data-loading] .skeleton-swap ~ *,
+.skeleton-host.is-skeleton-only[data-loading] > :not(.skeleton-swap) {
+  display: none;
+}
+
+.skeleton-card {
+  overflow: hidden;
+  border: 1px solid var(--mf-border);
+  border-radius: var(--mf-radius-lg);
+  background: var(--mf-surface);
+
+  .skeleton-card__body {
+    padding: var(--mf-space-4);
+  }
+}
+
+@keyframes mf-shimmer {
+  from {
+    background-position: 160% 0;
+  }
+
+  to {
+    background-position: -60% 0;
+  }
+}
+
+// ---- Scroll reveal (modules/ui.js toggles .is-revealed) ----
+.js [data-reveal] {
+  @include motion {
+    opacity: 0;
+    transform: translateY(0.9rem);
+    transition:
+      opacity var(--mf-duration-slow) var(--mf-ease-out),
+      transform var(--mf-duration-slow) var(--mf-ease-out);
+    transition-delay: calc(var(--reveal-index, 0) * 60ms);
+  }
+
+  &.is-revealed {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+// ---- Tables ----
+.table-scroll,
+.catalog-table-wrap,
+.table-sticky {
+  max-width: 100%;
+  overflow: auto;
+  border: 1px solid var(--mf-border);
+  border-radius: var(--mf-radius-lg);
+  background: var(--mf-surface);
+  box-shadow: var(--mf-elev-1);
+}
+
+.table-sticky {
+  max-height: min(70vh, 40rem);
+
+  thead th {
+    position: sticky;
+    z-index: 2;
+    top: 0;
+    background: var(--mf-surface-soft);
+    box-shadow: 0 1px 0 var(--mf-border);
+  }
+}
+
+.catalog-table,
+.table-ui {
+  --bs-table-bg: transparent;
+  --bs-table-color: var(--mf-text);
+  --bs-table-border-color: var(--mf-border);
+  --bs-table-hover-bg: color-mix(in srgb, var(--mf-accent) 6%, transparent);
+  --bs-table-striped-bg: color-mix(in srgb, var(--mf-surface-soft) 55%, transparent);
+
+  th {
+    padding-block: 0.8rem;
+  }
+
+  tbody tr {
+    transition: background-color var(--mf-duration-fast) linear;
+  }
+
+  td,
+  th {
+    padding-inline: 1rem;
+  }
+}
+
+.table-ui {
+  width: 100%;
+  margin: 0;
+  border-collapse: separate;
+  border-spacing: 0;
+
+  th {
+    background: var(--mf-surface-soft);
+    color: var(--mf-text-muted);
+    font-size: var(--mf-text-xs);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-align: start;
+    text-transform: uppercase;
+  }
+
+  td {
+    padding-block: 0.75rem;
+    border-top: 1px solid var(--mf-border);
+  }
+
+  tbody tr:hover {
+    background: var(--bs-table-hover-bg);
+  }
+}
+
+// ---- Pagination, load more, infinite scroll ----
+.pagination {
+  gap: 0.3rem;
+  --bs-pagination-border-radius: var(--mf-radius-pill);
+  --bs-pagination-padding-x: 0.85rem;
+
+  .page-link {
+    min-width: 2.4rem;
+    border-radius: var(--mf-radius-pill) !important;
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    text-align: center;
+    transition:
+      background-color var(--mf-duration-fast) linear,
+      transform var(--mf-duration-fast) var(--mf-ease-out);
+
+    &:hover {
+      transform: translateY(-1px);
+    }
+  }
+
+  .page-item.active .page-link {
+    box-shadow: 0 4px 14px color-mix(in srgb, var(--mf-accent) 30%, transparent);
+  }
+}
+
+// Sentinel for hx-trigger="revealed": shows a spinner only while it loads.
+.load-more {
+  display: grid;
+  justify-items: center;
+  gap: var(--mf-space-2);
+  padding: var(--mf-space-5) 0;
+  color: var(--mf-text-muted);
+  font-size: var(--mf-text-sm);
+}
+
+// ---- Filter chips and sticky filter bar ----
+.filter-bar {
+  position: sticky;
+  z-index: 8;
+  top: calc(var(--mf-header-height) + 0.25rem);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--mf-space-2) var(--mf-space-3);
+  margin-bottom: var(--mf-space-4);
+  padding: var(--mf-space-3);
+  border: 1px solid var(--mf-glass-border);
+  border-radius: var(--mf-radius-lg);
+  background: var(--mf-glass-bg-strong);
+  -webkit-backdrop-filter: blur(var(--mf-glass-blur)) saturate(1.4);
+  backdrop-filter: blur(var(--mf-glass-blur)) saturate(1.4);
+  box-shadow: var(--mf-elev-2);
+}
+
+.chip-ui {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.8rem;
+  border: 1px solid var(--mf-border);
+  border-radius: var(--mf-radius-pill);
+  background: var(--mf-surface);
+  color: var(--mf-text);
+  font-size: var(--mf-text-sm);
+  font-weight: 560;
+  text-decoration: none;
+  transition:
+    background-color var(--mf-duration-fast) linear,
+    border-color var(--mf-duration-fast) linear;
+
+  &:hover {
+    border-color: var(--mf-accent);
+    color: var(--mf-text);
+  }
+
+  &[aria-pressed="true"],
+  &.is-active,
+  &[aria-current] {
+    border-color: var(--mf-accent);
+    background: color-mix(in srgb, var(--mf-accent) 14%, var(--mf-surface));
+    color: var(--mf-text);
+  }
+
+  .chip-ui__remove {
+    display: inline-grid;
+    width: 1.15rem;
+    height: 1.15rem;
+    padding: 0;
+    place-items: center;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--mf-text-muted);
+    line-height: 1;
+
+    &:hover {
+      background: var(--mf-surface-soft);
+      color: var(--mf-text);
+    }
+  }
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--mf-space-2);
+}
+
+// ---- Stepper ----
+.stepper-ui {
+  display: flex;
+  gap: var(--mf-space-2);
+  margin: 0 0 var(--mf-space-5);
+  padding: 0;
+  counter-reset: step;
+  list-style: none;
+
+  li {
+    position: relative;
+    display: flex;
+    min-width: 0;
+    flex: 1 1 0;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.4rem;
+    color: var(--mf-text-muted);
+    font-size: var(--mf-text-xs);
+    font-weight: 600;
+    text-align: center;
+
+    &::before {
+      content: counter(step);
+      counter-increment: step;
+      z-index: 1;
+      display: grid;
+      width: 2rem;
+      height: 2rem;
+      place-items: center;
+      border: 2px solid var(--mf-border);
+      border-radius: 50%;
+      background: var(--mf-surface);
+      font-variant-numeric: tabular-nums;
+      font-weight: 750;
+    }
+
+    &:not(:last-child)::after {
+      content: "";
+      position: absolute;
+      top: 1rem;
+      left: calc(50% + 1.2rem);
+      width: calc(100% - 2.4rem);
+      height: 2px;
+      background: var(--mf-border);
+    }
+
+    &.is-done::before {
+      content: "✓";
+      border-color: var(--mf-accent);
+      background: var(--mf-accent);
+      color: var(--mf-accent-ink);
+    }
+
+    &.is-done::after {
+      background: var(--mf-accent);
+    }
+
+    &.is-current {
+      color: var(--mf-text);
+
+      &::before {
+        border-color: var(--mf-accent);
+        box-shadow: 0 0 0 0.25rem color-mix(in srgb, var(--mf-accent) 20%, transparent);
+        color: var(--mf-accent);
+      }
+    }
+  }
+}
+
+// ---- Breadcrumbs ----
+.breadcrumbs .breadcrumb {
+  --bs-breadcrumb-divider: "›";
+  margin-bottom: var(--mf-space-3);
+  font-size: var(--mf-text-sm);
+
+  a {
+    color: var(--mf-text-muted);
+    text-decoration: none;
+
+    &:hover {
+      color: var(--mf-accent);
+      text-decoration: underline;
+    }
+  }
+}

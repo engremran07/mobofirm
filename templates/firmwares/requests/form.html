@@ -6,34 +6,45 @@
 {% url 'firmwares:request_brand' as brand_request_url %}
 {% url 'firmwares:request_model' as model_request_url %}
 {% url 'firmwares:request_chipset' as chipset_request_url %}
-<div class="site-container py-5">
+<div class="site-container cat-page">
   {% include "components/breadcrumbs.html" with current=title parent_label="Requests" parent_url=hub_url %}
   <div class="row justify-content-center">
     <div class="col-12 col-lg-8 col-xl-7">
       {% include "components/page_header.html" with eyebrow="Catalogue request" title=title lead=lead %}
-      <form method="post" class="surface-card p-4" novalidate data-request-form="{{ kind }}">
+      <div class="request-example" role="note">
+        <i data-lucide="info" aria-hidden="true"></i>
+        <p><strong>Example.</strong>
+          {% if kind == "brand" %}Brand “Xiaomi”, website https://www.mi.com.
+          {% elif kind == "model" %}Brand “Xiaomi”, model “Redmi Note 13 Pro 5G”, model code “2312DRA50G”, chipset “MediaTek Dimensity 7200 Ultra”.
+          {% elif kind == "variant" %}Model “Redmi Note 13 Pro 5G”, code “2312DRA50G”, region “Global”, memory “8 GB / 256 GB”.
+          {% elif kind == "chipset" %}Vendor “MediaTek”, chipset “Dimensity 9200”, code name “MT6985”.
+          {% else %}Brand “Samsung”, model “Galaxy S24 Ultra”, variant code “SM-S928B”, Android 14, official firmware.
+          {% endif %}
+          Every field below shows its own hint.</p>
+      </div>
+      <form method="post" class="cat-panel" novalidate data-request-form="{{ kind }}">
         {% csrf_token %}
         {% include "components/form_errors.html" with form=form %}
         {% if kind == "model" or kind == "variant" or kind == "firmware" %}
-          {% include "firmwares/includes/catalog_field.html" with field=form.brand input_id="request-brand" label="Brand" kinds="brand" display=brand_label placeholder="Search brands…" required=True request_url=brand_request_url request_text="Request this brand" %}
+          {% include "firmwares/includes/catalog_field.html" with field=form.brand input_id="request-brand" label="Brand" kinds="brand" display=brand_label placeholder="e.g. Xiaomi" help="Start typing and pick the manufacturer from the list." required=True request_url=brand_request_url request_text="Request this brand" %}
         {% endif %}
         {% if kind == "variant" %}
-          {% include "firmwares/includes/catalog_field.html" with field=form.model input_id="request-model" label="Model" kinds="model" display=model_label depends_on="request-brand" depends_param="brand" placeholder="Search models…" required=True request_url=model_request_url request_text="Request this model" request_context="brand=request-brand" %}
+          {% include "firmwares/includes/catalog_field.html" with field=form.model input_id="request-model" label="Model" kinds="model" display=model_label depends_on="request-brand" depends_param="brand" placeholder="e.g. Redmi Note 13 Pro 5G" help="Choose the brand first, then pick the model this variant belongs to." required=True request_url=model_request_url request_text="Request this model" request_context="brand=request-brand" %}
         {% elif kind == "firmware" %}
-          {% include "firmwares/includes/catalog_field.html" with field=form.model input_id="request-model" label="Model" kinds="model" display=model_label depends_on="request-brand" depends_param="brand" placeholder="Search models…" optional=True request_url=model_request_url request_text="Request this model" request_context="brand=request-brand" %}
+          {% include "firmwares/includes/catalog_field.html" with field=form.model input_id="request-model" label="Model" kinds="model" display=model_label depends_on="request-brand" depends_param="brand" placeholder="e.g. Redmi Note 13 Pro 5G" help="Choose the brand first. Leave empty if you do not know the model." optional=True request_url=model_request_url request_text="Request this model" request_context="brand=request-brand" %}
         {% endif %}
         {% if kind == "model" %}
-          {% include "firmwares/includes/catalog_field.html" with field=form.chipset input_id="request-chipset" label="Chipset" kinds="chipset" display=chipset_label placeholder="Search chipsets…" optional=True request_url=chipset_request_url request_text="Request this chipset" %}
+          {% include "firmwares/includes/catalog_field.html" with field=form.chipset input_id="request-chipset" label="Chipset" kinds="chipset" display=chipset_label placeholder="e.g. MediaTek Dimensity 9200 (MT6985)" help="The chip the device uses, if you know it." optional=True request_url=chipset_request_url request_text="Request this chipset" %}
         {% endif %}
         {% for field in form %}
           {% if field.name != "brand" and field.name != "model" and field.name != "chipset" %}
             {% include "components/form_field.html" with field=field %}
           {% endif %}
         {% endfor %}
-        {% if kind != "firmware" %}<div id="request-check" class="mb-3" aria-live="polite"></div>{% endif %}
+        {% if kind != "firmware" %}<div id="request-check" class="request-check mb-3" aria-live="polite"></div>{% endif %}
         <div class="d-flex flex-wrap gap-2">
-          <button class="btn btn-primary" type="submit">{{ button }}</button>
-          <a class="btn btn-outline-secondary" href="{{ hub_url }}">Cancel</a>
+          <button class="btn btn-primary" type="submit"><i data-lucide="send" aria-hidden="true"></i><span class="ms-1">{{ button }}</span></button>
+          <a class="btn btn-ghost" href="{{ hub_url }}">Cancel</a>
         </div>
       </form>
     </div>

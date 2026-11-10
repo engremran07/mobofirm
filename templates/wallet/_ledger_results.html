@@ -1,7 +1,8 @@
 {# HTMX target body for the history filters and pagination; the full page wraps it in #ledger-results. #}
+{% include "components/search_feedback.html" with noun="entry" noun_plural="entries" %}
 {% if page_obj.object_list %}
   {% include "wallet/_ledger_table.html" with entries=page_obj.object_list %}
   {% include "components/pagination.html" with page_obj=page_obj label="History pages" hx_target="#ledger-results" %}
 {% else %}
-  {% include "components/empty_state.html" with title="No entries match" message="Earn or top up credits and every change shows up here." action_label="See ways to earn" action_url=earn_url %}
+  {% include "shop/_empty.html" with icon="receipt" title="No entries match" message="Earn or top up credits and every change shows up here." action_label="See ways to earn" action_url=earn_url %}
 {% endif %}

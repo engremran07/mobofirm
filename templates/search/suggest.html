@@ -1,23 +1,27 @@
-{# Combobox options (HTMX partial). Context: rows [{hit, kind}], query, mode, prefix, kinds, show_kind. #}
+{# Combobox options (HTMX partial). Context: rows [{hit, index, kind}], groups [{kind, label, icon, rows}] (navigate mode), suggestions (Suggestion list), query, mode, prefix, kinds, show_kind. #}
 {% load firmware_requests %}
-{% for row in rows %}
-  {% with hit=row.hit %}
-    {% if mode == "navigate" and hit.url and hit.url|slice:":1" == "/" and hit.url|slice:":2" != "//" %}
-      <a id="{{ prefix }}-option-{{ forloop.counter0 }}" class="combobox-option" role="option" aria-selected="false" tabindex="-1" href="{{ hit.url }}">
-        {% if show_kind %}<span class="combobox-kind">{{ row.kind }}</span>{% endif %}
-        <span class="combobox-title">{{ hit.title }}</span>
-        {% if hit.subtitle %}<span class="combobox-subtitle">{{ hit.subtitle }}</span>{% endif %}
+{% if groups %}
+  {% for group in groups %}
+    <div class="combobox-group" role="group" aria-labelledby="{{ prefix }}-group-{{ group.kind }}">
+      <div id="{{ prefix }}-group-{{ group.kind }}" class="combobox-group__label" role="presentation"><i data-lucide="{{ group.icon }}" aria-hidden="true"></i><span>{{ group.label }}</span></div>
+      {% for row in group.rows %}{% include "search/_option.html" %}{% endfor %}
+    </div>
+  {% endfor %}
+{% else %}
+  {% for row in rows %}{% include "search/_option.html" %}{% endfor %}
+{% endif %}
+{% if suggestions %}
+  <div class="combobox-group combobox-group--suggest" role="group" aria-labelledby="{{ prefix }}-group-suggest">
+    <div id="{{ prefix }}-group-suggest" class="combobox-group__label" role="presentation"><i data-lucide="sparkles" aria-hidden="true"></i><span>Did you mean</span></div>
+    {% for suggestion in suggestions %}
+      <a id="{{ prefix }}-option-suggest-{{ forloop.counter0 }}" class="combobox-option combobox-suggestion" role="option" aria-selected="false" tabindex="-1" href="{{ suggestion.url }}" data-suggestion-kind="{{ suggestion.kind }}">
+        <span class="combobox-icon" aria-hidden="true"><i data-lucide="{{ suggestion.icon }}"></i></span>
+        <span class="combobox-text"><span class="combobox-title">{{ suggestion.title }}</span><span class="combobox-subtitle">{{ suggestion.noun|capfirst }}</span></span>
       </a>
-    {% else %}
-      <div id="{{ prefix }}-option-{{ forloop.counter0 }}" class="combobox-option" role="option" aria-selected="false"
-           data-value="{{ hit.picked_value }}" data-label="{{ hit.picked_label }}" data-kind="{{ hit.kind }}"{% for key, extra in hit.extra %} data-{{ key }}="{{ extra }}"{% endfor %}>
-        {% if show_kind %}<span class="combobox-kind">{{ row.kind }}</span>{% endif %}
-        <span class="combobox-title">{{ hit.title }}</span>
-        {% if hit.subtitle %}<span class="combobox-subtitle">{{ hit.subtitle }}</span>{% endif %}
-      </div>
-    {% endif %}
-  {% endwith %}
-{% empty %}
+    {% endfor %}
+  </div>
+{% endif %}
+{% if not rows %}
   <div id="{{ prefix }}-option-empty" class="combobox-empty" role="option" aria-disabled="true">
     {% if query %}No matches for “{{ query }}”.{% else %}Type to search.{% endif %}
   </div>
@@ -29,9 +33,9 @@
     <a id="{{ prefix }}-option-request-chipset" class="combobox-option combobox-request" role="option" aria-selected="false" tabindex="-1" href="{{ cta_chipset.url }}" data-request-cta="chipset">{{ cta_chipset.label }}</a>
     <a id="{{ prefix }}-option-request-firmware" class="combobox-option combobox-request" role="option" aria-selected="false" tabindex="-1" href="{{ cta_firmware.url }}" data-request-cta="firmware">{{ cta_firmware.label }}</a>
   {% endif %}
-{% endfor %}
+{% endif %}
 {% if rows and mode == "navigate" %}
-  <a id="{{ prefix }}-option-all" class="combobox-option combobox-all" role="option" aria-selected="false" tabindex="-1"
+  <a id="{{ prefix }}-option-all" class="combobox-option combobox-all" role="option" aria-selected="false" tabindex="-1" data-recent-query="{{ query }}"
      href="{% url 'search:results' %}?q={{ query|urlencode }}{% if kinds %}&amp;kinds={{ kinds|urlencode }}{% endif %}">See all results for “{{ query }}”</a>
   <a id="{{ prefix }}-option-request" class="combobox-option combobox-request" role="option" aria-selected="false" tabindex="-1"
      href="{% url 'search:results' %}?q={{ query|urlencode }}#request-missing">Can’t find it? Request it</a>

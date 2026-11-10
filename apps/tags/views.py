@@ -12,13 +12,16 @@ from django.db.models import Count, Q
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
+from django.views.decorators.vary import vary_on_headers
 
 from apps.blog import selectors as blog_selectors
 from apps.blog.models import Post
 from apps.core.admin_pages import render_admin_page
+from apps.core.search import list_search_context, search_queryset
 from apps.tags.api import get_settings as tag_settings
 from apps.tags.models import Tag
 from apps.tags.models_keyword import KeywordSuggestion
+from apps.tags.search_providers import TAG_FIELDS
 from apps.tags.selectors import public_tags, tag_cloud, with_live_post_counts
 from apps.tags.services import automation, heuristics
 from apps.users.services.rate_limit import allow_action
@@ -88,15 +91,8 @@ def _jaccard(a: str, b: str) -> float:
 
 @require_GET
 def search(request: HttpRequest) -> JsonResponse:
-    """Autocomplete over public tags."""
-    query = request.GET.get("q", "").strip()[:80]
-    tags = public_tags()
-    if query:
-        tags = tags.filter(
-            Q(name__icontains=query)
-            | Q(normalized_name__icontains=query)
-            | Q(synonyms_text__icontains=query)
-        )
+    """Autocomplete over public tags (shared engine: synonyms, typo tolerance)."""
+    result = search_queryset(public_tags(), request.GET.get("q"), TAG_FIELDS)
     items = [
         {
             "name": tag.name,
@@ -106,30 +102,30 @@ def search(request: HttpRequest) -> JsonResponse:
             "description": tag.description,
             "is_curated": tag.is_curated,
         }
-        for tag in tags.order_by("-usage_count", "name")[:20]
+        for tag in result.queryset.order_by("-usage_count", "name")[:20]
     ]
     return JsonResponse({"items": items})
 
 
 @require_GET
+@vary_on_headers("HX-Request")
 def tag_list(request: HttpRequest) -> HttpResponse:
-    query = request.GET.get("q", "").strip()[:80]
-    tags = with_live_post_counts(public_tags())
-    if query:
-        tags = tags.filter(
-            Q(name__icontains=query)
-            | Q(normalized_name__icontains=query)
-            | Q(synonyms_text__icontains=query)
-        )
-    page_obj = Paginator(tags.order_by("-live_count", "name"), TAGS_PER_PAGE).get_page(
-        request.GET.get("page") or 1
+    """Topics list; ``q`` filters through the shared engine, HTMX gets the grid."""
+    result = search_queryset(
+        with_live_post_counts(public_tags()), request.GET.get("q"), TAG_FIELDS
     )
+    page_obj = Paginator(
+        result.queryset.order_by("-live_count", "name"), TAGS_PER_PAGE
+    ).get_page(request.GET.get("page") or 1)
     context = {
         "tags": page_obj,
         "page_obj": page_obj,
-        "q": query,
+        "q": result.query,
         "cloud": tag_cloud(24),
         "tag_settings": tag_settings(),
+        **list_search_context(
+            result, page_obj.paginator.count, user=request.user, kinds=("tag", "brand")
+        ),
     }
     if request.headers.get("HX-Request"):
         return render(request, "tags/partials/tag_results.html", context)

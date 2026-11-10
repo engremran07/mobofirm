@@ -1,14 +1,45 @@
 {% extends "base.html" %}
-{% load seo_tags %}
+{% load seo_tags editor_tags %}
 {% block title %}{{ tool.name }} | Flashing tools{% endblock %}
 {% block content %}
-<div class="site-container py-5"><nav aria-label="Breadcrumb"><a href="{% url 'firmwares:flashing_tools' %}">Flashing tools</a> / {{ tool.name }}</nav>
-  <article class="mt-4"><p class="section-eyebrow">{{ tool.get_platform_display }}{% if tool.category %} · {{ tool.category.name }}{% endif %}</p><h1 class="display-6 fw-bold">{{ tool.name }}</h1><p class="lead muted">{{ tool.description }}</p>
-    {% if tool.official_url %}<p><a class="btn btn-primary" href="{{ tool.official_url }}" rel="noopener noreferrer">Visit official tool source</a></p>{% endif %}
-    {% if brands %}<h2 class="h4 mt-4">Supported manufacturers</h2><ul>{% for brand in brands %}<li><a href="{% url 'firmwares:brand_detail' slug=brand.slug %}">{{ brand.name }}</a></li>{% endfor %}</ul>{% endif %}
-    {% if chipsets %}<h2 class="h4 mt-4">Supported chipsets</h2><ul>{% for chipset in chipsets %}<li><a href="{% url 'firmwares:chipset_detail' slug=chipset.slug %}">{{ chipset.display_name }}</a></li>{% endfor %}</ul>{% endif %}
-    {% if related_guides %}<h2 class="h4 mt-4">Related guides</h2><ul>{% for guide in related_guides %}<li><a href="{{ guide.post.get_absolute_url }}">{{ guide.post.title }}</a></li>{% endfor %}</ul>{% endif %}
-  </article>
+<div class="site-container cat-page">
+  {% url 'firmwares:flashing_tools' as tools_url %}
+  {% include "components/breadcrumbs.html" with current=tool.name parent_label="Flashing tools" parent_url=tools_url %}
+  <header class="hero-panel cat-head">
+    <div class="cat-head__lead">
+      <span class="logo-tile logo-tile--lg" aria-hidden="true"><i data-lucide="wrench"></i></span>
+      <div class="cat-head__main">
+        <p class="section-eyebrow">{{ tool.get_platform_display }}{% if tool.category %} · {{ tool.category.name }}{% endif %}</p>
+        <h1 class="cat-head__title">{{ tool.name }}</h1>
+        <p class="cat-head__text">{{ tool.description }}</p>
+      </div>
+    </div>
+    {% if tool.official_url %}<div class="cat-head__actions"><a class="btn btn-primary" href="{{ tool.official_url }}" rel="noopener noreferrer"><i data-lucide="external-link" aria-hidden="true"></i><span class="ms-1">Visit official tool source</span></a></div>{% endif %}
+  </header>
+  {% if tool.instructions %}
+    <section class="cat-section" aria-labelledby="tool-howto-title">
+      <div class="cat-section__head"><h2 id="tool-howto-title" class="cat-section__title">How to use</h2></div>
+      <div class="cat-panel article-body">{{ tool.instructions|rich_text }}</div>
+    </section>
+  {% endif %}
+  {% if brands %}
+    <section class="cat-section" aria-labelledby="tool-brands-title">
+      <div class="cat-section__head"><h2 id="tool-brands-title" class="cat-section__title">Supported manufacturers</h2></div>
+      <div class="chip-row">{% for brand in brands %}<a class="chip-ui" href="{% url 'firmwares:brand_detail' slug=brand.slug %}">{{ brand.name }}</a>{% endfor %}</div>
+    </section>
+  {% endif %}
+  {% if chipsets %}
+    <section class="cat-section" aria-labelledby="tool-chipsets-title">
+      <div class="cat-section__head"><h2 id="tool-chipsets-title" class="cat-section__title">Supported chipsets</h2></div>
+      <div class="chip-row">{% for chipset in chipsets %}<a class="chip-ui" href="{% url 'firmwares:chipset_detail' slug=chipset.slug %}">{{ chipset.display_name }}</a>{% endfor %}</div>
+    </section>
+  {% endif %}
+  {% if related_guides %}
+    <section class="cat-section" aria-labelledby="tool-guides-title">
+      <div class="cat-section__head"><h2 id="tool-guides-title" class="cat-section__title">Related guides</h2></div>
+      <div class="cat-panel">{% include "firmwares/includes/guide_list.html" with guides=related_guides %}</div>
+    </section>
+  {% endif %}
   {% related_links tool %}
 </div>
 {% endblock %}

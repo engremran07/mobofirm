@@ -1,0 +1,136 @@
+/* Presentation of rich-text content produced by the editor (public pages, admin and the
+   editing area). The editor never writes inline styles: colours, fonts, sizes,
+   alignment, tables and embeds are curated classes, styled here from design tokens. */
+
+:root {
+  --mf-c-red: #c62f2f;
+  --mf-c-orange: #c25e0a;
+  --mf-c-amber: #8a6a00;
+  --mf-c-green: #23794a;
+  --mf-c-teal: #0e7274;
+  --mf-c-blue: #2158b4;
+  --mf-c-indigo: #4a4ab8;
+  --mf-c-purple: #7b3796;
+  --mf-c-pink: #b8286f;
+  --mf-c-gray: #57626f;
+}
+
+:root[data-bs-theme="dark"],
+:root[data-theme="dark"],
+:root.dark {
+  --mf-c-red: #ff8a8a;
+  --mf-c-orange: #ffae66;
+  --mf-c-amber: #f1c84c;
+  --mf-c-green: #7fdc9f;
+  --mf-c-teal: #63d6d2;
+  --mf-c-blue: #8ab8ff;
+  --mf-c-indigo: #aab0ff;
+  --mf-c-purple: #d7a3f0;
+  --mf-c-pink: #ff9bc8;
+  --mf-c-gray: #b3bdc9;
+}
+
+.mf-fg-red { color: var(--mf-c-red); }
+.mf-fg-orange { color: var(--mf-c-orange); }
+.mf-fg-amber { color: var(--mf-c-amber); }
+.mf-fg-green { color: var(--mf-c-green); }
+.mf-fg-teal { color: var(--mf-c-teal); }
+.mf-fg-blue { color: var(--mf-c-blue); }
+.mf-fg-indigo { color: var(--mf-c-indigo); }
+.mf-fg-purple { color: var(--mf-c-purple); }
+.mf-fg-pink { color: var(--mf-c-pink); }
+.mf-fg-gray { color: var(--mf-c-gray); }
+
+.mf-bg-red { background-color: color-mix(in srgb, var(--mf-c-red) 20%, transparent); }
+.mf-bg-orange { background-color: color-mix(in srgb, var(--mf-c-orange) 20%, transparent); }
+.mf-bg-amber { background-color: color-mix(in srgb, var(--mf-c-amber) 24%, transparent); }
+.mf-bg-green { background-color: color-mix(in srgb, var(--mf-c-green) 20%, transparent); }
+.mf-bg-teal { background-color: color-mix(in srgb, var(--mf-c-teal) 20%, transparent); }
+.mf-bg-blue { background-color: color-mix(in srgb, var(--mf-c-blue) 20%, transparent); }
+.mf-bg-indigo { background-color: color-mix(in srgb, var(--mf-c-indigo) 20%, transparent); }
+.mf-bg-purple { background-color: color-mix(in srgb, var(--mf-c-purple) 20%, transparent); }
+.mf-bg-pink { background-color: color-mix(in srgb, var(--mf-c-pink) 20%, transparent); }
+.mf-bg-gray { background-color: color-mix(in srgb, var(--mf-c-gray) 20%, transparent); }
+
+[class*="mf-bg-"] {
+  border-radius: 0.2em;
+  padding-inline: 0.15em;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+.mf-font-sans { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.mf-font-serif { font-family: Georgia, "Times New Roman", serif; }
+.mf-font-mono { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 0.95em; }
+.mf-size-sm { font-size: 0.875em; }
+.mf-size-lg { font-size: 1.25em; }
+
+.mf-align-start { text-align: start; }
+.mf-align-center { text-align: center; }
+.mf-align-end { text-align: end; }
+.mf-align-justify { text-align: justify; }
+
+.mf-table {
+  width: 100%;
+  max-width: 100%;
+  margin-block: 1rem;
+  border-collapse: collapse;
+  table-layout: auto;
+}
+
+.mf-table th,
+.mf-table td {
+  min-width: 2.5rem;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--mf-border, #d9d2c7);
+  vertical-align: top;
+}
+
+.mf-table th {
+  background: var(--mf-surface-soft, #ece7de);
+  text-align: start;
+}
+
+iframe.mf-video {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  margin-block: 1rem;
+  border: 0;
+  border-radius: var(--mf-radius-sm, 0.5rem);
+  background: #000;
+}
+
+/* Images and figures (uploaded or pasted) in every rich-text surface: never wider than
+   their container, aspect ratio kept from the width/height attributes, optional caption. */
+:where(.article-body, .comment__body, .mf-ui-comment__body, .eco-prose, .card-ui__text, .note-editable) img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin-inline: auto;
+}
+
+:where(.article-body, .comment__body, .mf-ui-comment__body, .eco-prose, .card-ui__text, .note-editable) figure {
+  max-width: 100%;
+  margin-block: 1.25rem;
+  margin-inline: 0;
+}
+
+:where(.article-body, .comment__body, .mf-ui-comment__body, .eco-prose, .card-ui__text, .note-editable) figcaption {
+  margin-top: 0.4rem;
+  color: var(--mf-text-muted, #57626f);
+  font-size: 0.875em;
+  line-height: 1.45;
+  text-align: center;
+}
+
+:where(.article-body, .comment__body, .mf-ui-comment__body, .eco-prose, .card-ui__text) figcaption:empty {
+  display: none;
+}
+
+.note-editable figcaption:empty::before {
+  content: "Add a caption (optional)";
+  opacity: 0.6;
+}

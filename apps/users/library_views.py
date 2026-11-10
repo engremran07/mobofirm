@@ -9,6 +9,7 @@ from django.shortcuts import render
 from django.views.decorators.http import require_GET
 from django.views.decorators.vary import vary_on_headers
 
+from apps.core.search import list_search_context
 from apps.users.request_user import current_user
 
 from . import library
@@ -31,14 +32,25 @@ def library_view(request: HttpRequest) -> HttpResponse:
     """Everything served to the user (free, paid, featured) with filters."""
     user = current_user(request)
     filters = library.LibraryFilters.from_query(request.GET)
+    tab = (
+        library.HISTORY if request.GET.get("tab") == library.HISTORY else library.ACTIVE
+    )
     everything = library.library_entries(user)
-    page = Paginator(library.filter_library(everything, filters), PAGE_SIZE)
+    in_tab = library.entries_for_tab(everything, tab)
+    outcome = library.search_library(in_tab, filters)
+    page = Paginator(outcome.items, PAGE_SIZE)
+    history_count = sum(1 for entry in everything if entry.state == library.HISTORY)
     context = {
         **_tabs_context("library"),
+        **list_search_context(outcome, len(outcome.items), kinds=()),
         "filters": filters,
+        "library_tab": tab,
+        "library_tabs": library.LIBRARY_TABS,
+        "active_count": len(everything) - history_count,
+        "history_count": history_count,
         "page_obj": page.get_page(request.GET.get("page")),
-        "total_served": len(everything),
-        "brands": library.brand_choices(everything),
+        "total_served": len(in_tab),
+        "brands": library.brand_choices(in_tab),
         "tiers": library.TIERS,
         "quota": library.quota_panel(user),
     }

@@ -10,9 +10,9 @@
       {% for item in cards %}{% include "blog/partials/post_card.html" with card=item %}{% endfor %}
     </div>
   {% elif shop_lists_purchases %}
-    <p class="muted">You have not bought an article yet. Featured and paid articles show an unlock button.</p>
+    {% include "components/empty_ui.html" with icon="star" title="You have not bought an article yet" message="Featured and paid articles show an unlock button." action_label="Browse the journal" action_url=journal_url %}
   {% else %}
-    <p class="muted">Purchases cannot be listed right now.</p>
+    {% include "components/empty_ui.html" with icon="lock" title="Purchases cannot be listed right now" message="Your unlocked articles stay available; this list comes back shortly." %}
   {% endif %}
 </div>
 {% endblock %}

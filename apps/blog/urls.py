@@ -1,3 +1,5 @@
+"""URL routes of the blog, including the guide-request flow."""
+
 from django.urls import path
 
 from . import dialogs, feeds, views, views_api, views_manage, views_requests
@@ -60,8 +62,25 @@ urlpatterns = [
     path("purchased/", views.purchased, name="purchased"),
     path("requests/", views_requests.request_list, name="request_list"),
     path("requests/new/", views_requests.request_create, name="request_create"),
+    path("requests/new/search/", views_requests.request_search, name="request_search"),
+    path("requests/new/form/", views_requests.request_form, name="request_form"),
+    path(
+        "requests/from/<slug:slug>/",
+        views_requests.request_from_post,
+        name="request_from_post",
+    ),
     path("requests/mine/", views_requests.request_mine, name="request_mine"),
     path("requests/<int:pk>/", views_requests.request_detail, name="request_detail"),
+    path(
+        "requests/<int:pk>/follow/",
+        views_requests.request_follow,
+        name="request_follow",
+    ),
+    path(
+        "requests/<int:pk>/unfollow/",
+        views_requests.request_unfollow,
+        name="request_unfollow",
+    ),
     path(
         "requests/<int:pk>/cancel/",
         dialogs.CancelGuideRequestDialog.as_view(),

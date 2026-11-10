@@ -1,0 +1,7 @@
+{# Contract: title (required), icon (registered Lucide name; default sparkles), message, action_label + action_url. Commerce empty state with an icon bubble and a clear call to action. #}
+<div class="empty-ui" role="status">
+  <span class="empty-ui__icon"><i data-lucide="{{ icon|default:'sparkles' }}" aria-hidden="true"></i></span>
+  <p class="empty-ui__title">{{ title }}</p>
+  {% if message %}<p class="mb-0">{{ message }}</p>{% endif %}
+  {% if action_label and action_url %}<a class="btn btn-primary mt-2" href="{{ action_url }}">{{ action_label }}</a>{% endif %}
+</div>

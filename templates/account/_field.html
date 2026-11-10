@@ -1,0 +1,19 @@
+{% load mf_ui users_ui %}
+{# Contract: field (required BoundField). Text-like inputs get a floating label with inline validation; every other widget falls back to components/form_field.html. The [data-field-error] container is always present (hidden while empty) so server and in-browser messages share one place; new-password inputs also get the live checklist. #}
+{% with kind=field.field.widget.input_type %}
+  {% if field.is_hidden %}
+    {{ field }}
+  {% elif kind == "text" or kind == "email" or kind == "password" or kind == "url" or kind == "tel" or kind == "number" %}
+    <div class="auth-field mb-3" data-field>
+      <div class="form-floating">
+        {{ field|mf_widget }}
+        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+      </div>
+      <div class="invalid-feedback field-error" id="{{ field.auto_id }}_errors" role="alert" data-field-error{% if not field.errors %} hidden{% endif %}>{% for error in field.errors %}<p class="mb-0">{{ error }}</p>{% endfor %}</div>
+      {% if field.help_text %}<div class="form-text" id="{{ field.auto_id }}_help">{{ field.help_text }}</div>{% endif %}
+      {% if field|is_new_password %}{% password_checklist field %}{% endif %}
+    </div>
+  {% else %}
+    {% include "components/form_field.html" %}
+  {% endif %}
+{% endwith %}

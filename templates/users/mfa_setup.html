@@ -1,36 +1,43 @@
-{% extends "base.html" %}
+{% extends "account/_auth_layout.html" %}
 {% block title %}Set up two-factor authentication | {{ site_name|default:"Mobofirm" }}{% endblock %}
-{% block content %}
-<div class="site-container py-5">
-  {% url 'users:dashboard' as account_url %}
-  {% include "components/breadcrumbs.html" with current="Two-factor setup" parent_label="Account" parent_url=account_url %}
-  <section class="surface-card auth-card p-4" aria-labelledby="mfa-setup-title" x-data="mfaSetup">
-    <p class="section-eyebrow">Account security</p>
-    <h1 id="mfa-setup-title" class="h2">Set up an authenticator</h1>
-    <p>Use an authenticator app that supports time-based one-time passwords, such as Google Authenticator, Microsoft Authenticator or Authy.</p>
-    <ol class="mfa-steps">
-      <li>Open your authenticator app and choose <strong>Add account</strong>, then <strong>Scan a QR code</strong>.</li>
-      <li>
-        Scan this code. It adds <strong>{{ issuer }}</strong> for {{ user.email }}.
-        <div class="my-3">{{ qr_svg }}</div>
-        <button class="btn btn-link px-0" type="button" aria-controls="mfa-setup-key" :aria-expanded="expandedAttr" @click="toggle" x-text="toggleLabel">Can't scan? Show setup key</button>
-        <div id="mfa-setup-key" class="mt-2" :hidden="keyHidden" hidden>
-          <p class="mb-1">Enter this key manually in your app (time-based, 6 digits):</p>
-          <p class="mb-2"><code class="mfa-setup-key" x-ref="key">{{ setup_key }}</code></p>
-          <button class="btn btn-sm btn-outline-secondary" type="button" @click="copy" x-text="copyLabel">Copy key</button>
-        </div>
-        <noscript><p class="mt-2">Setup key: <code class="mfa-setup-key">{{ setup_key }}</code></p></noscript>
-      </li>
-      <li>Enter the six-digit code from the app to confirm setup.</li>
-    </ol>
-    <form method="post">
-      {% csrf_token %}
-      <label class="form-label" for="mfa-setup-code">Authenticator code</label>
-      <input class="form-control mb-3" id="mfa-setup-code" name="code"
-             inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}"
-             minlength="6" maxlength="6" required>
-      <button class="btn btn-primary" type="submit">Enable two-factor authentication</button>
-    </form>
-  </section>
+{% block auth_crumbs %}{% url 'users:dashboard' as account_url %}{% include "components/breadcrumbs.html" with current="Two-factor setup" parent_label="Account" parent_url=account_url %}{% endblock %}
+{% block auth_aside %}{% endblock %}
+{% block auth_card_class %} auth-card--wide{% endblock %}
+{% block auth_icon %}qr-code{% endblock %}
+{% block auth_eyebrow %}Account security{% endblock %}
+{% block auth_title %}Set up an authenticator{% endblock %}
+{% block auth_lead %}<p class="auth-card__lead">Use an authenticator app that supports time-based one-time passwords, such as Google Authenticator, Microsoft Authenticator or Authy.</p>{% endblock %}
+{% block auth_body %}
+<div x-data="mfaSetup">
+  <ol class="mfa-steps">
+    <li class="mfa-step">
+      <h2 class="mfa-step__title">Open your authenticator app</h2>
+      <p class="mfa-step__text">Choose <strong>Add account</strong>, then <strong>Scan a QR code</strong>.</p>
+    </li>
+    <li class="mfa-step">
+      <h2 class="mfa-step__title">Scan this code</h2>
+      <p class="mfa-step__text">It adds <strong>{{ issuer }}</strong> for {{ user.email }}.</p>
+      <div class="mfa-qr-frame">{{ qr_svg }}</div>
+      <button class="btn btn-link px-0" type="button" aria-controls="mfa-setup-key" :aria-expanded="expandedAttr" @click="toggle" x-text="toggleLabel">Can't scan? Show setup key</button>
+      <div id="mfa-setup-key" class="mfa-key-panel" :hidden="keyHidden" hidden>
+        <p class="mb-2 small">Enter this key manually in your app (time-based, 6 digits):</p>
+        <p class="mb-2"><code class="mfa-setup-key" x-ref="key">{{ setup_key }}</code></p>
+        <button class="btn btn-sm btn-outline-secondary" type="button" @click="copy" x-text="copyLabel">Copy key</button>
+      </div>
+      <noscript><p class="mt-2">Setup key: <code class="mfa-setup-key">{{ setup_key }}</code></p></noscript>
+    </li>
+    <li class="mfa-step">
+      <h2 class="mfa-step__title">Confirm with a code</h2>
+      <p class="mfa-step__text">Enter the six-digit code from the app to finish setup.</p>
+      <form method="post" class="auth-form">
+        {% csrf_token %}
+        <label class="form-label" for="mfa-setup-code">Authenticator code</label>
+        <input class="form-control otp-input mb-3" id="mfa-setup-code" name="code"
+               inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}"
+               minlength="6" maxlength="6" placeholder="000000" required>
+        <button class="btn btn-primary btn-lg w-100" type="submit">Enable two-factor authentication</button>
+      </form>
+    </li>
+  </ol>
 </div>
 {% endblock %}

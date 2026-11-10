@@ -1,0 +1,19 @@
+{% if show %}
+<section class="device-os-identity surface-card p-3 my-3" data-device-os data-mode="{{ mode }}"
+         data-options-url="{% url 'devices:os_options' %}"
+         data-register-url="{% url 'devices:os_register' %}"
+         data-verify-url="{% url 'devices:os_verify' %}" hidden>
+  {% csrf_token %}
+  <h3 class="h6 mb-1">Register this computer instead of each browser</h3>
+  <p class="small muted mb-2">
+    Your operating system holds a private key that every browser on this computer can use.
+    Registering it counts as one device however many browsers you use, and reinstalling the
+    operating system removes it. Only a public key is stored; the key itself never leaves this computer.
+  </p>
+  <p class="small mb-2" role="status" aria-live="polite" data-device-os-status hidden></p>
+  <div class="d-flex flex-wrap gap-2">
+    <button type="button" class="btn btn-primary" data-device-os-action="verify" hidden>Verify this computer</button>
+    <button type="button" class="btn btn-primary" data-device-os-action="register" hidden>Register this computer</button>
+  </div>
+</section>
+{% endif %}

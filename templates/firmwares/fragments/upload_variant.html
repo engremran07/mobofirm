@@ -1,0 +1,18 @@
+{# Variant field of the upload form (docs/04-backend/catalog-variants.md). Contract: form (UploadForm), has_model, variant_required, variant_count, variant_label. Re-rendered by HTMX when the brand or model changes. #}
+{% url 'firmwares:request_variant' as variant_request_url %}
+{% if not has_model %}
+  <div class="mb-3 catalog-field">
+    <label class="form-label" for="upload-variant">Variant</label>
+    <input class="form-control" id="upload-variant" type="text" value="" placeholder="e.g. AI2401_A" disabled aria-describedby="upload-variant_help">
+    <div class="form-text" id="upload-variant_help">Choose the brand and model first. Models that have variants ask you to pick one.</div>
+  </div>
+{% elif variant_required %}
+  {% include "firmwares/includes/catalog_field.html" with field=form.variant input_id="upload-variant" label="Variant" kinds="variant" display=variant_label depends_on="upload-model" depends_param="model" placeholder="e.g. AI2401_A" help="This model has variants. Pick the one that matches your device." required=True request_url=variant_request_url request_text="Request this variant" request_context="brand=upload-brand,model=upload-model" %}
+{% else %}
+  <div class="mb-3 catalog-field" data-no-variant>
+    <label class="form-label" for="upload-variant">Variant <span class="muted fw-normal">(none for this model)</span></label>
+    <input class="form-control" id="upload-variant" type="text" value="No specific variant" readonly aria-describedby="upload-variant_help">
+    <input type="hidden" name="variant" value="">
+    <div class="form-text" id="upload-variant_help">This model has no variants, so your file is published for the model itself. Missing a variant? <a href="{{ variant_request_url }}" data-request-link data-context="brand=upload-brand,model=upload-model">Request this variant</a></div>
+  </div>
+{% endif %}

@@ -2,35 +2,37 @@
 {% block title %}Chipsets | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block meta_description %}Browse mobile chipsets and the device models, flashing tools and firmware that use them.{% endblock %}
 {% block content %}
-<div class="site-container py-5">
-  <p class="section-eyebrow">Device catalogue</p>
-  <h1 class="h2 mb-2">Chipsets</h1>
-  <p class="muted mb-4">{{ total_chipsets }} chipset{{ total_chipsets|pluralize }} across the catalogue. Open a chipset to see the devices, tools and firmware that use it.</p>
-  <form class="row g-2 mb-4" method="get" action="{% url 'firmwares:chipset_list' %}">
-    <div class="col-12 col-md">
+{% url 'firmwares:chipset_list' as chipset_list_url %}
+<div class="site-container cat-page">
+  {% include "components/breadcrumbs.html" with current="Chipsets" %}
+  <header class="hero-panel cat-head">
+    <div class="cat-head__main">
+      <p class="section-eyebrow"><i class="icon" data-lucide="cpu" aria-hidden="true"></i> Device catalogue</p>
+      <h1 class="cat-head__title"><span class="text-gradient">Chipsets</span></h1>
+      <p class="cat-head__text">{{ total_chipsets }} chipset{{ total_chipsets|pluralize }} across the catalogue. Open a chipset to see the devices, tools and firmware that use it.</p>
+    </div>
+  </header>
+  <form id="chipset-filters" class="filter-bar cat-filters" role="search" method="get" action="{{ chipset_list_url }}" data-catalog-filters
+        hx-get="{{ chipset_list_url }}" hx-trigger="change, submit" hx-include="this" hx-target="#chipset-results"
+        hx-swap="innerHTML" hx-push-url="true" hx-sync="this:replace" hx-indicator="#chipset-indicator">
+    <div class="cat-filters__field cat-filters__field--search">
       <label class="form-label" for="chipset-query">Search chipsets</label>
-      <input id="chipset-query" class="form-control" type="search" name="q" value="{{ search_query }}" placeholder="Helio, Snapdragon, Exynos…">
+      <i data-lucide="search" aria-hidden="true"></i>
+      <input id="chipset-query" class="form-control" type="search" name="q" value="{{ search_query }}" maxlength="100" autocomplete="off" enterkeyhint="search" data-live-search
+             placeholder="Dimensity 9200, MT6985, Snapdragon, Exynos…"
+             hx-get="{{ chipset_list_url }}" hx-trigger="input changed delay:250ms, search" hx-include="closest form"
+             hx-target="#chipset-results" hx-swap="innerHTML" hx-push-url="true" hx-sync="closest form:replace" hx-indicator="#chipset-indicator">
     </div>
-    <div class="col-12 col-md-auto d-flex align-items-end"><button class="btn btn-primary" type="submit">Search</button></div>
+    <div class="cat-filters__field">
+      <label class="form-label" for="chipset-vendor">Vendor</label>
+      <select id="chipset-vendor" class="form-select" name="vendor">
+        <option value="">All vendors</option>
+        {% for vendor in vendors %}<option value="{{ vendor }}"{% if vendor == selected_vendor %} selected{% endif %}>{{ vendor }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="cat-filters__actions"><button class="btn btn-primary" type="submit">Search</button></div>
+    <span id="chipset-indicator" class="htmx-indicator cat-filters__status align-items-center gap-2 muted" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span><span>Searching</span></span>
   </form>
-  {% if chipsets %}
-    <div class="row g-3">
-      {% for chipset in chipsets %}
-        <div class="col-12 col-md-6 col-xl-4">
-          <a class="surface-card p-3 d-flex align-items-center gap-3 text-decoration-none" href="{% url 'firmwares:chipset_detail' slug=chipset.slug %}">
-            <span class="brand-mark" aria-hidden="true"><i data-lucide="cpu"></i></span>
-            <span><strong class="d-block">{{ chipset.display_name }}</strong><span class="small muted">{% if chipset.family %}{{ chipset.family }} · {% endif %}{{ chipset.model_total }} model{{ chipset.model_total|pluralize }}</span></span>
-          </a>
-        </div>
-      {% endfor %}
-    </div>
-    {% include "firmwares/includes/pagination.html" with page=chipsets label="Chipset pages" query=pagination_query %}
-  {% else %}
-    <p class="empty-state p-4">No chipsets match this search.</p>
-    {% include "components/request_cta.html" with kind="chipset" query=search_query %}
-  {% endif %}
-  {% if search_query and chipsets and chipsets|length < 3 %}
-    {% include "components/request_cta.html" with kind="chipset" query=search_query heading="Not the chipset you were looking for?" %}
-  {% endif %}
+  <div id="chipset-results" class="skeleton-host" aria-live="polite">{% include "firmwares/fragments/chipset_results.html" %}</div>
 </div>
 {% endblock %}

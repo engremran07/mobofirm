@@ -1,0 +1,48 @@
+{# Contract: searched, results (RelatedPost list), continue_url, requests_enabled. No body or snippet of any article is ever rendered here. #}
+{% if not searched %}
+  <div class="guide-hint" data-testid="guide-search-hint">
+    <span class="guide-hint__icon" aria-hidden="true"><i data-lucide="file-search" class="icon"></i></span>
+    <p class="mb-0">Enter your model code and/or variant code to list every article that may already solve your issue.</p>
+  </div>
+{% else %}
+  <section aria-labelledby="guide-search-title" data-testid="guide-search-results">
+    <div class="guide-results__head">
+      <h2 class="guide-results__title" id="guide-search-title">{{ results|length }} related article{{ results|length|pluralize }}</h2>
+      {% if results %}<p class="guide-results__hint">Check these first: your answer is probably here. Free, featured and paid articles are listed; paid and featured ones open a preview.</p>{% endif %}
+    </div>
+    {% if results %}
+      <ul class="guide-results">
+        {% for item in results %}
+          <li class="guide-result" data-testid="guide-result">
+            <span class="guide-result__icon" aria-hidden="true"><i data-lucide="book-open" class="icon"></i></span>
+            <div class="guide-result__main">
+              <a class="guide-result__title" href="{{ item.url }}"><strong>{{ item.title }}</strong></a>
+              {% if item.device %}<p class="guide-result__device">{{ item.device }}</p>{% endif %}
+              {% if item.reasons %}<ul class="chip-row guide-result__reasons" aria-label="Why it matched">{% for reason in item.reasons %}<li class="chip-ui chip-ui--static">{{ reason }}</li>{% endfor %}</ul>{% endif %}
+            </div>
+            <div class="guide-result__side">
+              <span class="badge-ui badge-ui--{% if item.access == 'free' %}free{% elif item.access == 'featured' %}featured{% else %}paid{% endif %}" data-testid="guide-result-access">{{ item.access_label }}</span>
+              <a class="btn btn-sm btn-primary" href="{{ item.url }}" data-testid="guide-solved">This solved it</a>
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <div class="guide-hint" data-testid="guide-no-results">
+        <span class="guide-hint__icon" aria-hidden="true"><i data-lucide="search" class="icon"></i></span>
+        <p class="mb-0">No published article matches this device yet.</p>
+      </div>
+    {% endif %}
+    <div class="guide-continue">
+      {% if requests_enabled %}
+        <div>
+          <p class="guide-continue__title">Nothing here solved your issue?</p>
+          <p class="guide-continue__text">Step 2 is a short form: describe the problem and what you already tried.</p>
+        </div>
+        <a class="btn btn-primary" href="{{ continue_url }}" data-testid="guide-continue">None of these solve it — request a new method</a>
+      {% else %}
+        <p class="mb-0 muted">Guide requests are switched off right now.</p>
+      {% endif %}
+    </div>
+  </section>
+{% endif %}

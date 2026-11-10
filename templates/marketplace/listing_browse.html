@@ -6,8 +6,8 @@
   <div class="mb-4">{% include "components/notice.html" with icon="info" message="Online checkout is not available. Purchases are arranged directly with the seller or through staff." %}</div>
 
   <form method="get" action="{% url 'marketplace:listing_browse' %}" class="row g-2 mb-4" role="search" aria-label="Search listings"
-        hx-get="{% url 'marketplace:listing_browse' %}" hx-target="#listing-grid" hx-push-url="true"
-        hx-trigger="change, input changed delay:350ms from:#listing-search">
+        hx-get="{% url 'marketplace:listing_browse' %}" hx-target="#listing-grid" hx-push-url="true" hx-sync="this:replace"
+        hx-trigger="change, input changed delay:250ms from:#listing-search, search from:#listing-search">
     <div class="col-12 col-md-6"><label class="visually-hidden" for="listing-search">Search listings</label><input class="form-control" id="listing-search" type="search" name="q" value="{{ search_query }}" placeholder="Search listings" maxlength="100" autocomplete="off"></div>
     <div class="col-8 col-md-4"><label class="visually-hidden" for="listing-sort">Sort listings</label><select class="form-select" id="listing-sort" name="sort">
       <option value="newest"{% if current_sort == "newest" %} selected{% endif %}>Newest</option>

@@ -1,0 +1,4 @@
+{# Contract: post (a Post). Free, Featured or Paid badge so readers see the access before opening an article. #}
+{% if post.access == "paid" %}{% include "components/badge.html" with variant="paid" label=post.get_access_display icon="lock" %}
+{% elif post.access == "featured" %}{% include "components/badge.html" with variant="featured" label=post.get_access_display icon="sparkles" %}
+{% else %}{% include "components/badge.html" with variant="free" label=post.get_access_display icon="circle-check" %}{% endif %}

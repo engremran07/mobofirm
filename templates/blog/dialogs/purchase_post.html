@@ -2,18 +2,23 @@
 {# Blog-owned content for the generic dialog shell: price, balance and the earn-more link. #}
 {% block dialog_body %}
   {% include "components/form_errors.html" with form=form %}
-  <p class="mb-2"><strong>{{ post.title }}</strong></p>
-  {% if gate.locked %}
-    <dl class="mb-3">
-      <dt>Price</dt><dd data-testid="blog-buy-price">{{ gate.credit_price }} credits</dd>
-      {% if balance is not None %}<dt>Your balance</dt><dd>{{ balance }} credits</dd>{% endif %}
-    </dl>
-    <p class="small text-muted">One payment unlocks this article for good. If the payment fails you are not charged.</p>
-    {% if insufficient %}
-      <p class="alert alert-warning" role="status">You need {{ gate.credit_price }} credits.{% if earn_url %} <a href="{{ earn_url }}">See how to earn credits</a>.{% endif %}</p>
+  <div class="buy-article">
+    <p class="buy-article__title"><strong>{{ post.title }}</strong> {% include "blog/partials/access_badge.html" with post=post %}</p>
+    {% if gate.locked %}
+      <dl class="buy-article__summary">
+        <div class="buy-article__row buy-article__row--price"><dt>Price</dt><dd data-testid="blog-buy-price">{{ gate.credit_price }} credits</dd></div>
+        {% if balance is not None %}<div class="buy-article__row"><dt>Your balance</dt><dd>{{ balance }} credits</dd></div>{% endif %}
+      </dl>
+      <ul class="buy-article__perks">
+        <li><i data-lucide="check" class="icon" aria-hidden="true"></i> One payment unlocks this article for good.</li>
+        <li><i data-lucide="shield-check" class="icon" aria-hidden="true"></i> If the payment fails you are not charged.</li>
+      </ul>
+      {% if insufficient %}
+        <p class="alert alert-warning" role="status">You need {{ gate.credit_price }} credits.{% if earn_url %} <a href="{{ earn_url }}">See how to earn credits</a>.{% endif %}</p>
+      {% endif %}
+      {% if gate.packages_url %}<p class="small mb-0"><a href="{{ gate.packages_url }}">Or see packages that include featured articles</a>.</p>{% endif %}
+    {% else %}
+      <p>You already have access to this article.</p>
     {% endif %}
-    {% if gate.packages_url %}<p class="small"><a href="{{ gate.packages_url }}">Or see packages that include featured articles</a>.</p>{% endif %}
-  {% else %}
-    <p>You already have access to this article.</p>
-  {% endif %}
+  </div>
 {% endblock %}

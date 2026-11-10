@@ -1,19 +1,29 @@
+{# Device search fragment. Context: query, results, search_* (list_search_context, only for queries of two or more characters). #}
 {% if query|length < 2 %}
   <p class="small muted mb-0">Enter at least two characters to search the catalogue.</p>
-{% elif results %}
-  <div class="list-group">
-    {% for model in results %}
-      <a class="list-group-item list-group-item-action d-flex flex-wrap justify-content-between gap-2"
-         href="{% url 'firmwares:model_detail' brand_slug=model.brand.slug model_slug=model.slug %}">
-        <span><strong>{{ model.display_name }}</strong><span class="muted ms-2">{{ model.brand.name }}</span></span>
-        <span class="model-code muted">{{ model.model_code|default:model.codename|default:"Model details" }}</span>
-      </a>
-    {% endfor %}
-  </div>
 {% else %}
-  <p class="empty-state p-3 mb-0">No matching devices were found. Try a model code, codename, or manufacturer.</p>
-  {% include "components/request_cta.html" with kind="model" query=query %}
-{% endif %}
-{% if query|length >= 2 and results and results|length < 3 %}
-  {% include "components/request_cta.html" with kind="model" query=query heading="Not the device you were looking for?" %}
+  {% include "components/search_feedback.html" with noun="device" %}
+  {% if results %}
+    <div class="card-grid card-grid--tiles">
+      {% for model in results %}
+        <article class="card-ui card-ui--tile">
+          <span class="logo-tile logo-tile--sm" aria-hidden="true"><i data-lucide="smartphone"></i></span>
+          <div class="cat-tile__body">
+            <h2 class="card-ui__title"><a class="card-ui__link" href="{% url 'firmwares:model_detail' brand_slug=model.brand.slug model_slug=model.slug %}">{{ model.display_name }}</a></h2>
+            <p class="card-ui__text">{{ model.brand.name }} · <span class="model-code">{{ model.model_code|default:model.codename|default:"Model details" }}</span></p>
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="empty-ui empty-state" role="status">
+      <span class="empty-ui__icon"><i data-lucide="search" aria-hidden="true"></i></span>
+      <p class="empty-ui__title">No matching devices were found.</p>
+      <p class="mb-0">Try a model code, codename, or manufacturer.</p>
+    </div>
+    {% include "components/request_cta.html" with kind="model" query=query %}
+  {% endif %}
+  {% if results and results|length < 3 %}
+    {% include "components/request_cta.html" with kind="model" query=query heading="Not the device you were looking for?" %}
+  {% endif %}
 {% endif %}

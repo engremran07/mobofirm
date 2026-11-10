@@ -16,6 +16,7 @@ from apps.comments.models import Comment
 from apps.firmwares.blog_automation import FirmwareBlogService
 from apps.firmwares.models import Brand, Chipset, Model
 from apps.tags.models import Tag
+from tests.frontend.editor_support import fill_rich_text
 
 VIEWPORTS = ((390, 844), (768, 1024), (1024, 768), (1365, 900))
 ARTICLE_BODY = (
@@ -261,7 +262,7 @@ def test_article_toc_share_comments_and_keyboard_access(live_server, journal):
             assert page.get_by_role("link", name=name).first.is_visible(), name
         expect(page.get_by_text("Written by")).to_be_visible()
 
-        page.get_by_label("Add a comment").fill("A helpful browser comment")
+        fill_rich_text(page, "#comment-form-body", "A helpful browser comment")
         page.get_by_role("button", name="Post comment").click()
         page.wait_for_load_state("load")
         expect(page.get_by_text("Your comment is published.")).to_be_visible()
@@ -271,15 +272,19 @@ def test_article_toc_share_comments_and_keyboard_access(live_server, journal):
             )
         ).to_be_visible()
 
-        page.get_by_label("Add a comment").fill(
-            "buy now click here free money http://x.example"
+        fill_rich_text(
+            page,
+            "#comment-form-body",
+            "buy now click here free money http://x.example",
         )
         page.get_by_role("button", name="Post comment").click()
         page.wait_for_load_state("load")
         expect(page.get_by_text("waiting for review")).to_be_visible()
 
         page.locator(".comment__panel > summary", has_text="Reply").first.click()
-        page.get_by_label("Your reply").first.fill("A threaded reply")
+        fill_rich_text(
+            page, ".comment__panel[open] textarea[name='body']", "A threaded reply"
+        )
         page.get_by_role("button", name="Post reply").first.click()
         page.wait_for_load_state("load")
         expect(page.locator(".comment-list--children")).to_contain_text(

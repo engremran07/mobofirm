@@ -1,0 +1,30 @@
+{# Shared two-column shell for sign-in, sign-up, verification and MFA pages. Blocks: auth_crumbs, auth_aside, auth_icon, auth_eyebrow, auth_title, auth_lead, auth_body, auth_footer. #}
+{% extends "base.html" %}
+{% block content %}
+<div class="site-container auth-page">
+  {% block auth_crumbs %}{% endblock %}
+  <div class="auth-layout">
+    {% block auth_aside %}
+      <aside class="auth-aside" aria-label="Why create an account">
+        <p class="hero-eyebrow">{{ site_name|default:"Mobofirm" }}</p>
+        <p class="auth-aside__title">Your device and firmware workspace.</p>
+        <ul class="auth-aside__list">
+          <li><span class="auth-aside__icon" aria-hidden="true"><i data-lucide="badge-check"></i></span><span><strong>Reviewed records</strong><span class="muted d-block">Firmware is checked by staff before it is listed.</span></span></li>
+          <li><span class="auth-aside__icon" aria-hidden="true"><i data-lucide="smartphone"></i></span><span><strong>Follow your devices</strong><span class="muted d-block">Keep your profile, files and browser sessions in one place.</span></span></li>
+          <li><span class="auth-aside__icon" aria-hidden="true"><i data-lucide="shield-check"></i></span><span><strong>Secure by default</strong><span class="muted d-block">Email verification and optional two-factor authentication.</span></span></li>
+        </ul>
+      </aside>
+    {% endblock %}
+    <section class="auth-card{% block auth_card_class %}{% endblock %}" aria-labelledby="auth-title">
+      <header class="auth-card__head">
+        <span class="auth-card__icon" aria-hidden="true"><i data-lucide="{% block auth_icon %}user-round{% endblock %}"></i></span>
+        <p class="section-eyebrow mb-1">{% block auth_eyebrow %}{% endblock %}</p>
+        <h1 id="auth-title" class="auth-card__title">{% block auth_title %}{% endblock %}</h1>
+        {% block auth_lead %}{% endblock %}
+      </header>
+      {% block auth_body %}{% endblock %}
+      {% block auth_footer %}{% endblock %}
+    </section>
+  </div>
+</div>
+{% endblock %}

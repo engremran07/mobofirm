@@ -1,0 +1,18 @@
+{# Guide cards. Swapped into #guide-results by HTMX. Context: guides (page), search_* (list_search_context). #}
+{% include "components/search_feedback.html" with noun="guide" %}
+{% if guides %}
+  <h2 class="visually-hidden">Guides</h2>
+  <div class="card-grid">
+    {% for guide in guides %}{% include "firmwares/includes/guide_card.html" with guide=guide %}{% endfor %}
+  </div>
+  {% include "components/pagination.html" with page_obj=guides label="Guide pages" hx_target="#guide-results" %}
+{% else %}
+  <div class="empty-ui empty-state" role="status">
+    <span class="empty-ui__icon"><i data-lucide="book-open" aria-hidden="true"></i></span>
+    <p class="empty-ui__title">No published guides match these filters.</p>
+    <p class="mb-0">Try another brand or guide type, or request the device if it is missing.</p>
+  </div>
+  {% if search_query %}
+    {% include "components/request_cta.html" with kind="model" query=search_query heading="Is the device missing from the catalogue?" %}
+  {% endif %}
+{% endif %}

@@ -1,0 +1,15 @@
+{% extends "components/dialog.html" %}
+{# Firmwares-owned staff dialog: change the access type of an approved file. Context: firmware, form (see apps/firmwares/dialogs.py). #}
+{% block dialog_body %}
+  <p class="mb-3">
+    <strong>{{ firmware.original_file_name }}</strong><br>
+    <span class="small muted">Now: {% include "firmwares/includes/tier_badge.html" with firmware=firmware %}</span>
+  </p>
+  {% include "components/form_errors.html" with form=form %}
+  {% for field in form %}{% include "components/form_field.html" with field=field %}{% endfor %}
+  <ul class="small muted ps-3 mb-0">
+    <li>Free files keep a bounded re-download allowance for people who already have them.</li>
+    <li>Files bought one by one stay with their buyers; nothing is refunded automatically.</li>
+    <li>Package files stay until the package period ends. The change is recorded in the access history.</li>
+  </ul>
+{% endblock %}

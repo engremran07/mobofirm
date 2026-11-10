@@ -9,6 +9,7 @@ from .api import (
     TrustedTesterViewSet,
     VerificationReportViewSet,
 )
+from .dialogs import ChangeAccessDialog, RequestAccessDialog
 from .public_views import (
     api_firmware_stats,
     api_search_autocomplete,
@@ -37,6 +38,7 @@ from .user_views import (
     request_variant,
     requests_hub,
     upload_page,
+    upload_variant_field,
 )
 from .views import (
     BrandCreationRequestViewSet,
@@ -94,6 +96,7 @@ urlpatterns = [
     # Admin/upload endpoints
     path("upload/", upload_page, name="upload"),
     path("upload/mine/", my_uploads, name="my_uploads"),
+    path("upload/variant-field/", upload_variant_field, name="upload_variant_field"),
     path("api/upload/", FirmwareUploadView.as_view(), name="firmware-upload"),
     path(
         "api/upload/external/",
@@ -130,6 +133,16 @@ urlpatterns = [
         "file/<str:firmware_type>/<uuid:firmware_id>/download/ad-gate/",
         firmware_ad_gate_complete,
         name="firmware_ad_gate_complete",
+    ),
+    path(
+        "file/<str:firmware_type>/<uuid:firmware_id>/access/change/",
+        ChangeAccessDialog.as_view(),
+        name="firmware_access_change",
+    ),
+    path(
+        "file/<str:firmware_type>/<uuid:firmware_id>/access/request/",
+        RequestAccessDialog.as_view(),
+        name="firmware_access_request",
     ),
     # Serve locally stored firmware via a short-lived, token-bound signed link.
     # URL: /firmwares/serve/<uuid:firmware_id>/?token=<tok>&exp=<ts>&sig=<hmac>

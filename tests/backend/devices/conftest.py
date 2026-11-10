@@ -6,12 +6,25 @@ from collections.abc import Callable
 from typing import Any
 
 import pytest
+from django.core.cache import cache
 from django.utils import timezone
 
 from apps.devices.models import Device
 from apps.devices.services import hash_browser_key
+from tests.backend.devices.webauthn_support import PlatformAuthenticator
 
 PASSWORD = "Pass-12345!"
+
+
+@pytest.fixture(autouse=True)
+def clear_rate_limit_cache() -> None:
+    """The OS-identity endpoints are rate limited per account in the shared cache."""
+    cache.clear()
+
+
+@pytest.fixture(name="authenticator")
+def authenticator_fixture() -> PlatformAuthenticator:
+    return PlatformAuthenticator()
 
 
 @pytest.fixture(name="make_user")

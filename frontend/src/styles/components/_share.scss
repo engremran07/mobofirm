@@ -1,0 +1,110 @@
+@use "../abstracts" as *;
+
+// ---- Content statistics line and share control (partials/includes) ----
+
+.content-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--mf-space-1) var(--mf-space-4);
+  margin: 0;
+  padding: 0;
+  color: var(--mf-text-muted);
+  font-size: var(--mf-text-sm);
+  list-style: none;
+}
+
+.content-stats__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-variant-numeric: tabular-nums;
+
+  .icon {
+    width: 1em;
+    height: 1em;
+    flex: none;
+  }
+}
+
+.content-stats--compact {
+  gap: var(--mf-space-1) var(--mf-space-3);
+  font-size: var(--mf-text-xs);
+
+  .content-stats__label {
+    @include visually-hidden;
+  }
+}
+
+// ---- Share control: a trigger plus a popover that is a bottom sheet on phones ----
+
+.share-menu {
+  position: relative;
+  display: inline-block;
+}
+
+.share-menu__panel {
+  position: absolute;
+  z-index: 1030;
+  top: calc(100% + var(--mf-space-2));
+  right: 0;
+  display: grid;
+  width: min(22rem, calc(100vw - 2rem));
+  gap: var(--mf-space-3);
+  padding: var(--mf-space-4);
+  border: 1px solid var(--mf-border);
+  border-radius: var(--mf-radius-lg);
+  background: var(--mf-surface-raised, var(--mf-surface));
+  box-shadow: var(--mf-elev-4);
+
+  &[hidden] {
+    display: none;
+  }
+
+  @media (max-width: 40rem) {
+    position: fixed;
+    top: auto;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: auto;
+    max-height: 80vh;
+    overflow-y: auto;
+    border-radius: var(--mf-radius-lg) var(--mf-radius-lg) 0 0;
+  }
+}
+
+.share-menu__title {
+  margin: 0;
+  font-size: var(--mf-text-sm);
+  font-weight: 700;
+}
+
+.share-menu__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+  gap: var(--mf-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+
+  .share__link {
+    width: 100%;
+    justify-content: flex-start;
+  }
+}
+
+.share-menu__qr {
+  display: grid;
+  justify-items: center;
+  gap: var(--mf-space-2);
+  color: var(--mf-text-muted);
+  font-size: var(--mf-text-xs);
+
+  img {
+    width: 8rem;
+    height: 8rem;
+    border-radius: var(--mf-radius-md);
+    background: #fff;
+  }
+}

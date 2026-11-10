@@ -1,12 +1,39 @@
 {% extends "base.html" %}
+{% load editor_tags %}
 {% block title %}{{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block content %}
-<div class="site-container py-5"><section class="hero-panel p-4 p-md-5">
-  <p class="hero-eyebrow">Device and firmware intelligence</p><h1 class="hero-title">{{ site_settings.site_name|default:"Mobofirm" }}</h1>
-  <p class="hero-copy">{{ site_settings.site_description|default:"Discover device profiles, reviewed firmware records, and technical guides." }}</p>
-  <div class="d-flex flex-wrap gap-2"><a class="btn btn-primary" href="{% url 'firmwares:library_hub' %}">Explore catalogue</a><a class="btn btn-outline-secondary" href="{% url 'blog:post_list' %}">Read the journal</a></div>
-</section>
-<div class="row g-3 mt-4"><div class="col"><div class="surface-card p-3">Active users <strong>{{ total_users }}</strong></div></div><div class="col"><div class="surface-card p-3">Unread notifications <strong>{{ unread_notifications }}</strong></div></div></div>
-{% if announcements %}<section class="mt-5"><h2 class="h3">Announcements</h2>{% for announcement in announcements %}<article class="surface-card p-3 mb-2"><h3 class="h5">{{ announcement.title }}</h3><p>{{ announcement.message }}</p></article>{% endfor %}</section>{% endif %}
+<div class="site-container home-page">
+  <section class="hero-panel hero-ui home-hero" aria-labelledby="core-home-title">
+    <span class="home-hero__glow home-hero__glow--a" aria-hidden="true"></span>
+    <span class="home-hero__glow home-hero__glow--b" aria-hidden="true"></span>
+    <div class="home-hero__inner">
+      <p class="hero-eyebrow">Device and firmware intelligence</p>
+      <h1 id="core-home-title" class="hero-title">{{ site_settings.site_name|default:"Mobofirm" }}</h1>
+      <p class="hero-copy">{{ site_settings.site_description|default:"Discover device profiles, reviewed firmware records, and technical guides." }}</p>
+      <div class="hero-ui__actions">
+        <a class="btn btn-primary btn-lg" href="{% url 'firmwares:library_hub' %}">Explore catalogue</a>
+        <a class="btn btn-outline-secondary btn-lg" href="{% url 'blog:post_list' %}">Read the journal</a>
+      </div>
+      <ul class="home-stats" aria-label="Community at a glance">
+        <li><span class="home-stat"><span class="home-stat__value">{{ total_users }}</span><span class="home-stat__label">Active users</span></span></li>
+        <li><span class="home-stat"><span class="home-stat__value">{{ unread_notifications }}</span><span class="home-stat__label">Unread notifications</span></span></li>
+      </ul>
+    </div>
+  </section>
+  {% if announcements %}
+    <section class="home-section" aria-labelledby="core-announcements-title">
+      <div class="section-ui"><h2 id="core-announcements-title" class="section-ui__title">Announcements</h2></div>
+      <div class="card-grid">
+        {% for announcement in announcements %}
+          <article class="card-ui">
+            <div class="card-ui__body">
+              <h3 class="card-ui__title">{{ announcement.title }}</h3>
+              <div class="card-ui__text">{{ announcement.message|rich_text }}</div>
+            </div>
+          </article>
+        {% endfor %}
+      </div>
+    </section>
+  {% endif %}
 </div>
 {% endblock %}

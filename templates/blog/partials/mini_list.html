@@ -1,13 +1,14 @@
-{# Contract: title, cards (list of PostCard), heading_id; renders a compact ranked list. #}
+{# Contract: title, cards (list of PostCard), heading_id; optional icon (registered Lucide name); renders a compact ranked list with total views. #}
+{% load content_tags %}
 <section class="side-widget" aria-labelledby="{{ heading_id }}">
-  <h2 class="side-widget__title" id="{{ heading_id }}">{{ title }}</h2>
+  <h2 class="side-widget__title" id="{{ heading_id }}">{% if icon %}<i data-lucide="{{ icon }}" class="icon" aria-hidden="true"></i>{% endif %}{{ title }}</h2>
   <ol class="mini-list">
     {% for card in cards %}
       <li class="mini-list__item">
         <span class="mini-list__rank" aria-hidden="true">{{ forloop.counter }}</span>
         <div>
           <a class="mini-list__link" href="{{ card.url }}">{{ card.title }}</a>
-          <p class="mini-list__meta">{% if card.published %}<time datetime="{{ card.published|date:'c' }}">{{ card.published|date:"M j, Y" }}</time> · {% endif %}{{ card.reading_time }} min read</p>
+          <p class="mini-list__meta">{% if card.published %}<time datetime="{{ card.published|date:'c' }}">{{ card.published|date:"M j, Y" }}</time> · {% endif %}{{ card.reading_time }} min read · {{ card.post.views_count|short_count }} view{{ card.post.views_count|pluralize }}</p>
         </div>
       </li>
     {% empty %}

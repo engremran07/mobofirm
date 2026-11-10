@@ -54,6 +54,7 @@ from .services import (
     submit_external_firmware,
     withdraw_firmware,
 )
+from .variant_rules import VariantIdentity
 
 
 def _resolve_hierarchy(data) -> tuple[Brand | None, Model | None, Variant | None]:
@@ -353,8 +354,12 @@ class VariantCreationRequestViewSet(_CreationRequestViewSet):
         return submit_variant_request(
             user,
             model=data["model"],
-            name=data["name"],
-            model_code=data.get("model_code", ""),
-            region=data.get("region", ""),
+            name=data.get("name", ""),
+            identity=VariantIdentity(
+                model_code=data.get("model_code", ""),
+                region=data.get("region", ""),
+                memory=data.get("memory", ""),
+                carrier=data.get("carrier", ""),
+            ),
             details=data.get("details", ""),
         )

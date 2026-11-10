@@ -1,19 +1,23 @@
 {# Contract: post, form_id (unique per page), parent_id (empty for a top-level comment). #}
+{% load editor_tags %}
 {% if user.is_authenticated %}
-  <form method="post" action="{% url 'comments:add_comment' slug=post.slug %}" class="comment-form" id="{{ form_id }}">
+  <form method="post" action="{% url 'comments:add_comment' slug=post.slug %}" class="comment-form{% if parent_id %} comment-form--reply{% endif %}" id="{{ form_id }}">
     {% csrf_token %}
     {% if parent_id %}<input type="hidden" name="parent" value="{{ parent_id }}">{% endif %}
-    <label class="form-label" for="{{ form_id }}-body">{% if parent_id %}Your reply{% else %}Add a comment{% endif %}</label>
-    <textarea class="form-control" id="{{ form_id }}-body" name="body" rows="{% if parent_id %}3{% else %}4{% endif %}" minlength="3" maxlength="5000" required aria-describedby="{{ form_id }}-help"></textarea>
+    <div class="comment-form__head">
+      {% if not parent_id %}<span class="avatar" aria-hidden="true">{{ user.public_display_name|slice:":1"|upper }}</span>{% endif %}
+      <label class="form-label mb-0" for="{{ form_id }}-body">{% if parent_id %}Your reply{% else %}Add a comment{% endif %}</label>
+    </div>
+    {% if parent_id %}{% rich_text_field "comment" "body" id=form_id|add:"-body" rows=3 class="form-control" aria_describedby=form_id|add:"-help" required=True %}{% else %}{% rich_text_field "comment" "body" id=form_id|add:"-body" rows=4 class="form-control" aria_describedby=form_id|add:"-help" required=True %}{% endif %}
     <div class="hp-field" inert>
       <label for="{{ form_id }}-hp">Leave this field empty</label>
       <input id="{{ form_id }}-hp" name="hp" tabindex="-1" autocomplete="off">
     </div>
     <div class="comment-form__footer">
-      <p class="form-text mb-0" id="{{ form_id }}-help">Plain text, up to 5,000 characters. Comments are screened automatically; unusual ones wait for a moderator.</p>
-      <button class="btn btn-primary" type="submit">{% if parent_id %}Post reply{% else %}Post comment{% endif %}</button>
+      <p class="form-text mb-0" id="{{ form_id }}-help">Basic formatting is allowed, up to 5,000 characters. Comments are screened automatically; unusual ones wait for a moderator.</p>
+      <button class="btn btn-primary" type="submit"><i data-lucide="send" class="icon" aria-hidden="true"></i> {% if parent_id %}Post reply{% else %}Post comment{% endif %}</button>
     </div>
   </form>
 {% elif not parent_id %}
-  <p class="comment-signin"><a href="{% url 'users:account_login' %}?next={{ request.path|urlencode }}%23comments">Sign in</a> to join the discussion.</p>
+  <p class="comment-signin"><i data-lucide="lock" class="icon" aria-hidden="true"></i><span><a href="{% url 'users:account_login' %}?next={{ request.path|urlencode }}%23comments">Sign in</a> to join the discussion.</span></p>
 {% endif %}

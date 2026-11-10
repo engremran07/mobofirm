@@ -9,6 +9,10 @@ provider is a separate, owner-approved change.
 Paying or refunding an order publishes ``shop.order_paid`` / ``shop.order_refunded``
 on the event bus after commit, with ``{"order_id", "user_id", "files": [{"content_type":
 "app_label.model", "object_id": "<uuid>", "amount": "9.99"}]}`` (paid-file lines only).
+
+Activating a package publishes ``shop.package_activated`` (``{"user_id",
+"user_package_id"}``) after commit: a new package period starts, and the firmware
+download history of the previous period is purged from it.
 """
 
 from __future__ import annotations
@@ -30,6 +34,7 @@ from .models import LIFETIME, Order, OrderItem, PackageTier, UserPackage
 ONLINE_PAYMENTS_ENABLED = False
 ORDER_PAID_EVENT = "shop.order_paid"
 ORDER_REFUNDED_EVENT = "shop.order_refunded"
+PACKAGE_ACTIVATED_EVENT = "shop.package_activated"
 
 
 class OrderError(ValueError):
@@ -114,7 +119,7 @@ def activate_package(
             start = held.expires_at
     _live_packages(user).update(status=UserPackage.Status.EXPIRED)
     request_cache.invalidate()
-    return UserPackage.objects.create(
+    created = UserPackage.objects.create(
         user=user,
         package=package,
         status=UserPackage.Status.ACTIVE,
@@ -124,6 +129,9 @@ def activate_package(
         payment_reference=reference,
         order=order,
     )
+    payload = {"user_id": user.pk, "user_package_id": created.pk}
+    transaction.on_commit(lambda: event_bus.publish(PACKAGE_ACTIVATED_EVENT, payload))
+    return created
 
 
 @transaction.atomic

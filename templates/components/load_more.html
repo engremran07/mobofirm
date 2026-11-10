@@ -1,0 +1,5 @@
+{# Contract: url (required; the next page URL, preserving the query string), target (CSS selector that receives the rows, default "this" replaced outerHTML). Infinite scroll: the sentinel loads the next page when it is revealed; the button is the keyboard and no-JavaScript fallback. Return the next rows followed by a new sentinel (or nothing on the last page). #}
+<div class="load-more" hx-get="{{ url }}" hx-trigger="revealed" hx-swap="outerHTML" hx-indicator="this" {% if target %}hx-target="{{ target }}"{% endif %}>
+  <span class="htmx-indicator align-items-center gap-2" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span><span>Loading more</span></span>
+  <a class="btn btn-outline-secondary btn-sm" href="{{ url }}">Load more</a>
+</div>

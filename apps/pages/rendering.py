@@ -10,6 +10,8 @@ from typing import Any
 import markdown
 from markdown.extensions.toc import slugify
 
+from apps.core.editor.sanitizer import strip_srcless_embeds, video_embed_options
+
 # Loaded dynamically: nh3 is a compiled extension that static analysis cannot read.
 nh3: Any = importlib.import_module("nh3")
 
@@ -104,14 +106,18 @@ def _flatten(tokens: list[dict[str, Any]]) -> list[TocEntry]:
 
 
 def _sanitize(rendered: str) -> str:
-    return nh3.clean(
+    attributes = {tag: set(attrs) for tag, attrs in PAGE_ATTRIBUTES.items()}
+    attributes["iframe"] = {"src", "title"}
+    cleaned = nh3.clean(
         rendered,
-        tags=set(PAGE_TAGS),
-        attributes={tag: set(attrs) for tag, attrs in PAGE_ATTRIBUTES.items()},
+        tags={*PAGE_TAGS, "iframe"},
+        attributes=attributes,
         url_schemes=set(PAGE_URL_SCHEMES),
         link_rel="nofollow noopener",
         strip_comments=True,
+        **video_embed_options(),
     )
+    return strip_srcless_embeds(cleaned)
 
 
 def render_page(content: str, content_format: str) -> RenderedPage:

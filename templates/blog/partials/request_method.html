@@ -1,0 +1,11 @@
+{# Contract: post (a Post). Rendered by {% request_method_cta post %}; hidden while guide requests are switched off. #}
+{% if enabled %}
+<aside class="request-method" aria-labelledby="request-method-title" data-testid="request-method">
+  <span class="request-method__icon" aria-hidden="true"><i data-lucide="circle-help" class="icon"></i></span>
+  <div class="request-method__body">
+    <h2 class="request-method__title" id="request-method-title">Didn't resolve your issue?</h2>
+    <p class="request-method__text">Tell us what you already tried. Staff review the request, then writers can answer it with their own method.</p>
+  </div>
+  <a class="btn btn-primary btn-sm request-method__cta" href="{% url 'blog:request_from_post' slug=post.slug %}" data-testid="request-new-method">Didn't resolve your issue? Request a new method</a>
+</aside>
+{% endif %}

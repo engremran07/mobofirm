@@ -1,0 +1,53 @@
+{# Desktop primary navigation. Contract: nav_current marks the current section (aria-current). Every top-level entry keeps a plain link; the panel is an enhancement opened by hover or by the toggle button (modules/ui.js), so all destinations stay reachable without JavaScript from the section pages. The mobile navigation keeps using includes/nav_links.html. #}
+<div class="nav-item" data-nav-item>
+  <a class="site-nav-link" href="{% url 'firmwares:browse' %}"{% if nav_current == "firmware" %} aria-current="page"{% endif %}>Firmware</a>
+  <button type="button" class="mega-toggle" data-mega-toggle aria-expanded="false" aria-controls="mega-firmware" aria-label="Firmware menu"><i data-lucide="chevron-down" aria-hidden="true"></i></button>
+  <div class="mega-panel" id="mega-firmware">
+    <ul class="mega-grid">
+      <li><a class="mega-link" href="{% url 'firmwares:browse' %}"><span class="mega-link__icon"><i data-lucide="download" aria-hidden="true"></i></span><span class="mega-link__title">Browse the catalogue</span><span class="mega-link__hint">Every build, filtered by brand, model and chipset.</span></a></li>
+      <li><a class="mega-link" href="{% url 'firmwares:universal_search' %}"><span class="mega-link__icon"><i data-lucide="file-search" aria-hidden="true"></i></span><span class="mega-link__title">Search by model code</span><span class="mega-link__hint">Find a build from a model or variant code.</span></a></li>
+      <li><a class="mega-link" href="{% url 'firmwares:upload' %}"><span class="mega-link__icon"><i data-lucide="upload" aria-hidden="true"></i></span><span class="mega-link__title">Upload firmware</span><span class="mega-link__hint">Share a build for review.</span></a></li>
+      <li><a class="mega-link" href="{% url 'firmwares:request_firmware' %}"><span class="mega-link__icon"><i data-lucide="circle-help" aria-hidden="true"></i></span><span class="mega-link__title">Request a build</span><span class="mega-link__hint">Ask for a firmware we do not list.</span></a></li>
+    </ul>
+  </div>
+</div>
+<div class="nav-item" data-nav-item>
+  <a class="site-nav-link" href="{% url 'firmwares:brand_list' %}"{% if nav_current == "brands" %} aria-current="page"{% endif %}>Brands</a>
+  <button type="button" class="mega-toggle" data-mega-toggle aria-expanded="false" aria-controls="mega-brands" aria-label="Brands menu"><i data-lucide="chevron-down" aria-hidden="true"></i></button>
+  <div class="mega-panel" id="mega-brands">
+    <ul class="mega-grid">
+      <li><a class="mega-link" href="{% url 'firmwares:brand_list' %}"><span class="mega-link__icon"><i data-lucide="building-2" aria-hidden="true"></i></span><span class="mega-link__title">All brands</span><span class="mega-link__hint">Browse devices by manufacturer.</span></a></li>
+      <li><a class="mega-link" href="{% url 'firmwares:request_brand' %}"><span class="mega-link__icon"><i data-lucide="plus" aria-hidden="true"></i></span><span class="mega-link__title">Request a brand</span><span class="mega-link__hint">A reviewer adds it to the catalogue.</span></a></li>
+      <li><a class="mega-link" href="{% url 'firmwares:request_model' %}"><span class="mega-link__icon"><i data-lucide="smartphone" aria-hidden="true"></i></span><span class="mega-link__title">Request a model</span><span class="mega-link__hint">Missing a device? Tell us.</span></a></li>
+      <li><a class="mega-link" href="{% url 'firmwares:request_variant' %}"><span class="mega-link__icon"><i data-lucide="layers" aria-hidden="true"></i></span><span class="mega-link__title">Request a variant</span><span class="mega-link__hint">A region or storage version of a model.</span></a></li>
+    </ul>
+  </div>
+</div>
+<div class="nav-item" data-nav-item>
+  <a class="site-nav-link" href="{% url 'firmwares:chipset_list' %}"{% if nav_current == "chipsets" %} aria-current="page"{% endif %}>Chipsets</a>
+  <button type="button" class="mega-toggle" data-mega-toggle aria-expanded="false" aria-controls="mega-chipsets" aria-label="Chipsets menu"><i data-lucide="chevron-down" aria-hidden="true"></i></button>
+  <div class="mega-panel" id="mega-chipsets">
+    <ul class="mega-grid">
+      <li><a class="mega-link" href="{% url 'firmwares:chipset_list' %}"><span class="mega-link__icon"><i data-lucide="cpu" aria-hidden="true"></i></span><span class="mega-link__title">All chipsets</span><span class="mega-link__hint">Find devices and tools by processor.</span></a></li>
+      <li><a class="mega-link" href="{% url 'firmwares:request_chipset' %}"><span class="mega-link__icon"><i data-lucide="plus" aria-hidden="true"></i></span><span class="mega-link__title">Request a chipset</span><span class="mega-link__hint">Suggest a processor we do not list.</span></a></li>
+    </ul>
+  </div>
+</div>
+<div class="nav-item" data-nav-item>
+  <a class="site-nav-link" href="{% url 'firmwares:flashing_tools' %}"{% if nav_current == "guides" %} aria-current="page"{% endif %}>Tools &amp; Guides</a>
+  <button type="button" class="mega-toggle" data-mega-toggle aria-expanded="false" aria-controls="mega-tools" aria-label="Tools and guides menu"><i data-lucide="chevron-down" aria-hidden="true"></i></button>
+  <div class="mega-panel" id="mega-tools">
+    <ul class="mega-grid">
+      <li><a class="mega-link" href="{% url 'firmwares:flashing_tools' %}"><span class="mega-link__icon"><i data-lucide="wrench" aria-hidden="true"></i></span><span class="mega-link__title">Flashing tools</span><span class="mega-link__hint">Software for flashing, with supported chipsets.</span></a></li>
+      <li><a class="mega-link" href="{% url 'firmwares:flashing_guides' %}"><span class="mega-link__icon"><i data-lucide="book-open" aria-hidden="true"></i></span><span class="mega-link__title">Flashing guides</span><span class="mega-link__hint">Step-by-step methods per model and chipset.</span></a></li>
+      <li><a class="mega-link" href="{% url 'blog:request_list' %}"><span class="mega-link__icon"><i data-lucide="message-circle" aria-hidden="true"></i></span><span class="mega-link__title">Method requests</span><span class="mega-link__hint">Ask for a new method or help with one.</span></a></li>
+      <li><a class="mega-link" href="{% url 'tags:list' %}"><span class="mega-link__icon"><i data-lucide="tags" aria-hidden="true"></i></span><span class="mega-link__title">Topics</span><span class="mega-link__hint">Browse articles and guides by topic.</span></a></li>
+    </ul>
+  </div>
+</div>
+<a class="site-nav-link" href="{% url 'blog:post_list' %}"{% if nav_current == "blog" %} aria-current="page"{% endif %}>Blog</a>
+{% if ecosystem.shop %}<a class="site-nav-link" href="{% url 'shop:pricing' %}"{% if nav_current == "shop" %} aria-current="page"{% endif %}>Shop</a>{% endif %}
+{% if ecosystem.marketplace %}<a class="site-nav-link" href="{% url 'marketplace:listing_browse' %}"{% if nav_current == "marketplace" %} aria-current="page"{% endif %}>Marketplace</a>{% endif %}
+{% if user.is_authenticated %}<a class="site-nav-link" href="{% url 'library:my_files' %}"{% if nav_current == "files" %} aria-current="page"{% endif %}>My files</a>{% endif %}
+{% if ecosystem.pages %}<a class="site-nav-link" href="{% url 'pages:index' %}"{% if nav_current == "pages" %} aria-current="page"{% endif %}>Help</a>{% endif %}
+{% if user.is_staff %}<a class="site-nav-link" href="{% url 'admin:index' %}">Admin</a>{% endif %}

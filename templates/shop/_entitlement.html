@@ -5,14 +5,14 @@
   {% if entitlement.package %}{% include "components/status_pill.html" with label=entitlement.package.get_status_display tone="success" %}{% endif %}
 </div>
 <p class="small mb-1">{{ entitlement.plan_summary }}</p>
-<p class="small muted mb-3">{{ entitlement.sources|join:" + " }}</p>
-<div class="row g-3">
+<p class="small cm-muted mb-3">{{ entitlement.sources|join:" + " }}</p>
+<div class="quota-grid">
   {% for meter in entitlement.windows %}
-    <div class="col-12 col-md-6">
+    <div class="quota-card">
       {% include "components/meter.html" with id=meter.dom_id label=meter.label percent=meter.percent text=meter.text %}
-      <p class="small muted mb-0 mt-1">{{ meter.remaining_text }}{% if meter.resets_at %} · resets {{ meter.resets_at|date:"j M Y, H:i" }}{% endif %}</p>
+      <p class="small cm-muted mb-0">{{ meter.remaining_text }}{% if meter.resets_at %} · resets {{ meter.resets_at|date:"j M Y, H:i" }}{% endif %}</p>
     </div>
   {% endfor %}
 </div>
 <p class="small mt-3 mb-1"><strong>Devices:</strong> {{ entitlement.devices_text }}{% if entitlement.perks %} · <strong>Perks:</strong> {{ entitlement.perks|join:", " }}{% endif %}</p>
-<p class="small muted mb-0">Each file counts once, the first time it is served to you; downloading it again is free. Paid files you bought count in these figures when your package covers them, but are never blocked by them.</p>
+<p class="small cm-muted mb-0">Each file counts once, the first time it is served to you; downloading it again is free. Paid files you bought count in these figures when your package covers them, but are never blocked by them.</p>

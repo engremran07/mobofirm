@@ -1,67 +1,93 @@
 {% extends "base.html" %}
-{% load shop_tags storage_tags ad_tags %}
+{% load shop_tags storage_tags ad_tags firmware_access editor_tags content_tags share_tags %}
 {% block title %}{{ firmware.build_number|default:firmware.original_file_name }} | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block meta_description %}Review compatibility, file size, build details, and review status for this firmware record.{% endblock %}
 {% block content %}
-<div class="site-container py-5">
-  <nav aria-label="Breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="{% url 'firmwares:browse' %}">Firmware</a></li>{% if firmware.brand %}<li class="breadcrumb-item"><a href="{% url 'firmwares:brand_detail' slug=firmware.brand.slug %}">{{ firmware.brand.name }}</a></li>{% endif %}<li class="breadcrumb-item active" aria-current="page">Firmware details</li></ol></nav>
+<div class="site-container cat-page">
+  {% url 'firmwares:browse' as browse_url %}
+  <nav class="breadcrumbs mb-3" aria-label="Breadcrumb"><ol class="breadcrumb mb-0">
+    <li class="breadcrumb-item"><a href="{% url 'home' %}">Home</a></li>
+    <li class="breadcrumb-item"><a href="{{ browse_url }}">Firmware</a></li>
+    {% if firmware.brand %}<li class="breadcrumb-item"><a href="{% url 'firmwares:brand_detail' slug=firmware.brand.slug %}">{{ firmware.brand.name }}</a></li>{% endif %}
+    {% if firmware.model and firmware.model.brand %}<li class="breadcrumb-item"><a href="{% url 'firmwares:model_detail' brand_slug=firmware.model.brand.slug model_slug=firmware.model.slug %}">{{ firmware.model.display_name }}</a></li>{% endif %}
+    <li class="breadcrumb-item active" aria-current="page">Firmware details</li>
+  </ol></nav>
   <div class="row g-4">
     <div class="col-12 col-lg-8">
-      <header class="hero-panel p-4 p-md-5">
-        <p class="section-eyebrow">{{ firmware_type_display }} firmware</p>
-        <h1 class="h2 fw-bold build-code">{{ firmware.build_number|default:firmware.original_file_name }}</h1>
-        <p class="hero-copy mb-0">{{ firmware.model.display_name|default:"Device not specified" }}{% if firmware.brand %} · {{ firmware.brand.name }}{% endif %}</p>
+      <header class="hero-panel cat-head">
+        <div class="cat-head__main">
+          <p class="section-eyebrow"><i class="icon" data-lucide="file-archive" aria-hidden="true"></i> {{ firmware_type_display }} firmware</p>
+          <h1 class="cat-head__title build-code">{{ firmware.build_number|default:firmware.original_file_name }}</h1>
+          <p class="cat-head__text">{{ firmware.model.display_name|default:"Device not specified" }}{% if firmware.brand %} · {{ firmware.brand.name }}{% endif %}</p>
+        </div>
+        <div class="fw-card__chips">
+          {% include "firmwares/includes/tier_badge.html" with firmware=firmware %}
+          {% include "components/badge.html" with variant="verified" label="Verified" icon="shield-check" %}
+          {% if firmware.file_hash %}{% include "components/badge.html" with label="SHA-256 checksum" icon="hash" %}{% endif %}
+          {% if firmware.is_external %}{% include "components/badge.html" with variant="warning" label="External download" icon="external-link" %}{% else %}{% include "components/badge.html" with label="Hosted by Mobofirm" icon="hard-drive" %}{% endif %}
+        </div>
+        {% content_stats firmware %}
       </header>
-      <section class="surface-card p-4 mt-4" aria-labelledby="firmware-metadata-title">
-        <h2 id="firmware-metadata-title" class="h4 mb-3">Technical details</h2>
-        <dl class="row mb-0">
-          <dt class="col-sm-4 muted fw-normal">File</dt><dd class="col-sm-8 build-code">{{ firmware.original_file_name }}</dd>
-          <dt class="col-sm-4 muted fw-normal">Firmware classification</dt><dd class="col-sm-8">{{ firmware_type_display }}</dd>
-          <dt class="col-sm-4 muted fw-normal">Package format</dt><dd class="col-sm-8">{{ firmware.get_package_format_display }}</dd>
-          <dt class="col-sm-4 muted fw-normal">Model</dt><dd class="col-sm-8">{% if firmware.model and firmware.model.brand %}<a href="{% url 'firmwares:model_detail' brand_slug=firmware.model.brand.slug model_slug=firmware.model.slug %}">{{ firmware.model.display_name }}</a>{% else %}Not specified{% endif %}</dd>
-          <dt class="col-sm-4 muted fw-normal">Variant / region</dt><dd class="col-sm-8">{{ firmware.variant.name|default:"Not specified" }}{% if firmware.variant.region %} · {{ firmware.variant.region }}{% endif %}{% if firmware.variant.model_code %} · {{ firmware.variant.model_code }}{% endif %}</dd>
-          <dt class="col-sm-4 muted fw-normal">Chipset</dt><dd class="col-sm-8">{% if firmware.model.chipset_ref %}<a href="{% url 'firmwares:chipset_detail' slug=firmware.model.chipset_ref.slug %}">{{ firmware.model.chipset_ref.display_name }}</a>{% else %}{{ firmware.chipset|default:"Not specified" }}{% endif %}</dd>
-          <dt class="col-sm-4 muted fw-normal">Android version</dt><dd class="col-sm-8">{{ firmware.android_version|default:"Not specified" }}</dd>
-          <dt class="col-sm-4 muted fw-normal">Build number</dt><dd class="col-sm-8 build-code">{{ firmware.build_number|default:"Not specified" }}</dd>
-          <dt class="col-sm-4 muted fw-normal">File size</dt><dd class="col-sm-8">{{ file_size_display }}</dd>
-          <dt class="col-sm-4 muted fw-normal">Security patch</dt><dd class="col-sm-8">{{ firmware.security_patch|date:"F j, Y"|default:"Not specified" }}</dd>
-          <dt class="col-sm-4 muted fw-normal">Hosting</dt><dd class="col-sm-8">{% if firmware.is_external %}<span class="badge text-bg-secondary">External download</span> hosted on {{ external_host }}{% else %}Hosted by Mobofirm{% endif %}</dd>
-          <dt class="col-sm-4 muted fw-normal">Review status</dt><dd class="col-sm-8"><span class="status-verified">Verified</span>{% if firmware.reviewed_at %} · {{ firmware.reviewed_at|date:"F j, Y" }}{% endif %}</dd>
-          <dt class="col-sm-4 muted fw-normal">Access</dt><dd class="col-sm-8">{% include "firmwares/includes/tier_badge.html" with firmware=firmware %}</dd>
-          <dt class="col-sm-4 muted fw-normal">SHA-256</dt><dd class="col-sm-8 build-code">{% if firmware.file_hash %}{{ firmware.file_hash }}{% else %}Not provided{% endif %}</dd>
-          <dt class="col-sm-4 muted fw-normal">Added</dt><dd class="col-sm-8">{{ firmware.created_at|date:"F j, Y" }}</dd>
+      <section class="cat-panel" aria-labelledby="firmware-metadata-title">
+        <h2 id="firmware-metadata-title" class="cat-panel__title">Technical details</h2>
+        <dl class="spec-list">
+          <dt>File</dt><dd class="build-code">{{ firmware.original_file_name }}</dd>
+          <dt>Firmware classification</dt><dd>{{ firmware_type_display }}</dd>
+          <dt>Package format</dt><dd>{{ firmware.get_package_format_display }}</dd>
+          <dt>Model</dt><dd>{% if firmware.model and firmware.model.brand %}<a href="{% url 'firmwares:model_detail' brand_slug=firmware.model.brand.slug model_slug=firmware.model.slug %}">{{ firmware.model.display_name }}</a>{% else %}Not specified{% endif %}</dd>
+          <dt>Variant / region</dt><dd>{{ firmware.variant.name|default:"Not specified" }}{% if firmware.variant.region %} · {{ firmware.variant.region }}{% endif %}{% if firmware.variant.model_code %} · {{ firmware.variant.model_code }}{% endif %}</dd>
+          <dt>Chipset</dt><dd>{% if firmware.model.chipset_ref %}<a href="{% url 'firmwares:chipset_detail' slug=firmware.model.chipset_ref.slug %}">{{ firmware.model.chipset_ref.display_name }}</a>{% else %}{{ firmware.chipset|default:"Not specified" }}{% endif %}</dd>
+          <dt>Android version</dt><dd>{{ firmware.android_version|default:"Not specified" }}</dd>
+          <dt>Build number</dt><dd class="build-code">{{ firmware.build_number|default:"Not specified" }}</dd>
+          <dt>File size</dt><dd>{{ file_size_display }}</dd>
+          <dt>Security patch</dt><dd>{{ firmware.security_patch|date:"F j, Y"|default:"Not specified" }}</dd>
+          <dt>Hosting</dt><dd>{% if firmware.is_external %}<span class="badge-ui badge-ui--warning">External download</span> hosted on {{ external_host }}{% else %}Hosted by Mobofirm{% endif %}</dd>
+          <dt>Review status</dt><dd><span class="status-verified">Verified</span>{% if firmware.reviewed_at %} · {{ firmware.reviewed_at|date:"F j, Y" }}{% endif %}</dd>
+          <dt>Access</dt><dd>{% include "firmwares/includes/tier_badge.html" with firmware=firmware %}</dd>
+          <dt>SHA-256</dt><dd>{% if firmware.file_hash %}<span class="checksum"><code id="firmware-sha256" class="build-code">{{ firmware.file_hash }}</code><button type="button" class="btn btn-ghost btn-sm" data-copy-target="#firmware-sha256" aria-label="Copy SHA-256 checksum"><i data-lucide="copy" aria-hidden="true"></i></button></span>{% else %}Not provided{% endif %}</dd>
+          <dt>Added</dt><dd>{{ firmware.created_at|date:"F j, Y" }}</dd>
+          <dt>Last updated</dt><dd><time datetime="{{ firmware.updated_at|date:'c' }}">{{ firmware.updated_at|date:"F j, Y" }}</time></dd>
         </dl>
       </section>
       {% if changelog %}
-        <section class="surface-card p-4 mt-4" aria-labelledby="firmware-changelog-title">
-          <h2 id="firmware-changelog-title" class="h4 mb-3">Changelog</h2>
-          <div class="mb-0">{{ changelog|linebreaksbr }}</div>
+        <section class="cat-panel" aria-labelledby="firmware-changelog-title">
+          <h2 id="firmware-changelog-title" class="cat-panel__title">Changelog</h2>
+          <div class="mb-0 article-body">{{ changelog|rich_text }}</div>
         </section>
       {% endif %}
+      <section class="cat-panel" aria-labelledby="firmware-steps-title">
+        <h2 id="firmware-steps-title" class="cat-panel__title">Before you flash</h2>
+        <ol class="steps-ui">
+          <li>Confirm the exact model{% if firmware.variant %} and variant{% endif %} above matches your device.</li>
+          <li>{% if firmware.file_hash %}Compare the SHA-256 checksum of the downloaded file with the one shown here.{% else %}Check the file size matches the listing after the download finishes.{% endif %}</li>
+          <li>Pick a flashing tool and follow a step-by-step guide: <a href="{% url 'firmwares:flashing_tools' %}">flashing tools</a> · <a href="{% url 'firmwares:flashing_guides' %}{% if firmware.brand %}?brand={{ firmware.brand.slug|urlencode }}{% endif %}">flashing guides</a>.</li>
+        </ol>
+      </section>
       {% ad_zone "in_content" %}
       {% if related_firmwares %}
-        <section class="surface-card p-4 mt-4" aria-labelledby="related-firmware-title">
-          <h2 id="related-firmware-title" class="h4 mb-3">Other files for this device</h2>
-          <ul class="list-unstyled d-grid gap-2 mb-0">
+        <section class="cat-panel" aria-labelledby="related-firmware-title">
+          <h2 id="related-firmware-title" class="cat-panel__title">Other files for this device</h2>
+          <ul class="cat-linklist">
             {% for related in related_firmwares %}
-              <li><a href="{% url 'firmwares:firmware_detail' firmware_type=related.firmware_type firmware_id=related.pk %}">{{ related.build_number|default:related.original_file_name }}</a> <span class="small muted">· {{ related.firmware_type_display }}</span></li>
+              <li><a href="{% url 'firmwares:firmware_detail' firmware_type=related.firmware_type firmware_id=related.pk %}"><i data-lucide="file-archive" aria-hidden="true"></i><span class="build-code">{{ related.build_number|default:related.original_file_name }}<small>{{ related.firmware_type_display }}{% if related.android_version %} · Android {{ related.android_version }}{% endif %}</small></span></a></li>
             {% endfor %}
           </ul>
         </section>
       {% endif %}
     </div>
     <aside class="col-12 col-lg-4">
-      {% ad_zone "sidebar" %}      <section class="surface-card p-4" aria-labelledby="download-panel-title">
-        <p class="section-eyebrow mb-2">Availability</p>
-        <h2 id="download-panel-title" class="h4">Download information</h2>
+      {% ad_zone "sidebar" %}
+      <section id="access" class="access-panel" aria-labelledby="download-panel-title">
+        <p class="section-eyebrow mb-1">Availability</p>
+        <h2 id="download-panel-title" class="access-panel__title">Download information</h2>
         <p class="mb-2">{% include "firmwares/includes/tier_badge.html" with firmware=firmware %}</p>
-        <p class="muted">Check the exact model and variant before installing firmware. The review label describes this record's status, not a guarantee of compatibility with every device.</p>
+        <p class="muted small">Check the exact model and variant before installing firmware. The review label describes this record's status, not a guarantee of compatibility with every device.</p>
         {% if access.allowed %}
-          <a class="btn btn-primary btn-lg w-100" href="{% url 'firmwares:firmware_download' firmware_type=firmware_type firmware_id=firmware.pk %}">
+          <a class="btn btn-primary btn-lg access-panel__cta" href="{% url 'firmwares:firmware_download' firmware_type=firmware_type firmware_id=firmware.pk %}">
             <i data-lucide="download" aria-hidden="true"></i><span class="ms-2">{% if access.already_served %}Download again{% else %}Continue to download{% endif %}</span>
           </a>
         {% else %}
-          <div class="access-locked p-3" role="status" data-access-locked="{{ access.requires|default:'locked' }}">
+          <div class="access-locked" role="status" data-access-locked="{{ access.requires|default:'locked' }}">
             <p class="fw-semibold mb-2"><i data-lucide="lock" aria-hidden="true"></i><span class="ms-1">Locked</span></p>
             <p class="mb-3">{{ access.reason }}</p>
             {% if access.requires == "login" %}
@@ -76,24 +102,29 @@
             {% endif %}
           </div>
         {% endif %}
-        <p class="small muted mt-3 mb-0">File size: {{ file_size_display }}{% if firmware.is_external %} · External download{% endif %}</p>
+        <ul class="access-panel__meta">
+          <li><i data-lucide="hard-drive" aria-hidden="true"></i><span>File size: {{ file_size_display }}{% if firmware.is_external %} · External download{% endif %}</span></li>
+          <li><i data-lucide="shield-check" aria-hidden="true"></i><span>Reviewed by staff before publication</span></li>
+        </ul>
       </section>
       {% shop_firmware_allowance firmware %}
+      {% firmware_access_actions firmware firmware_type %}
+      {% share_widget share_url share_title text=share_text heading="Share this firmware" copy_message="Firmware link copied." %}
       {% firmware_storage_panel firmware %}
       {% if firmware.model %}
-        <section class="surface-card p-4 mt-4" aria-labelledby="related-guides-title">
-          <p class="section-eyebrow mb-2">Editorial resources</p>
-          <h2 id="related-guides-title" class="h4">Guides for this device</h2>
+        <section class="cat-panel" aria-labelledby="related-guides-title">
+          <p class="section-eyebrow mb-1">Editorial resources</p>
+          <h2 id="related-guides-title" class="cat-panel__title">Guides for this device</h2>
           {% if related_blog_posts %}
-            <ul class="list-unstyled d-grid gap-3 mb-3">
+            <ul class="cat-linklist mb-3">
               {% for post in related_blog_posts %}
-                <li><a href="{{ post.get_absolute_url }}">{{ post.title }}</a>{% if post.summary %}<span class="d-block small muted">{{ post.summary|truncatewords:18 }}</span>{% endif %}</li>
+                <li><a href="{{ post.get_absolute_url }}"><i data-lucide="book-open" aria-hidden="true"></i><span>{{ post.title }}{% if post.summary %}<small>{{ post.summary|truncatewords:18 }}</small>{% endif %}</span></a></li>
               {% endfor %}
             </ul>
           {% else %}
             <p class="muted">No published guides are linked to this device yet.</p>
           {% endif %}
-          {% if firmware.model.brand %}<a class="btn btn-outline-secondary btn-sm" href="{% url 'blog:model_posts' brand_slug=firmware.model.brand.slug model_slug=firmware.model.slug %}">All device articles</a>{% endif %}
+          {% if firmware.model.brand %}<a class="btn btn-soft btn-sm" href="{% url 'blog:model_posts' brand_slug=firmware.model.brand.slug model_slug=firmware.model.slug %}">All device articles</a>{% endif %}
         </section>
       {% endif %}
     </aside>

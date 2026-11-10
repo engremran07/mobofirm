@@ -1,0 +1,22 @@
+{% extends "components/dialog.html" %}
+{# Contract: dialog_title, dialog_message, dialog_action, credit_cost, credit_balance, missing, back_url, earn_url, error (see shop/dialogs/pay_with_credits.html). Credits payment body for the shared dialog shell. #}
+{% block dialog_body %}
+  <dl class="eco-kv mb-3">
+    <dt>Price</dt><dd><strong>{{ credit_cost }} credits</strong></dd>
+    <dt>Your balance</dt><dd>{{ credit_balance }} credits</dd>
+  </dl>
+  {% if error %}<p class="status-unverified mb-2" role="alert">{{ error }}</p>{% endif %}
+  {% if missing %}
+    <p class="small mb-0" role="status">You need {{ missing }} more credits. <a href="{{ earn_url }}">See ways to earn credits</a>.</p>
+  {% else %}
+    <p class="small cm-muted mb-0">The credits are spent once and unlock this immediately.</p>
+  {% endif %}
+{% endblock %}
+{% block dialog_footer %}
+  {% if missing %}
+    {% if dialog_inline %}<a class="btn btn-outline-secondary" href="{{ back_url }}">Back</a>{% else %}<button type="button" class="btn btn-outline-secondary" @click="requestClose" data-dialog-initial-focus>Back</button>{% endif %}
+  {% else %}
+    {% if dialog_inline %}<a class="btn btn-outline-secondary" href="{{ back_url }}">Cancel</a>{% else %}<button type="button" class="btn btn-outline-secondary" @click="requestClose">Cancel</button>{% endif %}
+    <button type="submit" class="btn btn-primary" data-dialog-initial-focus>Pay {{ credit_cost }} credits</button>
+  {% endif %}
+{% endblock %}

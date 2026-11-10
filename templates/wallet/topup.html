@@ -3,13 +3,19 @@
 {% block title %}Top up credits{% endblock %}
 {% block content %}
 {% url 'wallet:dashboard' as wallet_url %}
-<div class="site-container py-4 py-lg-5">
+<div class="site-container cm-page py-4 py-lg-5">
   {% include "components/breadcrumbs.html" with current="Top up" parent_label="Wallet" parent_url=wallet_url %}
   {% include "components/page_header.html" with eyebrow="Account" title="Request a top-up" lead="Ask for credits, pay our team offline, and they are added once staff confirm the payment." %}
-  {% include "wallet/_subnav.html" %}
+  {% include "wallet/_subnav.html" with wallet_tab="topup" %}
+  <ol class="stepper-ui" aria-label="How a top-up works">
+    <li class="is-current" aria-current="step">Request</li>
+    <li>Pay our team offline</li>
+    <li>Staff confirm</li>
+    <li>Credits added</li>
+  </ol>
   <div class="mb-4">{% include "wallet/_payment_notice.html" %}</div>
   {% if cfg.topups_enabled %}
-    <form method="post" class="surface-card p-4 mb-5" novalidate>
+    <form method="post" class="form-card mb-5" novalidate>
       {% csrf_token %}
       {% include "components/form_errors.html" with form=form %}
       {% include "components/form_field.html" with field=form.credits %}
@@ -20,18 +26,18 @@
     <div class="mb-5">{% include "components/notice.html" with tone="warning" message="Top-ups are switched off right now." %}</div>
   {% endif %}
 
-  <h2 class="h5">Your requests</h2>
+  <div class="cm-section__head"><h2>Your requests</h2></div>
   {% if topups %}
     {% table_scroll "Your top-up requests" %}
-    <table class="table align-middle">
+    <table class="table table-ui align-middle">
       <thead><tr><th scope="col">Request</th><th scope="col" class="text-end">Credits</th><th scope="col" class="text-end">To pay</th><th scope="col">Status</th><th scope="col"><span class="visually-hidden">Actions</span></th></tr></thead>
       <tbody>
         {% for item in topups %}
           <tr>
-            <td>#{{ item.pk }} <span class="muted small d-block">{{ item.created_at|date:"j M Y" }}</span></td>
+            <td>#{{ item.pk }} <span class="cm-muted small d-block">{{ item.created_at|date:"j M Y" }}</span></td>
             <td class="text-end">{{ item.credits }}</td>
             <td class="text-end">{{ item.price }} {{ item.currency_label }}</td>
-            <td>{% if item.status == "paid" %}{% include "components/status_pill.html" with label="Paid" tone="success" %}{% elif item.status == "pending" %}{% include "components/status_pill.html" with label="Awaiting payment" tone="warning" %}{% else %}{% include "components/status_pill.html" with label="Cancelled" tone="danger" %}{% endif %}</td>
+            <td>{% if item.status == "paid" %}{% include "components/status_pill.html" with label="Paid" tone="success" icon="check" %}{% elif item.status == "pending" %}{% include "components/status_pill.html" with label="Awaiting payment" tone="warning" icon="clock" %}{% else %}{% include "components/status_pill.html" with label="Cancelled" tone="danger" icon="x" %}{% endif %}</td>
             <td class="text-end">
               {% if item.status == "pending" %}
                 <button type="button" class="btn btn-sm btn-outline-danger" data-dialog-open="cancel-topup-{{ item.pk }}">Cancel</button>
@@ -44,7 +50,7 @@
     </table>
     {% endtable_scroll %}
   {% else %}
-    {% include "components/empty_state.html" with title="No top-up requests yet" message="Request one above when you need more credits." %}
+    {% include "shop/_empty.html" with icon="receipt" title="No top-up requests yet" message="Request one above when you need more credits." %}
   {% endif %}
 </div>
 {% endblock %}

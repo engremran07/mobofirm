@@ -137,7 +137,7 @@ def test_keyboard_navigation_skip_link_and_current_page_state(live_server):
 
         page.focus("body")
         reached: list[str] = []
-        for _ in range(14):
+        for _ in range(24):
             page.keyboard.press("Tab")
             reached.append(page.evaluate("document.activeElement.textContent.trim()"))
         assert {"Brands", "Chipsets", "Blog"} <= set(reached)
@@ -271,7 +271,7 @@ def test_device_dialog_escape_closes_it_and_leaves_the_page_usable(live_server):
         page.goto(f"{live_server.url}{reverse('devices:my_devices')}")
         _ready(page)
 
-        dialog = page.get_by_role("dialog", name="Review this browser")
+        dialog = page.get_by_role("dialog", name="Review this computer")
         assert dialog.is_visible()
         assert page.locator(".device-registration-backdrop").count() == 0
         assert dialog.evaluate("element => element.matches(':modal')")
@@ -387,9 +387,9 @@ def test_htmx_failures_are_visible_to_sighted_users(live_server):
         _ready(page)
 
         page.locator("#site-search").press_sequentially("camera", delay=30)
-        alert = page.locator("#global-feedback .alert-danger")
+        alert = page.locator("#toast-region .toast-ui--danger")
         expect(alert).to_be_visible(timeout=5_000)
         assert "server hit a problem" in alert.inner_text()
         assert alert.get_attribute("role") == "alert"
-        alert.get_by_role("button", name="Dismiss message").click()
+        alert.get_by_role("button", name="Dismiss notification").click()
         expect(alert).to_have_count(0)

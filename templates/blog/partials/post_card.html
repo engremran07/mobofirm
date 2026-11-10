@@ -1,12 +1,14 @@
-{# Contract: card (apps.blog.selectors.PostCard); optional heading_level ("h3" default) and show_excerpt (default on). #}
+{# Contract: card (apps.blog.selectors.PostCard); optional heading_level ("h3" default) and show_excerpt (default on). Shows total views and the last update. #}
+{% load content_tags %}
 {% with level=heading_level|default:"h3" %}
-<article class="post-card">
+<article class="post-card post-card--{{ card.post.access }}" data-reveal>
   <div class="post-card__media">
     {% if card.cover %}
       <img src="{{ card.cover }}" alt="" loading="lazy" width="640" height="360">
     {% else %}
       {% include "blog/partials/thumb.html" with card=card %}
     {% endif %}
+    <span class="post-card__badge">{% include "blog/partials/access_badge.html" with post=card.post %}</span>
   </div>
   <div class="post-card__body">
     <p class="post-card__eyebrow">{% if card.category %}{{ card.category.name }}{% else %}{{ card.kind }}{% endif %}</p>
@@ -16,16 +18,17 @@
       <h3 class="post-card__title"><a class="stretched-link" href="{{ card.url }}">{{ card.title }}</a></h3>
     {% endif %}
     {% if show_excerpt|default:True and card.excerpt %}<p class="post-card__excerpt">{{ card.excerpt }}</p>{% endif %}
-    <p class="post-card__meta">
-      <span>{{ card.author }}</span>
-      {% if card.published %}<span aria-hidden="true">·</span><time datetime="{{ card.published|date:'c' }}">{{ card.published|date:"M j, Y" }}</time>{% endif %}
-      <span aria-hidden="true">·</span><span>{{ card.reading_time }} min read</span>
-    </p>
     {% if card.tags %}
       <ul class="post-card__tags" aria-label="Tags">
         {% for tag in card.tags %}<li><a href="{% url 'tags:detail' slug=tag.slug %}">#{{ tag.name }}</a></li>{% endfor %}
       </ul>
     {% endif %}
+    <p class="post-card__meta">
+      <span class="post-card__author">{{ card.author }}</span>
+      {% if card.published %}<span aria-hidden="true">·</span><time datetime="{{ card.published|date:'c' }}">{{ card.published|date:"M j, Y" }}</time>{% endif %}
+      <span aria-hidden="true">·</span><span class="post-card__read"><i data-lucide="clock" class="icon" aria-hidden="true"></i>{{ card.reading_time }} min read</span>
+    </p>
+    {% content_stats card.post compact=True reading=False %}
   </div>
 </article>
 {% endwith %}

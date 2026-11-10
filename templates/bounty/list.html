@@ -1,41 +1,51 @@
 {% extends "base.html" %}
 {% block title %}Bounties | {{ site_name }}{% endblock %}
 {% block content %}
-<div class="site-container py-4 py-lg-5">
+<div class="site-container py-4 py-lg-5 bounty-page">
   {% include "components/breadcrumbs.html" with current="Bounties" %}
   {% include "components/page_header.html" with eyebrow="Community" title="Firmware bounties" lead="Back a firmware request with credits. When staff approve an upload that fulfils it, the uploader is paid from your escrow." %}
   {% if not available %}<div class="alert alert-warning" role="status">{{ paused_reason }}</div>{% endif %}
-  <div class="d-flex flex-wrap gap-2 align-items-center mb-3">
-    <nav class="d-flex flex-wrap gap-2" aria-label="Bounty status">
-      {% for value, label in status_filters %}<a class="btn btn-sm {% if value == status %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="?status={{ value }}{% if kind %}&amp;kind={{ kind }}{% endif %}{% if query %}&amp;q={{ query|urlencode }}{% endif %}"{% if value == status %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}
-    </nav>
-    {% if user.is_authenticated %}<a class="btn btn-sm btn-link ms-auto" href="{% url 'bounty:mine' %}">My bounties</a>{% endif %}
-  </div>
-  <form method="get" class="row g-2 mb-4" role="search" aria-label="Filter bounties">
+  <form method="get" class="filter-bar bounty-filters" role="search" aria-label="Filter bounties">
     <input type="hidden" name="status" value="{{ status }}">
-    <div class="col-12 col-md-5"><label class="visually-hidden" for="bounty-q">Search</label><input class="form-control" id="bounty-q" name="q" value="{{ query }}" placeholder="Brand, model or variant"></div>
-    <div class="col-8 col-md-4"><label class="visually-hidden" for="bounty-kind">Kind</label><select class="form-select" id="bounty-kind" name="kind">{% for value, label in kind_filters %}<option value="{{ value }}"{% if value == kind %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
-    <div class="col-4 col-md-3"><button class="btn btn-outline-primary w-100" type="submit">Filter</button></div>
+    <div class="bounty-filters__field">
+      <label class="visually-hidden" for="bounty-q">Search</label>
+      <input class="form-control" id="bounty-q" type="search" name="q" value="{{ query }}" placeholder="Brand, model or variant">
+    </div>
+    <div class="bounty-filters__field bounty-filters__field--kind">
+      <label class="visually-hidden" for="bounty-kind">Kind</label>
+      <select class="form-select" id="bounty-kind" name="kind">{% for value, label in kind_filters %}<option value="{{ value }}"{% if value == kind %} selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+    </div>
+    <button class="btn btn-primary" type="submit">Filter</button>
+    {% if user.is_authenticated %}<a class="btn btn-ghost ms-auto" href="{% url 'bounty:mine' %}"><i data-lucide="trophy" class="icon" aria-hidden="true"></i> My bounties</a>{% endif %}
   </form>
+  <nav class="chip-row bounty-status" aria-label="Bounty status">
+    {% for value, label in status_filters %}<a class="chip-ui{% if value == status %} is-active{% endif %}" href="?status={{ value }}{% if kind %}&amp;kind={{ kind }}{% endif %}{% if query %}&amp;q={{ query|urlencode }}{% endif %}"{% if value == status %} aria-current="page"{% endif %}>{{ label }}</a>{% endfor %}
+  </nav>
   {% if page_obj.object_list %}
-    <div class="row g-3">
+    <div class="card-grid bounty-grid">
       {% for bounty in page_obj %}
-        <div class="col-12 col-md-6 col-xl-4">
-          <article class="surface-card h-100 p-3 d-flex flex-column gap-2" aria-labelledby="bounty-{{ bounty.pk }}">
-            <p class="bounty-credits mb-0"><strong>{{ bounty.credits }}</strong> credits</p>
-            <h2 class="h6 mb-0" id="bounty-{{ bounty.pk }}"><a href="{% url 'bounty:detail' pk=bounty.pk %}">{{ bounty.target_label }}</a></h2>
-            <p class="small muted mb-0">
+        <article class="card-ui card-ui--bounty" aria-labelledby="bounty-{{ bounty.pk }}" data-reveal>
+          <div class="card-ui__body">
+            <div class="bounty-card__top">
+              <p class="bounty-credits mb-0"><i data-lucide="trophy" class="icon" aria-hidden="true"></i><strong>{{ bounty.credits }}</strong> credits</p>
               {% include "bounty/_status.html" with bounty=bounty %}
-              {{ bounty.claim_count }} working on it · by {{ bounty.creator.username }}
-              {% if bounty.status == "open" %}· ends {{ bounty.expires_at|date:"j M Y" }}{% endif %}
-            </p>
-          </article>
-        </div>
+            </div>
+            <h2 class="card-ui__title" id="bounty-{{ bounty.pk }}"><a class="card-ui__link" href="{% url 'bounty:detail' pk=bounty.pk %}">{{ bounty.target_label }}</a></h2>
+            {% if bounty.status == "open" or bounty.status == "review" %}<p class="bounty-card__escrow"><i data-lucide="shield-check" class="icon" aria-hidden="true"></i> Held in escrow until a solution is approved</p>{% endif %}
+          </div>
+          <div class="card-ui__footer">
+            <ul class="card-ui__meta">
+              <li><i data-lucide="wrench" class="icon" aria-hidden="true"></i> {{ bounty.claim_count }} working on it</li>
+              <li>by {{ bounty.creator.username }}</li>
+              {% if bounty.status == "open" %}<li><i data-lucide="clock" class="icon" aria-hidden="true"></i> ends {{ bounty.expires_at|date:"j M Y" }}</li>{% endif %}
+            </ul>
+          </div>
+        </article>
       {% endfor %}
     </div>
     {% include "components/pagination.html" with page_obj=page_obj label="Bounties" %}
   {% else %}
-    {% include "components/empty_state.html" with title="No bounties here" message="Add a bounty from a firmware request you want fulfilled." action_label="Request a firmware" action_url="/firmwares/requests/" %}
+    {% include "components/empty_ui.html" with icon="gift" title="No bounties here" message="Add a bounty from a firmware request you want fulfilled." action_label="Request a firmware" action_url="/firmwares/requests/" %}
   {% endif %}
 </div>
 {% endblock %}

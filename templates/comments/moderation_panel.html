@@ -1,4 +1,5 @@
 {% extends "admin/staff_page.html" %}
+{% load editor_tags %}
 {% block mf_body %}
 {% if not can_moderate %}<p class="mf-ui-note mf-ui-note--warning" role="status">You can review the queue, but deciding needs the “change comment” permission.</p>{% endif %}
 <section class="mf-ui-section" aria-labelledby="queue-title">
@@ -9,7 +10,7 @@
         <a id="comment-{{ comment.pk }}-title" href="{{ comment.post.get_absolute_url }}#comment-{{ comment.pk }}">{{ comment.post.title }}</a>
         <span class="mf-ui-comment__meta">by {{ comment.user.public_display_name }} · <time datetime="{{ comment.created_at|date:'c' }}">{{ comment.created_at|date:"M j, Y H:i" }}</time> · risk {{ comment.toxicity_score }}</span>
       </header>
-      <p class="mf-ui-comment__body">{{ comment.body|linebreaksbr }}</p>
+      <div class="mf-ui-comment__body">{{ comment.body|rich_text }}</div>
       {% if comment.moderation_flags.moderation.reasons %}
         <p class="mf-ui-comment__meta">Flagged for: {{ comment.moderation_flags.moderation.reasons|join:", " }}</p>
       {% endif %}

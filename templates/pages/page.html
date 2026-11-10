@@ -1,18 +1,18 @@
 {% extends "base.html" %}
 {% block content %}
 {% url 'pages:index' as pages_index_url %}
-<div class="site-container py-4 py-lg-5">
+<div class="site-container py-4 py-lg-5 page-doc">
   {% include "components/breadcrumbs.html" with current=page.title parent_label="Pages" parent_url=pages_index_url %}
   {% include "components/page_header.html" with title=page.title eyebrow="Information" title_id="page-title" %}
-  <p class="muted small d-flex flex-wrap gap-3 mb-4">
-    <span><i class="icon" data-lucide="clock" aria-hidden="true"></i> Last updated <time datetime="{{ page.updated_at|date:'c' }}">{{ page.updated_at|date:"j F Y" }}</time></span>
-    <span>{{ rendered.reading_minutes }} min read</span>
+  <p class="page-doc__meta">
+    <span class="chip-ui"><i class="icon" data-lucide="clock" aria-hidden="true"></i> Last updated <time datetime="{{ page.updated_at|date:'c' }}">{{ page.updated_at|date:"j F Y" }}</time></span>
+    <span class="chip-ui">{{ rendered.reading_minutes }} min read</span>
   </p>
   <div class="eco-article{% if show_toc %} eco-article--toc{% endif %}">
     <article class="eco-prose" aria-labelledby="page-title">{{ rendered.html|safe }}</article>
     {% if show_toc %}
       <nav class="eco-toc" aria-labelledby="toc-title">
-        <h2 id="toc-title" class="h6 text-uppercase muted">On this page</h2>
+        <h2 id="toc-title" class="eco-toc__title">On this page</h2>
         <ol>
           {% for entry in rendered.toc %}
             <li{% if entry.level > 2 %} class="is-nested"{% endif %}><a href="#{{ entry.anchor }}">{{ entry.title }}</a></li>
@@ -23,21 +23,21 @@
   </div>
 
   {% if related_pages or latest_posts %}
-    <div class="row g-4 mt-4 pt-4 border-top">
+    <div class="page-doc__more">
       {% if related_pages %}
-        <nav class="col-12 col-md-6" aria-labelledby="more-pages-title">
-          <h2 id="more-pages-title" class="h5">More information</h2>
+        <nav aria-labelledby="more-pages-title">
+          <h2 id="more-pages-title" class="page-doc__more-title">More information</h2>
           <ul class="eco-list">
-            {% for other in related_pages %}<li><a href="{{ other.get_absolute_url }}">{{ other.title }}</a></li>{% endfor %}
+            {% for other in related_pages %}<li><a class="page-doc__link" href="{{ other.get_absolute_url }}"><i class="icon" data-lucide="file-text" aria-hidden="true"></i><span>{{ other.title }}</span></a></li>{% endfor %}
           </ul>
         </nav>
       {% endif %}
       {% if latest_posts %}
-        <section class="col-12 col-md-6" aria-labelledby="page-posts-title">
-          <h2 id="page-posts-title" class="h5">From the blog</h2>
+        <section aria-labelledby="page-posts-title">
+          <h2 id="page-posts-title" class="page-doc__more-title">From the blog</h2>
           <ul class="eco-list">
-            {% for post in latest_posts %}<li><a href="{{ post.url }}">{{ post.title }}</a></li>{% endfor %}
-            <li><a href="{% url 'tags:list' %}">Browse topics <i class="icon" data-lucide="arrow-right" aria-hidden="true"></i></a></li>
+            {% for post in latest_posts %}<li><a class="page-doc__link" href="{{ post.url }}"><i class="icon" data-lucide="newspaper" aria-hidden="true"></i><span>{{ post.title }}</span></a></li>{% endfor %}
+            <li><a class="page-doc__link" href="{% url 'tags:list' %}"><i class="icon" data-lucide="tags" aria-hidden="true"></i><span>Browse topics</span><i class="icon ms-auto" data-lucide="arrow-right" aria-hidden="true"></i></a></li>
           </ul>
         </section>
       {% endif %}

@@ -458,9 +458,16 @@ class UserAuthenticationApiTests(TestCase):
             str(user.pk),
         )
 
-    def test_google_sign_in_button_is_rendered_when_provider_is_configured(self):
-        response = self.client.get(reverse("users:account_login"))
-        self.assertNotContains(response, "Continue with Google")
+    def test_google_sign_in_button_is_always_shown_and_proceeds_only_when_configured(
+        self,
+    ):
+        with override_settings(SOCIALACCOUNT_PROVIDERS={}):
+            response = self.client.get(reverse("users:account_login"))
+        # Unconfigured: the button is still listed but opens the app-owned notice
+        # instead of posting to the provider.
+        self.assertContains(response, "Continue with Google")
+        self.assertContains(response, "Google sign-in is not set up yet")
+        self.assertNotContains(response, 'action="/accounts/google/login/')
 
         with override_settings(
             SOCIALACCOUNT_PROVIDERS={
@@ -476,6 +483,7 @@ class UserAuthenticationApiTests(TestCase):
 
         self.assertContains(configured_response, "Continue with Google")
         self.assertContains(configured_response, "/accounts/google/login/")
+        self.assertNotContains(configured_response, "social-unavailable-google")
 
     def test_signup_rejects_mismatched_passwords_and_hides_duplicate_email(self):
         mismatch = self.client.post(

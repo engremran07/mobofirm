@@ -21,6 +21,9 @@ class SiteSettingsConfig(AppConfig):
 
     def ready(self) -> None:
         import_module(f"{self.name}.signals")
+        import_module(f"{self.name}.editor_store").register()
+        import_module(f"{self.name}.editor_admin")
+        import_module(f"{self.name}.editor_cleanup")
         # Resolved when the admin renders, so edits apply without a restart.
         title = lazy(_admin_title, str)
         admin.site.site_header = title()

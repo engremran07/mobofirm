@@ -1,15 +1,12 @@
-{% extends "base.html" %}
+{% extends "account/_auth_layout.html" %}
 {% block title %}Verify your email | {{ site_name|default:"Mobofirm" }}{% endblock %}
-{% block content %}
-<div class="site-container py-5">
-  {% include "components/breadcrumbs.html" with current="Verify email" %}
-  
-  <section class="surface-card p-4">
-    <p class="section-eyebrow">Account security</p>
-    <h1 class="h2">Check your email</h1>
-    <p>Use the one-time code in the message, or follow its signed verification link.</p>
-    <a class="btn btn-primary" href="{% url 'users:verify_email' %}">Enter verification code</a>
-    {% include "users/includes/verification_poll.html" %}
-  </section>
-</div>
+{% block auth_crumbs %}{% include "components/breadcrumbs.html" with current="Verify email" %}{% endblock %}
+{% block auth_aside %}{% endblock %}
+{% block auth_icon %}mail-check{% endblock %}
+{% block auth_eyebrow %}Account security{% endblock %}
+{% block auth_title %}Check your email{% endblock %}
+{% block auth_lead %}<p class="auth-card__lead">Use the one-time code in the message, or follow its signed verification link.</p>{% endblock %}
+{% block auth_body %}
+<a class="btn btn-primary btn-lg w-100" href="{% url 'users:verify_email' %}">Enter verification code</a>
+{% include "users/includes/verification_poll.html" %}
 {% endblock %}

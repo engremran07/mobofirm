@@ -1,0 +1,35 @@
+{# Tools hub body. Swapped into #tool-results by HTMX. Context: categories, featured_tools, latest_guides, tool_total, search_* (list_search_context). #}
+{% include "components/search_feedback.html" with noun="tool" %}
+{% if not search_query %}
+  {% if latest_guides %}
+    <section class="cat-section" aria-labelledby="latest-guides-title">
+      <div class="cat-section__head"><h2 id="latest-guides-title" class="cat-section__title">Latest flashing guides</h2><a href="{% url 'firmwares:flashing_guides' %}">All guides</a></div>
+      <div class="card-grid">{% for guide in latest_guides %}{% include "firmwares/includes/guide_card.html" with guide=guide %}{% endfor %}</div>
+    </section>
+  {% endif %}
+  {% if featured_tools %}
+    <section class="cat-section" aria-labelledby="featured-tools-title">
+      <div class="cat-section__head"><h2 id="featured-tools-title" class="cat-section__title">Featured tools</h2></div>
+      <div class="card-grid">{% for tool in featured_tools %}{% include "firmwares/includes/tool_card.html" with tool=tool %}{% endfor %}</div>
+    </section>
+  {% endif %}
+{% endif %}
+{% for category in categories %}{% if category.active_tools %}
+  <section class="cat-section" aria-labelledby="tool-category-{{ forloop.counter }}">
+    <div class="cat-section__head"><h2 id="tool-category-{{ forloop.counter }}" class="cat-section__title">{{ category.name }}</h2></div>
+    <div class="card-grid">{% for tool in category.active_tools %}{% include "firmwares/includes/tool_card.html" with tool=tool %}{% endfor %}</div>
+  </section>
+{% endif %}{% empty %}
+  <div class="empty-ui empty-state" role="status">
+    <span class="empty-ui__icon"><i data-lucide="wrench" aria-hidden="true"></i></span>
+    <p class="empty-ui__title">No tool categories are configured.</p>
+  </div>
+  {% include "components/request_cta.html" with kind="chipset" heading="Tools missing for your chipset?" %}
+{% endfor %}
+{% if search_query and not tool_total %}
+  <div class="empty-ui empty-state" role="status">
+    <span class="empty-ui__icon"><i data-lucide="search" aria-hidden="true"></i></span>
+    <p class="empty-ui__title">No tools match this search.</p>
+  </div>
+  {% include "components/request_cta.html" with kind="chipset" query=search_query heading="Tools missing for your chipset?" %}
+{% endif %}

@@ -2,45 +2,64 @@
 {% load mf_ui %}
 {% block title %}Invite friends{% endblock %}
 {% block content %}
-<div class="site-container py-4 py-lg-5">
+<div class="site-container cm-page py-4 py-lg-5">
   {% include "components/breadcrumbs.html" with current="Invite friends" %}
   {% include "components/page_header.html" with eyebrow="Account" title="Invite friends" lead="Share your link. You are rewarded after your friend verifies their email and gets a first contribution approved." %}
 
-  <section class="surface-card p-4 mb-4" aria-labelledby="link-title">
-    <h2 class="h5" id="link-title">Your personal link</h2>
-    <label class="form-label" for="referral-link">Share this link</label>
-    <input id="referral-link" class="form-control mb-2" type="text" readonly value="{{ link }}" aria-describedby="referral-code-help">
-    <p class="muted small mb-0" id="referral-code-help">Select the link and copy it. Your code is <strong>{{ summary.code.code }}</strong>; friends can also add <code>?ref={{ summary.code.code }}</code> to any page address.</p>
+  <section class="referral-hero mb-4" aria-labelledby="link-title">
+    <div>
+      <h2 class="h5" id="link-title">Your personal link</h2>
+      <label class="form-label" for="referral-link">Share this link</label>
+      <div class="copy-field">
+        <input id="referral-link" class="form-control" type="text" readonly value="{{ link }}" aria-describedby="referral-code-help">
+        <button type="button" class="btn btn-primary" data-copy-target="#referral-link" data-copy-message="Invite link copied."><i data-lucide="copy" aria-hidden="true"></i> <span>Copy link</span></button>
+      </div>
+      <p class="cm-muted small mt-2 mb-0" id="referral-code-help">Select the link and copy it. Your code is <strong>{{ summary.code.code }}</strong>; friends can also add <code>?ref={{ summary.code.code }}</code> to any page address.</p>
+    </div>
+    <div>
+      <div class="stat-strip">
+        {% include "components/stat_tile.html" with label="Invited" value=summary.invited %}
+        {% include "components/stat_tile.html" with label="Rewarded" value=summary.rewarded %}
+        {% include "components/stat_tile.html" with label="Waiting" value=summary.pending hint="Not verified yet" %}
+        {% include "components/stat_tile.html" with label="Credits earned" value=summary.credits_earned %}
+      </div>
+      {% if cfg.enabled and cfg.max_rewarded_per_referrer %}
+        <div class="mt-3">
+          <p class="small mb-1" id="invite-progress-label">Reward slots used: {{ summary.rewarded }} of {{ cfg.max_rewarded_per_referrer }}</p>
+          <progress class="progress-ui" max="{{ cfg.max_rewarded_per_referrer }}" value="{{ summary.rewarded }}" aria-labelledby="invite-progress-label">{{ summary.rewarded }}</progress>
+        </div>
+      {% elif summary.invited %}
+        <div class="mt-3">
+          <p class="small mb-1" id="invite-progress-label">{{ summary.rewarded }} of {{ summary.invited }} invited friends rewarded</p>
+          <progress class="progress-ui" max="{{ summary.invited }}" value="{{ summary.rewarded }}" aria-labelledby="invite-progress-label">{{ summary.rewarded }}</progress>
+        </div>
+      {% endif %}
+    </div>
   </section>
 
-  <div class="row g-3 mb-4">
-    <div class="col-6 col-md-3">{% include "components/stat_tile.html" with label="Invited" value=summary.invited %}</div>
-    <div class="col-6 col-md-3">{% include "components/stat_tile.html" with label="Rewarded" value=summary.rewarded %}</div>
-    <div class="col-6 col-md-3">{% include "components/stat_tile.html" with label="Waiting" value=summary.pending hint="Not verified yet" %}</div>
-    <div class="col-6 col-md-3">{% include "components/stat_tile.html" with label="Credits earned" value=summary.credits_earned %}</div>
+  <div class="cm-split mb-5">
+    <section class="cm-section" aria-labelledby="rules-title">
+      <div class="cm-section__head"><h2 id="rules-title">How rewards work</h2></div>
+      {% if not cfg.enabled %}
+        {% include "components/notice.html" with tone="warning" message="Referral rewards are switched off right now. Links still work once they are back on." %}
+      {% else %}
+        <ul class="steps-list">
+          {% if referrer_rule and referrer_rule.enabled %}<li><span>You earn <strong>{{ referrer_rule.credits }} credits</strong> for each friend who qualifies.</span></li>{% endif %}
+          {% if welcome_rule and welcome_rule.enabled and welcome_rule.credits %}<li><span>Your friend gets <strong>{{ welcome_rule.credits }} credits</strong> as a welcome bonus.</span></li>{% endif %}
+          <li><span>The friend must verify their email{% if cfg.require_qualifying_action %} and have a first contribution approved{% endif %}.</span></li>
+          <li><span>One reward per friend. Using your own link or the same network does not count.</span></li>
+          {% if cfg.max_rewarded_per_referrer %}<li><span>Up to {{ cfg.max_rewarded_per_referrer }} rewarded friends in total{% if cfg.max_rewarded_per_referrer_per_day %}, {{ cfg.max_rewarded_per_referrer_per_day }} per day{% endif %}.</span></li>{% endif %}
+        </ul>
+        <p class="mt-3 mb-0"><a href="{{ earn_url }}">See every way to earn credits</a></p>
+      {% endif %}
+    </section>
   </div>
 
-  <section class="mb-5" aria-labelledby="rules-title">
-    <h2 class="h5" id="rules-title">How rewards work</h2>
-    {% if not cfg.enabled %}
-      {% include "components/notice.html" with tone="warning" message="Referral rewards are switched off right now. Links still work once they are back on." %}
-    {% else %}
-      <ul>
-        {% if referrer_rule and referrer_rule.enabled %}<li>You earn <strong>{{ referrer_rule.credits }} credits</strong> for each friend who qualifies.</li>{% endif %}
-        {% if welcome_rule and welcome_rule.enabled and welcome_rule.credits %}<li>Your friend gets <strong>{{ welcome_rule.credits }} credits</strong> as a welcome bonus.</li>{% endif %}
-        <li>The friend must verify their email{% if cfg.require_qualifying_action %} and have a first contribution approved{% endif %}.</li>
-        <li>One reward per friend. Using your own link or the same network does not count.</li>
-        {% if cfg.max_rewarded_per_referrer %}<li>Up to {{ cfg.max_rewarded_per_referrer }} rewarded friends in total{% if cfg.max_rewarded_per_referrer_per_day %}, {{ cfg.max_rewarded_per_referrer_per_day }} per day{% endif %}.</li>{% endif %}
-      </ul>
-      <p><a href="{{ earn_url }}">See every way to earn credits</a></p>
-    {% endif %}
-  </section>
-
   <section aria-labelledby="invited-title">
-    <h2 class="h5" id="invited-title">Friends you invited</h2>
+    <div class="cm-section__head"><h2 id="invited-title">Friends you invited</h2></div>
     {% if invitees %}
       {% table_scroll "Friends you invited" %}
-      <table class="table align-middle">
+      <table class="table table-ui align-middle">
         <thead><tr><th scope="col">Friend</th><th scope="col">Joined</th><th scope="col">Status</th><th scope="col" class="text-end">Reward</th></tr></thead>
         <tbody>
           {% for item in invitees %}
@@ -48,18 +67,18 @@
               <td>{{ item.invitee.username }}</td>
               <td>{{ item.created_at|date:"j M Y" }}</td>
               <td>
-                {% if item.status == "rewarded" %}{% include "components/status_pill.html" with label="Rewarded" tone="success" %}
-                {% elif item.status == "rejected" %}{% include "components/status_pill.html" with label="Not rewarded" tone="danger" %}
-                {% else %}{% include "components/status_pill.html" with label="Waiting" tone="warning" %}{% endif %}
+                {% if item.status == "rewarded" %}{% include "components/status_pill.html" with label="Rewarded" tone="success" icon="check" %}
+                {% elif item.status == "rejected" %}{% include "components/status_pill.html" with label="Not rewarded" tone="danger" icon="x" %}
+                {% else %}{% include "components/status_pill.html" with label="Waiting" tone="warning" icon="clock" %}{% endif %}
               </td>
-              <td class="text-end">{% if item.status == "rewarded" %}+{{ item.reward_credits }}{% else %}&mdash;{% endif %}</td>
+              <td class="text-end">{% if item.status == "rewarded" %}<span class="amount is-in">+{{ item.reward_credits }}</span>{% else %}&mdash;{% endif %}</td>
             </tr>
           {% endfor %}
         </tbody>
       </table>
       {% endtable_scroll %}
     {% else %}
-      {% include "components/empty_state.html" with title="Nobody has joined with your link yet" message="Share it with friends who flash or repair phones." %}
+      {% include "shop/_empty.html" with icon="gift" title="Nobody has joined with your link yet" message="Share it with friends who flash or repair phones." %}
     {% endif %}
   </section>
 </div>

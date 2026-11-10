@@ -1,0 +1,2291 @@
+{
+ "cookie_name": "sessionid",
+ "cookie": ".eJxVjLsKwzAMAP9FczGyZWOcsXu_IciWXKctMeQxlf57CWRo17vj3jDyvrVxX3UZJ4EBrIfLL8xcnjofRh4837spfd6WKZsjMaddza2Lvq5n-zdovDYYoCbSIoSIhCWK99VRxowuBbYpaqg1ElrPyqKOQkkacw2cyUp0scLnCwbEOFE:1xQ6S0:qiWCemJPHhlVfd-8Tg8aGDi3bqFzwd-sDxT9gsPo_qw",
+ "urls": [
+  {
+   "label": "staffadmin",
+   "kind": "page",
+   "path": "/admin/"
+  },
+  {
+   "label": "staffadmin_comments_comment__status__exact=pe",
+   "kind": "page",
+   "path": "/admin/comments/comment/?status__exact=pending"
+  },
+  {
+   "label": "staffadmin_consent_consentdecision_stats",
+   "kind": "page",
+   "path": "/admin/consent/consentdecision/stats/"
+  },
+  {
+   "label": "staffadmin_distribution_channel_analytics",
+   "kind": "page",
+   "path": "/admin/distribution/channel/analytics/"
+  },
+  {
+   "label": "staffadmin_distribution_channel_calendar",
+   "kind": "page",
+   "path": "/admin/distribution/channel/calendar/"
+  },
+  {
+   "label": "staffadmin_distribution_channel_dashboard",
+   "kind": "page",
+   "path": "/admin/distribution/channel/dashboard/"
+  },
+  {
+   "label": "staffadmin_distribution_channel_review",
+   "kind": "page",
+   "path": "/admin/distribution/channel/review/"
+  },
+  {
+   "label": "staffadmin_users_notification_dashboard",
+   "kind": "page",
+   "path": "/admin/users/notification/dashboard/"
+  },
+  {
+   "label": "staffads_dashboard",
+   "kind": "page",
+   "path": "/ads/dashboard/"
+  },
+  {
+   "label": "staffads_manage_placements",
+   "kind": "page",
+   "path": "/ads/manage/placements/"
+  },
+  {
+   "label": "staffads_manage_suggestions",
+   "kind": "page",
+   "path": "/ads/manage/suggestions/"
+  },
+  {
+   "label": "staffcomments_moderation",
+   "kind": "page",
+   "path": "/comments/moderation/"
+  },
+  {
+   "label": "staffdevices_events",
+   "kind": "page",
+   "path": "/devices/events/"
+  },
+  {
+   "label": "staffseo_dashboard",
+   "kind": "page",
+   "path": "/seo/dashboard/"
+  },
+  {
+   "label": "staffseo_guides",
+   "kind": "page",
+   "path": "/seo/guides/"
+  },
+  {
+   "label": "staffseo_inspect",
+   "kind": "page",
+   "path": "/seo/inspect/"
+  },
+  {
+   "label": "staffseo_inventory",
+   "kind": "page",
+   "path": "/seo/inventory/"
+  },
+  {
+   "label": "staffseo_issues",
+   "kind": "page",
+   "path": "/seo/issues/"
+  },
+  {
+   "label": "staffseo_jobs",
+   "kind": "page",
+   "path": "/seo/jobs/"
+  },
+  {
+   "label": "staffseo_ledger",
+   "kind": "page",
+   "path": "/seo/ledger/"
+  },
+  {
+   "label": "staffseo_links",
+   "kind": "page",
+   "path": "/seo/links/"
+  },
+  {
+   "label": "staffseo_settings",
+   "kind": "page",
+   "path": "/seo/settings/"
+  },
+  {
+   "label": "staffstorage",
+   "kind": "page",
+   "path": "/storage/"
+  },
+  {
+   "label": "stafftags_duplicates_review",
+   "kind": "page",
+   "path": "/tags/duplicates/review/"
+  },
+  {
+   "label": "stafftags_keywords_review",
+   "kind": "page",
+   "path": "/tags/keywords/review/"
+  },
+  {
+   "label": "stafftags_manage",
+   "kind": "page",
+   "path": "/tags/manage/"
+  },
+  {
+   "label": "stafffirmwares_admin_requests",
+   "kind": "page",
+   "path": "/firmwares/admin/requests/"
+  },
+  {
+   "label": "users.profile",
+   "kind": "list",
+   "path": "/admin/users/profile/"
+  },
+  {
+   "label": "users.profile",
+   "kind": "add",
+   "path": "/admin/users/profile/add/"
+  },
+  {
+   "label": "users.profile",
+   "kind": "change",
+   "path": "/admin/users/profile/1/change/"
+  },
+  {
+   "label": "users.reputation",
+   "kind": "list",
+   "path": "/admin/users/reputation/"
+  },
+  {
+   "label": "users.reputation",
+   "kind": "add",
+   "path": "/admin/users/reputation/add/"
+  },
+  {
+   "label": "users.reputation",
+   "kind": "change",
+   "path": "/admin/users/reputation/10/change/"
+  },
+  {
+   "label": "users.following",
+   "kind": "list",
+   "path": "/admin/users/following/"
+  },
+  {
+   "label": "users.following",
+   "kind": "add",
+   "path": "/admin/users/following/add/"
+  },
+  {
+   "label": "users.activityfeed",
+   "kind": "list",
+   "path": "/admin/users/activityfeed/"
+  },
+  {
+   "label": "users.activityfeed",
+   "kind": "add",
+   "path": "/admin/users/activityfeed/add/"
+  },
+  {
+   "label": "users.customuser",
+   "kind": "list",
+   "path": "/admin/users/customuser/"
+  },
+  {
+   "label": "users.customuser",
+   "kind": "add",
+   "path": "/admin/users/customuser/add/"
+  },
+  {
+   "label": "users.customuser",
+   "kind": "change",
+   "path": "/admin/users/customuser/15/change/"
+  },
+  {
+   "label": "users.notification",
+   "kind": "list",
+   "path": "/admin/users/notification/"
+  },
+  {
+   "label": "users.notification",
+   "kind": "add",
+   "path": "/admin/users/notification/add/"
+  },
+  {
+   "label": "users.notification",
+   "kind": "change",
+   "path": "/admin/users/notification/754/change/"
+  },
+  {
+   "label": "users.announcement",
+   "kind": "list",
+   "path": "/admin/users/announcement/"
+  },
+  {
+   "label": "users.announcement",
+   "kind": "add",
+   "path": "/admin/users/announcement/add/"
+  },
+  {
+   "label": "users.userssettings",
+   "kind": "list",
+   "path": "/admin/users/userssettings/"
+  },
+  {
+   "label": "users.userssettings",
+   "kind": "add",
+   "path": "/admin/users/userssettings/add/"
+  },
+  {
+   "label": "users.userssettings",
+   "kind": "change",
+   "path": "/admin/users/userssettings/1/change/"
+  },
+  {
+   "label": "users.notificationpreferences",
+   "kind": "list",
+   "path": "/admin/users/notificationpreferences/"
+  },
+  {
+   "label": "users.notificationpreferences",
+   "kind": "add",
+   "path": "/admin/users/notificationpreferences/add/"
+  },
+  {
+   "label": "users.pushsubscription",
+   "kind": "list",
+   "path": "/admin/users/pushsubscription/"
+  },
+  {
+   "label": "users.pushsubscription",
+   "kind": "add",
+   "path": "/admin/users/pushsubscription/add/"
+  },
+  {
+   "label": "socialaccount.socialapp",
+   "kind": "list",
+   "path": "/admin/socialaccount/socialapp/"
+  },
+  {
+   "label": "socialaccount.socialapp",
+   "kind": "add",
+   "path": "/admin/socialaccount/socialapp/add/"
+  },
+  {
+   "label": "users.securityquestion",
+   "kind": "list",
+   "path": "/admin/users/securityquestion/"
+  },
+  {
+   "label": "users.securityquestion",
+   "kind": "add",
+   "path": "/admin/users/securityquestion/add/"
+  },
+  {
+   "label": "users.mfadevice",
+   "kind": "list",
+   "path": "/admin/users/mfadevice/"
+  },
+  {
+   "label": "users.mfadevice",
+   "kind": "add",
+   "path": "/admin/users/mfadevice/add/"
+  },
+  {
+   "label": "core.searchsettings",
+   "kind": "list",
+   "path": "/admin/core/searchsettings/"
+  },
+  {
+   "label": "core.searchsettings",
+   "kind": "add",
+   "path": "/admin/core/searchsettings/add/"
+  },
+  {
+   "label": "core.appregistry",
+   "kind": "list",
+   "path": "/admin/core/appregistry/"
+  },
+  {
+   "label": "core.appregistry",
+   "kind": "add",
+   "path": "/admin/core/appregistry/add/"
+  },
+  {
+   "label": "core.appregistry",
+   "kind": "change",
+   "path": "/admin/core/appregistry/1/change/"
+  },
+  {
+   "label": "auth.group",
+   "kind": "list",
+   "path": "/admin/auth/group/"
+  },
+  {
+   "label": "auth.group",
+   "kind": "add",
+   "path": "/admin/auth/group/add/"
+  },
+  {
+   "label": "auth.group",
+   "kind": "change",
+   "path": "/admin/auth/group/3/change/"
+  },
+  {
+   "label": "sites.site",
+   "kind": "list",
+   "path": "/admin/sites/site/"
+  },
+  {
+   "label": "sites.site",
+   "kind": "add",
+   "path": "/admin/sites/site/add/"
+  },
+  {
+   "label": "sites.site",
+   "kind": "change",
+   "path": "/admin/sites/site/1/change/"
+  },
+  {
+   "label": "account.emailaddress",
+   "kind": "list",
+   "path": "/admin/account/emailaddress/"
+  },
+  {
+   "label": "account.emailaddress",
+   "kind": "add",
+   "path": "/admin/account/emailaddress/add/"
+  },
+  {
+   "label": "account.emailaddress",
+   "kind": "change",
+   "path": "/admin/account/emailaddress/14/change/"
+  },
+  {
+   "label": "socialaccount.socialaccount",
+   "kind": "list",
+   "path": "/admin/socialaccount/socialaccount/"
+  },
+  {
+   "label": "socialaccount.socialaccount",
+   "kind": "add",
+   "path": "/admin/socialaccount/socialaccount/add/"
+  },
+  {
+   "label": "socialaccount.socialtoken",
+   "kind": "list",
+   "path": "/admin/socialaccount/socialtoken/"
+  },
+  {
+   "label": "socialaccount.socialtoken",
+   "kind": "add",
+   "path": "/admin/socialaccount/socialtoken/add/"
+  },
+  {
+   "label": "authtoken.tokenproxy",
+   "kind": "list",
+   "path": "/admin/authtoken/tokenproxy/"
+  },
+  {
+   "label": "authtoken.tokenproxy",
+   "kind": "add",
+   "path": "/admin/authtoken/tokenproxy/add/"
+  },
+  {
+   "label": "ads.adplacement",
+   "kind": "list",
+   "path": "/admin/ads/adplacement/"
+  },
+  {
+   "label": "ads.adplacement",
+   "kind": "add",
+   "path": "/admin/ads/adplacement/add/"
+  },
+  {
+   "label": "ads.adplacement",
+   "kind": "change",
+   "path": "/admin/ads/adplacement/9/change/"
+  },
+  {
+   "label": "ads.campaign",
+   "kind": "list",
+   "path": "/admin/ads/campaign/"
+  },
+  {
+   "label": "ads.campaign",
+   "kind": "add",
+   "path": "/admin/ads/campaign/add/"
+  },
+  {
+   "label": "ads.campaign",
+   "kind": "change",
+   "path": "/admin/ads/campaign/1/change/"
+  },
+  {
+   "label": "ads.adcreative",
+   "kind": "list",
+   "path": "/admin/ads/adcreative/"
+  },
+  {
+   "label": "ads.adcreative",
+   "kind": "add",
+   "path": "/admin/ads/adcreative/add/"
+  },
+  {
+   "label": "ads.adcreative",
+   "kind": "change",
+   "path": "/admin/ads/adcreative/2/change/"
+  },
+  {
+   "label": "ads.placementassignment",
+   "kind": "list",
+   "path": "/admin/ads/placementassignment/"
+  },
+  {
+   "label": "ads.placementassignment",
+   "kind": "add",
+   "path": "/admin/ads/placementassignment/add/"
+  },
+  {
+   "label": "ads.placementassignment",
+   "kind": "change",
+   "path": "/admin/ads/placementassignment/9/change/"
+  },
+  {
+   "label": "ads.affiliatesource",
+   "kind": "list",
+   "path": "/admin/ads/affiliatesource/"
+  },
+  {
+   "label": "ads.affiliatesource",
+   "kind": "add",
+   "path": "/admin/ads/affiliatesource/add/"
+  },
+  {
+   "label": "ads.affiliatelink",
+   "kind": "list",
+   "path": "/admin/ads/affiliatelink/"
+  },
+  {
+   "label": "ads.affiliatelink",
+   "kind": "add",
+   "path": "/admin/ads/affiliatelink/add/"
+  },
+  {
+   "label": "ads.adevent",
+   "kind": "list",
+   "path": "/admin/ads/adevent/"
+  },
+  {
+   "label": "ads.adevent",
+   "kind": "add",
+   "path": "/admin/ads/adevent/add/"
+  },
+  {
+   "label": "ads.adnetwork",
+   "kind": "list",
+   "path": "/admin/ads/adnetwork/"
+  },
+  {
+   "label": "ads.adnetwork",
+   "kind": "add",
+   "path": "/admin/ads/adnetwork/add/"
+  },
+  {
+   "label": "ads.adunit",
+   "kind": "list",
+   "path": "/admin/ads/adunit/"
+  },
+  {
+   "label": "ads.adunit",
+   "kind": "add",
+   "path": "/admin/ads/adunit/add/"
+  },
+  {
+   "label": "ads.rewardedadconfig",
+   "kind": "list",
+   "path": "/admin/ads/rewardedadconfig/"
+  },
+  {
+   "label": "ads.rewardedadconfig",
+   "kind": "add",
+   "path": "/admin/ads/rewardedadconfig/add/"
+  },
+  {
+   "label": "ads.rewardedadview",
+   "kind": "list",
+   "path": "/admin/ads/rewardedadview/"
+  },
+  {
+   "label": "ads.rewardedadview",
+   "kind": "add",
+   "path": "/admin/ads/rewardedadview/add/"
+  },
+  {
+   "label": "ads.rewardedadgrant",
+   "kind": "list",
+   "path": "/admin/ads/rewardedadgrant/"
+  },
+  {
+   "label": "ads.rewardedadgrant",
+   "kind": "add",
+   "path": "/admin/ads/rewardedadgrant/add/"
+  },
+  {
+   "label": "ads.autoadsscanresult",
+   "kind": "list",
+   "path": "/admin/ads/autoadsscanresult/"
+  },
+  {
+   "label": "ads.autoadsscanresult",
+   "kind": "add",
+   "path": "/admin/ads/autoadsscanresult/add/"
+  },
+  {
+   "label": "ads.autoadsscanresult",
+   "kind": "change",
+   "path": "/admin/ads/autoadsscanresult/253/change/"
+  },
+  {
+   "label": "ads.scandiscovery",
+   "kind": "list",
+   "path": "/admin/ads/scandiscovery/"
+  },
+  {
+   "label": "ads.scandiscovery",
+   "kind": "add",
+   "path": "/admin/ads/scandiscovery/add/"
+  },
+  {
+   "label": "ads.templateadexclusion",
+   "kind": "list",
+   "path": "/admin/ads/templateadexclusion/"
+  },
+  {
+   "label": "ads.templateadexclusion",
+   "kind": "add",
+   "path": "/admin/ads/templateadexclusion/add/"
+  },
+  {
+   "label": "ads.affiliateprovider",
+   "kind": "list",
+   "path": "/admin/ads/affiliateprovider/"
+  },
+  {
+   "label": "ads.affiliateprovider",
+   "kind": "add",
+   "path": "/admin/ads/affiliateprovider/add/"
+  },
+  {
+   "label": "ads.affiliateproductcategory",
+   "kind": "list",
+   "path": "/admin/ads/affiliateproductcategory/"
+  },
+  {
+   "label": "ads.affiliateproductcategory",
+   "kind": "add",
+   "path": "/admin/ads/affiliateproductcategory/add/"
+  },
+  {
+   "label": "ads.affiliateproduct",
+   "kind": "list",
+   "path": "/admin/ads/affiliateproduct/"
+  },
+  {
+   "label": "ads.affiliateproduct",
+   "kind": "add",
+   "path": "/admin/ads/affiliateproduct/add/"
+  },
+  {
+   "label": "ads.affiliateproductmatch",
+   "kind": "list",
+   "path": "/admin/ads/affiliateproductmatch/"
+  },
+  {
+   "label": "ads.affiliateproductmatch",
+   "kind": "add",
+   "path": "/admin/ads/affiliateproductmatch/add/"
+  },
+  {
+   "label": "ads.affiliateclick",
+   "kind": "list",
+   "path": "/admin/ads/affiliateclick/"
+  },
+  {
+   "label": "ads.affiliateclick",
+   "kind": "add",
+   "path": "/admin/ads/affiliateclick/add/"
+  },
+  {
+   "label": "ads.adssettings",
+   "kind": "list",
+   "path": "/admin/ads/adssettings/"
+  },
+  {
+   "label": "ads.adssettings",
+   "kind": "add",
+   "path": "/admin/ads/adssettings/add/"
+  },
+  {
+   "label": "ads.adssettings",
+   "kind": "change",
+   "path": "/admin/ads/adssettings/1/change/"
+  },
+  {
+   "label": "devices.device",
+   "kind": "list",
+   "path": "/admin/devices/device/"
+  },
+  {
+   "label": "devices.device",
+   "kind": "add",
+   "path": "/admin/devices/device/add/"
+  },
+  {
+   "label": "devices.device",
+   "kind": "change",
+   "path": "/admin/devices/device/e8437e8f-3a7f-49be-8096-d024b91cee71/change/"
+  },
+  {
+   "label": "devices.deviceconfig",
+   "kind": "list",
+   "path": "/admin/devices/deviceconfig/"
+  },
+  {
+   "label": "devices.deviceconfig",
+   "kind": "add",
+   "path": "/admin/devices/deviceconfig/add/"
+  },
+  {
+   "label": "devices.deviceconfig",
+   "kind": "change",
+   "path": "/admin/devices/deviceconfig/1/change/"
+  },
+  {
+   "label": "devices.apppolicy",
+   "kind": "list",
+   "path": "/admin/devices/apppolicy/"
+  },
+  {
+   "label": "devices.apppolicy",
+   "kind": "add",
+   "path": "/admin/devices/apppolicy/add/"
+  },
+  {
+   "label": "devices.apppolicy",
+   "kind": "change",
+   "path": "/admin/devices/apppolicy/1/change/"
+  },
+  {
+   "label": "devices.deviceevent",
+   "kind": "list",
+   "path": "/admin/devices/deviceevent/"
+  },
+  {
+   "label": "devices.deviceevent",
+   "kind": "add",
+   "path": "/admin/devices/deviceevent/add/"
+  },
+  {
+   "label": "devices.deviceevent",
+   "kind": "change",
+   "path": "/admin/devices/deviceevent/4/change/"
+  },
+  {
+   "label": "devices.deviceslotreset",
+   "kind": "list",
+   "path": "/admin/devices/deviceslotreset/"
+  },
+  {
+   "label": "devices.deviceslotreset",
+   "kind": "add",
+   "path": "/admin/devices/deviceslotreset/add/"
+  },
+  {
+   "label": "devices.deviceslotrequest",
+   "kind": "list",
+   "path": "/admin/devices/deviceslotrequest/"
+  },
+  {
+   "label": "devices.deviceslotrequest",
+   "kind": "add",
+   "path": "/admin/devices/deviceslotrequest/add/"
+  },
+  {
+   "label": "devices.deviceresetallowance",
+   "kind": "list",
+   "path": "/admin/devices/deviceresetallowance/"
+  },
+  {
+   "label": "devices.deviceresetallowance",
+   "kind": "add",
+   "path": "/admin/devices/deviceresetallowance/add/"
+  },
+  {
+   "label": "devices.devicefingerprint",
+   "kind": "list",
+   "path": "/admin/devices/devicefingerprint/"
+  },
+  {
+   "label": "devices.devicefingerprint",
+   "kind": "add",
+   "path": "/admin/devices/devicefingerprint/add/"
+  },
+  {
+   "label": "devices.trustscore",
+   "kind": "list",
+   "path": "/admin/devices/trustscore/"
+  },
+  {
+   "label": "devices.trustscore",
+   "kind": "add",
+   "path": "/admin/devices/trustscore/add/"
+  },
+  {
+   "label": "devices.registryevent",
+   "kind": "list",
+   "path": "/admin/devices/registryevent/"
+  },
+  {
+   "label": "devices.registryevent",
+   "kind": "add",
+   "path": "/admin/devices/registryevent/add/"
+  },
+  {
+   "label": "devices.behaviorinsight",
+   "kind": "list",
+   "path": "/admin/devices/behaviorinsight/"
+  },
+  {
+   "label": "devices.behaviorinsight",
+   "kind": "add",
+   "path": "/admin/devices/behaviorinsight/add/"
+  },
+  {
+   "label": "blog.category",
+   "kind": "list",
+   "path": "/admin/blog/category/"
+  },
+  {
+   "label": "blog.category",
+   "kind": "add",
+   "path": "/admin/blog/category/add/"
+  },
+  {
+   "label": "blog.category",
+   "kind": "change",
+   "path": "/admin/blog/category/158/change/"
+  },
+  {
+   "label": "blog.post",
+   "kind": "list",
+   "path": "/admin/blog/post/"
+  },
+  {
+   "label": "blog.post",
+   "kind": "add",
+   "path": "/admin/blog/post/add/"
+  },
+  {
+   "label": "blog.post",
+   "kind": "change",
+   "path": "/admin/blog/post/253/change/"
+  },
+  {
+   "label": "blog.blogsettings",
+   "kind": "list",
+   "path": "/admin/blog/blogsettings/"
+  },
+  {
+   "label": "blog.blogsettings",
+   "kind": "add",
+   "path": "/admin/blog/blogsettings/add/"
+  },
+  {
+   "label": "blog.blogsettings",
+   "kind": "change",
+   "path": "/admin/blog/blogsettings/1/change/"
+  },
+  {
+   "label": "blog.guiderequest",
+   "kind": "list",
+   "path": "/admin/blog/guiderequest/"
+  },
+  {
+   "label": "blog.guiderequest",
+   "kind": "add",
+   "path": "/admin/blog/guiderequest/add/"
+  },
+  {
+   "label": "blog.autotopic",
+   "kind": "list",
+   "path": "/admin/blog/autotopic/"
+  },
+  {
+   "label": "blog.autotopic",
+   "kind": "add",
+   "path": "/admin/blog/autotopic/add/"
+  },
+  {
+   "label": "blog.posttranslation",
+   "kind": "list",
+   "path": "/admin/blog/posttranslation/"
+  },
+  {
+   "label": "blog.posttranslation",
+   "kind": "add",
+   "path": "/admin/blog/posttranslation/add/"
+  },
+  {
+   "label": "blog.categorytranslation",
+   "kind": "list",
+   "path": "/admin/blog/categorytranslation/"
+  },
+  {
+   "label": "blog.categorytranslation",
+   "kind": "add",
+   "path": "/admin/blog/categorytranslation/add/"
+  },
+  {
+   "label": "blog.tagtranslation",
+   "kind": "list",
+   "path": "/admin/blog/tagtranslation/"
+  },
+  {
+   "label": "blog.tagtranslation",
+   "kind": "add",
+   "path": "/admin/blog/tagtranslation/add/"
+  },
+  {
+   "label": "comments.comment",
+   "kind": "list",
+   "path": "/admin/comments/comment/"
+  },
+  {
+   "label": "comments.comment",
+   "kind": "add",
+   "path": "/admin/comments/comment/add/"
+  },
+  {
+   "label": "comments.comment",
+   "kind": "change",
+   "path": "/admin/comments/comment/24/change/"
+  },
+  {
+   "label": "comments.commentsettings",
+   "kind": "list",
+   "path": "/admin/comments/commentsettings/"
+  },
+  {
+   "label": "comments.commentsettings",
+   "kind": "add",
+   "path": "/admin/comments/commentsettings/add/"
+  },
+  {
+   "label": "comments.commentsettings",
+   "kind": "change",
+   "path": "/admin/comments/commentsettings/1/change/"
+  },
+  {
+   "label": "firmwares.accesschangerequest",
+   "kind": "list",
+   "path": "/admin/firmwares/accesschangerequest/"
+  },
+  {
+   "label": "firmwares.accesschangerequest",
+   "kind": "add",
+   "path": "/admin/firmwares/accesschangerequest/add/"
+  },
+  {
+   "label": "firmwares.accesschangelog",
+   "kind": "list",
+   "path": "/admin/firmwares/accesschangelog/"
+  },
+  {
+   "label": "firmwares.accesschangelog",
+   "kind": "add",
+   "path": "/admin/firmwares/accesschangelog/add/"
+  },
+  {
+   "label": "firmwares.autofeaturesettings",
+   "kind": "list",
+   "path": "/admin/firmwares/autofeaturesettings/"
+  },
+  {
+   "label": "firmwares.autofeaturesettings",
+   "kind": "add",
+   "path": "/admin/firmwares/autofeaturesettings/add/"
+  },
+  {
+   "label": "firmwares.autofeaturesettings",
+   "kind": "change",
+   "path": "/admin/firmwares/autofeaturesettings/1/change/"
+  },
+  {
+   "label": "firmwares.brandcreationrequest",
+   "kind": "list",
+   "path": "/admin/firmwares/brandcreationrequest/"
+  },
+  {
+   "label": "firmwares.brandcreationrequest",
+   "kind": "add",
+   "path": "/admin/firmwares/brandcreationrequest/add/"
+  },
+  {
+   "label": "firmwares.brandcreationrequest",
+   "kind": "change",
+   "path": "/admin/firmwares/brandcreationrequest/1/change/"
+  },
+  {
+   "label": "firmwares.modelcreationrequest",
+   "kind": "list",
+   "path": "/admin/firmwares/modelcreationrequest/"
+  },
+  {
+   "label": "firmwares.modelcreationrequest",
+   "kind": "add",
+   "path": "/admin/firmwares/modelcreationrequest/add/"
+  },
+  {
+   "label": "firmwares.variantcreationrequest",
+   "kind": "list",
+   "path": "/admin/firmwares/variantcreationrequest/"
+  },
+  {
+   "label": "firmwares.variantcreationrequest",
+   "kind": "add",
+   "path": "/admin/firmwares/variantcreationrequest/add/"
+  },
+  {
+   "label": "firmwares.variantcreationrequest",
+   "kind": "change",
+   "path": "/admin/firmwares/variantcreationrequest/1/change/"
+  },
+  {
+   "label": "firmwares.chipsetcreationrequest",
+   "kind": "list",
+   "path": "/admin/firmwares/chipsetcreationrequest/"
+  },
+  {
+   "label": "firmwares.chipsetcreationrequest",
+   "kind": "add",
+   "path": "/admin/firmwares/chipsetcreationrequest/add/"
+  },
+  {
+   "label": "firmwares.chipsetcreationrequest",
+   "kind": "change",
+   "path": "/admin/firmwares/chipsetcreationrequest/1/change/"
+  },
+  {
+   "label": "firmwares.firmwarerequest",
+   "kind": "list",
+   "path": "/admin/firmwares/firmwarerequest/"
+  },
+  {
+   "label": "firmwares.firmwarerequest",
+   "kind": "add",
+   "path": "/admin/firmwares/firmwarerequest/add/"
+  },
+  {
+   "label": "firmwares.chipset",
+   "kind": "list",
+   "path": "/admin/firmwares/chipset/"
+  },
+  {
+   "label": "firmwares.chipset",
+   "kind": "add",
+   "path": "/admin/firmwares/chipset/add/"
+  },
+  {
+   "label": "firmwares.chipset",
+   "kind": "change",
+   "path": "/admin/firmwares/chipset/65/change/"
+  },
+  {
+   "label": "firmwares.automatedbloglink",
+   "kind": "list",
+   "path": "/admin/firmwares/automatedbloglink/"
+  },
+  {
+   "label": "firmwares.automatedbloglink",
+   "kind": "add",
+   "path": "/admin/firmwares/automatedbloglink/add/"
+  },
+  {
+   "label": "firmwares.automatedbloglink",
+   "kind": "change",
+   "path": "/admin/firmwares/automatedbloglink/218/change/"
+  },
+  {
+   "label": "firmwares.brand",
+   "kind": "list",
+   "path": "/admin/firmwares/brand/"
+  },
+  {
+   "label": "firmwares.brand",
+   "kind": "add",
+   "path": "/admin/firmwares/brand/add/"
+  },
+  {
+   "label": "firmwares.brand",
+   "kind": "change",
+   "path": "/admin/firmwares/brand/22/change/"
+  },
+  {
+   "label": "firmwares.model",
+   "kind": "list",
+   "path": "/admin/firmwares/model/"
+  },
+  {
+   "label": "firmwares.model",
+   "kind": "add",
+   "path": "/admin/firmwares/model/add/"
+  },
+  {
+   "label": "firmwares.model",
+   "kind": "change",
+   "path": "/admin/firmwares/model/131/change/"
+  },
+  {
+   "label": "firmwares.variant",
+   "kind": "list",
+   "path": "/admin/firmwares/variant/"
+  },
+  {
+   "label": "firmwares.variant",
+   "kind": "add",
+   "path": "/admin/firmwares/variant/add/"
+  },
+  {
+   "label": "firmwares.variant",
+   "kind": "change",
+   "path": "/admin/firmwares/variant/142/change/"
+  },
+  {
+   "label": "firmwares.pendingfirmware",
+   "kind": "list",
+   "path": "/admin/firmwares/pendingfirmware/"
+  },
+  {
+   "label": "firmwares.pendingfirmware",
+   "kind": "add",
+   "path": "/admin/firmwares/pendingfirmware/add/"
+  },
+  {
+   "label": "firmwares.pendingfirmware",
+   "kind": "change",
+   "path": "/admin/firmwares/pendingfirmware/ff232d03-45fd-4d7e-8dc0-0ea52c5113bf/change/"
+  },
+  {
+   "label": "firmwares.officialfirmware",
+   "kind": "list",
+   "path": "/admin/firmwares/officialfirmware/"
+  },
+  {
+   "label": "firmwares.officialfirmware",
+   "kind": "add",
+   "path": "/admin/firmwares/officialfirmware/add/"
+  },
+  {
+   "label": "firmwares.officialfirmware",
+   "kind": "change",
+   "path": "/admin/firmwares/officialfirmware/ffc5c86b-56f7-4349-b528-d1622fdc2681/change/"
+  },
+  {
+   "label": "firmwares.engineeringfirmware",
+   "kind": "list",
+   "path": "/admin/firmwares/engineeringfirmware/"
+  },
+  {
+   "label": "firmwares.engineeringfirmware",
+   "kind": "add",
+   "path": "/admin/firmwares/engineeringfirmware/add/"
+  },
+  {
+   "label": "firmwares.readbackfirmware",
+   "kind": "list",
+   "path": "/admin/firmwares/readbackfirmware/"
+  },
+  {
+   "label": "firmwares.readbackfirmware",
+   "kind": "add",
+   "path": "/admin/firmwares/readbackfirmware/add/"
+  },
+  {
+   "label": "firmwares.modifiedfirmware",
+   "kind": "list",
+   "path": "/admin/firmwares/modifiedfirmware/"
+  },
+  {
+   "label": "firmwares.modifiedfirmware",
+   "kind": "add",
+   "path": "/admin/firmwares/modifiedfirmware/add/"
+  },
+  {
+   "label": "firmwares.otherfirmware",
+   "kind": "list",
+   "path": "/admin/firmwares/otherfirmware/"
+  },
+  {
+   "label": "firmwares.otherfirmware",
+   "kind": "add",
+   "path": "/admin/firmwares/otherfirmware/add/"
+  },
+  {
+   "label": "firmwares.unclassifiedfirmware",
+   "kind": "list",
+   "path": "/admin/firmwares/unclassifiedfirmware/"
+  },
+  {
+   "label": "firmwares.unclassifiedfirmware",
+   "kind": "add",
+   "path": "/admin/firmwares/unclassifiedfirmware/add/"
+  },
+  {
+   "label": "firmwares.changelogentry",
+   "kind": "list",
+   "path": "/admin/firmwares/changelogentry/"
+  },
+  {
+   "label": "firmwares.changelogentry",
+   "kind": "add",
+   "path": "/admin/firmwares/changelogentry/add/"
+  },
+  {
+   "label": "firmwares.firmwarediff",
+   "kind": "list",
+   "path": "/admin/firmwares/firmwarediff/"
+  },
+  {
+   "label": "firmwares.firmwarediff",
+   "kind": "add",
+   "path": "/admin/firmwares/firmwarediff/add/"
+  },
+  {
+   "label": "firmwares.trustedtester",
+   "kind": "list",
+   "path": "/admin/firmwares/trustedtester/"
+  },
+  {
+   "label": "firmwares.trustedtester",
+   "kind": "add",
+   "path": "/admin/firmwares/trustedtester/add/"
+  },
+  {
+   "label": "firmwares.verificationreport",
+   "kind": "list",
+   "path": "/admin/firmwares/verificationreport/"
+  },
+  {
+   "label": "firmwares.verificationreport",
+   "kind": "add",
+   "path": "/admin/firmwares/verificationreport/add/"
+  },
+  {
+   "label": "firmwares.testresult",
+   "kind": "list",
+   "path": "/admin/firmwares/testresult/"
+  },
+  {
+   "label": "firmwares.testresult",
+   "kind": "add",
+   "path": "/admin/firmwares/testresult/add/"
+  },
+  {
+   "label": "firmwares.verificationcredit",
+   "kind": "list",
+   "path": "/admin/firmwares/verificationcredit/"
+  },
+  {
+   "label": "firmwares.verificationcredit",
+   "kind": "add",
+   "path": "/admin/firmwares/verificationcredit/add/"
+  },
+  {
+   "label": "firmwares.downloadtoken",
+   "kind": "list",
+   "path": "/admin/firmwares/downloadtoken/"
+  },
+  {
+   "label": "firmwares.downloadtoken",
+   "kind": "add",
+   "path": "/admin/firmwares/downloadtoken/add/"
+  },
+  {
+   "label": "firmwares.downloadtoken",
+   "kind": "change",
+   "path": "/admin/firmwares/downloadtoken/263/change/"
+  },
+  {
+   "label": "firmwares.downloadsession",
+   "kind": "list",
+   "path": "/admin/firmwares/downloadsession/"
+  },
+  {
+   "label": "firmwares.downloadsession",
+   "kind": "add",
+   "path": "/admin/firmwares/downloadsession/add/"
+  },
+  {
+   "label": "firmwares.adgatelog",
+   "kind": "list",
+   "path": "/admin/firmwares/adgatelog/"
+  },
+  {
+   "label": "firmwares.adgatelog",
+   "kind": "add",
+   "path": "/admin/firmwares/adgatelog/add/"
+  },
+  {
+   "label": "firmwares.hotlinkblock",
+   "kind": "list",
+   "path": "/admin/firmwares/hotlinkblock/"
+  },
+  {
+   "label": "firmwares.hotlinkblock",
+   "kind": "add",
+   "path": "/admin/firmwares/hotlinkblock/add/"
+  },
+  {
+   "label": "firmwares.flashingtoolcategory",
+   "kind": "list",
+   "path": "/admin/firmwares/flashingtoolcategory/"
+  },
+  {
+   "label": "firmwares.flashingtoolcategory",
+   "kind": "add",
+   "path": "/admin/firmwares/flashingtoolcategory/add/"
+  },
+  {
+   "label": "firmwares.flashingtoolcategory",
+   "kind": "change",
+   "path": "/admin/firmwares/flashingtoolcategory/3/change/"
+  },
+  {
+   "label": "firmwares.flashingtool",
+   "kind": "list",
+   "path": "/admin/firmwares/flashingtool/"
+  },
+  {
+   "label": "firmwares.flashingtool",
+   "kind": "add",
+   "path": "/admin/firmwares/flashingtool/add/"
+  },
+  {
+   "label": "firmwares.flashingtool",
+   "kind": "change",
+   "path": "/admin/firmwares/flashingtool/11/change/"
+  },
+  {
+   "label": "firmwares.flashingguidetemplate",
+   "kind": "list",
+   "path": "/admin/firmwares/flashingguidetemplate/"
+  },
+  {
+   "label": "firmwares.flashingguidetemplate",
+   "kind": "add",
+   "path": "/admin/firmwares/flashingguidetemplate/add/"
+  },
+  {
+   "label": "firmwares.flashingguidetemplate",
+   "kind": "change",
+   "path": "/admin/firmwares/flashingguidetemplate/20/change/"
+  },
+  {
+   "label": "firmwares.generatedflashingguide",
+   "kind": "list",
+   "path": "/admin/firmwares/generatedflashingguide/"
+  },
+  {
+   "label": "firmwares.generatedflashingguide",
+   "kind": "add",
+   "path": "/admin/firmwares/generatedflashingguide/add/"
+  },
+  {
+   "label": "firmwares.generatedflashingguide",
+   "kind": "change",
+   "path": "/admin/firmwares/generatedflashingguide/20/change/"
+  },
+  {
+   "label": "firmwares.firmwareview",
+   "kind": "list",
+   "path": "/admin/firmwares/firmwareview/"
+  },
+  {
+   "label": "firmwares.firmwareview",
+   "kind": "add",
+   "path": "/admin/firmwares/firmwareview/add/"
+  },
+  {
+   "label": "firmwares.firmwareview",
+   "kind": "change",
+   "path": "/admin/firmwares/firmwareview/263/change/"
+  },
+  {
+   "label": "firmwares.firmwaredownloadattempt",
+   "kind": "list",
+   "path": "/admin/firmwares/firmwaredownloadattempt/"
+  },
+  {
+   "label": "firmwares.firmwaredownloadattempt",
+   "kind": "add",
+   "path": "/admin/firmwares/firmwaredownloadattempt/add/"
+  },
+  {
+   "label": "firmwares.serveddownload",
+   "kind": "list",
+   "path": "/admin/firmwares/serveddownload/"
+  },
+  {
+   "label": "firmwares.serveddownload",
+   "kind": "add",
+   "path": "/admin/firmwares/serveddownload/add/"
+  },
+  {
+   "label": "firmwares.firmwarestats",
+   "kind": "list",
+   "path": "/admin/firmwares/firmwarestats/"
+  },
+  {
+   "label": "firmwares.firmwarestats",
+   "kind": "add",
+   "path": "/admin/firmwares/firmwarestats/add/"
+  },
+  {
+   "label": "tags.tag",
+   "kind": "list",
+   "path": "/admin/tags/tag/"
+  },
+  {
+   "label": "tags.tag",
+   "kind": "add",
+   "path": "/admin/tags/tag/add/"
+  },
+  {
+   "label": "tags.tag",
+   "kind": "change",
+   "path": "/admin/tags/tag/664/change/"
+  },
+  {
+   "label": "tags.keywordprovider",
+   "kind": "list",
+   "path": "/admin/tags/keywordprovider/"
+  },
+  {
+   "label": "tags.keywordprovider",
+   "kind": "add",
+   "path": "/admin/tags/keywordprovider/add/"
+  },
+  {
+   "label": "tags.keywordsuggestion",
+   "kind": "list",
+   "path": "/admin/tags/keywordsuggestion/"
+  },
+  {
+   "label": "tags.keywordsuggestion",
+   "kind": "add",
+   "path": "/admin/tags/keywordsuggestion/add/"
+  },
+  {
+   "label": "tags.tagssettings",
+   "kind": "list",
+   "path": "/admin/tags/tagssettings/"
+  },
+  {
+   "label": "tags.tagssettings",
+   "kind": "add",
+   "path": "/admin/tags/tagssettings/add/"
+  },
+  {
+   "label": "tags.tagssettings",
+   "kind": "change",
+   "path": "/admin/tags/tagssettings/1/change/"
+  },
+  {
+   "label": "storage.firmwarestoragelocation",
+   "kind": "list",
+   "path": "/admin/storage/firmwarestoragelocation/"
+  },
+  {
+   "label": "storage.firmwarestoragelocation",
+   "kind": "add",
+   "path": "/admin/storage/firmwarestoragelocation/add/"
+  },
+  {
+   "label": "storage.firmwarestoragelocation",
+   "kind": "change",
+   "path": "/admin/storage/firmwarestoragelocation/ffeaf845-f179-40e5-9d0d-b94aacb16e54/change/"
+  },
+  {
+   "label": "seo.seomodel",
+   "kind": "list",
+   "path": "/admin/seo/seomodel/"
+  },
+  {
+   "label": "seo.seomodel",
+   "kind": "add",
+   "path": "/admin/seo/seomodel/add/"
+  },
+  {
+   "label": "seo.metadata",
+   "kind": "list",
+   "path": "/admin/seo/metadata/"
+  },
+  {
+   "label": "seo.metadata",
+   "kind": "add",
+   "path": "/admin/seo/metadata/add/"
+  },
+  {
+   "label": "seo.sitemapentry",
+   "kind": "list",
+   "path": "/admin/seo/sitemapentry/"
+  },
+  {
+   "label": "seo.sitemapentry",
+   "kind": "add",
+   "path": "/admin/seo/sitemapentry/add/"
+  },
+  {
+   "label": "seo.redirect",
+   "kind": "list",
+   "path": "/admin/seo/redirect/"
+  },
+  {
+   "label": "seo.redirect",
+   "kind": "add",
+   "path": "/admin/seo/redirect/add/"
+  },
+  {
+   "label": "seo.linkableentity",
+   "kind": "list",
+   "path": "/admin/seo/linkableentity/"
+  },
+  {
+   "label": "seo.linkableentity",
+   "kind": "add",
+   "path": "/admin/seo/linkableentity/add/"
+  },
+  {
+   "label": "seo.linkableentity",
+   "kind": "change",
+   "path": "/admin/seo/linkableentity/406/change/"
+  },
+  {
+   "label": "seo.linksuggestion",
+   "kind": "list",
+   "path": "/admin/seo/linksuggestion/"
+  },
+  {
+   "label": "seo.linksuggestion",
+   "kind": "add",
+   "path": "/admin/seo/linksuggestion/add/"
+  },
+  {
+   "label": "seo.seosettings",
+   "kind": "list",
+   "path": "/admin/seo/seosettings/"
+  },
+  {
+   "label": "seo.seosettings",
+   "kind": "add",
+   "path": "/admin/seo/seosettings/add/"
+  },
+  {
+   "label": "seo.seosettings",
+   "kind": "change",
+   "path": "/admin/seo/seosettings/1/change/"
+  },
+  {
+   "label": "seo.seokeywordhistory",
+   "kind": "list",
+   "path": "/admin/seo/seokeywordhistory/"
+  },
+  {
+   "label": "seo.seokeywordhistory",
+   "kind": "add",
+   "path": "/admin/seo/seokeywordhistory/add/"
+  },
+  {
+   "label": "seo.seoentity",
+   "kind": "list",
+   "path": "/admin/seo/seoentity/"
+  },
+  {
+   "label": "seo.seoentity",
+   "kind": "add",
+   "path": "/admin/seo/seoentity/add/"
+  },
+  {
+   "label": "seo.seoentity",
+   "kind": "change",
+   "path": "/admin/seo/seoentity/482/change/"
+  },
+  {
+   "label": "seo.seoentityedge",
+   "kind": "list",
+   "path": "/admin/seo/seoentityedge/"
+  },
+  {
+   "label": "seo.seoentityedge",
+   "kind": "add",
+   "path": "/admin/seo/seoentityedge/add/"
+  },
+  {
+   "label": "seo.seoentityedge",
+   "kind": "change",
+   "path": "/admin/seo/seoentityedge/654/change/"
+  },
+  {
+   "label": "seo.interlinkexclusion",
+   "kind": "list",
+   "path": "/admin/seo/interlinkexclusion/"
+  },
+  {
+   "label": "seo.interlinkexclusion",
+   "kind": "add",
+   "path": "/admin/seo/interlinkexclusion/add/"
+  },
+  {
+   "label": "seo.crawlrun",
+   "kind": "list",
+   "path": "/admin/seo/crawlrun/"
+  },
+  {
+   "label": "seo.crawlrun",
+   "kind": "add",
+   "path": "/admin/seo/crawlrun/add/"
+  },
+  {
+   "label": "seo.crawlrun",
+   "kind": "change",
+   "path": "/admin/seo/crawlrun/1/change/"
+  },
+  {
+   "label": "seo.pagesnapshot",
+   "kind": "list",
+   "path": "/admin/seo/pagesnapshot/"
+  },
+  {
+   "label": "seo.pagesnapshot",
+   "kind": "add",
+   "path": "/admin/seo/pagesnapshot/add/"
+  },
+  {
+   "label": "seo.pagesnapshot",
+   "kind": "change",
+   "path": "/admin/seo/pagesnapshot/1020/change/"
+  },
+  {
+   "label": "seo.pageobservation",
+   "kind": "list",
+   "path": "/admin/seo/pageobservation/"
+  },
+  {
+   "label": "seo.pageobservation",
+   "kind": "add",
+   "path": "/admin/seo/pageobservation/add/"
+  },
+  {
+   "label": "seo.issue",
+   "kind": "list",
+   "path": "/admin/seo/issue/"
+  },
+  {
+   "label": "seo.issue",
+   "kind": "add",
+   "path": "/admin/seo/issue/add/"
+  },
+  {
+   "label": "seo.issue",
+   "kind": "change",
+   "path": "/admin/seo/issue/1727/change/"
+  },
+  {
+   "label": "seo.changeledger",
+   "kind": "list",
+   "path": "/admin/seo/changeledger/"
+  },
+  {
+   "label": "seo.changeledger",
+   "kind": "add",
+   "path": "/admin/seo/changeledger/add/"
+  },
+  {
+   "label": "seo.seojob",
+   "kind": "list",
+   "path": "/admin/seo/seojob/"
+  },
+  {
+   "label": "seo.seojob",
+   "kind": "add",
+   "path": "/admin/seo/seojob/add/"
+  },
+  {
+   "label": "seo.seojob",
+   "kind": "change",
+   "path": "/admin/seo/seojob/1695/change/"
+  },
+  {
+   "label": "pages.page",
+   "kind": "list",
+   "path": "/admin/pages/page/"
+  },
+  {
+   "label": "pages.page",
+   "kind": "add",
+   "path": "/admin/pages/page/add/"
+  },
+  {
+   "label": "pages.page",
+   "kind": "change",
+   "path": "/admin/pages/page/10/change/"
+  },
+  {
+   "label": "shop.packagetier",
+   "kind": "list",
+   "path": "/admin/shop/packagetier/"
+  },
+  {
+   "label": "shop.packagetier",
+   "kind": "add",
+   "path": "/admin/shop/packagetier/add/"
+  },
+  {
+   "label": "shop.packagetier",
+   "kind": "change",
+   "path": "/admin/shop/packagetier/3/change/"
+  },
+  {
+   "label": "shop.userpackage",
+   "kind": "list",
+   "path": "/admin/shop/userpackage/"
+  },
+  {
+   "label": "shop.userpackage",
+   "kind": "add",
+   "path": "/admin/shop/userpackage/add/"
+  },
+  {
+   "label": "shop.userpackage",
+   "kind": "change",
+   "path": "/admin/shop/userpackage/15/change/"
+  },
+  {
+   "label": "shop.packagequotaoverride",
+   "kind": "list",
+   "path": "/admin/shop/packagequotaoverride/"
+  },
+  {
+   "label": "shop.packagequotaoverride",
+   "kind": "add",
+   "path": "/admin/shop/packagequotaoverride/add/"
+  },
+  {
+   "label": "shop.shopsettings",
+   "kind": "list",
+   "path": "/admin/shop/shopsettings/"
+  },
+  {
+   "label": "shop.shopsettings",
+   "kind": "add",
+   "path": "/admin/shop/shopsettings/add/"
+  },
+  {
+   "label": "shop.shopsettings",
+   "kind": "change",
+   "path": "/admin/shop/shopsettings/1/change/"
+  },
+  {
+   "label": "shop.userquotaoverride",
+   "kind": "list",
+   "path": "/admin/shop/userquotaoverride/"
+  },
+  {
+   "label": "shop.userquotaoverride",
+   "kind": "add",
+   "path": "/admin/shop/userquotaoverride/add/"
+  },
+  {
+   "label": "shop.quotaoverrideaudit",
+   "kind": "list",
+   "path": "/admin/shop/quotaoverrideaudit/"
+  },
+  {
+   "label": "shop.quotaoverrideaudit",
+   "kind": "add",
+   "path": "/admin/shop/quotaoverrideaudit/add/"
+  },
+  {
+   "label": "shop.order",
+   "kind": "list",
+   "path": "/admin/shop/order/"
+  },
+  {
+   "label": "shop.order",
+   "kind": "add",
+   "path": "/admin/shop/order/add/"
+  },
+  {
+   "label": "shop.quotaconsumption",
+   "kind": "list",
+   "path": "/admin/shop/quotaconsumption/"
+  },
+  {
+   "label": "shop.quotaconsumption",
+   "kind": "add",
+   "path": "/admin/shop/quotaconsumption/add/"
+  },
+  {
+   "label": "shop.featuredblogpurchase",
+   "kind": "list",
+   "path": "/admin/shop/featuredblogpurchase/"
+  },
+  {
+   "label": "shop.featuredblogpurchase",
+   "kind": "add",
+   "path": "/admin/shop/featuredblogpurchase/add/"
+  },
+  {
+   "label": "marketplace.sellerprofile",
+   "kind": "list",
+   "path": "/admin/marketplace/sellerprofile/"
+  },
+  {
+   "label": "marketplace.sellerprofile",
+   "kind": "add",
+   "path": "/admin/marketplace/sellerprofile/add/"
+  },
+  {
+   "label": "marketplace.sellerverification",
+   "kind": "list",
+   "path": "/admin/marketplace/sellerverification/"
+  },
+  {
+   "label": "marketplace.sellerverification",
+   "kind": "add",
+   "path": "/admin/marketplace/sellerverification/add/"
+  },
+  {
+   "label": "marketplace.sellerearning",
+   "kind": "list",
+   "path": "/admin/marketplace/sellerearning/"
+  },
+  {
+   "label": "marketplace.sellerearning",
+   "kind": "add",
+   "path": "/admin/marketplace/sellerearning/add/"
+  },
+  {
+   "label": "marketplace.listing",
+   "kind": "list",
+   "path": "/admin/marketplace/listing/"
+  },
+  {
+   "label": "marketplace.listing",
+   "kind": "add",
+   "path": "/admin/marketplace/listing/add/"
+  },
+  {
+   "label": "wallet.walletsettings",
+   "kind": "list",
+   "path": "/admin/wallet/walletsettings/"
+  },
+  {
+   "label": "wallet.walletsettings",
+   "kind": "add",
+   "path": "/admin/wallet/walletsettings/add/"
+  },
+  {
+   "label": "wallet.walletsettings",
+   "kind": "change",
+   "path": "/admin/wallet/walletsettings/1/change/"
+  },
+  {
+   "label": "wallet.wallet",
+   "kind": "list",
+   "path": "/admin/wallet/wallet/"
+  },
+  {
+   "label": "wallet.wallet",
+   "kind": "add",
+   "path": "/admin/wallet/wallet/add/"
+  },
+  {
+   "label": "wallet.wallet",
+   "kind": "change",
+   "path": "/admin/wallet/wallet/2/change/"
+  },
+  {
+   "label": "wallet.ledgerentry",
+   "kind": "list",
+   "path": "/admin/wallet/ledgerentry/"
+  },
+  {
+   "label": "wallet.ledgerentry",
+   "kind": "add",
+   "path": "/admin/wallet/ledgerentry/add/"
+  },
+  {
+   "label": "wallet.ledgerentry",
+   "kind": "change",
+   "path": "/admin/wallet/ledgerentry/10/change/"
+  },
+  {
+   "label": "wallet.rewardrule",
+   "kind": "list",
+   "path": "/admin/wallet/rewardrule/"
+  },
+  {
+   "label": "wallet.rewardrule",
+   "kind": "add",
+   "path": "/admin/wallet/rewardrule/add/"
+  },
+  {
+   "label": "wallet.rewardrule",
+   "kind": "change",
+   "path": "/admin/wallet/rewardrule/13/change/"
+  },
+  {
+   "label": "wallet.creditprice",
+   "kind": "list",
+   "path": "/admin/wallet/creditprice/"
+  },
+  {
+   "label": "wallet.creditprice",
+   "kind": "add",
+   "path": "/admin/wallet/creditprice/add/"
+  },
+  {
+   "label": "wallet.creditprice",
+   "kind": "change",
+   "path": "/admin/wallet/creditprice/4/change/"
+  },
+  {
+   "label": "wallet.rewardrefusal",
+   "kind": "list",
+   "path": "/admin/wallet/rewardrefusal/"
+  },
+  {
+   "label": "wallet.rewardrefusal",
+   "kind": "add",
+   "path": "/admin/wallet/rewardrefusal/add/"
+  },
+  {
+   "label": "wallet.rewardrefusal",
+   "kind": "change",
+   "path": "/admin/wallet/rewardrefusal/252/change/"
+  },
+  {
+   "label": "wallet.escrowhold",
+   "kind": "list",
+   "path": "/admin/wallet/escrowhold/"
+  },
+  {
+   "label": "wallet.escrowhold",
+   "kind": "add",
+   "path": "/admin/wallet/escrowhold/add/"
+  },
+  {
+   "label": "wallet.topuprequest",
+   "kind": "list",
+   "path": "/admin/wallet/topuprequest/"
+  },
+  {
+   "label": "wallet.topuprequest",
+   "kind": "add",
+   "path": "/admin/wallet/topuprequest/add/"
+  },
+  {
+   "label": "wallet.payoutrequest",
+   "kind": "list",
+   "path": "/admin/wallet/payoutrequest/"
+  },
+  {
+   "label": "wallet.payoutrequest",
+   "kind": "add",
+   "path": "/admin/wallet/payoutrequest/add/"
+  },
+  {
+   "label": "referral.referralsettings",
+   "kind": "list",
+   "path": "/admin/referral/referralsettings/"
+  },
+  {
+   "label": "referral.referralsettings",
+   "kind": "add",
+   "path": "/admin/referral/referralsettings/add/"
+  },
+  {
+   "label": "referral.referralsettings",
+   "kind": "change",
+   "path": "/admin/referral/referralsettings/1/change/"
+  },
+  {
+   "label": "referral.referralcode",
+   "kind": "list",
+   "path": "/admin/referral/referralcode/"
+  },
+  {
+   "label": "referral.referralcode",
+   "kind": "add",
+   "path": "/admin/referral/referralcode/add/"
+  },
+  {
+   "label": "referral.referral",
+   "kind": "list",
+   "path": "/admin/referral/referral/"
+  },
+  {
+   "label": "referral.referral",
+   "kind": "add",
+   "path": "/admin/referral/referral/add/"
+  },
+  {
+   "label": "consent.consentcategory",
+   "kind": "list",
+   "path": "/admin/consent/consentcategory/"
+  },
+  {
+   "label": "consent.consentcategory",
+   "kind": "add",
+   "path": "/admin/consent/consentcategory/add/"
+  },
+  {
+   "label": "consent.consentcategory",
+   "kind": "change",
+   "path": "/admin/consent/consentcategory/3/change/"
+  },
+  {
+   "label": "consent.consentpolicy",
+   "kind": "list",
+   "path": "/admin/consent/consentpolicy/"
+  },
+  {
+   "label": "consent.consentpolicy",
+   "kind": "add",
+   "path": "/admin/consent/consentpolicy/add/"
+  },
+  {
+   "label": "consent.consentpolicy",
+   "kind": "change",
+   "path": "/admin/consent/consentpolicy/1/change/"
+  },
+  {
+   "label": "consent.consentdecision",
+   "kind": "list",
+   "path": "/admin/consent/consentdecision/"
+  },
+  {
+   "label": "consent.consentdecision",
+   "kind": "add",
+   "path": "/admin/consent/consentdecision/add/"
+  },
+  {
+   "label": "consent.consentdecision",
+   "kind": "change",
+   "path": "/admin/consent/consentdecision/1/change/"
+  },
+  {
+   "label": "gamification.level",
+   "kind": "list",
+   "path": "/admin/gamification/level/"
+  },
+  {
+   "label": "gamification.level",
+   "kind": "add",
+   "path": "/admin/gamification/level/add/"
+  },
+  {
+   "label": "gamification.level",
+   "kind": "change",
+   "path": "/admin/gamification/level/5/change/"
+  },
+  {
+   "label": "gamification.xprule",
+   "kind": "list",
+   "path": "/admin/gamification/xprule/"
+  },
+  {
+   "label": "gamification.xprule",
+   "kind": "add",
+   "path": "/admin/gamification/xprule/add/"
+  },
+  {
+   "label": "gamification.xprule",
+   "kind": "change",
+   "path": "/admin/gamification/xprule/6/change/"
+  },
+  {
+   "label": "gamification.badge",
+   "kind": "list",
+   "path": "/admin/gamification/badge/"
+  },
+  {
+   "label": "gamification.badge",
+   "kind": "add",
+   "path": "/admin/gamification/badge/add/"
+  },
+  {
+   "label": "gamification.badge",
+   "kind": "change",
+   "path": "/admin/gamification/badge/8/change/"
+  },
+  {
+   "label": "gamification.userbadge",
+   "kind": "list",
+   "path": "/admin/gamification/userbadge/"
+  },
+  {
+   "label": "gamification.userbadge",
+   "kind": "add",
+   "path": "/admin/gamification/userbadge/add/"
+  },
+  {
+   "label": "gamification.userbadge",
+   "kind": "change",
+   "path": "/admin/gamification/userbadge/4/change/"
+  },
+  {
+   "label": "gamification.xptransaction",
+   "kind": "list",
+   "path": "/admin/gamification/xptransaction/"
+  },
+  {
+   "label": "gamification.xptransaction",
+   "kind": "add",
+   "path": "/admin/gamification/xptransaction/add/"
+  },
+  {
+   "label": "gamification.xptransaction",
+   "kind": "change",
+   "path": "/admin/gamification/xptransaction/287/change/"
+  },
+  {
+   "label": "gamification.streak",
+   "kind": "list",
+   "path": "/admin/gamification/streak/"
+  },
+  {
+   "label": "gamification.streak",
+   "kind": "add",
+   "path": "/admin/gamification/streak/add/"
+  },
+  {
+   "label": "gamification.streak",
+   "kind": "change",
+   "path": "/admin/gamification/streak/10/change/"
+  },
+  {
+   "label": "bounty.bounty",
+   "kind": "list",
+   "path": "/admin/bounty/bounty/"
+  },
+  {
+   "label": "bounty.bounty",
+   "kind": "add",
+   "path": "/admin/bounty/bounty/add/"
+  },
+  {
+   "label": "bounty.bountydispute",
+   "kind": "list",
+   "path": "/admin/bounty/bountydispute/"
+  },
+  {
+   "label": "bounty.bountydispute",
+   "kind": "add",
+   "path": "/admin/bounty/bountydispute/add/"
+  },
+  {
+   "label": "bounty.bountylog",
+   "kind": "list",
+   "path": "/admin/bounty/bountylog/"
+  },
+  {
+   "label": "bounty.bountylog",
+   "kind": "add",
+   "path": "/admin/bounty/bountylog/add/"
+  },
+  {
+   "label": "distribution.channel",
+   "kind": "list",
+   "path": "/admin/distribution/channel/"
+  },
+  {
+   "label": "distribution.channel",
+   "kind": "add",
+   "path": "/admin/distribution/channel/add/"
+  },
+  {
+   "label": "distribution.campaign",
+   "kind": "list",
+   "path": "/admin/distribution/campaign/"
+  },
+  {
+   "label": "distribution.campaign",
+   "kind": "add",
+   "path": "/admin/distribution/campaign/add/"
+  },
+  {
+   "label": "distribution.sharejob",
+   "kind": "list",
+   "path": "/admin/distribution/sharejob/"
+  },
+  {
+   "label": "distribution.sharejob",
+   "kind": "add",
+   "path": "/admin/distribution/sharejob/add/"
+  },
+  {
+   "label": "distribution.sharelog",
+   "kind": "list",
+   "path": "/admin/distribution/sharelog/"
+  },
+  {
+   "label": "distribution.sharelog",
+   "kind": "add",
+   "path": "/admin/distribution/sharelog/add/"
+  },
+  {
+   "label": "distribution.shortlink",
+   "kind": "list",
+   "path": "/admin/distribution/shortlink/"
+  },
+  {
+   "label": "distribution.shortlink",
+   "kind": "add",
+   "path": "/admin/distribution/shortlink/add/"
+  },
+  {
+   "label": "distribution.mediaasset",
+   "kind": "list",
+   "path": "/admin/distribution/mediaasset/"
+  },
+  {
+   "label": "distribution.mediaasset",
+   "kind": "add",
+   "path": "/admin/distribution/mediaasset/add/"
+  },
+  {
+   "label": "distribution.distributionsettings",
+   "kind": "list",
+   "path": "/admin/distribution/distributionsettings/"
+  },
+  {
+   "label": "distribution.distributionsettings",
+   "kind": "add",
+   "path": "/admin/distribution/distributionsettings/add/"
+  },
+  {
+   "label": "distribution.distributionsettings",
+   "kind": "change",
+   "path": "/admin/distribution/distributionsettings/1/change/"
+  },
+  {
+   "label": "promotions.promotion",
+   "kind": "list",
+   "path": "/admin/promotions/promotion/"
+  },
+  {
+   "label": "promotions.promotion",
+   "kind": "add",
+   "path": "/admin/promotions/promotion/add/"
+  },
+  {
+   "label": "promotions.promotion",
+   "kind": "change",
+   "path": "/admin/promotions/promotion/2/change/"
+  },
+  {
+   "label": "promotions.promotiongrant",
+   "kind": "list",
+   "path": "/admin/promotions/promotiongrant/"
+  },
+  {
+   "label": "promotions.promotiongrant",
+   "kind": "add",
+   "path": "/admin/promotions/promotiongrant/add/"
+  },
+  {
+   "label": "promotions.promotionprogress",
+   "kind": "list",
+   "path": "/admin/promotions/promotionprogress/"
+  },
+  {
+   "label": "promotions.promotionprogress",
+   "kind": "add",
+   "path": "/admin/promotions/promotionprogress/add/"
+  },
+  {
+   "label": "promotions.promotionlog",
+   "kind": "list",
+   "path": "/admin/promotions/promotionlog/"
+  },
+  {
+   "label": "promotions.promotionlog",
+   "kind": "add",
+   "path": "/admin/promotions/promotionlog/add/"
+  },
+  {
+   "label": "site_settings.verificationmetatag",
+   "kind": "list",
+   "path": "/admin/site_settings/verificationmetatag/"
+  },
+  {
+   "label": "site_settings.verificationmetatag",
+   "kind": "add",
+   "path": "/admin/site_settings/verificationmetatag/add/"
+  },
+  {
+   "label": "site_settings.verificationfile",
+   "kind": "list",
+   "path": "/admin/site_settings/verificationfile/"
+  },
+  {
+   "label": "site_settings.verificationfile",
+   "kind": "add",
+   "path": "/admin/site_settings/verificationfile/add/"
+  },
+  {
+   "label": "site_settings.sitesettings",
+   "kind": "list",
+   "path": "/admin/site_settings/sitesettings/"
+  },
+  {
+   "label": "site_settings.sitesettings",
+   "kind": "add",
+   "path": "/admin/site_settings/sitesettings/add/"
+  },
+  {
+   "label": "site_settings.sitesettings",
+   "kind": "change",
+   "path": "/admin/site_settings/sitesettings/1/change/"
+  },
+  {
+   "label": "site_settings.editorprofile",
+   "kind": "list",
+   "path": "/admin/site_settings/editorprofile/"
+  },
+  {
+   "label": "site_settings.editorprofile",
+   "kind": "add",
+   "path": "/admin/site_settings/editorprofile/add/"
+  },
+  {
+   "label": "site_settings.editorprofile",
+   "kind": "change",
+   "path": "/admin/site_settings/editorprofile/9/change/"
+  },
+  {
+   "label": "site_settings.editorimage",
+   "kind": "list",
+   "path": "/admin/site_settings/editorimage/"
+  },
+  {
+   "label": "site_settings.editorimage",
+   "kind": "add",
+   "path": "/admin/site_settings/editorimage/add/"
+  }
+ ]
+}

@@ -1,12 +1,12 @@
 {# Context: post, comment_nodes, comment_count. Threaded discussion with an add-comment form. #}
 <section id="comments" class="comments" aria-labelledby="comments-title">
-  <h2 class="section-heading" id="comments-title">Discussion <span class="muted">({{ comment_count }})</span></h2>
+  <h2 class="section-heading comments__title" id="comments-title"><i data-lucide="message-circle" class="icon" aria-hidden="true"></i> Discussion <span class="comments__count">{{ comment_count }}</span></h2>
   {% include "comments/form.html" with parent_id="" form_id="comment-form" %}
   <ol class="comment-list">
     {% for node in comment_nodes %}
       {% include "comments/node.html" with node=node %}
     {% empty %}
-      <li class="comment-empty">No comments yet. Start the conversation.</li>
+      <li class="comment-empty"><i data-lucide="message-circle" class="icon" aria-hidden="true"></i><span>No comments yet. Start the conversation.</span></li>
     {% endfor %}
   </ol>
 </section>

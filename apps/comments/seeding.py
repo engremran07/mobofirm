@@ -10,6 +10,7 @@ from django.core.management.base import CommandError
 from apps.blog.models import Post
 from apps.comments.models import Comment
 from apps.comments.services import submit_comment
+from apps.comments.services.comment_service import clean_body
 from apps.core.seed_data.comments import COMMENTS, CommentSeed
 from apps.core.seeding import SeedReport
 
@@ -42,8 +43,9 @@ def seed_comments(
             report.record("comments skipped (post not seeded)", created=False)
             continue
         user = resolve_user(seed.username)
+        stored_body = clean_body(seed.body)
         existing = Comment.objects.filter(
-            post=post, user_id=user.pk, body=seed.body
+            post=post, user_id=user.pk, body=stored_body
         ).first()
         if existing is not None:
             submitted[seed.key] = existing

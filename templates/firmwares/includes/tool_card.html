@@ -1,0 +1,8 @@
+{# Contract: tool (FlashingTool). One flashing tool card for the hub and category lists; show_desc (optional length), platform shown as eyebrow. #}
+<article class="card-ui card-ui--tool">
+  <div class="card-ui__body">
+    <span class="card-ui__eyebrow">{{ tool.get_platform_display }}{% if tool.category and show_category %} · {{ tool.category.name }}{% endif %}</span>
+    <h3 class="card-ui__title"><a class="card-ui__link" href="{% url 'firmwares:flashing_tool_detail' slug=tool.slug %}">{{ tool.name }}</a></h3>
+    <p class="card-ui__text">{{ tool.description|truncatewords:25 }}</p>
+  </div>
+</article>

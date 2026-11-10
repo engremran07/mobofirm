@@ -887,10 +887,35 @@ def _check_limits(
     return QuotaDecision(True)
 
 
-def _already_consumed(user: Any, content_type: ContentType, object_id: Any) -> bool:
+def _current_period_id(user: Any) -> int | None:
+    """Pk of the package period the user is in now (``None`` = no live package)."""
+    package = effective_entitlements(user).package
+    return package.pk if package is not None else None
+
+
+def _consumption(
+    user: Any, content_type: ContentType, object_id: Any
+) -> QuotaConsumption | None:
     return QuotaConsumption.objects.filter(
         user=user, content_type=content_type, object_id=object_id
-    ).exists()
+    ).first()
+
+
+def _is_current(user: Any, row: QuotaConsumption | None) -> bool:
+    """Whether ``row`` still covers its file.
+
+    A featured file counted in an earlier package period no longer does: serving it
+    under the current period counts it again, which keeps the new window honest.
+    """
+    if row is None:
+        return False
+    if row.reason != QuotaConsumption.Reason.FEATURED:
+        return True
+    return row.user_package_id == _current_period_id(user)
+
+
+def _already_consumed(user: Any, content_type: ContentType, object_id: Any) -> bool:
+    return _is_current(user, _consumption(user, content_type, object_id))
 
 
 def check_quota(user: Any, firmware: Any) -> QuotaDecision:
@@ -938,7 +963,8 @@ def consume_quota(user: Any, firmware: Any, *, reason: str) -> None:
 
     lock_user(user)
     content_type, object_id = file_ref(firmware)
-    if _already_consumed(user, content_type, object_id):
+    existing = _consumption(user, content_type, object_id)
+    if _is_current(user, existing):
         return
     entitled = effective_entitlements(user)
     if reason == QuotaConsumption.Reason.PAID and not has_purchased(user, firmware):
@@ -954,6 +980,16 @@ def consume_quota(user: Any, firmware: Any, *, reason: str) -> None:
         decision = _check_limits(user, entitled, reason, _size_mb(firmware))
         if not decision.allowed:
             raise QuotaExceeded(decision.reason)
+    period = entitled.package
+    if existing is not None:
+        existing.reason = reason
+        existing.size_mb = _size_mb(firmware)
+        existing.consumed_at = timezone.now()
+        existing.user_package = period
+        existing.save(
+            update_fields=["reason", "size_mb", "consumed_at", "user_package"]
+        )
+        return
     try:
         with transaction.atomic():
             QuotaConsumption.objects.create(
@@ -962,6 +998,7 @@ def consume_quota(user: Any, firmware: Any, *, reason: str) -> None:
                 object_id=object_id,
                 reason=reason,
                 size_mb=_size_mb(firmware),
+                user_package=period,
             )
     except IntegrityError:
         # A concurrent request charged this file first; the unique constraint won.

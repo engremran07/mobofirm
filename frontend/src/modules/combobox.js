@@ -8,6 +8,17 @@
 //   combobox:clear   detail { id, name }
 // Listen for `combobox:set` on the root to set a value from outside:
 //   detail { value, label, onlyIfEmpty }.
+// Navigation comboboxes also offer recent searches (this browser only, switchable off with
+// data-recent="false" or from the list itself) and the "/" shortcut (modules/search.js).
+
+import {
+  clearRecentSearches,
+  initializeSearchShortcuts,
+  readRecentSearches,
+  recentSearchesEnabled,
+  rememberSearch,
+  setRecentSearchesEnabled,
+} from "./search.js";
 
 const normalize = (text) => text.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
 
@@ -15,7 +26,47 @@ function emit(root, type, detail) {
   root.dispatchEvent(new CustomEvent(type, { bubbles: true, detail }));
 }
 
+function recentOption(id, label, attributes) {
+  const option = document.createElement("div");
+  option.id = id;
+  option.className = "combobox-option combobox-recent-option";
+  option.setAttribute("role", "option");
+  option.setAttribute("aria-selected", "false");
+  Object.entries(attributes).forEach(([name, value]) => option.setAttribute(name, value));
+  const text = document.createElement("span");
+  text.className = "combobox-text";
+  const title = document.createElement("span");
+  title.className = "combobox-title";
+  title.textContent = label;
+  text.append(title);
+  option.append(text);
+  return option;
+}
+
+function buildRecentPanel(prefix, searches) {
+  const group = document.createElement("div");
+  group.className = "combobox-group combobox-group--recent";
+  group.setAttribute("role", "group");
+  group.setAttribute("aria-labelledby", `${prefix}-group-recent`);
+  const heading = document.createElement("div");
+  heading.id = `${prefix}-group-recent`;
+  heading.className = "combobox-group__label";
+  heading.setAttribute("role", "presentation");
+  heading.textContent = "Recent searches";
+  group.append(heading);
+  searches.forEach((query, index) => {
+    group.append(recentOption(`${prefix}-option-recent-${index}`, query, { "data-recent-value": query }));
+  });
+  const clear = recentOption(`${prefix}-option-recent-clear`, "Clear recent searches", { "data-action": "clear-recent" });
+  const disable = recentOption(`${prefix}-option-recent-off`, "Turn off recent searches", { "data-action": "disable-recent" });
+  clear.classList.add("combobox-recent-action");
+  disable.classList.add("combobox-recent-action");
+  group.append(clear, disable);
+  return group;
+}
+
 export function registerCombobox(Alpine) {
+  initializeSearchShortcuts();
   Alpine.data("combobox", () => ({
     mode: "pick",
     minChars: 0,
@@ -31,6 +82,8 @@ export function registerCombobox(Alpine) {
     detected: false,
     dirty: false,
     forceRequest: false,
+    recentShown: false,
+    recentAllowed: false,
     status: "",
 
     init() {
@@ -40,10 +93,15 @@ export function registerCombobox(Alpine) {
       this.dependsOn = settings.dependsOn ?? "";
       this.dependsParam = settings.dependsParam ?? "";
       this.detected = settings.detected === "true";
+      this.recentAllowed = this.mode === "navigate" && settings.recent !== "false";
       this.text = this.$refs.input.value;
       this.value = this.valueField ? this.valueField.value : "";
       this.selectedLabel = this.value ? this.text : "";
       this.syncDisabled();
+      const form = this.$refs.input.form;
+      if (form && this.recentAllowed) {
+        form.addEventListener("submit", () => rememberSearch(this.$refs.input.value));
+      }
     },
 
     get valueField() {
@@ -84,12 +142,26 @@ export function registerCombobox(Alpine) {
       this.detected = false;
       if (this.mode === "pick" && this.value !== "") this.setValue("", "", false);
       this.setActive(-1);
+      if (this.text.trim() === "" && this.showRecent()) return;
       if (this.text.trim().length < this.minChars) this.close();
     },
     onFocus() {
       this.focused = true;
       // A chosen value is replaced, not extended: select it so typing overwrites it.
       if (this.mode === "pick" && this.value !== "") this.$refs.input.select();
+      if (this.text.trim() === "") this.showRecent();
+    },
+    // Recent searches fill the list while the field is empty (navigation mode only).
+    showRecent() {
+      if (!this.recentAllowed || !this.focused || !recentSearchesEnabled()) return false;
+      const searches = readRecentSearches();
+      if (searches.length === 0) return false;
+      this.$refs.list.replaceChildren(buildRecentPanel(this.$refs.input.id, searches));
+      this.recentShown = true;
+      this.activeIndex = -1;
+      this.status = `${searches.length} recent search${searches.length === 1 ? "" : "es"}. Use the up and down arrow keys to review.`;
+      this.open = true;
+      return true;
     },
     onBeforeRequest(event) {
       if (event.target !== this.$refs.input) return;
@@ -100,7 +172,8 @@ export function registerCombobox(Alpine) {
       const blocked = this.dependsOn && this.parentValue() === "";
       if (tooShort || blocked || (hasSelection && !forced)) {
         event.preventDefault();
-        if (tooShort || blocked) this.close();
+        const keepRecent = this.recentShown && this.text.trim() === "";
+        if ((tooShort || blocked) && !keepRecent) this.close();
         return;
       }
       this.loading = true;
@@ -114,6 +187,7 @@ export function registerCombobox(Alpine) {
     },
     onResults(event) {
       if (event.detail.target !== this.$refs.list) return;
+      this.recentShown = false;
       const count = this.options().length;
       this.activeIndex = -1;
       this.status =
@@ -200,14 +274,40 @@ export function registerCombobox(Alpine) {
     onListClick(event) {
       const option = event.target.closest('[role="option"]');
       if (!option || option.getAttribute("aria-disabled") === "true") return;
-      if (this.mode === "pick") {
+      if (this.mode === "pick" || option.dataset.action || option.dataset.recentValue) {
         event.preventDefault();
         this.choose(option);
+      } else if (this.recentAllowed) {
+        rememberSearch(option.dataset.recentQuery ?? this.text);
       }
     },
     choose(option) {
+      if (option.dataset.action === "clear-recent") {
+        clearRecentSearches();
+        this.recentShown = false;
+        this.close();
+        return;
+      }
+      if (option.dataset.action === "disable-recent") {
+        setRecentSearchesEnabled(false);
+        this.recentShown = false;
+        this.close();
+        return;
+      }
+      if (option.dataset.recentValue !== undefined) {
+        this.text = option.dataset.recentValue;
+        this.$refs.input.value = this.text;
+        this.recentShown = false;
+        this.close();
+        const form = this.$refs.input.form;
+        if (form) form.requestSubmit();
+        return;
+      }
       if (this.mode === "navigate") {
-        if (option instanceof HTMLAnchorElement) window.location.assign(option.href);
+        if (option instanceof HTMLAnchorElement) {
+          if (this.recentAllowed) rememberSearch(option.dataset.recentQuery ?? this.text);
+          window.location.assign(option.href);
+        }
         return;
       }
       const label = option.dataset.label ?? option.textContent.trim();

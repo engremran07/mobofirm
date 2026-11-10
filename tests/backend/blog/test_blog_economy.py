@@ -59,9 +59,13 @@ def reviewer(make_user):
 def pending(user, title="Unlock bootloader on Mediatek tablets"):
     return guide_requests.create_request(
         user,
-        title=title,
-        description="A detailed description of the topic that is needed here.",
-        kind="method",
+        guide_requests.RequestText(
+            title=title,
+            kind="method",
+            tried="Tried SP Flash Tool with the stock scatter file, error 0xC0020036.",
+            description="A detailed description of the topic that is needed here.",
+        ),
+        guide_requests.RequestContext(model_code="MT6765"),
     )
 
 

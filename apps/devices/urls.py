@@ -18,6 +18,9 @@ urlpatterns = [
     path("events/", views.device_events, name="device_events"),
     path("payload/", views.device_payload_view, name="device_payload"),
     path("acknowledge/", views.acknowledge_new_device, name="acknowledge_new_device"),
+    path("os/options/", views.os_options, name="os_options"),
+    path("os/register/", views.os_register, name="os_register"),
+    path("os/verify/", views.os_verify, name="os_verify"),
     path("slots/ask-staff/", dialogs.AskStaffDialog.as_view(), name="slot_ask_staff"),
     path(
         "slots/pay-credits/",

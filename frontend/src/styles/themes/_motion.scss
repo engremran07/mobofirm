@@ -1,0 +1,24 @@
+// Reduced motion is honoured twice: by the operating-system preference and by an
+// explicit data-motion="reduce" switch (testable and user-controllable).
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --mf-duration-fast: 0.01ms;
+    --mf-duration-base: 0.01ms;
+    --mf-duration-slow: 0.01ms;
+  }
+}
+
+:root[data-motion="reduce"] {
+  --mf-duration-fast: 0.01ms;
+  --mf-duration-base: 0.01ms;
+  --mf-duration-slow: 0.01ms;
+}
+
+:root[data-motion="reduce"] *,
+:root[data-motion="reduce"] *::before,
+:root[data-motion="reduce"] *::after {
+  scroll-behavior: auto !important;
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+}

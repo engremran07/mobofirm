@@ -6,7 +6,7 @@ The site never uses the browser's native `alert()`, `confirm()` or `prompt()`, t
 
 | Layer | Owns | Lives in |
 | --- | --- | --- |
-| **core** (shell) | native `<dialog>` markup, the Alpine `appDialog` component, `#dialog-slot`, focus/scroll/Esc/backdrop behaviour, CSS, the `DialogView`/`DialogForm` helpers, the JavaScript `Dialogs` API, the unsaved-changes guard | `templates/components/dialog*.html`, `templates/components/confirm_dialog.html`, `frontend/src/modules/dialogs.js`, `frontend/src/styles/dialogs.css`, `apps/core/dialogs.py` |
+| **core** (shell) | native `<dialog>` markup, the Alpine `appDialog` component, `#dialog-slot`, focus/scroll/Esc/backdrop behaviour, CSS, the `DialogView`/`DialogForm` helpers, the JavaScript `Dialogs` API, the unsaved-changes guard | `templates/components/dialog*.html`, `templates/components/confirm_dialog.html`, `frontend/src/modules/dialogs.js`, `frontend/src/styles/components/_dialog.scss`, `apps/core/dialogs.py` |
 | **app** (content) | the copy, form, view, permission rule and side effect of one dialog | `templates/<app>/dialogs/*.html`, `apps/<app>/dialogs.py` (or `forms.py`) |
 
 Core never imports a domain app for dialogs. An app subclasses `DialogView`, extends `components/dialog.html` and registers a URL in its own `urls.py`. Staff dialogs in the Unfold admin keep using Unfold's own action dialog (`apps/core/admin_base.py`: `confirm_dialog`, `BaseDialogForm`); they are not affected by this shell.
@@ -28,12 +28,15 @@ Converted so far: blog (publish, schedule, archive), comments (reject, mark as s
 ```python
 # apps/comments/dialogs.py
 class ModerationDialog(DialogView):
-    template_name = "comments/dialogs/moderate.html"   # extends components/dialog.html
-    form_class = ModerationNoteForm                   # DialogForm; reason_required = False
+    template_name = "comments/dialogs/moderate.html"  # extends components/dialog.html
+    form_class = ModerationNoteForm  # DialogForm; reason_required = False
     danger = True
 
-    def has_permission(self, request): return request.user.has_perm("comments.change_comment")
-    def perform(self, form): moderate_comment(self.comment, self.action, self.request.user, note=form.reason)
+    def has_permission(self, request):
+        return request.user.has_perm("comments.change_comment")
+
+    def perform(self, form):
+        moderate_comment(self.comment, self.action, self.request.user, note=form.reason)
 ```
 
 Open it from anywhere. Keep a real `href`: without JavaScript it is a normal page.
@@ -94,14 +97,21 @@ Mark a form `data-unsaved-guard`. After the first edit:
 - `aria-labelledby` (title) and `aria-describedby` (message); close button has an accessible name.
 - Initial focus: `[autofocus]`, else first field, else the safe action (Cancel for destructive, the primary action otherwise). Focus returns to the opener on close, or to `#main-content` if it is gone.
 - Esc and backdrop close unless configured otherwise (`static_backdrop`, `esc_blocked`); a drag that starts inside and ends on the backdrop does not close it.
-- Scroll lock via `html:has(.app-dialog:modal)`; no layout shift.
-- Below 576px the dialog is a full-width bottom sheet; above it a centred panel (`sm` 30rem, `md` 40rem, `lg` 56rem). Light/dark use the shared tokens. `prefers-reduced-motion` disables the entrance animation.
+- Scroll lock via `html:has(dialog:modal)` plus a reserved scrollbar gutter on `<html>`: no layout shift, and the lock holds until the last modal closes.
+- Below 576px the dialog is a full-width bottom sheet with a handle; above it a centred panel (`sm` 30rem, `md` 40rem, `lg` 56rem, `xl` 72rem). Light/dark use the shared tokens. `prefers-reduced-motion` (and `data-motion="reduce"`) disables the entrance animation.
+- Only the body scrolls (`overscroll-behavior: contain`) with edge shadows on the side that has hidden content; the footer actions stay visible; long titles, messages and values wrap (`overflow-wrap: anywhere`).
+- Loading: an HTMX submit sets `[data-loading]` on the form (spinner on the submit button, dimmed body); a plain form post sets `data-submitting` / `aria-busy` and ignores a second submit (cleared on `pageshow` and after 20 s).
+- Errors: the dialog re-renders in place with labelled fields and an error summary (`role="alert"`); the first invalid field takes focus. Transport errors (403/404/5xx, offline, timeout) raise a danger toast.
+- Success: after a redirect or refresh the flash message shows as a toast; with `refresh_on_success = False` the response carries a `toast` event (`HX-Trigger`) so the toast appears immediately.
+- Nested: a confirm opened from inside a dialog stacks on the native top layer; Esc acts on the top dialog only and focus returns to the lower one.
+- Hand-written dialogs that set `data-app-dialog` (without the Alpine component) still get `[data-dialog-close]`, the Tab trap, focus restore and backdrop close; migrate them to the shell (see `dialog-audit.md`).
 - Strict CSP: no inline scripts or styles, no `eval`; Alpine uses the CSP build, handlers are named methods.
 - Without JavaScript the dialog URL renders the same form inline in a page and the POST redirects after success.
 
 ## Testing
 
-- `tests/backend/core/test_dialogs.py` – the `DialogView`/component contract (permission, CSRF, validation, rollback, redirects).
+- `tests/backend/core/test_dialogs.py` – the `DialogView`/component contract (permission, CSRF, validation, rollback, redirects, in-place success toast).
 - `tests/backend/{blog,comments,tags}/test_*_dialogs.py` – each converted dialog.
 - `tests/backend/test_no_native_dialogs.py` – forbids native dialogs and checks the single `beforeunload`.
-- `tests/frontend/test_dialogs_browser.py` – Playwright: open/close/Esc/focus trap and return, HTMX validation, destructive confirm, unsaved-changes guard, bottom sheet, dark theme, reduced motion, 360/1440 overflow, no console/CSP errors, no native dialogs, no-JavaScript fallback.
+- `tests/frontend/test_dialogs_browser.py` – Playwright: open/close/Esc/focus trap and return, HTMX validation, destructive confirm, unsaved-changes guard, bottom sheet for the inline, HTMX and JavaScript kinds, dark theme, reduced motion, 360/1440 overflow, long content with sticky footer and scroll lock, size variants, loading + success toast, nested confirm, hand-written dialogs, no console/CSP errors, no native dialogs, no-JavaScript fallback.
+- The audit of every dialog kind and the migration list live in `dialog-audit.md`.

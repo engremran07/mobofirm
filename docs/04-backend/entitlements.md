@@ -66,8 +66,10 @@ Everything goes through it: `active_package`, `quota_snapshot`, `quota_windows`,
 
 * `apps.firmwares.access.check_download_access(user, firmware)` asks `has_purchased`,
   `effective_entitlements(...).can_access_featured`, `check_quota` and the package's
-  `max_concurrent`. A file already served to the user is always re-downloadable (and never
-  charged again). `finalize_served_download` calls `consume_quota(user, firmware, reason=<tier>)`.
+  `max_concurrent`. A file already served to the user stays fetchable only while its
+  lifetime rule holds (see "Download expiry and history" below) and is never charged
+  twice in the same record period. `finalize_served_download` calls
+  `consume_quota(user, firmware, reason=<tier>)`.
 * Per item type: **free** files are counted in the bucket only when the package covers free
   files; **featured** files need a package that covers them and share its quota; **paid**
   files need a purchase for that exact file (a file bought individually is always allowed),
@@ -142,3 +144,91 @@ default), activate/deactivate actions, row and detail dialogs to duplicate (inac
 draft) and archive (hides the package, cancels its pending orders, holders keep it) and a
 Holders inline. `UserPackage` carries the quota-override inline; `Order` shows its items
 inline with mark-paid, cancel and refund dialogs.
+
+## Download expiry and history
+
+**Audit (before wave 10).** `check_download_access` treated any `ServedDownload` row as a
+permanent entitlement and `QuotaConsumption` was "already consumed" forever, so a file
+served once, free or under a package, stayed downloadable for good even after the package
+expired. Every serve is now recorded under one of three rules
+(`ServedDownload.access_rule`, `user_package_id`), decided by `access.serve_rule` and read
+through `access.served_status` / `served_statuses` (contract `apps/shop/download_rules.py`):
+
+| Rule | Files | Stays fetchable |
+| --- | --- | --- |
+| `free` | free files | within the **re-download allowance** after the first serve: `ShopSettings.free_redownload_window_days` (default 30) and `free_redownload_max` (default 5 re-downloads); 0 = unlimited for that dimension. When spent the gate refuses with "Your free re-download allowance for this file has ended (30 days / 5 re-downloads after the first download)." and the file lives in the History tab; staff can reset it (**Served downloads → Reset re-download allowance**). |
+| `package` | featured files served under a package | while the package **period** it was served under is the user's live one (`period_is_live`). Expiry, cancellation or a new activation end it; the gate then says "Package expired — renew to download again." (`requires = package`). |
+| `lifetime` | paid files, and featured files bought one by one with credits or an order | always (the earlier lifetime rule); never expired, never purged, never counted in the package quota. |
+
+A **package period** is one `UserPackage` row. Activating or renewing a package
+(`services.activate_package`) creates a new one, ends the previous and publishes
+`shop.package_activated` after commit. `apps/firmwares/package_history.py` subscribes and
+purges the history of the replaced period once `ShopSettings.package_history_retention_days`
+(default 0 = on activation, per the owner) has passed since the new period began; the daily
+beat task `firmwares-purge-package-history` is the safety net (it also covers periods
+created without an event). History of free files and lifetime files is never purged, and the
+history of a package that merely expired stays until a new package is activated.
+
+**Quota consistency.** `QuotaConsumption.user_package` tags the period a featured file was
+counted in. A featured file counted in an earlier period is *not* "already consumed" in the
+new one: serving it again re-counts it in the new window (it consumes the new period's
+allowance exactly once and passes the same fair-usage checks). Re-serving a lapsed record
+restarts it (new first-serve date, counter, rule and period). Free-file consumption keeps its
+one-per-file rule.
+
+**My files.** `/files/` has **Active** (downloadable now) and **History** tabs. History is
+read-only: no download button, the reason ("Package expired — renew to download again" with a
+**Renew your package** action, or the spent allowance) and a details link.
+
+**Existing grants.** `manage.py backfill_download_rules [--dry-run]` (idempotent) marks paid
+and bought files lifetime and tags the other featured files with the package period that
+covered their serve date, and tags the matching quota rows. Run it once after migrating
+(`shop/0003`, `firmwares/0004`); until then every old row counts as a free file.
+
+## Access type changes after approval
+
+`apps/firmwares/access_changes.py::apply_access_change(firmware, AccessChange(...))` is the
+only writer of `access_tier` / `approved_price` after approval. Rules: only approved files;
+a paid file needs a USD price greater than zero and an uploader who is an approved seller,
+a staff member or nobody (platform file) because paid files pay their seller; only paid
+files carry a price (credits are always `apps.wallet.api.to_credits(price)`); staff cannot make
+their own file paid or featured; the system only moves free → featured; a no-op is refused.
+It runs on the locked row in one transaction, closes other open requests for the file, writes
+one append-only `AccessChangeLog` row (who / when / from / to / price / reason / source /
+request / reverted change) and, after commit, publishes `firmware.access_changed` and notifies
+the uploader.
+
+* **Staff:** the **Change access type** dialog on the typed firmware admin (row, detail page
+  and bulk action) and on the firmware page (app-owned dialog, `firmwares:firmware_access_change`).
+  The access and price fields are read-only on the admin form; the tab shows the history.
+* **Uploaders:** only the uploader of an approved file, and only an approved seller for paid
+  and featured, may **request** a change (reason of at least ten characters, price proposal for
+  paid) from the firmware page (`firmwares:firmware_access_request`). One open request per file.
+  Reviewers (superusers and holders of `firmwares.change_accesschangerequest`) are notified;
+  staff approve (optionally with another price) or reject (reason required) in **Access change
+  requests**, nobody decides their own request, and the requester is notified.
+* **History and revert:** **Access change history** is read-only; the latest change of a file
+  can be reverted (a staff change, so reverting an automatic promotion also stops auto-promotion).
+
+**People who already received the file.** Nothing is taken away and nobody is charged
+retroactively. Served records keep the rule they were created under: a free file keeps the
+free re-download allowance of those who have it (then the new access type applies), package
+files stay until their period ends, files bought one by one stay with their buyers and a
+demotion from paid never refunds or revokes a purchase. New downloads follow the new type
+at once.
+
+## Automatic promotion of popular files
+
+`apps/firmwares/auto_feature.py` (settings: **Firmwares → Auto-feature settings**, singleton
+`AutoFeatureSettings`): `enabled` (default off), `dry_run` (default on), `window_days`,
+`min_downloads`, `min_unique_downloaders` (accounts plus distinct anonymous IPs),
+`velocity_days` + `min_velocity` (downloads per day recently), `cooldown_days`,
+`max_promotions_per_run`, `notify_uploader`. It counts completed `DownloadToken` rows in the
+window, considers only free, active, approved files, and promotes the most downloaded first.
+It skips a file that people took out of featured before (`demoted_by_staff`), whose access
+changed within the cooldown, or that has an open request; paid and featured files are never
+touched. Each promotion is an access change by `system` (`source = auto`, reason holds the
+figures) that staff can revert, and the uploader is notified. The settings page previews what
+would be promoted right now and shows the last run. Run it with the daily beat task
+`firmwares-auto-feature-popular` or `manage.py auto_feature_popular_firmware [--dry-run]`
+(`--dry-run` works even while the rule is off and changes nothing).

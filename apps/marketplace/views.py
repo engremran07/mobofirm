@@ -5,14 +5,15 @@ from typing import Final
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ValidationError
-from django.db.models import Q
 from django.forms import BaseFormSet
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
+from django.views.decorators.vary import vary_on_headers
 
 from apps.core.decorators import require_app_enabled
+from apps.core.search import list_search_context, search_queryset
 from apps.firmwares.catalog import get_public_firmware_queryset
 from apps.firmwares.models import OfficialFirmware
 from apps.pages.widgets import published_page_slugs
@@ -34,6 +35,7 @@ from .forms import (
     application_data,
 )
 from .models import MAX_SOCIAL_LINKS, Listing, SellerProfile
+from .search_providers import LISTING_FIELDS
 from .validators import validate_https_url
 
 SORTS = {
@@ -109,17 +111,17 @@ def _safe_website(seller: SellerProfile) -> str:
 
 @require_GET
 @require_app_enabled("marketplace")
+@vary_on_headers("HX-Request")
 def listing_browse(request: HttpRequest) -> HttpResponse:
-    query = request.GET.get("q", "").strip()[:100]
+    """Approved listings; ``q`` goes through the shared engine, HTMX gets the grid."""
     sort = request.GET.get("sort", "newest")
     listings = services.public_listings()
     if request.GET.get("featured") == "1":
         listings = listings.filter(is_featured=True)
-    if query:
-        listings = listings.filter(
-            Q(title__icontains=query) | Q(description__icontains=query)
-        )
-    listings = listings.order_by(SORTS.get(sort, SORTS["newest"]))[:SEARCH_LIMIT]
+    result = search_queryset(listings, request.GET.get("q"), LISTING_FIELDS)
+    found = list(
+        result.queryset.order_by(SORTS.get(sort, SORTS["newest"]))[:SEARCH_LIMIT]
+    )
     template = (
         "marketplace/fragments/listing_grid.html"
         if request.headers.get("HX-Request")
@@ -128,7 +130,13 @@ def listing_browse(request: HttpRequest) -> HttpResponse:
     return render(
         request,
         template,
-        {"listings": listings, "search_query": query, "current_sort": sort},
+        {
+            "listings": found,
+            "current_sort": sort,
+            **list_search_context(
+                result, len(found), user=request.user, kinds=("brand", "model", "tool")
+            ),
+        },
     )
 
 

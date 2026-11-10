@@ -1,36 +1,36 @@
-{% extends "base.html" %}
+{% extends "account/_auth_layout.html" %}
 {% block title %}Verify two-factor authentication | {{ site_name|default:"Mobofirm" }}{% endblock %}
-{% block content %}
-<div class="site-container py-5">
-  {% url 'users:dashboard' as account_url %}
-  {% include "components/breadcrumbs.html" with current="Two-factor verification" parent_label="Account" parent_url=account_url %}
-  
-  <section class="surface-card auth-card p-4" aria-labelledby="mfa-verify-title">
-    <p class="section-eyebrow">Account security</p>
-    <h1 id="mfa-verify-title" class="h2">Two-factor verification</h1>
-    {% if is_verified %}
-      <p>Two-factor authentication is enabled for this account.</p>
-    {% else %}
-      <p>Enter a six-digit authenticator code or an unused recovery code.</p>
-      <form method="post" class="mb-4">
-        {% csrf_token %}
-        <label class="form-label" for="mfa-verify-code">Verification code</label>
-        <input class="form-control mb-3" id="mfa-verify-code" name="code"
-               inputmode="numeric" autocomplete="one-time-code"
-               pattern="[0-9A-Za-z]{6,8}" minlength="6" maxlength="8" required>
-        <button class="btn btn-primary" type="submit">Verify</button>
-      </form>
-    {% endif %}
-    {% if can_disable %}
-      <form method="post" action="{% url 'users:mfa_disable' %}">
-        {% csrf_token %}
-        <label class="form-label" for="mfa-disable-code">Code to disable two-factor authentication</label>
-        <input class="form-control mb-3" id="mfa-disable-code" name="code"
-               inputmode="numeric" autocomplete="one-time-code"
-               pattern="[0-9A-Za-z]{6,8}" minlength="6" maxlength="8" required>
-        <button class="btn btn-outline-danger" type="submit">Disable two-factor authentication</button>
-      </form>
-    {% endif %}
-  </section>
-</div>
+{% block auth_crumbs %}{% url 'users:dashboard' as account_url %}{% include "components/breadcrumbs.html" with current="Two-factor verification" parent_label="Account" parent_url=account_url %}{% endblock %}
+{% block auth_aside %}{% endblock %}
+{% block auth_icon %}shield-check{% endblock %}
+{% block auth_eyebrow %}Account security{% endblock %}
+{% block auth_title %}Two-factor verification{% endblock %}
+{% block auth_body %}
+{% if is_verified %}
+  <p class="auth-card__lead"><span class="badge-ui badge-ui--verified"><i data-lucide="badge-check" aria-hidden="true"></i>Enabled</span></p>
+  <p>Two-factor authentication is enabled for this account.</p>
+{% else %}
+  <p class="auth-card__lead">Enter a six-digit authenticator code or an unused recovery code.</p>
+  <form method="post" class="auth-form mb-4">
+    {% csrf_token %}
+    <label class="form-label" for="mfa-verify-code">Verification code</label>
+    <input class="form-control otp-input mb-3" id="mfa-verify-code" name="code"
+           inputmode="numeric" autocomplete="one-time-code"
+           pattern="[0-9A-Za-z]{6,8}" minlength="6" maxlength="8" placeholder="000000" required>
+    <button class="btn btn-primary btn-lg w-100" type="submit">Verify</button>
+  </form>
+{% endif %}
+{% if can_disable %}
+  <div class="auth-danger-zone">
+    <h2 class="auth-danger-zone__title">Turn off two-factor authentication</h2>
+    <form method="post" action="{% url 'users:mfa_disable' %}" class="auth-form">
+      {% csrf_token %}
+      <label class="form-label" for="mfa-disable-code">Code to disable two-factor authentication</label>
+      <input class="form-control otp-input mb-3" id="mfa-disable-code" name="code"
+             inputmode="numeric" autocomplete="one-time-code"
+             pattern="[0-9A-Za-z]{6,8}" minlength="6" maxlength="8" placeholder="000000" required>
+      <button class="btn btn-outline-danger" type="submit">Disable two-factor authentication</button>
+    </form>
+  </div>
+{% endif %}
 {% endblock %}

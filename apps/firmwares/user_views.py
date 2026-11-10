@@ -15,9 +15,10 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
-from django.urls import reverse
+from django.urls import NoReverseMatch, reverse
 from django.views.decorators.http import require_GET, require_http_methods
 
+from apps.core.app_service import app_enabled
 from apps.users.decorators import email_verification_required
 from apps.users.request_user import current_user
 
@@ -35,6 +36,7 @@ from .forms import (
 from .models import Brand, Chipset, Model, PendingFirmware, Variant
 from .services import FirmwareUploadError, max_upload_bytes
 from .submissions import submit_user_upload
+from .variant_rules import VariantIdentity
 
 logger = logging.getLogger(__name__)
 
@@ -261,8 +263,12 @@ def request_variant(request: HttpRequest) -> HttpResponse:
             user,
             model=data["model"],
             name=data["name"],
-            model_code=data["model_code"],
-            region=data["region"],
+            identity=VariantIdentity(
+                model_code=data["model_code"],
+                region=data["region"],
+                memory=data["memory"],
+                carrier=data["carrier"],
+            ),
             details=data["details"],
         )
         messages.success(request, f"Variant request “{pending.name}” sent for review.")
@@ -356,9 +362,65 @@ def my_uploads(request: HttpRequest) -> HttpResponse:
     )
 
 
+def _variant_field_context(form: Any, model: Model | None) -> dict[str, Any]:
+    """What the upload page's variant field needs to adapt to the chosen model."""
+    count = model.variants.filter(is_active=True).count() if model else 0
+    return {
+        "form": form,
+        "has_model": model is not None,
+        "variant_required": count > 0,
+        "variant_count": count,
+    }
+
+
+@verified_user_required
+@require_GET
+def upload_variant_field(request: HttpRequest) -> HttpResponse:
+    """The variant field of the upload form for the chosen model (HTMX fragment).
+
+    A model with active variants gets a required variant picker; a model without
+    any shows "No specific variant" and the upload proceeds without one.
+    """
+    model_id = _int(request, "model")
+    model = Model.objects.filter(pk=model_id).first() if model_id else None
+    variant_id = _int(request, "variant")
+    variant = (
+        Variant.objects.filter(pk=variant_id, model=model).first()
+        if model and variant_id
+        else None
+    )
+    form = UploadForm(
+        initial={"variant": variant.pk} if variant else None,
+        seller=is_seller(request.user),
+    )
+    return render(
+        request,
+        "firmwares/fragments/upload_variant.html",
+        {
+            **_variant_field_context(form, model),
+            "variant_label": variant.name if variant else "",
+        },
+    )
+
+
+def _become_seller_url() -> str:
+    """URL of the marketplace seller application, or ``""`` without that optional app.
+
+    The marketplace is an optional integration: only its public URL name and its
+    feature flag are consulted, never its code.
+    """
+    if not app_enabled("marketplace"):
+        return ""
+    try:
+        return reverse("marketplace:become_seller")
+    except NoReverseMatch:
+        return ""
+
+
 @verified_user_required
 @require_http_methods(["GET", "POST"])
 def upload_page(request: HttpRequest) -> HttpResponse:
+    """The end-user upload page: device, file, release details."""
     seller = is_seller(request.user)
     if request.method == "POST":
         form = UploadForm(request.POST, request.FILES, seller=seller)
@@ -387,7 +449,9 @@ def upload_page(request: HttpRequest) -> HttpResponse:
         {
             "form": form,
             "seller": seller,
+            "become_seller_url": "" if seller else _become_seller_url(),
             "max_upload_mb": max_upload_bytes() // (1024 * 1024),
             **_picker_state(form),
+            **_variant_field_context(form, _chosen(form, "model", Model)),
         },
     )

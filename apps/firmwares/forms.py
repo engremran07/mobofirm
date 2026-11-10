@@ -6,6 +6,9 @@ from typing import Any
 
 from django import forms
 
+from apps.core.editor.forms import RichTextField
+
+from .catalog_lookup import DETAILS_MAX
 from .models import (
     AccessTier,
     Brand,
@@ -14,9 +17,10 @@ from .models import (
     Model,
     Variant,
 )
-from .services import max_upload_bytes
+from .services import RELEASE_INFO_LIMITS, max_upload_bytes
 from .submissions import UploadSubmission, file_name_from_url
 from .tracking_models import FIRMWARE_REQUEST_TYPES, FIRMWARE_REQUEST_URGENCIES
+from .variant_rules import VariantIdentity, variant_is_required
 
 
 def _hidden_choice(queryset: Any, message: str) -> forms.ModelChoiceField:
@@ -28,45 +32,83 @@ def _hidden_choice(queryset: Any, message: str) -> forms.ModelChoiceField:
     )
 
 
-class BrandRequestForm(forms.Form):
-    name = forms.CharField(
-        label="Brand name", max_length=128, help_text="As printed on the device."
+def _text(label: str, example: str, help_text: str, **kwargs: Any) -> forms.CharField:
+    """A single-line request field with an example placeholder and help text."""
+    return forms.CharField(
+        label=label,
+        help_text=help_text,
+        widget=forms.TextInput(attrs={"placeholder": example}),
+        **kwargs,
     )
-    details = forms.CharField(
-        label="Anything we should know?",
+
+
+def _notes(label: str, example: str, help_text: str) -> forms.CharField:
+    """The optional formatted free-text field of a request, with an example."""
+    return RichTextField(
+        profile="request",
+        visible_limit=DETAILS_MAX,
+        label=label,
         required=False,
-        max_length=1000,
-        widget=forms.Textarea(attrs={"rows": 3}),
-        help_text="Website, country of origin or links that help us verify it.",
+        widget_attrs={"rows": 3, "placeholder": example},
+        help_text=help_text,
+    )
+
+
+class BrandRequestForm(forms.Form):
+    """Ask for a manufacturer that is missing from the catalogue."""
+
+    name = _text(
+        "Brand name",
+        "Xiaomi",
+        "The manufacturer as printed on the device, e.g. Xiaomi, Samsung, Tecno.",
+        max_length=128,
+    )
+    details = _notes(
+        "Anything we should know?",
+        "https://www.mi.com. Makes Redmi, POCO and Xiaomi phones.",
+        "Website, country of origin or links that help us verify the brand.",
     )
 
 
 class ChipsetRequestForm(forms.Form):
-    vendor = forms.CharField(
-        label="Vendor", max_length=64, help_text="e.g. MediaTek, Qualcomm, Unisoc"
+    """Ask for a system-on-chip that is missing from the chipset catalogue."""
+
+    vendor = _text(
+        "Vendor",
+        "MediaTek",
+        "The company that makes the chip: MediaTek, Qualcomm, Unisoc, Samsung.",
+        max_length=64,
     )
-    name = forms.CharField(
-        label="Chipset name", max_length=128, help_text="e.g. Helio G100 Ultra"
+    name = _text(
+        "Chipset name",
+        "Dimensity 9200 (MT6985)",
+        "The chip name without the vendor; add the part number in brackets.",
+        max_length=128,
     )
-    family = forms.CharField(
-        label="Family", required=False, max_length=64, help_text="e.g. Helio"
+    family = _text(
+        "Family",
+        "Dimensity",
+        "The product line, e.g. Dimensity, Helio, Snapdragon, Exynos.",
+        required=False,
+        max_length=64,
     )
-    aliases = forms.CharField(
-        label="Other names",
+    aliases = _text(
+        "Other names",
+        "MT6985, Dimensity 9200 5G",
+        "Alternative spellings or part numbers, separated by commas.",
         required=False,
         max_length=500,
-        help_text="Alternative spellings or codes, separated by commas.",
     )
-    details = forms.CharField(
-        label="Why is it needed?",
-        required=False,
-        max_length=1000,
-        widget=forms.Textarea(attrs={"rows": 3}),
-        help_text="Devices that use it, datasheet or vendor links.",
+    details = _notes(
+        "Why is it needed?",
+        "Used by the Vivo X90 and Oppo Find X6; datasheet at mediatek.com.",
+        "Devices that use it, datasheet or vendor links.",
     )
 
 
 class ModelRequestForm(forms.Form):
+    """Ask for a device model that is not listed under its brand yet."""
+
     brand = _hidden_choice(Brand.objects.all(), "Choose the brand from the list.")
     chipset = forms.ModelChoiceField(
         queryset=Chipset.objects.all(),
@@ -74,69 +116,135 @@ class ModelRequestForm(forms.Form):
         required=False,
         error_messages={"invalid_choice": "Choose the chipset from the list."},
     )
-    name = forms.CharField(label="Model name", max_length=128)
-    model_code = forms.CharField(
-        label="Model code", required=False, max_length=64, help_text="e.g. SM-S911B"
+    name = _text(
+        "Model name",
+        "Redmi Note 13 Pro 5G",
+        "The marketing name printed on the box, without the brand.",
+        max_length=128,
     )
-    details = forms.CharField(
-        label="Anything we should know?",
+    model_code = _text(
+        "Model code",
+        "2312DRA50G",
+        "The manufacturer's model number, found in Settings › About phone.",
         required=False,
-        max_length=1000,
-        widget=forms.Textarea(attrs={"rows": 3}),
+        max_length=64,
+    )
+    details = _notes(
+        "Anything we should know?",
+        "Released in January 2024; sold in Europe as the Redmi Note 13 Pro 5G.",
+        "Release date, regions, a link to the specifications.",
     )
 
 
 class VariantRequestForm(forms.Form):
+    """Ask for a regional or hardware variant of an existing model.
+
+    The brand and model are required; so is at least one identifying field (the
+    variant code, the region or market, RAM / storage or the carrier). The name is
+    optional and is built from those fields when left empty.
+    """
+
     brand = _hidden_choice(Brand.objects.all(), "Choose the brand from the list.")
     model = _hidden_choice(Model.objects.all(), "Choose the model from the list.")
-    name = forms.CharField(
-        label="Variant name", max_length=128, help_text="e.g. Global, EU, India"
-    )
-    model_code = forms.CharField(label="Model code", required=False, max_length=64)
-    region = forms.CharField(label="Region", required=False, max_length=64)
-    details = forms.CharField(
-        label="Anything we should know?",
+    name = _text(
+        "Variant name",
+        "AI2401_A",
+        "Optional. How the variant should appear in lists; defaults to its code.",
         required=False,
-        max_length=1000,
-        widget=forms.Textarea(attrs={"rows": 3}),
+        max_length=128,
+    )
+    model_code = _text(
+        "Variant code",
+        "AI2401_A",
+        "The code printed on the box or in the build, e.g. AI2401, AI2401_A, "
+        "AI2401_D. Saved in upper case.",
+        required=False,
+        max_length=64,
+    )
+    region = _text(
+        "Region or market",
+        "Global",
+        "Where it is sold, e.g. Global, EU, India, China.",
+        required=False,
+        max_length=64,
+    )
+    memory = _text(
+        "RAM / storage",
+        "8 GB / 256 GB",
+        "The memory configuration: RAM first, then storage.",
+        required=False,
+        max_length=64,
+    )
+    carrier = _text(
+        "Carrier",
+        "Verizon",
+        "Only when the variant is locked to an operator.",
+        required=False,
+        max_length=64,
+    )
+    details = _notes(
+        "Anything we should know?",
+        "Sold in India only; the box says AI2401_A.",
+        "Where you saw the code, build numbers or a link.",
     )
 
     def clean(self) -> dict[str, Any]:
+        """Brand and model must match; one identifying field is required."""
         cleaned = super().clean() or {}
         brand, model = cleaned.get("brand"), cleaned.get("model")
         if brand and model and model.brand_id != brand.pk:
             self.add_error("model", "This model does not belong to the chosen brand.")
+        identity = VariantIdentity(
+            model_code=cleaned.get("model_code", ""),
+            region=cleaned.get("region", ""),
+            memory=cleaned.get("memory", ""),
+            carrier=cleaned.get("carrier", ""),
+        ).normalized()
+        if brand and model and not identity.is_identified:
+            self.add_error(
+                None,
+                "Give at least one of: the variant code, the region or market, "
+                "RAM / storage, or the carrier.",
+            )
         return cleaned
 
 
 class FirmwareRequestForm(forms.Form):
+    """Ask for a firmware build we do not publish yet."""
+
     brand = _hidden_choice(Brand.objects.all(), "Choose the brand from the list.")
     model = forms.ModelChoiceField(
         queryset=Model.objects.all(), widget=forms.HiddenInput, required=False
     )
-    variant_name = forms.CharField(
-        label="Variant or region", required=False, max_length=200
+    variant_name = _text(
+        "Variant or region",
+        "AI2401_A or Global",
+        "The variant code or the region of the device, if you know it.",
+        required=False,
+        max_length=200,
     )
     firmware_type = forms.ChoiceField(
         label="Firmware type",
         choices=FIRMWARE_REQUEST_TYPES,
         initial="official",
+        help_text="Official is the stock build from the manufacturer; the others "
+        "are engineering, readback and modified builds.",
     )
     urgency = forms.TypedChoiceField(
         label="Urgency",
         choices=FIRMWARE_REQUEST_URGENCIES,
         coerce=int,
         initial=2,
+        help_text="How soon you need it; it helps reviewers prioritise.",
     )
-    description = forms.CharField(
-        label="Details",
-        required=False,
-        max_length=1000,
-        widget=forms.Textarea(attrs={"rows": 3}),
-        help_text="Build number, region, what you need it for.",
+    description = _notes(
+        "Details",
+        "V14.0.5.0.TMGMIXM, EEA region. Needed to unbrick after a failed flash.",
+        "Build number, region and what you need it for.",
     )
 
     def clean(self) -> dict[str, Any]:
+        """The chosen model must belong to the chosen brand."""
         cleaned = super().clean() or {}
         brand, model = cleaned.get("brand"), cleaned.get("model")
         if brand and model and model.brand_id != brand.pk:
@@ -148,14 +256,39 @@ SOURCE_FILE = "file"
 SOURCE_URL = "url"
 
 
+class TierSelect(forms.Select):
+    """Access-tier select that renders some options disabled but still visible."""
+
+    def __init__(
+        self,
+        attrs: dict[str, Any] | None = None,
+        *,
+        disabled_values: tuple[str, ...] = (),
+    ) -> None:
+        super().__init__(attrs)
+        self.disabled_values = tuple(str(value) for value in disabled_values)
+
+    def create_option(
+        self, name: str, value: Any, *args: Any, **kwargs: Any
+    ) -> dict[str, Any]:
+        option = super().create_option(name, value, *args, **kwargs)
+        if str(value) in self.disabled_values:
+            option["attrs"]["disabled"] = True
+        return option
+
+
 class UploadForm(forms.Form):
     """Firmware upload: an exact variant plus a stored file or an external link."""
 
     brand = _hidden_choice(Brand.objects.all(), "Choose the brand from the list.")
     model = _hidden_choice(Model.objects.all(), "Choose the model from the list.")
-    variant = _hidden_choice(
-        Variant.objects.all(),
-        "Choose the variant from the list, or request it if it is missing.",
+    variant = forms.ModelChoiceField(
+        queryset=Variant.objects.all(),
+        widget=forms.HiddenInput,
+        required=False,
+        error_messages={
+            "invalid_choice": "Choose the variant from the list, or request it."
+        },
     )
     source = forms.ChoiceField(
         label="How do you provide the file?",
@@ -197,47 +330,63 @@ class UploadForm(forms.Form):
         max_length=2000,
         widget=forms.Textarea(attrs={"rows": 3}),
     )
-    changelog = forms.CharField(
+    changelog = RichTextField(
+        profile="firmware_notes",
+        visible_limit=RELEASE_INFO_LIMITS["changelog"],
         label="Changelog",
         required=False,
-        max_length=5000,
-        widget=forms.Textarea(attrs={"rows": 4}),
-        help_text="What changed in this build.",
+        widget_attrs={"rows": 4},
+        help_text="What changed in this build. Shown on the firmware page.",
     )
 
     def __init__(self, *args: Any, seller: bool = False, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         self.seller = seller
+        # Everyone sees the access control. Only approved sellers can leave Free:
+        # for the others Featured and Paid are shown but disabled, and a forged
+        # value is ignored in ``clean_access_tier``.
+        locked = () if seller else (AccessTier.FEATURED, AccessTier.PAID)
+        self.fields["access_tier"] = forms.ChoiceField(
+            label="Access",
+            required=seller,
+            choices=AccessTier.choices,
+            initial=AccessTier.FREE,
+            widget=TierSelect(disabled_values=locked),
+            help_text=(
+                "Paid and featured files are priced and confirmed by reviewers."
+                if seller
+                else "Uploads are free. Featured and Paid are available to approved sellers."
+            ),
+        )
         if seller:
-            self.fields["access_tier"] = forms.ChoiceField(
-                label="Access",
-                choices=AccessTier.choices,
-                initial=AccessTier.FREE,
-                help_text="Paid and featured files are priced and confirmed by reviewers.",
-            )
             self.fields["proposed_price"] = forms.DecimalField(
                 label="Proposed price (USD)",
                 required=False,
                 min_value=0,
                 max_digits=10,
                 decimal_places=2,
+                widget=forms.NumberInput(
+                    attrs={
+                        "inputmode": "decimal",
+                        "data-msg-required": "Enter the amount for a paid file.",
+                        "data-msg-min": "Enter an amount above zero.",
+                        "data-msg-step": "Use at most two decimal places, for example 4.50.",
+                    }
+                ),
                 help_text="Paid files only. Reviewers set the final price.",
             )
+            # Django derives min="0" from min_value; a paid amount must be above zero.
+            self.fields["proposed_price"].widget.attrs["min"] = "0.01"
+
+    def clean_access_tier(self) -> str:
+        """Only approved sellers may choose Featured or Paid; everyone else gets Free."""
+        tier = self.cleaned_data.get("access_tier")
+        return tier if self.seller and tier else AccessTier.FREE
 
     def clean(self) -> dict[str, Any]:
+        """Validate the device (variant rules), the file source and the tier."""
         cleaned = super().clean() or {}
-        brand, model, variant = (
-            cleaned.get("brand"),
-            cleaned.get("model"),
-            cleaned.get("variant"),
-        )
-        if brand and model and model.brand_id != brand.pk:
-            self.add_error("model", "This model does not belong to the chosen brand.")
-        elif model and variant and variant.model_id != model.pk:
-            self.add_error(
-                "variant", "This variant does not belong to the chosen model."
-            )
-
+        self._validate_device(cleaned)
         source = cleaned.get("source")
         if source == SOURCE_FILE:
             self._validate_file(cleaned.get("file"))
@@ -261,6 +410,27 @@ class UploadForm(forms.Form):
             )
         return cleaned
 
+    def _validate_device(self, cleaned: dict[str, Any]) -> None:
+        """Brand/model/variant must agree; a variant is needed only if the model has
+        active variants (see ``variant_rules``)."""
+        brand, model, variant = (
+            cleaned.get("brand"),
+            cleaned.get("model"),
+            cleaned.get("variant"),
+        )
+        if brand and model and model.brand_id != brand.pk:
+            self.add_error("model", "This model does not belong to the chosen brand.")
+        elif model and variant and variant.model_id != model.pk:
+            self.add_error(
+                "variant", "This variant does not belong to the chosen model."
+            )
+        elif model and variant is None and variant_is_required(model):
+            self.add_error(
+                "variant",
+                "This model has variants: choose the one that matches your "
+                "device, or request it if it is missing.",
+            )
+
     def _validate_file(self, file: Any) -> None:
         if file is None:
             self.add_error("file", "Choose the firmware file to upload.")
@@ -278,7 +448,8 @@ class UploadForm(forms.Form):
         tier = data.get("access_tier") or AccessTier.FREE
         price = data.get("proposed_price") if tier == AccessTier.PAID else None
         return UploadSubmission(
-            variant=data["variant"],
+            model=data["model"],
+            variant=data.get("variant"),
             build_number=data["build_number"].strip(),
             android_version=data["android_version"].strip(),
             package_format=data["package_format"],

@@ -1,18 +1,19 @@
 {% extends "base.html" %}
 {% block content %}
-<div class="site-container py-4 py-lg-5">
+<div class="site-container py-4 py-lg-5 workspace-page">
   {% url 'blog:manage_posts' as manage_url %}
   {% include "components/breadcrumbs.html" with current="Version history" parent_label="Editorial workspace" parent_url=manage_url %}
   {% include "components/page_header.html" with eyebrow="Editorial workspace" title="Version history" lead=post.title %}
-  <p class="muted">Current version {{ post.version }}</p>
+  <p class="history-current"><i data-lucide="history" class="icon" aria-hidden="true"></i> Current version {{ post.version }}</p>
   {% if not revisions %}
-    {% include "components/empty_state.html" with title="No saved versions yet" %}
+    {% include "components/empty_ui.html" with icon="history" title="No saved versions yet" message="Each save of this post adds a version you can restore from here." %}
   {% else %}
-    <ol class="list-unstyled d-grid gap-3">
+    <ol class="history-timeline">
       {% for revision in revisions %}
-        <li class="surface-card p-3 p-md-4">
-          <div class="d-flex flex-column flex-md-row justify-content-between gap-2">
-            <div>
+        <li class="history-item">
+          <span class="history-item__dot" aria-hidden="true"></span>
+          <div class="history-item__card">
+            <div class="history-item__text">
               <h2 class="h5 mb-1">{{ revision.snapshot.title|default:post.title }}</h2>
               <p class="small muted mb-2">
                 Version {{ revision.snapshot.version|default:"Historical" }}
@@ -24,7 +25,7 @@
             {% if can_restore %}
               <form method="post" action="{% url 'blog:restore_post_revision' slug=post.slug revision_id=revision.pk %}">
                 {% csrf_token %}
-                <button class="btn btn-outline-primary" type="submit">Restore this draft version</button>
+                <button class="btn btn-outline-primary" type="submit"><i data-lucide="rotate-ccw" class="icon" aria-hidden="true"></i> Restore this draft version</button>
               </form>
             {% endif %}
           </div>
@@ -35,6 +36,6 @@
   {% if not can_restore %}
     <p class="alert alert-info" role="status">Only drafts can be restored from history; this does not change publication state.</p>
   {% endif %}
-  <a class="btn btn-outline-secondary" href="{% url 'blog:post_create' %}?edit={{ post.slug }}">Back to editor</a>
+  <a class="btn btn-soft" href="{% url 'blog:post_create' %}?edit={{ post.slug }}"><i data-lucide="arrow-left" class="icon" aria-hidden="true"></i> Back to editor</a>
 </div>
 {% endblock %}

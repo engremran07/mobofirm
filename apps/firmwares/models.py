@@ -13,6 +13,7 @@ from django.db.models.functions import Lower
 from django.utils import timezone
 
 from .constants import MAIN_CATEGORIES, RESERVED_BRAND_SLUGS
+from .variant_rules import normalize_variant_code
 
 
 class FirmwarePackageFormat(models.TextChoices):
@@ -463,6 +464,12 @@ class Variant(Timestamped):
         default="",
         help_text="Region code (e.g., SM, EU, US, CN)",
     )
+    carrier = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        help_text="Carrier or operator the variant is locked to (e.g., Verizon)",
+    )
     board_id = models.CharField(
         max_length=128,
         blank=True,
@@ -505,6 +512,18 @@ class Variant(Timestamped):
 
     class Meta:
         unique_together = ("model", "slug")
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                "model",
+                Lower("model_code"),
+                condition=~Q(model_code=""),
+                name="variant_model_code_unique_ci",
+                violation_error_message=(
+                    "Another variant of this model already uses this code "
+                    "(codes are compared ignoring case)."
+                ),
+            )
+        ]
         indexes: ClassVar[list[models.Index]] = [
             models.Index(
                 fields=["model", "is_active"], name="variant_model_active_idx"
@@ -516,9 +535,15 @@ class Variant(Timestamped):
     def __str__(self):
         return f"{self.model}/{self.name}"
 
+    def clean(self) -> None:
+        """Normalise the code before the uniqueness constraints are checked."""
+        super().clean()
+        self.model_code = normalize_variant_code(self.model_code)
+
     def save(self, *args, **kwargs):
         from .chipsets import sync_chipset_reference
 
+        self.model_code = normalize_variant_code(self.model_code)
         kwargs = sync_chipset_reference(self, kwargs)
         super().save(*args, **kwargs)
 
@@ -632,9 +657,16 @@ class VariantCreationRequest(Timestamped):
     model = models.ForeignKey(
         Model, on_delete=models.CASCADE, related_name="variant_creation_requests"
     )
-    name = models.CharField(max_length=128)
+    name = models.CharField(max_length=128, blank=True, default="")
     model_code = models.CharField(max_length=64, blank=True, default="")
     region = models.CharField(max_length=64, blank=True, default="")
+    memory = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        help_text="RAM and storage, e.g. 8 GB / 256 GB",
+    )
+    carrier = models.CharField(max_length=64, blank=True, default="")
     details = models.TextField(blank=True, default="", max_length=1000)
     requested_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -672,7 +704,13 @@ class VariantCreationRequest(Timestamped):
                 Lower("name"),
                 condition=Q(status="pending"),
                 name="variant_request_pending_name_unique",
-            )
+            ),
+            models.UniqueConstraint(
+                "model",
+                Lower("model_code"),
+                condition=Q(status="pending") & ~Q(model_code=""),
+                name="variant_request_pending_code_unique",
+            ),
         ]
 
     def __str__(self) -> str:
@@ -1364,6 +1402,14 @@ class HotlinkBlock(models.Model):
         return f"{self.domain} [{'active' if self.is_active else 'inactive'}]"
 
 
+class DownloadRule(models.TextChoices):
+    """The lifetime rule that decides how long a served file stays fetchable."""
+
+    FREE = "free", "Free re-download allowance"
+    PACKAGE = "package", "Package period"
+    LIFETIME = "lifetime", "Lifetime (bought)"
+
+
 class ServedDownload(models.Model):
     """The single record of a file served to a signed-in user (their library).
 
@@ -1389,6 +1435,23 @@ class ServedDownload(models.Model):
     )
     charged_quota = models.BooleanField(
         default=False, help_text="Counted against the user's package quota"
+    )
+    access_rule = models.CharField(
+        max_length=10,
+        choices=DownloadRule.choices,
+        default=DownloadRule.FREE,
+        db_index=True,
+        help_text=(
+            "How long the file stays fetchable: free (bounded re-download allowance), "
+            "package (while the package period it was served under is live) or "
+            "lifetime (bought one by one)."
+        ),
+    )
+    user_package_id = models.PositiveBigIntegerField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Package period the file was served under (shop UserPackage id)",
     )
     served_at = models.DateTimeField(auto_now_add=True)
     last_served_at = models.DateTimeField(default=timezone.now)
@@ -1581,7 +1644,9 @@ class FlashingTool(Timestamped):
     is_featured = models.BooleanField(default=False)
     hero_image = models.ImageField(upload_to="flashing_tools/", blank=True, null=True)
     instructions = models.TextField(
-        blank=True, default="", help_text="Usage instructions (Markdown supported)"
+        blank=True,
+        default="",
+        help_text="Usage instructions, formatted with the editor",
     )
     features = models.JSONField(
         default=list, blank=True, help_text="Feature bullet points"

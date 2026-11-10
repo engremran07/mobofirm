@@ -1,34 +1,90 @@
 {% extends "base.html" %}
-{% block title %}Request a method or guide | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block title %}Request a new method | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block meta_description %}Ask for a flashing method, unlock pattern, trick or guide. Staff review every request before writers can answer it.{% endblock %}
 {% block content %}
 {% url 'blog:request_list' as list_url %}
-<div class="site-container py-5">
-  {% include "components/breadcrumbs.html" with current="Request a method or guide" parent_label="Requests" parent_url=list_url %}
+{% url 'blog:request_create' as search_url %}
+<div class="site-container py-5 guide-page">
+  {% include "components/breadcrumbs.html" with current="Request a new method" parent_label="Requests" parent_url=list_url %}
   <div class="row justify-content-center">
-    <div class="col-12 col-lg-8 col-xl-7">
-      {% include "components/page_header.html" with eyebrow="Guide requests" title="Request a method or guide" lead="Describe the flashing method, unlock pattern or trick you need. Staff review every request first; once approved it is public and anyone can add a credit bounty." %}
+    <div class="col-12 col-lg-9 col-xl-8">
+      {% include "components/page_header.html" with eyebrow="Guide requests" title="Request a new method" lead="Step 2 of 2: describe what you need and what you already tried. Staff review every request first; once approved it is public and anyone can add a credit bounty." %}
+      <ol class="stepper-ui guide-stepper" aria-label="Request steps">
+        <li class="is-done"><span>Search</span></li>
+        <li class="is-current" aria-current="step"><span>Describe</span></li>
+        <li><span>Staff review</span></li>
+      </ol>
       {% if not requests_enabled %}
         <p class="alert alert-info" role="status">Guide requests are switched off right now.</p>
       {% else %}
-      <form method="post" class="surface-card p-4" novalidate data-guide-request-form>
-        {% csrf_token %}
-        {% include "components/form_errors.html" with form=form %}
-        {% if duplicates %}
-          <div class="alert alert-warning" role="status" data-testid="guide-duplicates">
-            <p class="mb-1"><strong>This may already exist:</strong></p>
-            <ul class="mb-0">{% for item in duplicates %}<li><a href="{{ item.url }}">{{ item.title }}</a> ({{ item.kind }})</li>{% endfor %}</ul>
+      {% if related_post %}
+        <div class="guide-related" data-testid="guide-related-article">
+          <span class="guide-related__icon" aria-hidden="true"><i data-lucide="book-open" class="icon"></i></span>
+          <div>
+            <p class="muted small mb-1">The article that did not resolve your issue</p>
+            <a href="{{ related_post.get_absolute_url }}"><strong>{{ related_post.title }}</strong></a>
           </div>
-        {% endif %}
-        {% include "components/form_field.html" with field=form.title %}
-        {% include "components/form_field.html" with field=form.kind %}
-        {% include "blog/requests/_catalog_field.html" with field=form.brand input_id="guide-brand" label="Brand" kinds="brand" display=brand_label placeholder="Search brands…" %}
-        {% include "blog/requests/_catalog_field.html" with field=form.model input_id="guide-model" label="Model" kinds="model" display=model_label depends_on="guide-brand" depends_param="brand" placeholder="Search models…" %}
-        {% include "blog/requests/_catalog_field.html" with field=form.chipset input_id="guide-chipset" label="Chipset" kinds="chipset" display=chipset_label placeholder="Search chipsets…" %}
-        {% include "components/form_field.html" with field=form.description %}
-        <div class="d-flex flex-wrap gap-2">
-          <button class="btn btn-primary" type="submit">Send for review</button>
-          <a class="btn btn-outline-secondary" href="{{ list_url }}">Cancel</a>
+        </div>
+      {% endif %}
+      {% if open_duplicates %}
+        <div class="alert alert-warning guide-duplicates" role="status" data-testid="guide-open-duplicates">
+          <p class="mb-2"><strong>Others already asked for something similar.</strong> Follow one of these instead of filing a duplicate.</p>
+          <ul class="list-unstyled d-grid gap-2 mb-3">
+            {% for item in open_duplicates %}
+              <li class="d-flex flex-wrap justify-content-between align-items-center gap-2">
+                <span><a href="{{ item.get_absolute_url }}">{{ item.title }}</a> <span class="muted small">{{ item.get_kind_display }}{% if item.label %} · {{ item.label }}{% endif %}</span></span>
+                {% if item.requester_id == request.user.pk %}{% include "components/badge.html" with label="Your request" %}
+                {% else %}
+                  <form method="post" action="{% url 'blog:request_follow' pk=item.pk %}">{% csrf_token %}
+                    <button class="btn btn-sm btn-primary" type="submit" data-testid="guide-follow">Follow this request</button>
+                  </form>
+                {% endif %}
+              </li>
+            {% endfor %}
+          </ul>
+          <button class="btn btn-sm btn-outline-secondary" type="submit" name="confirm_different" value="1" form="guide-request-form" data-testid="guide-confirm-different">My request is different: send it anyway</button>
+        </div>
+      {% endif %}
+      {% if duplicates %}
+        <div class="alert alert-warning" role="status" data-testid="guide-duplicates">
+          <p class="mb-1"><strong>This may already exist:</strong></p>
+          <ul class="mb-0">{% for item in duplicates %}<li><a href="{{ item.url }}">{{ item.title }}</a> ({{ item.kind }})</li>{% endfor %}</ul>
+        </div>
+      {% endif %}
+      <form method="post" id="guide-request-form" action="{% url 'blog:request_form' %}" class="guide-form surface-card" novalidate data-guide-request-form>
+        {% csrf_token %}
+        <input type="hidden" name="ctx" value="{{ ctx_token }}">
+        {{ form.related_post }}
+        {{ form.search_keywords }}
+        {% include "components/form_errors.html" with form=form %}
+        <fieldset class="guide-form__section">
+          <legend class="guide-form__legend"><span class="guide-form__num" aria-hidden="true">1</span> What do you need?</legend>
+          {% include "components/form_field.html" with field=form.title %}
+          {% include "components/form_field.html" with field=form.kind %}
+        </fieldset>
+        <fieldset class="guide-form__section">
+          <legend class="guide-form__legend"><span class="guide-form__num" aria-hidden="true">2</span> Your device</legend>
+          <div class="guide-form__grid">
+            {% include "blog/requests/_catalog_field.html" with field=form.brand input_id="guide-brand" label="Brand" kinds="brand" display=brand_label placeholder="e.g. Infinix" help="Optional. Search the catalogue." %}
+            {% include "blog/requests/_catalog_field.html" with field=form.model input_id="guide-model" label="Model" kinds="model" display=model_label depends_on="guide-brand" depends_param="brand" placeholder="e.g. Hot 40" help="Pick your model, or type its code below." %}
+            {% include "components/form_field.html" with field=form.model_code %}
+            {% include "components/form_field.html" with field=form.variant_code %}
+            {% include "blog/requests/_catalog_field.html" with field=form.chipset input_id="guide-chipset" label="Chipset" kinds="chipset" display=chipset_label placeholder="e.g. MediaTek Helio G99" help="Optional." %}
+          </div>
+        </fieldset>
+        <fieldset class="guide-form__section">
+          <legend class="guide-form__legend"><span class="guide-form__num" aria-hidden="true">3</span> Context for the writer</legend>
+          {% include "components/form_field.html" with field=form.tried %}
+          {% include "components/form_field.html" with field=form.expected_outcome %}
+        </fieldset>
+        <fieldset class="guide-form__section">
+          <legend class="guide-form__legend"><span class="guide-form__num" aria-hidden="true">4</span> Optional extras</legend>
+          {% include "components/form_field.html" with field=form.bounty_offer %}
+          {% include "components/form_field.html" with field=form.description %}
+        </fieldset>
+        <div class="form-actions">
+          <button class="btn btn-primary" type="submit"><i data-lucide="send" class="icon" aria-hidden="true"></i> Send for review</button>
+          <a class="btn btn-soft" href="{{ search_url }}">Back to search</a>
         </div>
       </form>
       {% endif %}

@@ -22,6 +22,8 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext as _
 
+from apps.core.app_service import AppService
+
 logger = logging.getLogger(__name__)
 
 CACHE_KEY = "admin:dashboard:metrics:v2"
@@ -139,6 +141,18 @@ def _promotion_totals() -> tuple[int | None, int | None]:
     return int(totals["views"] or 0), int(totals["claims"] or 0)
 
 
+def _stale_posts() -> int | None:
+    """Stale live articles, from the blog's public contract (None when unavailable)."""
+    counter = AppService.export("blog", "stale_post_count")
+    if counter is None:
+        return None
+    try:
+        return int(counter())
+    except DatabaseError:
+        logger.warning("Dashboard metric unavailable for stale posts", exc_info=True)
+        return None
+
+
 def compute_metrics() -> dict[str, Any]:
     """Collect every dashboard number in one pass (uncached)."""
     week_ago = timezone.now() - timedelta(days=7)
@@ -176,6 +190,7 @@ def compute_metrics() -> dict[str, Any]:
         "pending_seo_jobs": _count("seo.SEOJob", status="pending"),
         "failed_topics": _count("blog.AutoTopic", status="failed"),
         "queued_topics": _count("blog.AutoTopic", status="queued"),
+        "stale_posts": _stale_posts(),
         "pending_listings": _count("marketplace.Listing", status="pending"),
         "pending_sellers": _count("marketplace.SellerVerification", status="pending"),
         "pending_orders": _count("shop.Order", status="pending"),
@@ -196,6 +211,11 @@ def get_metrics() -> dict[str, Any]:
     return metrics
 
 
+def invalidate_metrics() -> None:
+    """Drop the cached dashboard numbers so the next read recounts."""
+    cache.delete(CACHE_KEY)
+
+
 def metric_badge(request: HttpRequest, metric: str) -> str:
     """Sidebar badge text for one cached metric (empty when zero/unavailable)."""
     value = get_metrics().get(metric)
@@ -214,7 +234,63 @@ def _sum(*values: int | None) -> int | None:
     return sum(present) if present else None
 
 
-def build_kpis(metrics: dict[str, Any]) -> list[Kpi]:
+CATALOG_QUEUES: tuple[tuple[str, str, str], ...] = (
+    (
+        "pending_model_requests",
+        "firmwares.ModelCreationRequest",
+        "status__exact=pending",
+    ),
+    (
+        "pending_brand_requests",
+        "firmwares.BrandCreationRequest",
+        "status__exact=pending",
+    ),
+    (
+        "pending_variant_requests",
+        "firmwares.VariantCreationRequest",
+        "status__exact=pending",
+    ),
+    (
+        "pending_chipset_requests",
+        "firmwares.ChipsetCreationRequest",
+        "status__exact=pending",
+    ),
+    ("open_firmware_requests", "firmwares.FirmwareRequest", "status__exact=open"),
+)
+
+
+def _catalog_requests_kpi(metrics: dict[str, Any], user: Any | None) -> Kpi:
+    """One KPI for the five review queues that opens a queue that has work.
+
+    The total counts only the queues ``user`` may view, and the link goes to the
+    first of them that holds pending requests, so the number on the card and the
+    list behind it always agree.
+    """
+    visible: list[tuple[str, str, str, str]] = []
+    for metric, label, query in CATALOG_QUEUES:
+        model = _model(label)
+        permission = f"{model._meta.app_label}.view_{model._meta.model_name}"
+        if user is None or user.has_perm(permission):
+            visible.append((metric, label, query, permission))
+    if not visible:
+        visible.append((*CATALOG_QUEUES[0], "firmwares.view_modelcreationrequest"))
+    target = next(
+        (entry for entry in visible if metrics.get(entry[0])),
+        visible[0],
+    )
+    return Kpi(
+        "catalog_requests",
+        _("Catalog requests"),
+        _sum(*(metrics[entry[0]] for entry in visible)),
+        _("Brand, model, variant, chipset and firmware requests to review"),
+        "playlist_add",
+        _changelist(target[1], target[2]),
+        "warning",
+        target[3],
+    )
+
+
+def build_kpis(metrics: dict[str, Any], user: Any | None = None) -> list[Kpi]:
     healthy = metrics["storage_healthy"]
     total = metrics["storage_total"]
     storage_problems = None if healthy is None or total is None else total - healthy
@@ -239,22 +315,7 @@ def build_kpis(metrics: dict[str, Any]) -> list[Kpi]:
             "warning",
             "comments.view_comment",
         ),
-        Kpi(
-            "catalog_requests",
-            _("Catalog requests"),
-            _sum(
-                metrics["pending_brand_requests"],
-                metrics["pending_model_requests"],
-                metrics["pending_variant_requests"],
-                metrics["pending_chipset_requests"],
-                metrics["open_firmware_requests"],
-            ),
-            _("Brand, model, variant, chipset and firmware requests to review"),
-            "playlist_add",
-            _changelist("firmwares.ModelCreationRequest", "status__exact=pending"),
-            "warning",
-            "firmwares.view_modelcreationrequest",
-        ),
+        _catalog_requests_kpi(metrics, user),
         Kpi(
             "unapproved_tags",
             _("Unapproved tags"),
@@ -284,6 +345,16 @@ def build_kpis(metrics: dict[str, Any]) -> list[Kpi]:
             _changelist("seo.ChangeLedger", "status__exact=proposed"),
             "warning",
             "seo.view_changeledger",
+        ),
+        Kpi(
+            "stale_posts",
+            _("Stale articles"),
+            metrics.get("stale_posts"),
+            _("Published articles that have not been updated for a while"),
+            "update",
+            _changelist("blog.Post", "freshness=stale"),
+            "warning",
+            "blog.view_post",
         ),
         Kpi(
             "storage",
@@ -362,7 +433,7 @@ def dashboard_callback(request: HttpRequest, context: dict[str, Any]) -> dict[st
     """Unfold ``DASHBOARD_CALLBACK``: add permission-filtered KPIs and tables."""
     metrics = get_metrics()
     user = request.user
-    kpis = [kpi for kpi in build_kpis(metrics) if user.has_perm(kpi.permission)]
+    kpis = [kpi for kpi in build_kpis(metrics, user) if user.has_perm(kpi.permission)]
     context.update(
         {
             "kpis": kpis,

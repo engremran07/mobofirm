@@ -9,7 +9,7 @@ Owner: `apps.firmwares` (code, templates under `templates/firmwares/`, tests und
 | --- | --- | --- | --- |
 | Brand | Staff in the admin, or end users through a **brand request** | none | logo, website |
 | Model | Staff (Add model) or **model request** | **brand** | chipset |
-| Variant | Staff (Add variant) or **variant request** | **brand and model** (the model must belong to the brand) | chipset text, region, model code |
+| Variant | Staff (Add variant) or **variant request** | **brand and model** (the model must belong to the brand); a request also needs one identifying field (code, region/market, RAM / storage or carrier) | chipset text, region, carrier, model code |
 | Chipset | Staff or **chipset request** | none | family, aliases |
 
 - End-user pages: `/firmwares/requests/` (hub), `/requests/brand|model|variant|chipset|firmware/`
@@ -20,25 +20,52 @@ Owner: `apps.firmwares` (code, templates under `templates/firmwares/`, tests und
 - Brand, model and variant are picked with the shared combobox
   (`templates/components/combobox.html`) fed by the central search
   (`/search/suggest/?kinds=brand|model|variant|chipset`, `filter.brand`, `filter.model`).
-- Admin request queues ("… requests (review)") are review-only: no add, no edit. Approve and
-  reject run through `apps.firmwares.catalog_requests` (the same services as the REST
-  viewsets) and notify the requester. Approving a model request uses the requested brand and
-  chipset; approving a variant request creates the variant under the requested model.
+- Admin request queues ("… requests (review)") are decision queues, not add forms (no add
+  permission). Pending requests stay editable until decided. **Approve** creates (or links)
+  the real record from the requested data in one transaction, after an app-owned confirm
+  dialog where the reviewer may correct name, slug and the like; **Reject** needs a reason.
+  Both exist as row actions, detail-page actions and bulk changelist actions (a confirm page
+  with a note or reason). Every decision runs through `apps.firmwares.catalog_review`
+  (re-exported by `catalog_requests`, the same services as the REST viewsets): row lock,
+  idempotent (a decided request cannot be decided again), reviewer and timestamp stored, an
+  admin history (`LogEntry`) entry for the request and for a created record, the normal save
+  hooks of admin-created records (blog automation), and a notification to the requester
+  after commit. Approving a model request uses the requested brand and chipset; approving a
+  variant request creates the variant under the requested model (code normalised, RAM and
+  storage read from the request); approving a **firmware request** accepts it (status *in
+  progress*, supporters notified) and creates the requested variant when the model lacks it.
+  The dashboard **Catalog requests** KPI and the sidebar badges count the pending requests of
+  the queues the staff member may view, link to a queue that has work, and refresh as soon as
+  a request is filed or decided.
 - Admin **Add variant** has a brand select that loads only that brand's models over HTMX
   (`admin:firmwares_variant_model_options`); the form also validates server-side that the model
   belongs to the brand.
-- Empty or not-found states include `templates/components/request_cta.html`.
+- Empty or not-found states include `templates/components/request_cta.html` (covered for the
+  brand, chipset, model, firmware, variant and central search pages by
+  `tests/backend/firmwares/test_request_cta_empty_searches.py`).
+- Every request form field has an example placeholder and help text (Brand `Xiaomi`, Model
+  `Redmi Note 13 Pro 5G`, model code `2312DRA50G`, variant `AI2401_A`, chipset
+  `MediaTek Dimensity 9200 (MT6985)`, RAM / storage `8 GB / 256 GB`, region `Global`); keep
+  them when adding fields.
 - There is no external catalogue sync, scraper or auto-fill: the admin fields are entered by
   hand or come from approved requests and uploads.
 
 ## Upload page
 
-`/firmwares/upload/` requires brand, model and variant (cascading), then a stored file or an
-allowlisted HTTPS link. The result is a `PendingFirmware` linked to that exact variant;
+`/firmwares/upload/` requires brand and model (cascading) and a variant **only when the model
+has at least one active variant** (see `catalog-variants.md`; models without variants show
+"No specific variant" and proceed), then a stored file or an
+allowlisted HTTPS link. The result is a `PendingFirmware` linked to that exact variant (or to
+the model when it has none);
 staff approval publishes it under the model and variant and refreshes the automated blog
-posts. Normal users' uploads are always free. Approved marketplace sellers
-(`apps.marketplace.services.is_active_seller`) may also propose `paid` or `featured` with a
-`proposed_price`; only staff set `approved_price`.
+posts. The page always shows an **Access control** section. Normal users' uploads are always
+free: the tier select shows Free selected with Featured and Paid present but disabled, a note
+("Only approved sellers can offer paid or featured files") links to the marketplace
+become-seller page when that optional app is installed and enabled, and the server ignores any
+forged `access_tier`. Approved marketplace sellers
+(`apps.marketplace.services.is_active_seller`) get the live tier select and may propose `paid`
+or `featured`; the amount (`proposed_price`, above zero) appears only for Paid; only staff set
+`approved_price`.
 
 ## Download gate
 

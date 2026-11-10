@@ -1,4 +1,5 @@
 {# Contract: card (PostCard) for the featured story. #}
+{% load content_tags %}
 <article class="lead-story">
   <div class="lead-story__media">
     {% if card.cover %}
@@ -6,15 +7,18 @@
     {% else %}
       {% include "blog/partials/thumb.html" with card=card %}
     {% endif %}
+    <span class="lead-story__badge">{% include "blog/partials/access_badge.html" with post=card.post %}</span>
   </div>
   <div class="lead-story__body">
-    <p class="section-eyebrow mb-2">Featured story{% if card.category %} · {{ card.category.name }}{% endif %}</p>
+    <p class="section-eyebrow mb-2"><i data-lucide="sparkles" class="icon" aria-hidden="true"></i> Featured story{% if card.category %} · {{ card.category.name }}{% endif %}</p>
     <h2 class="lead-story__title"><a class="stretched-link" href="{{ card.url }}">{{ card.title }}</a></h2>
     {% if card.excerpt %}<p class="lead-story__excerpt">{{ card.excerpt }}</p>{% endif %}
     <p class="post-card__meta mb-0">
-      <span>{{ card.author }}</span>
+      <span class="post-card__author">{{ card.author }}</span>
       {% if card.published %}<span aria-hidden="true">·</span><time datetime="{{ card.published|date:'c' }}">{{ card.published|date:"F j, Y" }}</time>{% endif %}
-      <span aria-hidden="true">·</span><span>{{ card.reading_time }} min read</span>
+      <span aria-hidden="true">·</span><span class="post-card__read"><i data-lucide="clock" class="icon" aria-hidden="true"></i>{{ card.reading_time }} min read</span>
     </p>
+    {% content_stats card.post compact=True reading=False %}
+    <span class="lead-story__cta" aria-hidden="true">Read the story <i data-lucide="arrow-right" class="icon"></i></span>
   </div>
 </article>

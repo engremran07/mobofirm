@@ -1082,7 +1082,7 @@ def tell_us_about_you(request: HttpRequest) -> HttpResponse:
                 "website": website,
                 "location": location,
                 "social_links": {
-                    **(profile_obj.social_links if profile_obj else {}),
+                    **(profile_obj.social_links_data if profile_obj else {}),
                     "interests": interests,
                 },
             }
@@ -1119,8 +1119,8 @@ def tell_us_about_you(request: HttpRequest) -> HttpResponse:
             "website": profile_obj.website if profile_obj else "",
             "location": profile_obj.location if profile_obj else "",
             "interests": (
-                profile_obj.social_links.get("interests", [])
-                if profile_obj and isinstance(profile_obj.social_links, dict)
+                profile_obj.social_links_data.get("interests", [])
+                if profile_obj
                 else []
             ),
         }
@@ -1145,11 +1145,7 @@ def tell_us_about_you(request: HttpRequest) -> HttpResponse:
         filled_count += 1
     if profile_obj and profile_obj.bio:
         filled_count += 1
-    if (
-        profile_obj
-        and isinstance(profile_obj.social_links, dict)
-        and profile_obj.social_links.get("interests")
-    ):
+    if profile_obj and profile_obj.social_links_data.get("interests"):
         filled_count += 1
     completion_percent = int((filled_count / total_fields) * 100) if total_fields else 0
 

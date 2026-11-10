@@ -37,5 +37,6 @@ export function initializeRequestLinks() {
   document.addEventListener("input", refresh);
   document.addEventListener("combobox:select", refresh);
   document.addEventListener("combobox:clear", refresh);
+  document.addEventListener("htmx:afterSwap", refresh);
   refresh();
 }

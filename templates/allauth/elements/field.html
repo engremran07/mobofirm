@@ -10,9 +10,9 @@
     {% if slots.help_text %}<div class="form-text">{% slot help_text %}{% endslot %}</div>{% endif %}
   </div>
 {% else %}
-  <div class="mb-3">
-    <label class="form-label" for="{{ attrs.id }}">{% slot label %}{% endslot %}</label>
+  <div class="mb-3 auth-field">
     {% if attrs.type == "textarea" %}
+      <label class="form-label" for="{{ attrs.id }}">{% slot label %}{% endslot %}</label>
       <textarea class="form-control{% if attrs.errors %} is-invalid{% endif %}"
                 {% if attrs.required %}required{% endif %} {% if attrs.rows %}rows="{{ attrs.rows }}"{% endif %}
                 {% if attrs.disabled %}disabled{% endif %} {% if attrs.readonly %}readonly{% endif %}
@@ -20,13 +20,16 @@
                 {% if attrs.placeholder %}placeholder="{{ attrs.placeholder }}"{% endif %}
                 {% if attrs.errors %}aria-invalid="true"{% endif %}>{% slot value %}{% endslot %}</textarea>
     {% else %}
-      <input class="form-control{% if attrs.errors %} is-invalid{% endif %}" type="{{ attrs.type }}"
-             {% if attrs.required %}required{% endif %} {% if attrs.disabled %}disabled{% endif %} {% if attrs.readonly %}readonly{% endif %}
-             {% if attrs.name %}name="{{ attrs.name }}"{% endif %} {% if attrs.id %}id="{{ attrs.id }}"{% endif %}
-             {% if attrs.placeholder %}placeholder="{{ attrs.placeholder }}"{% endif %}
-             {% if attrs.autocomplete %}autocomplete="{{ attrs.autocomplete }}"{% endif %}
-             {% if attrs.value is not None %}value="{{ attrs.value }}"{% endif %}
-             {% if attrs.errors %}aria-invalid="true"{% endif %}>
+      <div class="form-floating">
+        <input class="form-control{% if attrs.errors %} is-invalid{% endif %}" type="{{ attrs.type }}"
+               {% if attrs.required %}required{% endif %} {% if attrs.disabled %}disabled{% endif %} {% if attrs.readonly %}readonly{% endif %}
+               {% if attrs.name %}name="{{ attrs.name }}"{% endif %} {% if attrs.id %}id="{{ attrs.id }}"{% endif %}
+               placeholder="{% if attrs.placeholder %}{{ attrs.placeholder }}{% else %} {% endif %}"
+               {% if attrs.autocomplete %}autocomplete="{{ attrs.autocomplete }}"{% endif %}
+               {% if attrs.value is not None %}value="{{ attrs.value }}"{% endif %}
+               {% if attrs.errors %}aria-invalid="true"{% endif %}>
+        <label for="{{ attrs.id }}">{% slot label %}{% endslot %}</label>
+      </div>
     {% endif %}
     {% if attrs.errors %}<div class="invalid-feedback d-block" role="alert">{{ attrs.errors }}</div>{% endif %}
     {% if slots.help_text %}<div class="form-text">{% slot help_text %}{% endslot %}</div>{% endif %}

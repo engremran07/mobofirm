@@ -3,84 +3,87 @@
 {% block title %}{{ model.display_name }} firmware | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block meta_description %}Device specifications, model variants, and approved firmware for {{ model.display_name }}.{% endblock %}
 {% block content %}
-<div class="site-container py-5">
-  <nav aria-label="Breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="{% url 'firmwares:brand_list' %}">Brands</a></li><li class="breadcrumb-item"><a href="{% url 'firmwares:brand_detail' slug=brand.slug %}">{{ brand.name }}</a></li><li class="breadcrumb-item active" aria-current="page">{{ model.display_name }}</li></ol></nav>
-  <header class="hero-panel p-4 p-md-5 mb-5">
-    <p class="section-eyebrow">{{ brand.name }} device profile</p>
-    <h1 class="display-6 fw-bold">{{ model.display_name }}</h1>
-    <p class="muted mb-3">{% if model.model_code %}<span class="model-code">{{ model.model_code }}</span>{% endif %}{% if model.codename %} · Codename {{ model.codename }}{% endif %}</p>
-    {% if model.description %}<p class="hero-copy mb-0">{{ model.description }}</p>{% endif %}
-    <div class="d-flex flex-wrap gap-2 mt-4">
-      <a class="btn btn-outline-secondary" href="{% url 'blog:model_posts' brand_slug=brand.slug model_slug=model.slug %}">Device guides and articles</a>
-      {% if model_post %}<a class="btn btn-outline-secondary" href="{{ model_post.get_absolute_url }}">Firmware download article</a>{% endif %}
-      <a class="btn btn-link" href="{% url 'blog:brand_posts' brand_slug=brand.slug %}">More {{ brand.name }} articles</a>
+<div class="site-container cat-page">
+  {% url 'firmwares:brand_list' as brands_url %}
+  {% url 'firmwares:brand_detail' slug=brand.slug as brand_url %}
+  {% include "components/breadcrumbs.html" with current=model.display_name parent_label=brand.name parent_url=brand_url grandparent_label="Brands" grandparent_url=brands_url %}
+  <header class="hero-panel cat-head">
+    <div class="cat-head__lead">
+      <span class="logo-tile logo-tile--lg" aria-hidden="true"><i data-lucide="smartphone"></i></span>
+      <div class="cat-head__main">
+        <p class="section-eyebrow">{{ brand.name }} device profile</p>
+        <h1 class="cat-head__title">{{ model.display_name }}</h1>
+        <p class="cat-head__sub">{% if model.model_code %}<span class="model-code">{{ model.model_code }}</span>{% endif %}{% if model.codename %} · Codename {{ model.codename }}{% endif %}</p>
+        {% if model.description %}<p class="cat-head__text mt-2">{{ model.description }}</p>{% endif %}
+      </div>
+    </div>
+    <div class="cat-head__actions">
+      <a class="btn btn-soft" href="{% url 'blog:model_posts' brand_slug=brand.slug model_slug=model.slug %}"><i data-lucide="book-open" aria-hidden="true"></i><span class="ms-1">Device guides and articles</span></a>
+      {% if model_post %}<a class="btn btn-soft" href="{{ model_post.get_absolute_url }}">Firmware download article</a>{% endif %}
+      <a class="btn btn-ghost" href="{% url 'blog:brand_posts' brand_slug=brand.slug %}">More {{ brand.name }} articles</a>
     </div>
   </header>
   <div class="row g-4">
     <section class="col-12 col-lg-4" aria-labelledby="device-specs-title">
-      <div class="surface-card p-4">
-        <h2 id="device-specs-title" class="h4 mb-3">Device information</h2>
-        <dl class="row mb-0">
+      <div class="cat-panel">
+        <h2 id="device-specs-title" class="cat-panel__title">Device information</h2>
+        <dl class="spec-list">
           {% for label, value in model_specifications %}
-            {% if value %}<dt class="col-5 muted fw-normal">{{ label }}</dt><dd class="col-7">{{ value }}</dd>{% endif %}
+            {% if value %}<dt>{{ label }}</dt><dd>{{ value }}</dd>{% endif %}
           {% endfor %}
-          {% if chipsets %}<dt class="col-5 muted fw-normal">Chipset</dt><dd class="col-7">{% for chipset in chipsets %}<a href="{% url 'firmwares:chipset_detail' slug=chipset.slug %}">{{ chipset.display_name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</dd>{% elif model.chipset %}<dt class="col-5 muted fw-normal">Chipset</dt><dd class="col-7">{{ model.chipset }}</dd>{% endif %}
-          {% if model.os_version %}<dt class="col-5 muted fw-normal">Launch OS</dt><dd class="col-7">{{ model.os_version }}</dd>{% endif %}
-          {% if model.display_size %}<dt class="col-5 muted fw-normal">Display</dt><dd class="col-7">{{ model.display_size }}</dd>{% endif %}
-          {% if model.battery %}<dt class="col-5 muted fw-normal">Battery</dt><dd class="col-7">{{ model.battery }}</dd>{% endif %}
-          {% if model.release_date %}<dt class="col-5 muted fw-normal">Released</dt><dd class="col-7">{{ model.release_date|date:"F Y" }}</dd>{% endif %}
+          {% if chipsets %}<dt>Chipset</dt><dd>{% for chipset in chipsets %}<a href="{% url 'firmwares:chipset_detail' slug=chipset.slug %}">{{ chipset.display_name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</dd>{% elif model.chipset %}<dt>Chipset</dt><dd>{{ model.chipset }}</dd>{% endif %}
+          {% if model.os_version %}<dt>Launch OS</dt><dd>{{ model.os_version }}</dd>{% endif %}
+          {% if model.display_size %}<dt>Display</dt><dd>{{ model.display_size }}</dd>{% endif %}
+          {% if model.battery %}<dt>Battery</dt><dd>{{ model.battery }}</dd>{% endif %}
+          {% if model.release_date %}<dt>Released</dt><dd>{{ model.release_date|date:"F Y" }}</dd>{% endif %}
         </dl>
         {% if variants %}
           <h3 class="h6 mt-4">Model variants</h3>
-          <ul class="list-unstyled mb-0">{% for variant in variants %}<li>{{ variant.name }}{% if variant.region %}<span class="muted"> · {{ variant.region }}</span>{% endif %}{% if variant.model_code %}<span class="d-block small model-code">{{ variant.model_code }}</span>{% endif %}</li>{% endfor %}</ul>
+          <ul class="cat-linklist">{% for variant in variants %}<li><span class="d-block">{{ variant.name }}{% if variant.region %}<span class="muted"> · {{ variant.region }}</span>{% endif %}{% if variant.model_code %}<span class="d-block small model-code">{{ variant.model_code }}</span>{% endif %}</span></li>{% endfor %}</ul>
         {% endif %}
         {% include "components/request_cta.html" with kind="variant" brand=brand model=model heading=variants|yesno:"Is a variant of this model missing?,No variants are listed yet." %}
       </div>
       {% if tools %}
-        <div class="surface-card p-4 mt-4">
-          <h2 class="h5 mb-3">Flashing tools</h2>
-          <ul class="list-unstyled mb-3">{% for tool in tools %}<li><a href="{% url 'firmwares:flashing_tool_detail' slug=tool.slug %}">{{ tool.name }}</a> <span class="small muted">· {{ tool.get_platform_display }}</span></li>{% endfor %}</ul>
+        <div class="cat-panel">
+          <h2 class="cat-panel__title">Flashing tools</h2>
+          <ul class="cat-linklist mb-3">{% for tool in tools %}<li><a href="{% url 'firmwares:flashing_tool_detail' slug=tool.slug %}"><i data-lucide="wrench" aria-hidden="true"></i><span>{{ tool.name }}<small>{{ tool.get_platform_display }}</small></span></a></li>{% endfor %}</ul>
           <a class="small" href="{% url 'firmwares:flashing_tools' %}">Tools and guides hub</a>
         </div>
       {% endif %}
       {% if guides %}
-        <div class="surface-card p-4 mt-4">
-          <h2 class="h5 mb-3">Flashing guides</h2>
-          <ul class="list-unstyled mb-0">{% for guide in guides %}<li><a href="{{ guide.post.get_absolute_url }}">{{ guide.post.title }}</a></li>{% endfor %}</ul>
+        <div class="cat-panel">
+          <h2 class="cat-panel__title">Flashing guides</h2>
+          {% include "firmwares/includes/guide_list.html" with guides=guides %}
         </div>
       {% endif %}
     </section>
-    <section class="col-12 col-lg-8" aria-labelledby="firmware-title">
-      <div class="d-flex justify-content-between align-items-end gap-2 mb-3">
-        <div><p class="section-eyebrow mb-2">Catalog files</p><h2 id="firmware-title" class="h3 mb-0">Firmware catalogue</h2></div>
+    <section class="col-12 col-lg-8" aria-labelledby="firmware-title"{% if variants and firmware_groups %} data-variant-scope{% endif %}>
+      <div class="cat-section__head">
+        <div><p class="section-eyebrow mb-1">Catalog files</p><h2 id="firmware-title" class="cat-section__title">Firmware catalogue</h2></div>
         <span class="small muted">{{ total_firmwares }} records</span>
       </div>
       {% if firmware_groups %}
+        {% if variants %}
+          <div class="variant-filter chip-row" role="group" aria-label="Filter by variant">
+            <button type="button" class="chip-ui" data-variant-filter="" aria-pressed="true">All variants</button>
+            {% for variant in variants %}<button type="button" class="chip-ui" data-variant-filter="{{ variant.pk }}" aria-pressed="false">{{ variant.name }}{% if variant.model_code %} <span class="variant-filter__code">{{ variant.model_code }}</span>{% endif %}</button>{% endfor %}
+          </div>
+          <p class="variant-empty muted" data-variant-empty hidden>No firmware is listed for this variant yet.</p>
+        {% endif %}
         {% for key, label, items in firmware_groups %}
-          <h3 class="h5 mt-4 mb-3">{{ label }} firmware <span class="small muted">({{ items|length }})</span></h3>
-          <div class="d-grid gap-3">
-          {% for firmware in items %}
-            <article class="surface-card p-3 p-md-4">
-              <div class="d-flex flex-wrap justify-content-between gap-3">
-                <div>
-                  <span class="badge text-bg-secondary">{{ firmware.firmware_type_display }}</span>
-                  {% if firmware.is_external %}<span class="badge text-bg-light">External download</span>{% endif %}
-                  <h4 class="h5 mt-2 mb-1"><span class="build-code">{{ firmware.build_number|default:firmware.original_file_name }}</span></h4>
-                  <p class="small muted mb-0">{{ firmware.variant.name|default:"Variant not specified" }}{% if firmware.variant.region %} · {{ firmware.variant.region }}{% endif %}{% if firmware.variant.model_code %} · <span class="model-code">{{ firmware.variant.model_code }}</span>{% endif %}</p>
-                  <p class="small muted mb-0">{{ firmware.get_package_format_display }}</p>
-                </div>
-                <div class="text-md-end">
-                  <p class="small muted mb-2">{{ firmware.android_version|default:"Android version not specified" }} · {{ firmware.file_size_display }}</p>
-                  <a class="btn btn-outline-secondary btn-sm" href="{% url 'firmwares:firmware_detail' firmware_type=firmware.firmware_type firmware_id=firmware.pk %}">Review details</a>
-                  <a class="btn btn-primary btn-sm" href="{% url 'firmwares:firmware_download' firmware_type=firmware.firmware_type firmware_id=firmware.pk %}">Download</a>
-                </div>
-              </div>
-            </article>
-          {% endfor %}
+          <div data-variant-group>
+            <h3 class="h5 mt-4 mb-3">{{ label }} firmware <span class="small muted">({{ items|length }})</span></h3>
+            <div class="card-grid card-grid--wide">
+            {% for firmware in items %}{% include "firmwares/includes/firmware_card.html" with firmware=firmware data_variant=True %}{% endfor %}
+            </div>
           </div>
         {% endfor %}
       {% else %}
-        <p class="empty-state p-4">No approved firmware is available for this model yet.</p>
+        <div class="empty-ui empty-state" role="status">
+          <span class="empty-ui__icon"><i data-lucide="file-search" aria-hidden="true"></i></span>
+          <p class="empty-ui__title">No approved firmware is available for this model yet.</p>
+          <p class="mb-0">Ask us to find it, or upload a file you already have.</p>
+        </div>
         {% ad_zone "in_content" %}
         {% include "components/request_cta.html" with kind="firmware" brand=brand model=model heading="Need firmware for this model?" %}
       {% endif %}

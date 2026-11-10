@@ -1,0 +1,88 @@
+@use "sass:map";
+@use "variables" as v;
+
+@mixin up($name) {
+  @media (min-width: map.get(v.$breakpoints, $name)) {
+    @content;
+  }
+}
+
+@mixin down($name) {
+  @media (max-width: map.get(v.$breakpoints, $name) - 0.02px) {
+    @content;
+  }
+}
+
+// Motion is opt-in: wrap transitions/animations so reduced-motion visitors never get them.
+@mixin motion {
+  @media (prefers-reduced-motion: no-preference) {
+    :root:not([data-motion="reduce"]) & {
+      @content;
+    }
+  }
+}
+
+@mixin focus-ring($offset: 0.15rem) {
+  &:focus-visible {
+    outline: 0.15rem solid var(--mf-focus);
+    outline-offset: $offset;
+    box-shadow: 0 0 0 0.35rem color-mix(in srgb, var(--mf-focus) 22%, transparent);
+  }
+}
+
+@mixin glass($strength: 1) {
+  border: 1px solid var(--mf-glass-border);
+  background: var(--mf-glass-bg);
+  -webkit-backdrop-filter: blur(var(--mf-glass-blur)) saturate(1.4);
+  backdrop-filter: blur(var(--mf-glass-blur)) saturate(1.4);
+  @if $strength > 1 {
+    background: var(--mf-glass-bg-strong);
+  }
+}
+
+@mixin hover-lift($lift: -2px) {
+  @include motion {
+    transition:
+      transform var(--mf-duration-base) var(--mf-ease-out),
+      box-shadow var(--mf-duration-base) var(--mf-ease-out),
+      border-color var(--mf-duration-base) var(--mf-ease-out);
+  }
+
+  &:hover {
+    transform: translateY($lift);
+    border-color: color-mix(in srgb, var(--mf-accent) 45%, var(--mf-border));
+    box-shadow: var(--mf-elev-3);
+  }
+}
+
+// A button in its busy state: label hidden, centred spinner, no pointer events.
+@mixin busy-button($color: var(--mf-accent-ink)) {
+  position: relative;
+  pointer-events: none;
+  color: transparent !important;
+
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 50% auto auto 50%;
+    width: 1.1em;
+    height: 1.1em;
+    margin: -0.55em 0 0 -0.55em;
+    border: 0.15em solid $color;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: mf-spin 0.7s linear infinite;
+  }
+}
+
+@mixin visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

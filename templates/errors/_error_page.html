@@ -1,0 +1,15 @@
+{# Shared layout for 400/403/404/500/503 and CSRF failures. Blocks: code, icon, eyebrow, error_title, message, extra, actions. Keep URL lookups minimal: this renders while the site may be unhealthy. #}
+{% extends "base.html" %}
+{% block content %}
+<div class="site-container error-page">
+  <section class="error-card" aria-labelledby="error-title">
+    <p class="error-card__code" aria-hidden="true">{% block code %}!{% endblock %}</p>
+    <span class="error-card__icon" aria-hidden="true"><i data-lucide="{% block icon %}triangle-alert{% endblock %}"></i></span>
+    <p class="section-eyebrow justify-content-center">{% block eyebrow %}{% endblock %}</p>
+    <h1 id="error-title" class="error-card__title">{% block error_title %}{% endblock %}</h1>
+    <p class="error-card__text">{% block message %}{% endblock %}</p>
+    {% block extra %}{% endblock %}
+    <div class="error-card__actions">{% block actions %}<a class="btn btn-primary" href="{% url 'home' %}">Return home</a>{% endblock %}</div>
+  </section>
+</div>
+{% endblock %}

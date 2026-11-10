@@ -1,0 +1,6 @@
+{# Contract: guides (FlashingGuide-like list with post, template, optional brand/model), show_type (optional). Flashing guide links with a type label. #}
+<ul class="cat-linklist">
+  {% for guide in guides %}
+    <li><a href="{{ guide.post.get_absolute_url }}"><i data-lucide="book-open" aria-hidden="true"></i><span>{{ guide.post.title }}{% if guide.template %}<small>{{ guide.template.get_guide_type_display }}</small>{% endif %}</span></a></li>
+  {% endfor %}
+</ul>

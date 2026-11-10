@@ -15,6 +15,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.blog import guide_requests
+from apps.blog import guide_requests_search as search
 from apps.blog.models import (
     BlogSettings,
     GuideRequest,
@@ -37,6 +38,8 @@ VALID = {
     "title": "How to bypass FRP on Acme Phone One",
     "kind": "method",
     "description": "The phone is locked after a reset and I need the exact steps.",
+    "tried": "Tried SP Flash Tool v5.2316 with the stock ROM, error 0xC0020036 at 12%.",
+    "model_code": "AP1",
 }
 
 
@@ -86,13 +89,28 @@ def file_request(user, **overrides):
     data = {**VALID, **overrides}
     return guide_requests.create_request(
         user,
-        title=data["title"],
-        description=data["description"],
-        kind=data["kind"],
-        brand=data.get("brand"),
-        firmware_model=data.get("firmware_model"),
-        chipset=data.get("chipset"),
+        guide_requests.RequestText(
+            title=data["title"],
+            kind=data["kind"],
+            tried=data["tried"],
+            description=data["description"],
+        ),
+        guide_requests.RequestContext(
+            brand=data.get("brand"),
+            firmware_model=data.get("firmware_model"),
+            chipset=data.get("chipset"),
+            model_code=data.get("model_code", ""),
+        ),
+        allow_duplicates=data.get("allow_duplicates", True),
     )
+
+
+def form_data(user, **overrides):
+    """POST data of the request form, with the proof of a finished search."""
+    token = search.make_token(
+        user.pk, search.DeviceQuery(model_code=VALID["model_code"]), 0
+    )
+    return {**VALID, "ctx": token, **overrides}
 
 
 @pytest.fixture
@@ -115,7 +133,7 @@ def test_unverified_member_cannot_request(make_user, client):
     user = make_user("unverified", verified=False)
     client.force_login(user)
 
-    response = client.post(reverse("blog:request_create"), VALID)
+    response = client.post(reverse("blog:request_form"), form_data(user))
 
     assert response.status_code == 200
     assert not GuideRequest.objects.exists()
@@ -125,7 +143,7 @@ def test_unverified_member_cannot_request(make_user, client):
 def test_verified_member_creates_a_pending_request(requester, client):
     client.force_login(requester)
 
-    response = client.post(reverse("blog:request_create"), VALID)
+    response = client.post(reverse("blog:request_form"), form_data(requester))
 
     item = GuideRequest.objects.get()
     assert response.status_code == 302
@@ -373,9 +391,10 @@ def test_duplicate_of_someones_pending_request_is_blocked_without_a_link(
 
 
 def test_form_lists_duplicate_links(approved_request, make_user, client):
-    client.force_login(make_user("other-asker"))
+    other = make_user("other-asker")
+    client.force_login(other)
 
-    page = client.post(reverse("blog:request_create"), VALID)
+    page = client.post(reverse("blog:request_form"), form_data(other))
 
     assert approved_request.get_absolute_url() in page.content.decode()
     assert GuideRequest.objects.count() == 1

@@ -22,7 +22,7 @@ from apps.firmwares.models import (
     Variant,
 )
 from apps.shop import entitlements, services
-from apps.shop.models import PackageTier, WindowKind
+from apps.shop.models import PackageTier, ShopSettings, WindowKind
 
 pytestmark = pytest.mark.django_db
 
@@ -170,6 +170,17 @@ class TestLibrary:
     def test_lists_every_served_tier_with_badges(
         self, owner, owner_client, default_tier, make_served
     ):
+        gold = PackageTier.objects.create(
+            name="Gold",
+            slug="gold",
+            price=Decimal("9.00"),
+            duration_days=30,
+            bandwidth_enabled=False,
+            limit_devices=False,
+            applies_to_featured=True,
+            applies_to_paid=True,
+        )
+        services.activate_package(owner, gold)
         make_served(owner, name="free.zip")
         make_served(owner, tier="paid", price="7.50", charged=True, name="paid.zip")
         make_served(owner, tier="featured", charged=True, name="featured.zip")
@@ -230,6 +241,9 @@ class TestLibrary:
     def test_filters_by_tier_brand_search_and_date(
         self, owner, owner_client, default_tier, make_served
     ):
+        ShopSettings.objects.update_or_create(
+            pk=1, defaults={"free_redownload_window_days": 0}
+        )
         old = timezone.now() - timedelta(days=40)
         make_served(owner, name="alpha-free.zip", brand="Acme")
         make_served(

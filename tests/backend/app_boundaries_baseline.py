@@ -36,6 +36,7 @@ ALLOWED_EDGES: dict[str, frozenset[str]] = {
             "admin_base",
             "app_service",
             "dialogs",
+            "editor",
             "events",
             "search",
             "seed_data",
@@ -75,6 +76,7 @@ ALLOWED_EDGES: dict[str, frozenset[str]] = {
             "admin_dialogs",
             "admin_pages",
             "dialogs",
+            "editor",
             "models",
             "seed_data",
             "seeding",
@@ -107,8 +109,11 @@ ALLOWED_EDGES: dict[str, frozenset[str]] = {
         {
             "(package)",
             "admin_base",
+            "admin_pages",
             "ai_client",
             "app_service",
+            "dialogs",
+            "editor",
             "events",
             "search",
             "seed_data",
@@ -139,13 +144,15 @@ ALLOWED_EDGES: dict[str, frozenset[str]] = {
     "gamification->users": frozenset({"request_user"}),
     "gamification->wallet": frozenset({"api"}),
     "marketplace->core": frozenset(
-        {"admin_base", "app_service", "decorators", "events"}
+        {"admin_base", "app_service", "decorators", "editor", "events", "search"}
     ),
     "marketplace->firmwares": frozenset({"catalog", "models"}),
     "marketplace->pages": frozenset({"widgets"}),
     "marketplace->users": frozenset({"models", "request_user", "services"}),
     "pages->blog": frozenset({"models"}),
-    "pages->core": frozenset({"admin_base", "app_service", "decorators", "search"}),
+    "pages->core": frozenset(
+        {"admin_base", "app_service", "decorators", "editor", "search"}
+    ),
     "pages->firmwares": frozenset({"catalog", "models"}),
     "pages->seo": frozenset(
         {
@@ -158,7 +165,15 @@ ALLOWED_EDGES: dict[str, frozenset[str]] = {
         }
     ),
     "promotions->core": frozenset(
-        {"admin_base", "app_service", "decorators", "dialogs", "events", "search"}
+        {
+            "admin_base",
+            "app_service",
+            "decorators",
+            "dialogs",
+            "editor",
+            "events",
+            "search",
+        }
     ),
     "promotions->marketplace": frozenset({"services"}),
     "promotions->shop": frozenset({"(package)", "entitlements", "models"}),
@@ -180,7 +195,7 @@ ALLOWED_EDGES: dict[str, frozenset[str]] = {
     "shop->marketplace": frozenset({"services"}),
     "shop->users": frozenset({"request_user"}),
     "site_settings->consent": frozenset({"constants", "services"}),
-    "site_settings->core": frozenset({"admin_base"}),
+    "site_settings->core": frozenset({"admin_base", "editor"}),
     "site_settings->pages": frozenset({"widgets"}),
     "storage->core": frozenset(
         {"admin_base", "admin_pages", "app_service", "decorators", "utils"}
@@ -209,6 +224,7 @@ ALLOWED_EDGES: dict[str, frozenset[str]] = {
             "admin_base",
             "app_service",
             "cache",
+            "editor",
             "geo",
             "search",
             "seed_data",
@@ -219,12 +235,12 @@ ALLOWED_EDGES: dict[str, frozenset[str]] = {
         }
     ),
     "users->devices": frozenset({"models", "services"}),
-    "users->firmwares": frozenset({"catalog", "models"}),
+    "users->firmwares": frozenset({"access", "catalog", "models"}),
     "users->shop": frozenset({"(package)"}),
     "users->site_settings": frozenset({"services"}),
     "users->wallet": frozenset({"(package)", "api"}),
     "wallet->core": frozenset(
-        {"admin_base", "app_service", "decorators", "events", "services"}
+        {"admin_base", "app_service", "decorators", "events", "search", "services"}
     ),
     "wallet->users": frozenset({"decorators", "request_user"}),
 }

@@ -1,5 +1,6 @@
 {# Contract: page_obj (LibraryEntry page), filters, total_served. HTMX fragment for #library-results; re-download always goes through the download gate page. #}
 {% load mf_ui %}
+{% if search_corrected %}<p class="small muted" data-search-corrected>Showing matches for “{{ search_corrected }}” (spelling corrected).</p>{% endif %}
 {% if page_obj.object_list %}
   <p class="small muted" role="status">{{ page_obj.paginator.count }} file{{ page_obj.paginator.count|pluralize }}{% if filters.active %} match these filters{% endif %}</p>
   {% table_scroll "Files served to you" %}
@@ -21,7 +22,10 @@
           </td>
           <td>{{ entry.served_at|date:"j M Y" }}{% if entry.times_served > 1 %}<span class="d-block small muted">{{ entry.times_served }} downloads</span>{% endif %}</td>
           <td class="text-end">
-            {% if entry.available %}
+            {% if entry.state == "history" %}
+              <span class="d-block small muted" data-history-reason>{{ entry.state_message }}</span>
+              {% if entry.renew_url %}<a class="btn btn-sm btn-primary" href="{{ entry.renew_url }}" data-renew-package>Renew your package</a>{% endif %}
+            {% elif entry.can_download %}
               <a class="btn btn-sm btn-outline-primary" href="{{ entry.download_url }}"><i class="icon" data-lucide="download" aria-hidden="true"></i> Download again<span class="visually-hidden">: {{ entry.name }}</span></a>
             {% else %}
               <span class="small muted">No longer available</span>
@@ -36,6 +40,8 @@
   {% include "components/pagination.html" with page_obj=page_obj label="Library pages" hx_target="#library-results" %}
 {% elif filters.active and total_served %}
   {% include "components/empty_state.html" with title="No files match these filters" message="Try a different brand, tier or date range, or clear the filters." %}
+{% elif library_tab == 'history' %}
+  {% include "components/empty_state.html" with title="No history yet" message="Files that expire with a package or whose free re-download allowance ended appear here, read-only." %}
 {% else %}
   {% url 'firmwares:browse' as browse_url %}
   {% include "components/empty_state.html" with title="Nothing in your library yet" message="Files you download, including paid and featured ones, are kept here so you can fetch them again." action_label="Browse firmware" action_url=browse_url %}

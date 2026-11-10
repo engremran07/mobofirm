@@ -2,6 +2,8 @@
 
 import pytest
 
+from apps.site_settings.editor_models import EditorProfile
+from apps.site_settings.editor_store import clear_profile_cache
 from apps.site_settings.services import clear_site_settings_cache
 
 
@@ -12,5 +14,14 @@ def fresh_site_settings_cache():
     Database rollbacks do not fire signals, so the cache is cleared explicitly.
     """
     clear_site_settings_cache()
+    clear_profile_cache()
     yield
     clear_site_settings_cache()
+    clear_profile_cache()
+
+
+@pytest.fixture
+def seeded_profiles(db):
+    """The editor profile rows that the data migration creates (not run here)."""
+    del db
+    EditorProfile.seed()

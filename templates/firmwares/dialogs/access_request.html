@@ -1,0 +1,11 @@
+{% extends "components/dialog.html" %}
+{# Firmwares-owned uploader dialog: ask staff to change the access type. Context: firmware, form (see apps/firmwares/dialogs.py). #}
+{% block dialog_body %}
+  <p class="mb-3">
+    <strong>{{ firmware.original_file_name }}</strong><br>
+    <span class="small muted">Now: {% include "firmwares/includes/tier_badge.html" with firmware=firmware %}</span>
+  </p>
+  {% include "components/form_errors.html" with form=form %}
+  {% for field in form %}{% include "components/form_field.html" with field=field %}{% endfor %}
+  <p class="small muted mb-0">Only approved sellers can ask for paid or featured access. You are told when staff decide.</p>
+{% endblock %}

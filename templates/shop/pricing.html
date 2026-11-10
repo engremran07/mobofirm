@@ -2,39 +2,41 @@
 {% load mf_ui ad_tags %}
 {% block title %}Download packages{% endblock %}
 {% block content %}
-<div class="site-container py-4 py-lg-5">
+<div class="site-container cm-page py-4 py-lg-5">
   {% include "components/breadcrumbs.html" with current="Shop" %}
   {% include "components/page_header.html" with eyebrow="Shop" title="Download packages" lead="Compare download allowances and request the package that fits how you use the library." %}
   {% include "shop/_subnav.html" with shop_tab="packages" %}
   {% if not online_payments_enabled %}<div class="mb-4">{% include "shop/_payment_notice.html" %}</div>{% endif %}
 
-  <section class="surface-card p-4 mb-4" aria-labelledby="access-kinds">
-    <h2 class="h5" id="access-kinds">How firmware access works</h2>
-    <dl class="eco-kv mb-0">
-      <dt>Free files</dt><dd>No purchase needed. Each new file counts once against your allowance; downloading it again costs nothing.</dd>
-      <dt>Featured files</dt><dd>Highlighted files, available with a package that includes them. They count once in your allowance.</dd>
-      <dt>Paid files</dt><dd>Priced by staff, per file. Request the file from its page{% if credits_available %} or pay with credits{% endif %}; a bought file counts in your allowance but is never blocked by it.</dd>
-    </dl>
+  <section class="mb-5" aria-labelledby="access-kinds">
+    <h2 class="visually-hidden" id="access-kinds">How firmware access works</h2>
+    <div class="how-grid mb-0">
+      <div class="how-card"><span class="how-card__icon"><i data-lucide="download" aria-hidden="true"></i></span><h3>Free files</h3><p>No purchase needed. Each new file counts once against your allowance; downloading it again costs nothing.</p></div>
+      <div class="how-card"><span class="how-card__icon"><i data-lucide="star" aria-hidden="true"></i></span><h3>Featured files</h3><p>Highlighted files, available with a package that includes them. They count once in your allowance.</p></div>
+      <div class="how-card"><span class="how-card__icon"><i data-lucide="tag" aria-hidden="true"></i></span><h3>Paid files</h3><p>Priced by staff, per file. Request the file from its page{% if credits_available %} or pay with credits{% endif %}; a bought file counts in your allowance but is never blocked by it.</p></div>
+    </div>
   </section>
 
   {% if packages %}
-    <div class="row g-3 mb-5">
+    <div class="chip-row billing-toggle" role="group" aria-label="Billing period" data-billing-toggle hidden>
+      <button type="button" class="chip-ui" data-plan-filter="monthly" aria-pressed="true">Monthly</button>
+      <button type="button" class="chip-ui" data-plan-filter="yearly" aria-pressed="false">Yearly</button>
+    </div>
+    <div class="plan-grid" data-plan-grid data-reveal>
       {% for package in packages %}
-        <div class="col-12 col-md-6 col-xl-4">
-          {% include "shop/_package_card.html" %}
-        </div>
+        {% include "shop/_package_card.html" %}
       {% endfor %}
     </div>
 
-    <section aria-labelledby="compare-heading">
-      <h2 class="h4" id="compare-heading">Compare packages</h2>
+    <section class="plan-compare" aria-labelledby="compare-heading">
+      <div class="cm-section__head"><h2 id="compare-heading">Compare packages</h2></div>
       {% table_scroll "Package comparison" %}
-      <table class="table align-middle comparison-table">
+      <table class="table table-ui align-middle comparison-table">
         <thead>
           <tr>
             <th scope="col"><span class="visually-hidden">Feature</span></th>
             {% for package in packages %}
-              <th scope="col">{{ package.name }}{% if package.pk == current_package_id %} <span class="badge text-bg-success">Current plan</span>{% endif %}</th>
+              <th scope="col">{{ package.name }}{% if package.pk == current_package_id %} <span class="badge-ui badge-ui--verified">Current plan</span>{% endif %}</th>
             {% endfor %}
           </tr>
         </thead>
@@ -63,7 +65,7 @@
     </section>
     {% ad_zone "in_content" %}
   {% else %}
-    {% include "components/empty_state.html" with title="No packages are available yet" message="Download packages appear here once they are configured." %}
+    {% include "shop/_empty.html" with icon="package" title="No packages are available yet" message="Download packages appear here once they are configured." %}
   {% endif %}
 </div>
 {% endblock %}

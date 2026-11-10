@@ -995,6 +995,17 @@ class QuotaConsumption(models.Model):
     reason = models.CharField(max_length=10, choices=Reason.choices)
     size_mb = models.PositiveIntegerField(default=0)
     consumed_at = models.DateTimeField(default=timezone.now)
+    user_package = models.ForeignKey(
+        UserPackage,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+        help_text=(
+            "Package period the file was counted in. A featured file counted in an "
+            "earlier period is charged again when it is served under a new one."
+        ),
+    )
 
     class Meta:
         verbose_name = "Quota consumption"
@@ -1030,6 +1041,32 @@ class ShopSettings(SingletonModel):
             "good. The credits price is this × the rate under Credits & pricing. "
             "0 = featured files cannot be bought one by one. Package holders never "
             "pay it."
+        ),
+    )
+    free_redownload_window_days = models.PositiveIntegerField(
+        default=30,
+        verbose_name="Free file re-download window (days)",
+        help_text=(
+            "How long after the first download a user may fetch a free file again "
+            "without counting it twice. 0 = no time limit."
+        ),
+    )
+    free_redownload_max = models.PositiveIntegerField(
+        default=5,
+        verbose_name="Free file re-downloads allowed",
+        help_text=(
+            "How many times a free file may be downloaded again after the first "
+            "serve. 0 = unlimited."
+        ),
+    )
+    package_history_retention_days = models.PositiveIntegerField(
+        default=0,
+        verbose_name="Old package history retention (days)",
+        help_text=(
+            "When a user activates or renews a package, the files downloaded under "
+            "the previous package period are purged from their history after this "
+            "many days. 0 = purge on activation. History of free files and lifetime "
+            "purchases is never purged."
         ),
     )
 

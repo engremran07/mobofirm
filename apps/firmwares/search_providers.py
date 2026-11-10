@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-from django.db.models import Count, Q, QuerySet
+from collections.abc import Mapping
+from typing import Any
+
+from django.db.models import Count, Q, QuerySet, TextField
+from django.db.models.functions import Cast
 from django.urls import reverse
 
 from apps.core.search import (
@@ -10,9 +14,11 @@ from apps.core.search import (
     SearchContext,
     SearchHit,
     SearchProvider,
+    VocabTerm,
     register,
 )
 from apps.core.search.db import candidate_limit, tokens_match
+from apps.core.search.synonyms import FIRMWARE_TYPE_ALIASES
 from apps.core.search.text import score_text
 
 from .catalog import (
@@ -27,6 +33,7 @@ from .models import (
     Model,
     Variant,
 )
+from .popularity import popular_files, popular_models
 
 
 def _join(*parts: object) -> str:
@@ -40,7 +47,31 @@ def _pk_filter(value: str, field: str) -> Q:
     return Q(**{f"{field}__slug": value})
 
 
+BRAND_FIELDS = ("name", "slug")
+MODEL_FIELDS = (
+    "name",
+    "marketing_name",
+    "model_code",
+    "codename",
+    "also_known_as",
+    "slug",
+    "chipset",
+    "chipset_ref__name",
+    "brand__name",
+)
+TOOL_FIELDS = ("name", "slug", "category__name", "version")
+GUIDE_FIELDS = (
+    "post__title",
+    "brand__name",
+    "model__name",
+    "model__marketing_name",
+    "model__model_code",
+)
+
+
 class BrandProvider(QuerySetProvider[Brand]):
+    """Brands by name or slug, with their active model count."""
+
     kind = "brand"
     label = "Brand"
     label_plural = "Brands"
@@ -48,8 +79,10 @@ class BrandProvider(QuerySetProvider[Brand]):
     priority = 10
     min_length = 1
     supports_browse = True
-    search_fields = ("name", "slug")
+    search_fields = BRAND_FIELDS
     ordering = ("name",)
+    suggestible = True
+    watches = (Brand,)
 
     def get_queryset(self, context: SearchContext) -> QuerySet[Brand]:
         return Brand.objects.annotate(
@@ -84,16 +117,24 @@ class ModelProvider(QuerySetProvider[Model]):
     priority = 20
     min_length = 1
     supports_browse = True
-    search_fields = (
-        "name",
-        "marketing_name",
-        "model_code",
-        "codename",
-        "also_known_as",
-        "slug",
-        "brand__name",
-    )
+    search_fields = MODEL_FIELDS
     ordering = ("brand__name", "name")
+    noun = "model"
+    popular_title = "Popular models"
+    suggestible = True
+    watches = (Model, Brand)
+
+    def popular(
+        self, *, limit: int, window_days: int, scope: Mapping[str, str]
+    ) -> list[SearchHit]:
+        models = popular_models(
+            limit=limit,
+            window_days=window_days,
+            brand=scope.get("brand", ""),
+            chipset=scope.get("chipset", ""),
+        )
+        context = SearchContext(query="", tokens=(), limit=limit)
+        return [self.build_hit(model, 0.0, context) for model in models]
 
     def get_queryset(self, context: SearchContext) -> QuerySet[Model]:
         queryset = Model.objects.filter(is_active=True).select_related("brand")
@@ -110,6 +151,7 @@ class ModelProvider(QuerySetProvider[Model]):
             obj.codename,
             f"{obj.brand.name} {obj.name}",
             obj.also_known_as,
+            obj.chipset,
         )
 
     def build_hit(self, obj: Model, score: float, context: SearchContext) -> SearchHit:
@@ -147,6 +189,9 @@ class VariantProvider(QuerySetProvider[Variant]):
         "model__brand__name",
     )
     ordering = ("model__brand__name", "model__name", "name")
+    noun = "variant"
+    suggestible = True
+    watches = (Variant, Model)
 
     def get_queryset(self, context: SearchContext) -> QuerySet[Variant]:
         queryset = Variant.objects.filter(
@@ -186,17 +231,27 @@ class VariantProvider(QuerySetProvider[Variant]):
         )
 
 
+CHIPSET_ALIAS_TEXT = "alias_text"
+CHIPSET_FIELDS = ("name", "vendor", "family", "slug", CHIPSET_ALIAS_TEXT)
+CHIPSET_ANNOTATIONS = {CHIPSET_ALIAS_TEXT: Cast("aliases", TextField())}
+
+
 class ChipsetProvider(QuerySetProvider[Chipset]):
+    """Chipsets by name, vendor, family or alias (alias text is a JSON cast)."""
+
     kind = "chipset"
     label = "Chipset"
     label_plural = "Chipsets"
     icon = "cpu"
     priority = 40
-    search_fields = ("name", "vendor", "family", "slug")
+    search_fields = CHIPSET_FIELDS
     ordering = ("vendor", "name")
+    suggestible = True
+    supports_browse = True
+    watches = (Chipset,)
 
     def get_queryset(self, context: SearchContext) -> QuerySet[Chipset]:
-        return Chipset.objects.all()
+        return Chipset.objects.annotate(**CHIPSET_ANNOTATIONS)
 
     def score_fields(self, obj: Chipset) -> tuple[str, ...]:
         aliases = obj.aliases if isinstance(obj.aliases, list) else []
@@ -218,13 +273,17 @@ class ChipsetProvider(QuerySetProvider[Chipset]):
 
 
 class ToolProvider(QuerySetProvider[FlashingTool]):
+    """Active flashing tools in active categories."""
+
     kind = "tool"
     label = "Tool"
     label_plural = "Tools"
     icon = "wrench"
     priority = 50
-    search_fields = ("name", "slug", "category__name", "version")
+    search_fields = TOOL_FIELDS
     ordering = ("-is_featured", "name")
+    suggestible = True
+    watches = (FlashingTool,)
 
     def get_queryset(self, context: SearchContext) -> QuerySet[FlashingTool]:
         return FlashingTool.objects.filter(
@@ -249,6 +308,78 @@ class ToolProvider(QuerySetProvider[FlashingTool]):
         )
 
 
+class FirmwareTypeProvider(SearchProvider):
+    """Firmware classifications (official, engineering, readback, ...).
+
+    Opens the firmware browser filtered to that classification. Spellings such as
+    "stock" or "eng" resolve through the shared synonyms.
+    """
+
+    kind = "firmware_type"
+    label = "Firmware type"
+    label_plural = "Firmware types"
+    noun = "firmware type"
+    icon = "layers-3"
+    priority = 65
+    min_length = 3
+
+    def _types(self) -> list[tuple[str, str, tuple[str, ...]]]:
+        browse = reverse("firmwares:browse")
+        return [
+            (
+                FIRMWARE_TYPE_DISPLAY[key],
+                f"{browse}?type={key}",
+                (FIRMWARE_TYPE_DISPLAY[key], key, *FIRMWARE_TYPE_ALIASES.get(key, ())),
+            )
+            for key, _model_class in PUBLIC_FIRMWARE_TYPES
+            if key in FIRMWARE_TYPE_ALIASES
+        ]
+
+    def search(self, context: SearchContext) -> list[SearchHit]:
+        hits: list[SearchHit] = []
+        for title, url, spellings in self._types():
+            score = score_text(context.query, context.tokens, *spellings)
+            if score > 0:
+                hits.append(
+                    SearchHit(
+                        kind=self.kind,
+                        title=f"{title} firmware",
+                        subtitle="Browse by type",
+                        url=url,
+                        icon=self.icon,
+                        score=score,
+                        value=title.lower(),
+                        label=title,
+                    )
+                )
+        return hits
+
+    def vocabulary(self) -> list[VocabTerm]:
+        return [
+            VocabTerm(
+                kind=self.kind,
+                title=title,
+                url=url,
+                icon=self.icon,
+                terms=spellings,
+            )
+            for title, url, spellings in self._types()
+        ]
+
+
+FIRMWARE_FIELDS = (
+    "original_file_name",
+    "build_number",
+    "android_version",
+    "chipset",
+    "brand__name",
+    "model__name",
+    "model__marketing_name",
+    "model__model_code",
+    "variant__name",
+)
+
+
 class FirmwareBuildProvider(SearchProvider):
     """Approved firmware builds of every classification (never pending files)."""
 
@@ -259,16 +390,39 @@ class FirmwareBuildProvider(SearchProvider):
     priority = 60
     min_length = 3
 
-    search_fields = (
-        "original_file_name",
-        "build_number",
-        "android_version",
-        "chipset",
-        "brand__name",
-        "model__name",
-        "model__model_code",
-        "variant__name",
-    )
+    search_fields = FIRMWARE_FIELDS
+    popular_title = "Popular firmware"
+
+    def watched_models(self) -> list[type]:
+        return [model_class for _key, model_class in PUBLIC_FIRMWARE_TYPES]
+
+    def _hit(self, firmware: Any, type_key: str, score: float) -> SearchHit:
+        device = _join(
+            firmware.brand.name if firmware.brand else "",
+            firmware.model.name if firmware.model else "",
+            firmware.variant.name if firmware.variant else "",
+        )
+        return SearchHit(
+            kind=self.kind,
+            title=firmware.original_file_name,
+            subtitle=_join(device, FIRMWARE_TYPE_DISPLAY[type_key]),
+            url=reverse("firmwares:firmware_detail", args=[type_key, firmware.pk]),
+            icon=self.icon,
+            score=score,
+            value=f"{type_key}:{firmware.pk}",
+            label=firmware.original_file_name,
+        )
+
+    def popular(
+        self, *, limit: int, window_days: int, scope: Mapping[str, str]
+    ) -> list[SearchHit]:
+        files = popular_files(
+            limit=limit,
+            window_days=window_days,
+            brand=scope.get("brand", ""),
+            chipset=scope.get("chipset", ""),
+        )
+        return [self._hit(item.firmware, item.type_key, 0.0) for item in files]
 
     def search(self, context: SearchContext) -> list[SearchHit]:
         condition = tokens_match(context, self.search_fields)
@@ -295,22 +449,8 @@ class FirmwareBuildProvider(SearchProvider):
                     firmware.android_version,
                     firmware.chipset,
                 )
-                if score <= 0:
-                    continue
-                hits.append(
-                    SearchHit(
-                        kind=self.kind,
-                        title=firmware.original_file_name,
-                        subtitle=_join(device, FIRMWARE_TYPE_DISPLAY[type_key]),
-                        url=reverse(
-                            "firmwares:firmware_detail", args=[type_key, firmware.pk]
-                        ),
-                        icon=self.icon,
-                        score=score,
-                        value=f"{type_key}:{firmware.pk}",
-                        label=firmware.original_file_name,
-                    )
-                )
+                if score > 0:
+                    hits.append(self._hit(firmware, type_key, score))
         return hits
 
 
@@ -319,4 +459,5 @@ register(ModelProvider())
 register(VariantProvider())
 register(ChipsetProvider())
 register(ToolProvider())
+register(FirmwareTypeProvider())
 register(FirmwareBuildProvider())

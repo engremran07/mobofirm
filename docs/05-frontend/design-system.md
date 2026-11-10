@@ -30,6 +30,86 @@ The system is not a finished visual identity. Do not claim final design approval
 - Only `a.surface-card` and `.surface-card--interactive` lift on hover; static cards (forms, stat tiles) do not.
 - Unfilled ad slots render nothing; `.ad-placeholder` is hidden as a safety net.
 
+## Public design system (Wave 10)
+
+The public shell is a premium, light-first editorial UI with a balanced multi-tone dark theme, built from CSS custom properties (the runtime theme API), SCSS partials compiled by Vite, HTMX for server interaction and Alpine's CSP-safe build for ephemeral state. It is backward compatible: Bootstrap utilities and every existing class (`surface-card`, `hero-panel`, `site-nav-link`, `btn-*`, `form-control`, …) keep working and are re-skinned by the layers below; new pages use the `*-ui` components documented here.
+
+### Source layout and build
+
+```
+frontend/src/styles/
+  tokens.css            colour themes (light, dark, high contrast) - the single colour source
+  main.scss             entry (compiled to static/build/site.css), layer order below
+  abstracts/            Sass-only breakpoints + mixins (motion, focus-ring, glass, hover-lift, busy-button)
+  tokens/_scale.scss    type, space, radius, elevation, glass, gradient, motion, z-index tokens
+  base/                 element styles, typography, selection, scrollbars, forced-colours
+  legacy/_site.scss     page-level rules from the pre-SCSS stylesheet (migrate page by page)
+  layout/_shell.scss    header, mega menu, footer, appearance controls, progress bar
+  components/           buttons, forms, cards, badges/tabs/accordion/tooltip/toast, data (skeleton,
+                        tables, pagination, filters, stepper), overlays (hero, command palette,
+                        sheet), dialog
+  utilities/            small helpers (stack, cluster, glass, elev-*)
+  themes/               per-theme refinements and the reduced-motion switch
+```
+
+Layer order is tokens → base → legacy → layout → components → utilities → themes, imported by `main.scss`; Bootstrap's minified CSS is imported first in `site.js`, feature stylesheets (`blog.css`, `ecosystem.css`, …) after. Output names in `static/build/` are unchanged (`site.css`, `site.js`, `tokens.css`, `theme-init.js`, admin and SEO files). `tokens.css` stays plain CSS on purpose: Python tests and the admin theme read its hex values. Run `npm run build` after any change (do not run two builds at once: `emptyOutDir` makes concurrent builds clash).
+
+### Tokens
+
+| Group | Tokens |
+| --- | --- |
+| Colour (`tokens.css`) | `--mf-page/surface/surface-raised/surface-soft/border/text/text-muted/accent/accent-strong/accent-ink/accent-warm/accent-cool/success/warning/danger/info/focus`, `--mf-glass-bg(-strong)/glass-border`, `--mf-overlay`, `--mf-skeleton-base/shine`, `--mf-shadow-rgb` |
+| Type (`_scale.scss`) | fluid `--mf-text-2xs … --mf-text-5xl` (clamp, 360→1440 px), `--mf-leading-*`, `--mf-tracking-*`, `--mf-font-sans/mono` |
+| Space / radius | `--mf-space-1…9` (4 px scale), `--mf-section-gap`, `--mf-radius-xs…xl/pill` |
+| Elevation | `--mf-elev-1…4`, `--mf-glow`, `--mf-inset-highlight` (colour-aware via `--mf-shadow-rgb`) |
+| Glass / gradient | `--mf-glass-blur`, `--mf-gradient-accent/soft/mesh` (derived from the accent, so a site-settings accent restyles them) |
+| Motion | `--mf-duration-fast/base/slow`, `--mf-ease-out/spring/in-out` (all durations collapse to 0.01 ms under reduced motion) |
+| Layers | `--mf-z-header/mega/sheet/toast/progress`, `--mf-header-height` |
+
+Accent colours come from one source: `site_settings` emits `--mf-accent`, `--mf-accent-strong`, `--mf-accent-cool` overrides and every gradient, glow and tint is derived with `color-mix()`. Add a new foreground/background pair to the contrast test in `tests/backend/test_frontend_contract.py` when you introduce one.
+
+### Themes, contrast and motion
+
+`<html>` carries `data-bs-theme="light|dark"` (resolved), `data-theme-mode="auto|light|dark"` (the visitor's choice), `data-contrast="high"` (high-contrast tokens) and optionally `data-motion="reduce"`. `theme-init.js` applies them before first paint (stored choice → `prefers-color-scheme`; `prefers-contrast: more` turns contrast on unless the visitor chose otherwise). Controls: `[data-theme-toggle]` flips light/dark, `[data-theme-set="auto|light|dark"]` and `[data-contrast-toggle]` (footer "Appearance", command palette). Keys: `mobofirm-theme` (absent = auto) and `mobofirm-contrast` (`high|normal`); all storage access is guarded and other tabs stay in sync. Motion is wrapped in the `motion` mixin (`prefers-reduced-motion: no-preference` and not `data-motion="reduce"`), so reduced-motion visitors never get transitions or animations.
+
+### Components (CSS + Alpine/HTMX)
+
+Every snippet works under the strict CSP (no inline styles or scripts).
+
+- **Header + mega menu**: `includes/site_header.html`, `includes/nav_mega.html`. Top-level links stay plain `<a class="site-nav-link">`; Firmware, Brands, Chipsets and Tools & Guides add a panel opened by hover or by the toggle button (`[data-mega-toggle]`; Esc closes and returns focus). The mobile navigation (`includes/nav_links.html`) has no panels. Set `nav_current` to mark the section.
+- **Command palette** (Ctrl/Cmd+K, or `[data-command-palette-open]`): `components/command_palette.html`. Its search is the shared combobox (`input_id="palette-search"`, navigate mode, central search engine), so ranking, suggestions and typo tolerance come from `apps/core/search`; the palette only adds quick links and preference actions. Esc closes suggestions, then clears the query, then closes the palette. It does not open over another modal dialog.
+- **Buttons**: `.btn` (+ `btn-primary`, `btn-outline-secondary`, `btn-soft`, `btn-ghost`, `btn-sm`, `btn-lg`, `btn-icon`). Loading: `.is-loading`, `aria-busy="true"`, or automatically `[data-loading]` while the button (or its form) issues an HTMX request.
+- **Forms**: `.form-control`, `.form-select`, floating labels (`<div class="form-floating"><input … placeholder=" "><label>`), `.form-layout` grid, `.form-section`, sticky `.form-actions`, `.field-error`, switches (`.form-switch`). Use `components/form_field.html` so labels, errors and descriptions are wired.
+- **Cards**: `.card-ui` with `__media/__body/__eyebrow/__title/__text/__meta/__footer/__link` and variants `--firmware --brand --chipset --article --package(.is-featured) --bounty`; grid `.card-grid`. A stretched `.card-ui__link::after` makes the whole card clickable without nesting interactive content; hover lift and focus ring are built in. The legacy `.surface-card` (and `a.surface-card`) gets the same look.
+  ```html
+  <article class="card-ui card-ui--firmware">
+    <div class="card-ui__body"><span class="card-ui__eyebrow">Samsung</span>
+      <h3 class="card-ui__title"><a class="card-ui__link" href="…">SM-A546E_XXU3AWK1</a></h3></div>
+    <div class="card-ui__footer">{% include "components/badge.html" with variant="free" label="Free" %}</div>
+  </article>
+  ```
+- **Badges**: `components/badge.html` (`variant` = free, paid, featured, verified, popular, new, warning, danger) or `.badge-ui .badge-ui--free`.
+- **Tabs**: `<div class="tabs-ui" role="tablist" data-tabs>` with `role="tab"` buttons (`aria-controls`) and `role="tabpanel"`; `modules/ui.js` adds roving focus (arrows, Home, End).
+- **Accordion**: `.accordion-ui > details > summary + .accordion-ui__body` (native, keyboard and no-JS safe).
+- **Tooltip / popover**: `data-tooltip="…"` on a focusable element (CSS only); popovers use the native API: `<button popovertarget="p1">` + `<div id="p1" popover class="popover-ui">`.
+- **Toasts**: `modules/toasts.js`. Django messages (`includes/messages.html`, `data-flash`) become toasts; HTMX failures (`htmx:responseError`, `sendError`, `timeout`) raise a danger toast; a server response can send `HX-Trigger: {"toast": {"message": "Saved", "level": "success"}}` (levels `success|info|warning|danger`); JavaScript calls `showToast({message, level})` or dispatches `mf:toast`. `DialogView` successes that stay on the page use this automatically. Region: `#toast-region` (live region); toasts pause on hover/focus and repeated identical toasts replace each other.
+- **Loading**: the top bar (`#global-progress`) shows for every HTMX request; `[data-loading]` marks the requesting element; `.skeleton-host` dims and shimmers while a request targeting it runs; `.skeleton`, `.skeleton--text/title/media/avatar/pill`, `.skeleton-card` and `components/skeleton_cards.html` are placeholders.
+  ```html
+  <div id="results" class="skeleton-host" hx-get="…" hx-trigger="input changed delay:200ms from:#q" hx-target="this">…</div>
+  ```
+- **Empty state / stat tile / avatar / rank / section header**: `.empty-ui`, `.stat-ui`, `.avatar-ui`, `.rank-ui`, `.section-ui` (the existing `empty_state.html` and `stat_tile.html` partials are re-skinned).
+- **Tables**: `.table-scroll` / `.table-sticky` (+ `.table-ui`) give a rounded scroller; `.table-sticky` keeps the header visible.
+- **Pagination and infinite scroll**: `components/pagination.html` (pill pagination, HTMX-aware). Infinite scroll: `components/load_more.html` renders a sentinel with `hx-trigger="revealed"` and a "Load more" link fallback; the server returns the next rows plus a new sentinel.
+- **Filters**: `.filter-bar` (sticky glass bar), `.chip-ui` (`aria-pressed`/`.is-active`, `.chip-ui__remove`), `.chip-row`.
+- **Sheets and dialogs**: `<dialog class="sheet-ui">` is a modal on desktop and a bottom sheet on phones; app dialogs use the shared shell (`dialogs.md`).
+- **Stepper / breadcrumbs / hero**: `.stepper-ui` (`.is-done`, `.is-current`), `.breadcrumbs` (existing partial), `.hero-ui` / `.hero-panel` with `.hero-ui__title`, `.text-gradient`, `.hero-ui__actions/stats`.
+- **Scroll reveal**: `data-reveal` (staggered, once). **Copy to clipboard**: `data-copy="text"`, `data-copy-target="#id"` or `data-copy-url`. **Optimistic UI**: `data-optimistic` (+ `data-optimistic-toggle="aria-pressed"`) flips immediately and reverts on failure. **View transitions**: opt in per swap with `hx-swap="innerHTML transition:true"` (plain swap where unsupported; disabled under reduced motion).
+- **Footer**: three-column grid, version stamp, appearance controls.
+
+### Verification
+
+`tests/backend/test_frontend_contract.py` (tokens/contrast incl. high contrast, shell and partial contracts), `tests/frontend/test_design_system_browser.py` (tokens, theme persistence, palette, mega menu, toasts, loading, reduced motion, components, no console/CSP errors, 360/768/1440 overflow), `tests/frontend/test_public_shell_browser.py` and `tests/frontend/test_dialogs_browser.py`.
+
 ## Admin console (Unfold)
 
 The admin (`/admin/`) is `django-unfold` on a project `AdminSite` (`apps.core.admin_site.MobofirmAdminSite`, installed through `apps.core.admin_config.MobofirmAdminConfig`). The legacy overrides (`templates/admin/*` base templates, `frontend/src/admin.js`, `frontend/src/styles/admin.css`, the `admin` Vite entry and every `mf-admin-*` / `mf-review-workflow` class) were removed; `tests/backend/admin/test_admin_access.py` fails if they return.

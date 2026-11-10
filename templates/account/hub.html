@@ -1,14 +1,13 @@
 {% extends "base.html" %}
 {% block title %}Your Mobofirm account | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block content %}
-<div class="site-container py-5">
+<div class="site-container py-4 py-lg-5">
   {% include "components/breadcrumbs.html" with current="Account" %}
-  
-  <section class="hero-panel p-4 p-md-5">
+  <section class="hero-panel hero-ui account-hero p-4 p-md-5">
     <p class="hero-eyebrow">Your account</p>
-    <h1 class="hero-title">A better way to follow your devices.</h1>
+    <h1 class="hero-title">A better way to follow <span class="text-gradient">your devices.</span></h1>
     <p class="hero-copy">Sign in to manage your profile and device sessions, or create an account to get started.</p>
-    <div class="d-flex flex-wrap gap-2 mt-4">
+    <div class="hero-ui__actions">
       <a class="btn btn-primary btn-lg" href="{% url 'users:account_login' %}">Sign in</a>
       <a class="btn btn-outline-secondary btn-lg" href="{% url 'users:account_signup' %}">Create account</a>
     </div>

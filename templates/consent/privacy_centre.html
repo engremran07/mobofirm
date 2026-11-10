@@ -1,47 +1,50 @@
 {% extends "base.html" %}
 {% block title %}Privacy centre | {{ site_name }}{% endblock %}
 {% block content %}
-<div class="site-container py-4 py-lg-5">
+<div class="site-container py-4 py-lg-5 privacy-page">
   {% include "components/breadcrumbs.html" with current="Privacy centre" %}
   {% include "components/page_header.html" with eyebrow="Privacy" title="Privacy centre" lead=policy.details_text %}
 
-  <section class="surface-card p-4 mb-4" aria-labelledby="consent-status-title" role="status">
-    <h2 class="h5" id="consent-status-title">Your current choice</h2>
-    {% if not state.enabled %}
-      <p class="mb-0">Consent management is switched off by the site operator, so no optional cookies or trackers are used.</p>
-    {% elif state.decided %}
-      <p class="mb-0">
-        Saved under policy version {{ policy.version }}.
-        {% if state.granted %}Allowed optional categories: {% for item in categories %}{% if not item.category.required and item.granted %}<strong>{{ item.category.name }}</strong>{% if not forloop.last %}, {% endif %}{% endif %}{% endfor %}.{% else %}All optional categories are off.{% endif %}
-      </p>
-    {% else %}
-      <p class="mb-0">You have not made a choice yet. Optional categories stay off until you do.</p>
-    {% endif %}
+  <section class="consent-status" aria-labelledby="consent-status-title" role="status">
+    <span class="consent-status__icon" aria-hidden="true"><i data-lucide="shield-check"></i></span>
+    <div>
+      <h2 class="consent-status__title" id="consent-status-title">Your current choice</h2>
+      {% if not state.enabled %}
+        <p class="mb-0">Consent management is switched off by the site operator, so no optional cookies or trackers are used.</p>
+      {% elif state.decided %}
+        <p class="mb-0">
+          Saved under policy version {{ policy.version }}.
+          {% if state.granted %}Allowed optional categories: {% for item in categories %}{% if not item.category.required and item.granted %}<strong>{{ item.category.name }}</strong>{% if not forloop.last %}, {% endif %}{% endif %}{% endfor %}.{% else %}All optional categories are off.{% endif %}
+        </p>
+      {% else %}
+        <p class="mb-0">You have not made a choice yet. Optional categories stay off until you do.</p>
+      {% endif %}
+    </div>
   </section>
 
-  <form method="post" action="{% url 'consent:save' %}" class="surface-card p-4" aria-labelledby="consent-form-title">
+  <form method="post" action="{% url 'consent:save' %}" class="consent-form" aria-labelledby="consent-form-title">
     {% csrf_token %}
     <input type="hidden" name="source" value="privacy_centre">
-    <h2 class="h5" id="consent-form-title">Cookie and tracker categories</h2>
-    <ul class="list-unstyled mb-4 d-grid gap-3">
+    <h2 class="consent-form__title" id="consent-form-title">Cookie and tracker categories</h2>
+    <ul class="consent-list">
       {% for item in categories %}
-        <li class="form-check">
+        <li class="consent-option form-check form-switch">
           {% if item.category.required %}
-            <input class="form-check-input" type="checkbox" id="consent-{{ item.category.slug }}" checked disabled aria-describedby="consent-{{ item.category.slug }}-help">
+            <input class="form-check-input" type="checkbox" role="switch" id="consent-{{ item.category.slug }}" checked disabled aria-describedby="consent-{{ item.category.slug }}-help">
           {% else %}
-            <input class="form-check-input" type="checkbox" name="categories" value="{{ item.category.slug }}" id="consent-{{ item.category.slug }}"{% if item.granted %} checked{% endif %} aria-describedby="consent-{{ item.category.slug }}-help">
+            <input class="form-check-input" type="checkbox" role="switch" name="categories" value="{{ item.category.slug }}" id="consent-{{ item.category.slug }}"{% if item.granted %} checked{% endif %} aria-describedby="consent-{{ item.category.slug }}-help">
           {% endif %}
-          <label class="form-check-label fw-semibold" for="consent-{{ item.category.slug }}">{{ item.category.name }}{% if item.category.required %} <span class="muted fw-normal">(always on)</span>{% endif %}</label>
+          <label class="form-check-label fw-semibold" for="consent-{{ item.category.slug }}">{{ item.category.name }}{% if item.category.required %} <span class="badge-ui badge-ui--verified">Always on</span>{% endif %}</label>
           <div class="form-text mt-0" id="consent-{{ item.category.slug }}-help">{{ item.category.description }}</div>
         </li>
       {% endfor %}
     </ul>
-    <div class="d-flex flex-wrap gap-2">
+    <div class="consent-form__actions">
       <button type="submit" name="action" value="custom" class="btn btn-primary">Save my choices</button>
       <button type="submit" name="action" value="accept_all" class="btn btn-outline-secondary">Accept all</button>
       <button type="submit" name="action" value="reject_all" class="btn btn-outline-secondary">Reject optional</button>
     </div>
-    <p class="small muted mt-3 mb-0">
+    <p class="consent-form__note">
       Withdrawing is as easy as consenting: reject optional cookies here at any time and the trackers are switched off and their cookies removed from this browser.
       Your choice is remembered in one first-party cookie and logged anonymously (no IP address or user agent is stored in readable form).
       {% if policy.privacy_url %}{% for label, url in legal_links %}{% if url == policy.privacy_url %}<a href="{{ url }}">Read the privacy policy</a>.{% endif %}{% endfor %}{% endif %}

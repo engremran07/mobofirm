@@ -5,6 +5,8 @@ const projectRoot = fileURLToPath(new URL(".", import.meta.url));
 
 export default defineConfig({
   root: projectRoot,
+  // Relative URLs keep font/asset references valid under any STATIC_URL.
+  base: "./",
   publicDir: false,
   build: {
     outDir: fileURLToPath(new URL("./static/build/", import.meta.url)),
@@ -30,6 +32,12 @@ export default defineConfig({
         ),
         "admin-theme-switch": fileURLToPath(
           new URL("./frontend/src/styles/admin-theme.css", import.meta.url),
+        ),
+        editor: fileURLToPath(
+          new URL("./frontend/src/editor.js", import.meta.url),
+        ),
+        "editor-core": fileURLToPath(
+          new URL("./frontend/src/editor-core.js", import.meta.url),
         ),
       },
       output: {

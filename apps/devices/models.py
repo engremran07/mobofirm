@@ -72,12 +72,46 @@ class Device(models.Model):
         default="normal",
     )
 
+    # Operating-system identity: a platform WebAuthn credential (Windows Hello/TPM,
+    # macOS or Android keystore). It is shared by every browser on the OS user
+    # profile and disappears when the OS is reinstalled. Only public material is
+    # stored; the private key never leaves the authenticator.
+    os_credential_id = models.CharField(
+        max_length=1024,
+        blank=True,
+        default="",
+        help_text="Base64url WebAuthn credential id (public; sent as allowCredentials).",
+    )
+    os_credential_id_hash = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        help_text="SHA-256 of the credential id; the per-account identity key.",
+    )
+    os_credential_public_key = models.TextField(
+        blank=True,
+        default="",
+        help_text="Base64 SubjectPublicKeyInfo (DER) used to verify assertions.",
+    )
+    os_credential_alg = models.SmallIntegerField(
+        null=True,
+        blank=True,
+        help_text="COSE algorithm: -7 (ES256) or -257 (RS256).",
+    )
+    os_credential_sign_count = models.PositiveBigIntegerField(default=0)
+    os_credential_rp_id = models.CharField(max_length=255, blank=True, default="")
+
     class Meta:
         constraints = (
             models.UniqueConstraint(
                 fields=["user", "browser_key_hash"],
                 condition=~Q(browser_key_hash=""),
                 name="device_user_browser_key_unique",
+            ),
+            models.UniqueConstraint(
+                fields=["user", "os_credential_id_hash"],
+                condition=~Q(os_credential_id_hash=""),
+                name="device_user_os_credential_unique",
             ),
         )
         indexes = (
@@ -100,6 +134,45 @@ class Device(models.Model):
         Legacy alias for compatibility with older code paths.
         """
         return self.hardware_uuid or self.os_fingerprint
+
+    @property
+    def is_os_identity(self) -> bool:
+        """True when this row is a registered operating system (platform credential)."""
+        return bool(self.os_credential_id_hash)
+
+
+class DeviceBrowserLink(models.Model):
+    """A browser profile recognised as running on a registered OS ``Device``.
+
+    Created only after the browser proved possession of the OS credential, so a
+    second browser on the same computer never needs a registration of its own.
+    """
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="device_browser_links",
+    )
+    device = models.ForeignKey(
+        Device, on_delete=models.CASCADE, related_name="browser_links"
+    )
+    browser_key_hash = models.CharField(max_length=64)
+    first_linked_at = models.DateTimeField(default=timezone.now)
+    verified_at = models.DateTimeField(
+        default=timezone.now,
+        help_text="Last time this browser proved possession of the OS credential.",
+    )
+
+    class Meta:
+        constraints = (
+            models.UniqueConstraint(
+                fields=["user", "browser_key_hash"],
+                name="device_browser_link_user_key_unique",
+            ),
+        )
+
+    def __str__(self) -> str:
+        return f"{self.device_id} <- {self.browser_key_hash[:8]}"
 
 
 class DeviceConfig(SingletonModel):

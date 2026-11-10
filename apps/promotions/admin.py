@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any, ClassVar
 
 from django.contrib import messages
@@ -27,6 +28,7 @@ from apps.core.admin_base import (
     htmx_redirect,
     return_url,
 )
+from apps.core.editor.admin import RichTextAdminMixin
 from apps.users.request_user import current_user
 
 from . import lifecycle
@@ -65,7 +67,11 @@ class PromotionLogInline(TabularInline):
 
 
 @register(Promotion)
-class PromotionAdmin(ModelAdmin):
+class PromotionAdmin(RichTextAdminMixin, ModelAdmin):
+    rich_text_fields: ClassVar[Mapping[str, str]] = {
+        "description": "announcement",
+        "terms": "announcement",
+    }
     list_display = (
         "name",
         "kind",

@@ -1,15 +1,24 @@
 {% extends "base.html" %}
+{% load editor_tags %}
 {% block title %}{{ item.title }} | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block meta_description %}{{ item.get_kind_display }} request{% if item.label %} for {{ item.label }}{% endif %}.{% endblock %}
 {% block content %}
 {% url 'blog:request_list' as list_url %}
-<div class="site-container py-5">
+<div class="site-container py-5 guide-page">
   {% include "components/breadcrumbs.html" with current=item.title parent_label="Requests" parent_url=list_url %}
-  <header class="mb-4">
+  <header class="guide-head">
     <p class="section-eyebrow mb-2">{{ item.get_kind_display }}{% if item.label %} · {{ item.label }}{% endif %}</p>
-    <h1 class="h2">{{ item.title }}</h1>
-    <p><span class="badge text-bg-secondary" data-testid="request-status">{{ item.get_status_display }}</span>
-      <span class="muted small">Asked by {{ item.requester.public_display_name }} on {{ item.created_at|date:"M j, Y" }}</span></p>
+    <h1 class="guide-head__title">{{ item.title }}</h1>
+    <p class="guide-head__meta">
+      <span class="badge-ui badge-ui--{% if item.status == 'fulfilled' %}free{% elif item.status == 'approved' %}verified{% elif item.status == 'pending' %}warning{% elif item.status == 'rejected' %}danger{% endif %}" data-testid="request-status">{{ item.get_status_display }}</span>
+      <span class="muted small">Asked by {{ item.requester.public_display_name }} on {{ item.created_at|date:"M j, Y" }}</span>
+    </p>
+    <ol class="stepper-ui guide-stepper" aria-label="Request progress">
+      <li class="is-done"><span>Submitted</span></li>
+      <li class="{% if item.status == 'pending' %}is-current{% elif item.status == 'rejected' or item.status == 'cancelled' %}is-current{% else %}is-done{% endif %}"><span>{% if item.status == "rejected" %}Not approved{% elif item.status == "cancelled" %}Cancelled{% else %}Staff review{% endif %}</span></li>
+      <li class="{% if item.status == 'approved' %}is-current{% elif item.status == 'fulfilled' %}is-done{% endif %}"><span>Open for solutions</span></li>
+      <li class="{% if item.status == 'fulfilled' %}is-done{% endif %}"><span>Solved</span></li>
+    </ol>
   </header>
 
   {% if item.status == "pending" %}
@@ -20,56 +29,101 @@
     <p class="alert alert-secondary" role="status">This request was cancelled.</p>
   {% endif %}
 
-  <div class="surface-card p-4 mb-4"><div class="article-body">{{ item.description|linebreaks }}</div></div>
+  <div class="guide-layout">
+    <div class="guide-layout__main">
+      <section class="surface-card p-4 mb-4" aria-labelledby="request-context-title" data-testid="request-context">
+        <h2 class="h6" id="request-context-title"><i data-lucide="smartphone" class="icon" aria-hidden="true"></i> Device and context</h2>
+        <dl class="row mb-0 small">
+          {% if item.brand %}<dt class="col-sm-4">Brand</dt><dd class="col-sm-8">{{ item.brand.name }}</dd>{% endif %}
+          {% if item.firmware_model %}<dt class="col-sm-4">Model</dt><dd class="col-sm-8">{{ item.firmware_model.name }}</dd>{% endif %}
+          {% if item.model_code %}<dt class="col-sm-4">Model code</dt><dd class="col-sm-8" data-testid="request-model-code">{{ item.model_code }}</dd>{% endif %}
+          {% if item.variant %}<dt class="col-sm-4">Variant</dt><dd class="col-sm-8">{{ item.variant.name }}</dd>{% endif %}
+          {% if item.variant_code %}<dt class="col-sm-4">Variant code</dt><dd class="col-sm-8">{{ item.variant_code }}</dd>{% endif %}
+          {% if item.chipset %}<dt class="col-sm-4">Chipset</dt><dd class="col-sm-8">{{ item.chipset.display_name }}</dd>{% endif %}
+          {% if related_post %}<dt class="col-sm-4">Article that did not help</dt><dd class="col-sm-8" data-testid="request-related-post"><a href="{{ related_post.get_absolute_url }}">{{ related_post.title }}</a></dd>{% endif %}
+          {% if item.bounty_offer %}<dt class="col-sm-4">Planned bounty</dt><dd class="col-sm-8">{{ item.bounty_offer }} credits</dd>{% endif %}
+        </dl>
+      </section>
 
-  {% if item.is_public %}
-    <section class="surface-card p-3 mb-4" aria-labelledby="bounty-title" data-testid="guide-bounty">
-      <h2 class="h6" id="bounty-title"><i data-lucide="gift" class="icon" aria-hidden="true"></i> Bounty</h2>
-      {% if offer.available %}
-        <p class="mb-2">{% if offer.count %}{{ offer.credits }} credits are offered across {{ offer.count }} bount{{ offer.count|pluralize:"y,ies" }}. They are paid to the writer when staff publish a solution.{% else %}No bounty yet. Offer credits to attract a writer.{% endif %}</p>
-        {% if item.status == "approved" %}
-          {% if signed_in %}<a class="btn btn-sm btn-outline-primary" href="{{ offer.new_url }}">Add a bounty</a>
-          {% else %}<a class="btn btn-sm btn-outline-primary" href="{% url 'users:account_login' %}?next={{ request.path|urlencode }}">Sign in to add a bounty</a>{% endif %}
-        {% endif %}
-      {% elif offer.paused_reason %}
-        <p class="mb-0 muted">{{ offer.paused_reason }}</p>
-      {% else %}
-        <p class="mb-0 muted">Bounties are not available on this site.</p>
+      {% if can_see_context %}
+        <section class="surface-card p-4 mb-4" aria-labelledby="request-tried-title" data-testid="request-tried">
+          <h2 class="h6" id="request-tried-title"><i data-lucide="wrench" class="icon" aria-hidden="true"></i> What the requester tried</h2>
+          <div class="article-body">{% if item.tried %}{{ item.tried|rich_text }}{% else %}<p>Not provided (older request).</p>{% endif %}</div>
+          {% if item.expected_outcome %}<p class="mb-0 mt-2"><strong>Expected outcome:</strong> {{ item.expected_outcome }}</p>{% endif %}
+        </section>
+      {% elif item.is_public %}
+        <p class="muted small" data-testid="request-tried-locked"><i data-lucide="lock" class="icon" aria-hidden="true"></i> Sign in with a verified email to see what the requester already tried.</p>
       {% endif %}
-    </section>
-  {% endif %}
 
-  {% if item.status == "approved" %}
-    <section class="mb-4" aria-labelledby="solve-title">
-      <h2 class="h5" id="solve-title">Provide the solution</h2>
-      <p>State whether your solution is <strong>free</strong>, <strong>featured</strong> or <strong>paid</strong>. Staff review it; approval publishes it and pays any bounty to you.</p>
-      {% if can_solve %}<a class="btn btn-primary" href="{{ solve_url }}" data-testid="submit-solution">Submit a solution</a>
-      {% elif not signed_in %}<a class="btn btn-outline-primary" href="{% url 'users:account_login' %}?next={{ request.path|urlencode }}">Sign in to submit</a>
-      {% elif is_owner %}<p class="muted">You asked for this, so another member answers it.</p>
-      {% else %}<p class="muted">Verify your email address to submit a solution.</p>{% endif %}
-    </section>
-  {% endif %}
+      {% if item.description %}<div class="surface-card p-4 mb-4"><div class="article-body">{{ item.description|rich_text }}</div></div>{% endif %}
 
-  {% if solutions %}
-    <section aria-labelledby="solutions-title" class="mb-4">
-      <h2 class="h5" id="solutions-title">Solutions</h2>
-      <ul class="list-unstyled d-grid gap-2">
-        {% for post in solutions %}
-          <li class="surface-card p-3 d-flex flex-wrap justify-content-between gap-2">
-            <span>{% if post.is_live %}<a href="{{ post.get_absolute_url }}">{{ post.title }}</a>{% else %}{{ post.title }}{% endif %} <span class="muted small">by {{ post.author.public_display_name }}</span></span>
-            <span>
-              <span class="badge text-bg-{% if post.access == 'free' %}success{% else %}warning{% endif %}" data-testid="solution-access">{{ post.get_access_display }}</span>
-              {% if post.access == "paid" and post.proposed_price and not post.price %}<span class="badge text-bg-secondary">Price pending approval</span>{% endif %}
-              {% if not post.is_live %}<span class="badge text-bg-secondary">{{ post.get_status_display }}</span>{% endif %}
-            </span>
-          </li>
-        {% endfor %}
-      </ul>
-    </section>
-  {% endif %}
+      {% if item.status == "approved" %}
+        <section class="guide-solve mb-4" aria-labelledby="solve-title">
+          <h2 class="h5" id="solve-title">Provide the solution</h2>
+          <p>State whether your solution is <strong>free</strong>, <strong>featured</strong> or <strong>paid</strong>. Staff review it; approval publishes it and pays any bounty to you.</p>
+          {% if can_solve %}<a class="btn btn-primary" href="{{ solve_url }}" data-testid="submit-solution">Submit a solution</a>
+          {% elif not signed_in %}<a class="btn btn-soft" href="{% url 'users:account_login' %}?next={{ request.path|urlencode }}">Sign in to submit</a>
+          {% elif is_owner %}<p class="muted mb-0">You asked for this, so another member answers it.</p>
+          {% else %}<p class="muted mb-0">Verify your email address to submit a solution.</p>{% endif %}
+        </section>
+      {% endif %}
 
-  {% if can_cancel %}
-    <a class="btn btn-outline-danger btn-sm" href="{% url 'blog:request_cancel_dialog' pk=item.pk %}" hx-get="{% url 'blog:request_cancel_dialog' pk=item.pk %}" hx-target="#dialog-slot" hx-swap="innerHTML">Cancel request</a>
-  {% endif %}
+      {% if solutions %}
+        <section aria-labelledby="solutions-title" class="mb-4">
+          <h2 class="h5" id="solutions-title">Solutions</h2>
+          <ul class="guide-solutions">
+            {% for post in solutions %}
+              <li class="guide-solution">
+                <span class="guide-solution__title">{% if post.is_live %}<a href="{{ post.get_absolute_url }}">{{ post.title }}</a>{% else %}{{ post.title }}{% endif %} <span class="muted small">by {{ post.author.public_display_name }}</span></span>
+                <span class="guide-solution__badges">
+                  <span class="badge-ui badge-ui--{% if post.access == 'free' %}free{% elif post.access == 'featured' %}featured{% else %}paid{% endif %}" data-testid="solution-access">{{ post.get_access_display }}</span>
+                  {% if post.access == "paid" and post.proposed_price and not post.price %}{% include "components/badge.html" with label="Price pending approval" %}{% endif %}
+                  {% if not post.is_live %}{% include "components/badge.html" with label=post.get_status_display %}{% endif %}
+                </span>
+              </li>
+            {% endfor %}
+          </ul>
+        </section>
+      {% endif %}
+
+      {% if can_cancel %}
+        <a class="btn btn-outline-danger btn-sm" href="{% url 'blog:request_cancel_dialog' pk=item.pk %}" hx-get="{% url 'blog:request_cancel_dialog' pk=item.pk %}" hx-target="#dialog-slot" hx-swap="innerHTML">Cancel request</a>
+      {% endif %}
+    </div>
+
+    <aside class="guide-layout__side" aria-label="Bounty and followers">
+      {% if item.is_public %}
+        <section class="bounty-hero bounty-hero--compact" aria-labelledby="bounty-title" data-testid="guide-bounty">
+          <div class="bounty-hero__reward">
+            <span class="bounty-hero__icon" aria-hidden="true"><i data-lucide="gift" class="icon"></i></span>
+            <h2 class="bounty-hero__label" id="bounty-title">Bounty</h2>
+          </div>
+          {% if offer.available %}
+            <p class="mb-2">{% if offer.count %}{{ offer.credits }} credits are offered across {{ offer.count }} bount{{ offer.count|pluralize:"y,ies" }}. They are paid to the writer when staff publish a solution.{% else %}No bounty yet. Offer credits to attract a writer.{% endif %}</p>
+            {% if item.status == "approved" %}
+              {% if signed_in %}<a class="btn btn-sm btn-primary" href="{{ offer.new_url }}">Add a bounty</a>
+              {% else %}<a class="btn btn-sm btn-primary" href="{% url 'users:account_login' %}?next={{ request.path|urlencode }}">Sign in to add a bounty</a>{% endif %}
+            {% endif %}
+          {% elif offer.paused_reason %}
+            <p class="mb-0 muted">{{ offer.paused_reason }}</p>
+          {% else %}
+            <p class="mb-0 muted">Bounties are not available on this site.</p>
+          {% endif %}
+        </section>
+      {% endif %}
+
+      {% if item.status == "approved" %}
+        <section class="surface-card p-3" aria-labelledby="follow-title" data-testid="request-follow">
+          <h2 class="h6" id="follow-title">Need this too?</h2>
+          <p class="muted small mb-2" data-testid="follower-count">{{ follower_count }} member{{ follower_count|pluralize }} follow{{ follower_count|pluralize:"s," }} this request.</p>
+          {% if is_following %}
+            <form method="post" action="{% url 'blog:request_unfollow' pk=item.pk %}">{% csrf_token %}<button class="btn btn-sm btn-soft" type="submit">Stop following</button></form>
+          {% elif can_follow %}
+            <form method="post" action="{% url 'blog:request_follow' pk=item.pk %}">{% csrf_token %}<button class="btn btn-sm btn-primary" type="submit" data-testid="follow-request">Follow this request</button></form>
+          {% endif %}
+        </section>
+      {% endif %}
+    </aside>
+  </div>
 </div>
 {% endblock %}

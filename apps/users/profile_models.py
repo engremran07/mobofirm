@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import ClassVar
+import json
+from typing import Any, ClassVar
 
 from django.conf import settings
 from django.contrib.contenttypes.fields import GenericForeignKey
@@ -28,7 +29,25 @@ class Profile(models.Model):
         verbose_name_plural = "Profiles"
 
     def __str__(self) -> str:
+        """Readable label used by the admin and logs."""
         return f"Profile({self.user})"
+
+    @property
+    def social_links_data(self) -> dict[str, Any]:
+        """``social_links`` as a dict, whatever legacy shape was stored.
+
+        Older rows hold a JSON string (sometimes double-encoded), a list, or JSON
+        ``null``; every shape that is not a mapping reads as an empty dict.
+        """
+        value: Any = self.social_links
+        for _attempt in range(2):
+            if not isinstance(value, str):
+                break
+            try:
+                value = json.loads(value)
+            except ValueError:
+                return {}
+        return dict(value) if isinstance(value, dict) else {}
 
 
 class Reputation(models.Model):

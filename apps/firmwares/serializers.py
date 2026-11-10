@@ -188,6 +188,8 @@ class VariantCreationRequestSerializer(serializers.ModelSerializer):
             "name",
             "model_code",
             "region",
+            "memory",
+            "carrier",
             "details",
             "requested_by",
             "ai_suggestion",

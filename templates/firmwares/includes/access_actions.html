@@ -1,0 +1,24 @@
+{# Contract: firmware, firmware_type, can_change, can_request, pending (open AccessChangeRequest or None). Opens the app-owned access dialogs; renders nothing for other visitors. #}
+{% if can_change or can_request %}
+<section class="surface-card p-4 mt-4" aria-labelledby="access-actions-title" data-access-actions>
+  <p class="section-eyebrow mb-2">Access type</p>
+  <h2 id="access-actions-title" class="h5">Free, featured or paid</h2>
+  {% if can_change %}
+    <a class="btn btn-outline-primary btn-sm" data-access-change
+       href="{% url 'firmwares:firmware_access_change' firmware_type=firmware_type firmware_id=firmware.pk %}"
+       hx-get="{% url 'firmwares:firmware_access_change' firmware_type=firmware_type firmware_id=firmware.pk %}"
+       hx-target="#dialog-slot" hx-swap="innerHTML">Change access type</a>
+  {% endif %}
+  {% if can_request %}
+    {% if pending %}
+      <p class="small mb-0" role="status">Your request to make this file {{ pending.get_to_tier_display|lower }} is waiting for staff.</p>
+    {% else %}
+      <p class="small muted">You uploaded this file. Ask staff to change how it is offered.</p>
+      <a class="btn btn-outline-primary btn-sm" data-access-request
+         href="{% url 'firmwares:firmware_access_request' firmware_type=firmware_type firmware_id=firmware.pk %}"
+         hx-get="{% url 'firmwares:firmware_access_request' firmware_type=firmware_type firmware_id=firmware.pk %}"
+         hx-target="#dialog-slot" hx-swap="innerHTML">Request a change</a>
+    {% endif %}
+  {% endif %}
+</section>
+{% endif %}

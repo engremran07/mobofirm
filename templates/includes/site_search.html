@@ -1,4 +1,5 @@
-{# Contract: search_id (required, unique per page). Header search: the shared combobox (mode navigate) fed by the central search engine, with a plain GET form that opens the full results page without JavaScript. #}
-<form class="site-search position-relative" role="search" method="get" action="{% url 'search:results' %}">
+{# Contract: search_id (required, unique per page). Header search: the shared combobox (mode navigate) fed by the central search engine, with a plain GET form that opens the full results page without JavaScript. Press "/" to focus it. #}
+<form class="site-search position-relative" role="search" method="get" action="{% url 'search:results' %}" data-global-search>
   {% include "components/combobox.html" with input_id=search_id mode="navigate" label="Search devices, brands, chipsets, tools, firmware, articles and pages" placeholder="Search devices, firmware, guides" icon=True limit=10 %}
+  <kbd class="site-search__hint" aria-hidden="true" title="Press / to search">/</kbd>
 </form>

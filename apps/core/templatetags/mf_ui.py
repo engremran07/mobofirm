@@ -51,12 +51,11 @@ def mf_widget(field: forms.BoundField) -> SafeString:
     describedby = []
     if field.help_text:
         describedby.append(f"{field.auto_id}_help")
+    describedby.append(f"{field.auto_id}_errors")
     if field.errors:
         attrs["aria-invalid"] = "true"
         classes.append("is-invalid")
-        describedby.append(f"{field.auto_id}_errors")
-    if describedby:
-        attrs["aria-describedby"] = " ".join(describedby)
+    attrs["aria-describedby"] = " ".join(describedby)
     if classes:
         attrs["class"] = " ".join(classes)
     if isinstance(widget, (forms.CheckboxSelectMultiple, forms.RadioSelect)):
@@ -105,8 +104,7 @@ def combobox_field(field: forms.BoundField) -> dict[str, object]:
     describedby = []
     if field.help_text:
         describedby.append(f"{field.auto_id}_help")
-    if field.errors:
-        describedby.append(f"{field.auto_id}_errors")
+    describedby.append(f"{field.auto_id}_errors")
     return {
         "input_id": field.auto_id,
         "name": field.html_name,

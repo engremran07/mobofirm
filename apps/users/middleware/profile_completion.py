@@ -27,6 +27,7 @@ class EnforceProfileCompletionMiddleware:
     SAFE_URL_NAMES: Iterable[str] = {
         PROFILE_URL_NAME,
         "users:locale_hint",
+        "users:password_rules",
         "account_login",
         "account_logout",
         "account_signup",

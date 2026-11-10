@@ -1,0 +1,11 @@
+{# Contract: did_you_mean (list of Suggestion: label, url, icon, kind, title). Same-site paths only. #}
+{% if did_you_mean %}
+  <p class="did-you-mean small mb-3" data-did-you-mean>
+    <span class="muted">Did you mean</span>
+    {% for suggestion in did_you_mean %}
+      {% if suggestion.url|slice:":1" == "/" and suggestion.url|slice:":2" != "//" %}
+        <a class="did-you-mean__link" href="{{ suggestion.url }}" data-suggestion-kind="{{ suggestion.kind }}"><i data-lucide="{{ suggestion.icon }}" aria-hidden="true"></i> <strong>{{ suggestion.title }}</strong> <span class="muted">({{ suggestion.noun }})</span></a>{% if not forloop.last %}<span class="muted">,</span>{% endif %}
+      {% endif %}
+    {% endfor %}<span class="muted">?</span>
+  </p>
+{% endif %}

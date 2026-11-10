@@ -181,7 +181,7 @@ class ArticleDetailTests(JournalTestCase):
         self.assertContains(response, 'href="#second-section"')
         self.assertContains(response, "In this article")
         self.assertContains(response, "Share this article")
-        self.assertContains(response, "twitter.com/intent/tweet")
+        self.assertContains(response, "x.com/intent/post")
         self.assertContains(response, "Written by")
         self.assertNotContains(response, "<script>alert")
         self.assertNotContains(response, "style=")
@@ -237,8 +237,9 @@ class ArticleDetailTests(JournalTestCase):
 
     def test_views_are_counted_once_per_session(self):
         url = self.post.get_absolute_url()
-        self.client.get(url)
-        self.client.get(url)
+        browser = {"HTTP_USER_AGENT": "Mozilla/5.0 (X11; Linux) Firefox/130"}
+        self.client.get(url, **browser)
+        self.client.get(url, **browser)
 
         self.post.refresh_from_db()
         self.assertEqual(self.post.views_count, 1)

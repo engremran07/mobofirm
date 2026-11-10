@@ -15,7 +15,11 @@ from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
 from allauth.socialaccount.models import SocialApp, SocialLogin
 from django.conf import settings
 from django.contrib import messages
-from django.core.exceptions import ImproperlyConfigured, ValidationError
+from django.core.exceptions import (
+    ImproperlyConfigured,
+    MultipleObjectsReturned,
+    ValidationError,
+)
 from django.http import HttpRequest
 from django.shortcuts import redirect
 from django.urls import NoReverseMatch, reverse
@@ -148,6 +152,23 @@ class CustomSocialAccountAdapter(DefaultSocialAccountAdapter):
     def get_app(self, request: HttpRequest, provider, client_id=None):
         try:
             return super().get_app(request, provider, client_id=client_id)
+        except MultipleObjectsReturned:
+            # Keys saved in the admin (a database row) and keys from the environment
+            # both exist: the admin's are the ones a person edited last, so use them.
+            apps = self.list_apps(request, provider=provider, client_id=client_id)
+            saved = [app for app in apps if app.pk is not None]
+            if len(saved) == 1:
+                return saved[0]
+            logger.error(
+                "Social provider %s has %d conflicting apps; keep only one",
+                provider,
+                len(apps),
+            )
+            messages.error(
+                request,
+                _("Social sign-in is misconfigured. Use email and password instead."),
+            )
+            raise ImmediateHttpResponse(redirect("users:account_login")) from None
         except SocialApp.DoesNotExist as exc:
             logger.error(
                 "Social sign-in is unavailable: provider %s is not configured", provider

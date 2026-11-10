@@ -1,14 +1,21 @@
-{% extends "base.html" %}
+{% extends "errors/_error_page.html" %}
 {% block title %}Page not found | {{ site_name|default:"Mobofirm" }}{% endblock %}
-{% block content %}
-<div class="site-container py-5">
-  <section class="surface-card allauth-shell p-4 mx-auto" aria-labelledby="error-title">
-    <p class="section-eyebrow">Not found</p>
-    <h1 id="error-title" class="h2">This page is unavailable.</h1>
-    <p>The address may be outdated, or the item may no longer be public. Try a search instead.</p>
+{% block code %}404{% endblock %}
+{% block icon %}compass{% endblock %}
+{% block eyebrow %}Not found{% endblock %}
+{% block error_title %}This page is unavailable.{% endblock %}
+{% block message %}The address may be outdated, or the item may no longer be public. Try a search instead.{% endblock %}
+{% block extra %}
+  <div class="error-card__search">
     {% url 'firmwares:universal_search' as search_url %}
     {% include "components/search_box.html" with action=search_url input_id="not-found-search" label="Search the catalogue" placeholder="Search devices, brands, chipsets" %}
-    <a class="btn btn-primary mt-3" href="{% url 'home' %}">Return home</a>
-  </section>
-</div>
+  </div>
+  <nav class="error-links" aria-label="Helpful links">
+    <a class="error-links__item" href="{% url 'firmwares:brand_list' %}"><i data-lucide="building-2" aria-hidden="true"></i><span>Brands</span></a>
+    <a class="error-links__item" href="{% url 'firmwares:chipset_list' %}"><i data-lucide="cpu" aria-hidden="true"></i><span>Chipsets</span></a>
+    <a class="error-links__item" href="{% url 'blog:post_list' %}"><i data-lucide="newspaper" aria-hidden="true"></i><span>Journal</span></a>
+    <a class="error-links__item" href="{% url 'firmwares:flashing_tools' %}"><i data-lucide="wrench" aria-hidden="true"></i><span>Tools</span></a>
+    <a class="error-links__item" href="{% url 'pages:index' %}"><i data-lucide="life-buoy" aria-hidden="true"></i><span>Help</span></a>
+  </nav>
 {% endblock %}
+{% block actions %}<a class="btn btn-primary" href="{% url 'home' %}">Return home</a>{% endblock %}

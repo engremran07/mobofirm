@@ -1,0 +1,146 @@
+@use "../abstracts" as *;
+
+// Buttons: a premium skin over Bootstrap's .btn so every existing button upgrades at once.
+.btn {
+  --bs-btn-border-radius: var(--mf-radius-pill);
+  --bs-btn-padding-x: 1.1rem;
+  --bs-btn-padding-y: 0.5rem;
+  --bs-btn-font-weight: 650;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  letter-spacing: -0.005em;
+  line-height: 1.35;
+  text-decoration: none;
+  user-select: none;
+
+  @include motion {
+    transition:
+      background-color var(--mf-duration-fast) linear,
+      border-color var(--mf-duration-fast) linear,
+      color var(--mf-duration-fast) linear,
+      box-shadow var(--mf-duration-base) var(--mf-ease-out),
+      transform var(--mf-duration-fast) var(--mf-ease-out);
+  }
+
+  &:active:not(:disabled):not(.disabled) {
+    transform: translateY(1px) scale(0.985);
+  }
+
+  &:focus-visible {
+    outline: 0.15rem solid var(--mf-focus);
+    outline-offset: 0.15rem;
+    box-shadow: none;
+  }
+
+  .icon,
+  [data-lucide] {
+    flex-shrink: 0;
+  }
+}
+
+.btn-sm {
+  --bs-btn-padding-x: 0.8rem;
+  --bs-btn-padding-y: 0.28rem;
+  --bs-btn-font-size: var(--mf-text-sm);
+}
+
+.btn-lg {
+  --bs-btn-padding-x: 1.6rem;
+  --bs-btn-padding-y: 0.75rem;
+  --bs-btn-font-size: var(--mf-text-lg);
+}
+
+.btn-primary {
+  background-image: linear-gradient(180deg, color-mix(in srgb, #fff 14%, transparent), transparent);
+  box-shadow:
+    var(--mf-inset-highlight),
+    0 1px 2px rgb(var(--mf-shadow-rgb) / 20%),
+    0 6px 16px color-mix(in srgb, var(--mf-accent) 22%, transparent);
+
+  &:hover:not(:disabled):not(.disabled) {
+    box-shadow:
+      var(--mf-inset-highlight),
+      0 2px 4px rgb(var(--mf-shadow-rgb) / 20%),
+      0 10px 24px color-mix(in srgb, var(--mf-accent) 34%, transparent);
+  }
+}
+
+.btn-outline-secondary,
+.btn-outline-primary,
+.btn-outline-danger {
+  background-color: color-mix(in srgb, var(--mf-surface) 60%, transparent);
+}
+
+.btn-outline-secondary {
+  --bs-btn-border-color: var(--mf-border);
+  --bs-btn-hover-bg: var(--mf-surface-soft);
+  --bs-btn-hover-color: var(--mf-text);
+  --bs-btn-hover-border-color: color-mix(in srgb, var(--mf-text-muted) 55%, var(--mf-border));
+  --bs-btn-active-bg: var(--mf-surface-soft);
+  --bs-btn-active-color: var(--mf-text);
+  --bs-btn-active-border-color: var(--mf-text-muted);
+}
+
+// Soft (tinted) and ghost variants.
+.btn-soft {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--mf-accent) 14%, transparent);
+  color: var(--mf-accent);
+
+  &:hover {
+    background: color-mix(in srgb, var(--mf-accent) 22%, transparent);
+    color: var(--mf-accent);
+  }
+}
+
+.btn-ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--mf-text-muted);
+
+  &:hover {
+    background: var(--mf-surface-soft);
+    color: var(--mf-text);
+  }
+}
+
+// Loading state: any button that issues an HTMX request, or carries aria-busy / .is-loading.
+.btn.is-loading,
+.btn[aria-busy="true"],
+.btn[data-loading],
+.btn.htmx-request,
+form[data-loading] .btn[type="submit"] {
+  @include busy-button;
+}
+
+.btn-outline-secondary.is-loading,
+.btn-outline-secondary[aria-busy="true"],
+.btn-outline-secondary[data-loading],
+.btn-outline-secondary.htmx-request,
+form[data-loading] .btn-outline-secondary[type="submit"],
+.btn-soft.is-loading,
+.btn-ghost.is-loading {
+  @include busy-button(var(--mf-text-muted));
+}
+
+// Optimistic UI: applied immediately by modules/optimistic.js, removed on completion.
+[data-optimistic].is-pending {
+  opacity: 0.65;
+  pointer-events: none;
+}
+
+@keyframes mf-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.copy-btn {
+  &[data-copied="true"] {
+    background: color-mix(in srgb, var(--mf-success) 16%, transparent);
+    color: var(--mf-success);
+  }
+}

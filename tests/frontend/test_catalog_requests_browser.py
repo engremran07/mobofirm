@@ -158,6 +158,81 @@ def test_the_variant_form_cascades_brand_then_model(live_server):
 
 
 @pytest.mark.django_db(transaction=True)
+def test_the_upload_variant_field_adapts_to_the_chosen_model(live_server):
+    seed_catalog()
+    cookies = login_cookie(make_user("variant-adapter"))
+    failures: list[str] = []
+
+    with locked_chromium() as browser:
+        context = session_context(browser, live_server, cookies)
+        page = context.new_page()
+        watch(page, failures)
+        open_page(page, live_server, "/firmwares/upload/")
+
+        assert page.locator("#upload-variant").is_disabled()
+        pick(page, "upload-brand", "acme", "Acme Mobile")
+        pick(page, "upload-model", "acme one", "Acme One")
+        page.wait_for_selector("#upload-variant[role=combobox]")
+        assert page.locator("#upload-variant").get_attribute("placeholder") == (
+            "e.g. AI2401_A"
+        )
+        pick(page, "upload-variant", "glob", "Global")
+        assert page.locator("#upload-variant-value").input_value() != ""
+        assert page.locator("input[name=variant]").count() == 1
+
+        pick(page, "upload-model", "acme two", "Acme Two")
+        page.wait_for_selector("#upload-variant[readonly]")
+        assert page.locator("#upload-variant").input_value() == "No specific variant"
+        assert page.locator("input[name=variant]").input_value() == ""
+
+        pick(page, "upload-model", "acme one", "Acme One")
+        page.wait_for_selector("#upload-variant[role=combobox]")
+        assert page.locator("#upload-variant-value").input_value() == ""
+        context.close()
+
+    assert not failures, "\n".join(failures)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_a_variant_request_needs_an_identifying_field_and_shows_examples(live_server):
+    data = seed_catalog()
+    cookies = login_cookie(make_user("variant-examples"))
+    failures: list[str] = []
+
+    with locked_chromium() as browser:
+        context = session_context(browser, live_server, cookies)
+        page = context.new_page()
+        watch(page, failures)
+        open_page(page, live_server, "/firmwares/requests/variant/")
+
+        assert page.locator("#id_model_code").get_attribute("placeholder") == "AI2401_A"
+        assert page.locator("#id_region").get_attribute("placeholder") == "Global"
+        assert page.locator("#id_memory").get_attribute("placeholder") == (
+            "8 GB / 256 GB"
+        )
+        assert page.locator("#id_model_code_help").inner_text()
+
+        pick(page, "request-brand", "acme", "Acme Mobile")
+        pick(page, "request-model", "acme", "Acme One")
+        page.wait_for_load_state("networkidle")
+        page.fill("#id_name", "Only a name")
+        page.wait_for_load_state("networkidle")
+        page.get_by_role("button", name="Send variant request").click()
+        page.wait_for_load_state("load")
+        assert page.get_by_text("Give at least one of").count() >= 1
+
+        page.fill("#id_model_code", "ai2401 d")
+        page.wait_for_load_state("networkidle")
+        page.get_by_role("button", name="Send variant request").click()
+        page.wait_for_url("**/firmwares/requests/mine/")
+        context.close()
+
+    pending = VariantCreationRequest.objects.get()
+    assert (pending.model, pending.model_code) == (data["model"], "AI2401_D")
+    assert not failures, "\n".join(failures)
+
+
+@pytest.mark.django_db(transaction=True)
 def test_request_pages_fit_every_viewport_and_stay_quiet(live_server):
     seed_catalog()
     cookies = login_cookie(make_user("layout-user"))

@@ -212,3 +212,23 @@ def catchup_missing_blog_posts(brand_slug: str | None = None):
     if result["errors"]:
         logger.warning("Blog catch-up finished with errors: %s", result)
     return {"status": "completed", **result}
+
+
+@shared_task(name="apps.firmwares.tasks.purge_package_history")
+def purge_package_history() -> dict[str, int]:
+    """Purge download history of package periods a newer period has replaced."""
+    from .package_history import purge_superseded_package_history
+
+    return {"purged": purge_superseded_package_history()}
+
+
+@shared_task(
+    name="apps.firmwares.tasks.auto_feature_popular_firmware",
+    soft_time_limit=300,
+    time_limit=600,
+)
+def auto_feature_popular_firmware() -> dict[str, object]:
+    """Promote very popular free files to featured as configured in the admin."""
+    from .auto_feature import run_auto_feature
+
+    return run_auto_feature().as_dict()

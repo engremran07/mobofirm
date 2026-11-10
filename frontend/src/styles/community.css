@@ -1,41 +1,5 @@
-/* Community and compliance apps: consent, gamification, bounty, distribution. */
-
-.consent-banner {
-  position: fixed;
-  right: 1rem;
-  bottom: 1rem;
-  z-index: 1040;
-  width: min(26rem, calc(100vw - 2rem));
-  max-height: calc(100vh - 2rem);
-  overflow-y: auto;
-  padding: 1rem;
-  background: var(--mf-surface-raised);
-  color: var(--mf-text);
-  border: 1px solid var(--mf-border);
-  border-radius: 0.75rem;
-  box-shadow: var(--mf-shadow);
-}
-
-.consent-banner__custom {
-  margin-bottom: 0.75rem;
-}
-
-.consent-banner__custom[hidden] {
-  display: none;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .consent-banner {
-    animation: consent-rise 160ms ease-out;
-  }
-}
-
-@keyframes consent-rise {
-  from {
-    opacity: 0;
-    transform: translateY(0.5rem);
-  }
-}
+/* Community and compliance apps: gamification, bounty, distribution. The consent
+   banner and privacy centre live in components/_consent.scss. */
 
 /* Gamification */
 .badge-card {

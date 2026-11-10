@@ -9,7 +9,7 @@
       <p class="section-eyebrow mb-1">Topic</p>
       <h1 class="hub-header__title">{{ tag.name }}</h1>
       {% if tag.description %}<p class="hub-header__lead">{{ tag.description }}</p>{% endif %}
-      {% if tag_settings.show_tag_usage %}<p class="muted mb-0 numeric">{{ live_count }} published article{{ live_count|pluralize }}</p>{% endif %}
+      {% if tag_settings.show_tag_usage %}<p class="hub-header__count numeric mb-0">{% include "components/badge.html" with variant="popular" label=live_count icon="newspaper" %} published article{{ live_count|pluralize }}</p>{% endif %}
     </div>
   </header>
   {% if related_tags %}
@@ -19,7 +19,7 @@
     </nav>
   {% endif %}
   <div class="journal-layout">
-    <div class="journal-main" id="tag-posts">{% include "tags/partials/tag_posts.html" %}</div>
+    <div class="journal-main skeleton-host" id="tag-posts">{% include "tags/partials/tag_posts.html" %}</div>
     <aside class="journal-aside" aria-label="Topic sidebar">
       {% include "blog/partials/mini_list.html" with title="Latest" cards=latest_posts heading_id="tag-latest-title" %}
       {% include "blog/partials/tag_cloud.html" %}

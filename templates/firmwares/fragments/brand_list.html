@@ -1,17 +1,13 @@
+{# Brand tiles. Included by the home page; context: brands, search_query. #}
 {% if brands %}
-  <div class="row g-3">
-    {% for brand in brands %}
-      <div class="col-6 col-md-4 col-xl-3">
-        <a class="surface-card p-3 d-flex align-items-center gap-3 text-decoration-none" href="{% url 'firmwares:brand_detail' slug=brand.slug %}">
-          <span class="brand-mark" aria-hidden="true">{{ brand.name|slice:":1"|upper }}</span>
-          <span class="min-w-0"><span class="d-block fw-semibold">{{ brand.name }}</span><span class="small muted">{{ brand.model_count }} models</span></span>
-          <i class="icon ms-auto muted" data-lucide="chevron-right" aria-hidden="true"></i>
-        </a>
-      </div>
-    {% endfor %}
+  <div class="card-grid card-grid--tiles">
+    {% for brand in brands %}{% include "firmwares/includes/brand_tile.html" with brand=brand %}{% endfor %}
   </div>
 {% else %}
-  <p class="empty-state p-4 mb-0">No brands match this search.</p>
+  <div class="empty-ui empty-state" role="status">
+    <span class="empty-ui__icon"><i data-lucide="building-2" aria-hidden="true"></i></span>
+    <p class="empty-ui__title">No brands match this search.</p>
+  </div>
   {% include "components/request_cta.html" with kind="brand" query=search_query %}
 {% endif %}
 {% if search_query and brands|length > 0 and brands|length < 3 %}

@@ -1,15 +1,17 @@
-<footer class="site-footer mt-5 py-4">
+<footer class="site-footer">
   <div class="site-container">
-    <div class="row g-4">
-      <div class="col-12 col-md-5">
-        <a class="site-brand" href="{% url 'home' %}">{{ site_name|default:"Mobofirm" }}</a>
-        {% if not site_settings.site_description %}<p class="mb-0 mt-2 small">Firmware discovery with clear model and review information.</p>{% endif %}
-        <p class="mb-0 mt-1 small" data-app-version="{{ release_version }}">Version {{ release_version }}{% if release_build.git_sha %} <span class="text-secondary">&middot; build {{ release_build.git_sha }}{% if release_build.build_date %} ({{ release_build.build_date }}){% endif %}</span>{% endif %}</p>
+    <div class="site-footer__grid">
+      <div>
+        <a class="site-brand d-inline-flex align-items-center gap-2" href="{% url 'home' %}">
+          <span class="site-brand-mark" aria-hidden="true"><i data-lucide="smartphone"></i></span>
+          <span>{{ site_name|default:"Mobofirm" }}</span>
+        </a>
+        {% if not site_settings.site_description %}<p class="mb-0 mt-3 small">Firmware discovery with clear model and review information.</p>{% endif %}
         {% include "site_settings/footer.html" %}
       </div>
-      <nav class="col-6 col-md-3" aria-label="Footer catalogue navigation">
+      <nav aria-label="Footer catalogue navigation">
         <h2 class="footer-heading">Explore</h2>
-        <ul class="list-unstyled mb-0 d-grid gap-1">
+        <ul class="site-footer__links">
           <li><a href="{% url 'firmwares:browse' %}">Firmware catalogue</a></li>
           <li><a href="{% url 'firmwares:brand_list' %}">Brands</a></li>
           <li><a href="{% url 'firmwares:chipset_list' %}">Chipsets</a></li>
@@ -21,15 +23,28 @@
           {% if user.is_authenticated %}<li><a href="{% url 'library:my_files' %}">My files</a></li>{% endif %}
         </ul>
       </nav>
-      <nav class="col-6 col-md-4" aria-label="Footer legal navigation">
+      <nav aria-label="Footer legal navigation">
         <h2 class="footer-heading">Information and legal</h2>
-        <ul class="list-unstyled mb-0 d-grid gap-1">
+        <ul class="site-footer__links">
           {% for label, url in info_links %}<li><a href="{{ url }}">{{ label }}</a></li>{% endfor %}
           {% for label, url in legal_links %}<li><a href="{{ url }}">{{ label }}</a></li>{% endfor %}
           <li><a href="{% url 'consent:privacy_centre' %}">Cookie settings</a></li>
           <li><a href="{% url 'health-live' %}" rel="nofollow" title="Machine-readable service status (JSON)">Service status</a></li>
         </ul>
       </nav>
+    </div>
+    <div class="site-footer__bar">
+      <p class="mb-0" data-app-version="{{ release_version }}">Version {{ release_version }}{% if release_build.git_sha %} <span class="text-secondary">&middot; build {{ release_build.git_sha }}{% if release_build.build_date %} ({{ release_build.build_date }}){% endif %}</span>{% endif %}</p>
+      <div class="d-flex flex-wrap align-items-center gap-2" role="group" aria-label="Appearance">
+        <div class="appearance" role="group" aria-label="Colour theme">
+          <button type="button" data-theme-set="auto" aria-pressed="false"><i data-lucide="monitor" aria-hidden="true"></i>Auto</button>
+          <button type="button" data-theme-set="light" aria-pressed="false"><i data-lucide="sun" aria-hidden="true"></i>Light</button>
+          <button type="button" data-theme-set="dark" aria-pressed="false"><i data-lucide="moon" aria-hidden="true"></i>Dark</button>
+        </div>
+        <div class="appearance" role="group" aria-label="Contrast">
+          <button type="button" data-contrast-toggle aria-pressed="false"><i data-lucide="contrast" aria-hidden="true"></i>High contrast</button>
+        </div>
+      </div>
     </div>
   </div>
 </footer>

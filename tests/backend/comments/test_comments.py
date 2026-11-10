@@ -220,10 +220,10 @@ class SubmissionTests(CommentTestCase):
         )
 
         self.assertEqual(ok.status_code, 302)
-        reply = Comment.objects.get(body="A reply to you")
+        reply = Comment.objects.get(body="<p>A reply to you</p>")
         self.assertEqual(reply.parent, parent)
-        self.assertFalse(Comment.objects.filter(body="Reply to pending").exists())
-        self.assertFalse(Comment.objects.filter(body="Reply nowhere").exists())
+        self.assertFalse(Comment.objects.filter(body__contains="Reply to pending").exists())
+        self.assertFalse(Comment.objects.filter(body__contains="Reply nowhere").exists())
         page = self.client.get(self.post.get_absolute_url())
         self.assertContains(page, "comment-list--children")
         self.assertContains(page, "A reply to you")
@@ -358,7 +358,7 @@ class InteractionTests(CommentTestCase):
             url, {"body": "Better wording"}, HTTP_ACCEPT="application/json"
         )
         comment.refresh_from_db()
-        self.assertEqual((clean.status_code, comment.body), (200, "Better wording"))
+        self.assertEqual((clean.status_code, comment.body), (200, "<p>Better wording</p>"))
         self.assertEqual(comment.status, Comment.Status.APPROVED)
         self.assertEqual(comment.metadata["history"][0]["body"], "Original wording")
 

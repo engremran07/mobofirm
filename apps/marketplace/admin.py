@@ -6,8 +6,8 @@ exactly once, by a user holding the change permission, with the reason recorded.
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import Any
+from collections.abc import Callable, Mapping
+from typing import Any, ClassVar
 
 from django import forms
 from django.contrib import messages
@@ -41,6 +41,7 @@ from apps.core.admin_base import (
     htmx_redirect,
     return_url,
 )
+from apps.core.editor.admin import RichTextAdminMixin
 
 from . import services
 from .models import (
@@ -408,7 +409,8 @@ class SellerEarningAdmin(ReadOnlyModelAdmin):
 
 
 @register(Listing)
-class ListingAdmin(ReviewActionsMixin):
+class ListingAdmin(RichTextAdminMixin, ReviewActionsMixin):
+    rich_text_fields: ClassVar[Mapping[str, str]] = {"description": "listing"}
     list_display = (
         "title",
         "seller",

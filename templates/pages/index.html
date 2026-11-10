@@ -5,19 +5,29 @@
   {% include "components/page_header.html" with title="Help and information" eyebrow="Resources" lead="Guides, policies and answers about using the firmware library." %}
 
   {% if pages %}
-    <ul class="row g-3 list-unstyled">
+    <ul class="card-grid list-unstyled mb-0" data-reveal>
       {% for page in pages %}
-        <li class="col-12 col-md-6 col-xl-4">
-          <a class="surface-card surface-card--interactive p-3 d-block text-decoration-none" href="{{ page.get_absolute_url }}">
-            <h2 class="h5">{{ page.title }}</h2>
-            <p class="small muted mb-2">{{ page.effective_seo_description|truncatechars:140 }}</p>
-            <span class="small muted">Updated {{ page.updated_at|date:"j M Y" }}</span>
-          </a>
+        <li class="d-flex">
+          <article class="card-ui w-100">
+            <div class="card-ui__body">
+              <span class="card-ui__eyebrow"><i class="icon" data-lucide="file-text" aria-hidden="true"></i> Information</span>
+              <h2 class="card-ui__title"><a class="card-ui__link" href="{{ page.get_absolute_url }}">{{ page.title }}</a></h2>
+              <p class="card-ui__text">{{ page.effective_seo_description|truncatechars:140 }}</p>
+            </div>
+            <div class="card-ui__footer">
+              <span class="card-ui__meta"><span><i class="icon" data-lucide="clock" aria-hidden="true"></i> Updated {{ page.updated_at|date:"j M Y" }}</span></span>
+              <i class="icon" data-lucide="arrow-right" aria-hidden="true"></i>
+            </div>
+          </article>
         </li>
       {% endfor %}
     </ul>
   {% else %}
-    {% include "components/empty_state.html" with title="No pages are published yet" message="Information pages appear here once they are published." %}
+    <div class="empty-ui empty-state" role="status">
+      <span class="empty-ui__icon"><i data-lucide="book-open" aria-hidden="true"></i></span>
+      <p class="empty-ui__title">No pages are published yet</p>
+      <p class="mb-0">Information pages appear here once they are published.</p>
+    </div>
   {% endif %}
 
   {% include "pages/partials/home_widgets.html" %}

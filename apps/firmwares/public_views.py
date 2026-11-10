@@ -8,7 +8,6 @@ countdown, optional ad gate, single-use consumption and short-lived signed links
 
 import logging
 from collections import defaultdict
-from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote, urlsplit
@@ -30,6 +29,17 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
+from django.views.decorators.vary import vary_on_headers
+
+from apps.core.search import (
+    list_search_context,
+    search_queryset,
+    search_querysets,
+)
+from apps.core.search import search as engine_search
+from apps.core.search.text import clean_query, score_text, tokenize
+from apps.core.view_counter import should_count
+from apps.site_settings.services import absolute_url
 
 from . import catalog
 from .access import (
@@ -76,6 +86,13 @@ from .models import (
     Model,
     Variant,
 )
+from .search_providers import (
+    BRAND_FIELDS,
+    CHIPSET_ANNOTATIONS,
+    CHIPSET_FIELDS,
+    FIRMWARE_FIELDS,
+    MODEL_FIELDS,
+)
 from .services import storage_root
 from .sources import validate_external_url
 from .tracking_models import FirmwareDownloadAttempt, FirmwareView
@@ -95,6 +112,7 @@ __all__ = [
 BRAND_MODEL_PAGE_SIZE = 24
 CHIPSET_PAGE_SIZE = 48
 BROWSE_PAGE_SIZE = 20
+MIN_DEVICE_QUERY = 2
 
 
 # ============================================================
@@ -171,26 +189,51 @@ def _external_host(firmware) -> str:
     )
 
 
+def _share_context(
+    request: HttpRequest, firmware, firmware_type: str, type_display: str
+) -> dict[str, str]:
+    """Canonical absolute detail URL plus title and blurb for the share component.
+
+    The detail page is always the shared target, also from the download page, so a
+    shared link never carries a download token.
+    """
+    path = reverse(
+        "firmwares:firmware_detail",
+        kwargs={"firmware_type": firmware_type, "firmware_id": firmware.pk},
+    )
+    device = firmware.model.display_name if firmware.model else ""
+    build = firmware.build_number or firmware.original_file_name
+    title = " ".join(part for part in (device, f"{type_display} firmware", build) if part)
+    blurb = f"{type_display} firmware" + (f" for {device}" if device else "")
+    return {
+        "share_url": absolute_url(path, request),
+        "share_title": title,
+        "share_text": blurb,
+    }
+
+
 # ============================================================
 # Library Hub & Universal Search
 # ============================================================
 
 
 @require_GET
+@vary_on_headers("HX-Request")
 def library_hub(request: HttpRequest) -> HttpResponse:
     """Multi-brand firmware library hub — main landing page for browsing."""
-    search_query = request.GET.get("q", "").strip()
     brands = Brand.objects.annotate(
         model_count=Count("models", filter=Q(models__is_active=True))
     ).order_by("name")
     featured_brands = brands.filter(is_featured=True)
-    if search_query:
-        brands = brands.filter(name__icontains=search_query)
+    result = search_queryset(brands, request.GET.get("q"), BRAND_FIELDS)
+    brands = result.queryset
 
     context = {
         "brands": brands,
         "featured_brands": featured_brands,
-        "search_query": search_query,
+        **list_search_context(
+            result, brands.count(), user=request.user, kinds=("brand",)
+        ),
         "total_brands": Brand.objects.count(),
         "total_models": Model.objects.filter(is_active=True).count(),
         "total_firmwares": total_public_firmware(),
@@ -224,28 +267,47 @@ def _home_widgets() -> dict[str, list]:
 
 
 @require_GET
+@vary_on_headers("HX-Request")
 def universal_search(request: HttpRequest) -> HttpResponse:
-    """Universal search across brands, models, codenames, model codes and chipsets."""
-    query = request.GET.get("q", "").strip()
-    results: Iterable[Model] = []
-    if len(query) >= 2:
-        results = (
-            Model.objects.filter(
-                Q(name__icontains=query)
-                | Q(codename__icontains=query)
-                | Q(model_code__icontains=query)
-                | Q(marketing_name__icontains=query)
-                | Q(also_known_as__icontains=query)
-                | Q(chipset__icontains=query)
-                | Q(chipset_ref__name__icontains=query)
-                | Q(brand__name__icontains=query),
-                is_active=True,
-            )
-            .select_related("brand")
-            .order_by("brand__name", "name")[:50]
-        )
+    """Device search: names, codenames, model codes, chipsets and brands.
 
-    context = {"results": results, "query": query}
+    Uses the shared engine (synonyms, typo tolerance, relevance order) and offers
+    "did you mean" suggestions when few devices match.
+    """
+    query = clean_query(request.GET.get("q"))
+    results: list[Model] = []
+    context: dict[str, Any] = {"results": results, "query": query}
+    if len(query) >= MIN_DEVICE_QUERY:
+        outcome = search_queryset(
+            Model.objects.filter(is_active=True).select_related("brand").distinct(),
+            query,
+            MODEL_FIELDS,
+        )
+        tokens = tokenize(query)
+        results.extend(
+            sorted(
+                outcome.queryset.order_by("brand__name", "name")[:50],
+                key=lambda device: (
+                    -score_text(
+                        query,
+                        tokens,
+                        device.name,
+                        device.marketing_name,
+                        device.model_code,
+                        device.codename,
+                        f"{device.brand.name} {device.name}",
+                    )
+                ),
+            )
+        )
+        context.update(
+            list_search_context(
+                outcome,
+                len(results),
+                user=request.user,
+                kinds=("model", "brand", "chipset"),
+            )
+        )
 
     if request.headers.get("HX-Request"):
         return render(request, "firmwares/fragments/search_results.html", context)
@@ -257,9 +319,7 @@ def universal_search(request: HttpRequest) -> HttpResponse:
 # ============================================================
 
 
-def _filtered_firmware_queryset(
-    model_class, *, brand_slug, chipset, package_format, search
-):
+def _filtered_firmware_queryset(model_class, *, brand_slug, chipset, package_format):
     queryset = get_public_firmware_queryset(model_class)
     if brand_slug:
         queryset = queryset.filter(brand__slug=brand_slug)
@@ -271,13 +331,6 @@ def _filtered_firmware_queryset(
         )
     if package_format:
         queryset = queryset.filter(package_format=package_format)
-    if search:
-        queryset = queryset.filter(
-            Q(original_file_name__icontains=search)
-            | Q(model__name__icontains=search)
-            | Q(brand__name__icontains=search)
-            | Q(chipset__icontains=search)
-        )
     return queryset
 
 
@@ -323,12 +376,16 @@ def _paginate_firmware(querysets: dict, page_number):
 
 
 @require_GET
+@vary_on_headers("HX-Request")
 def firmware_browse(request: HttpRequest) -> HttpResponse:
-    """Main firmware browsing page with filters."""
+    """Main firmware browsing page with filters.
+
+    ``q`` is answered by the shared search engine across every classification;
+    HTMX requests (per keystroke or filter change) get the table fragment only.
+    """
     brand_slug = request.GET.get("brand")
     firmware_type = request.GET.get("type", "all")
     chipset = request.GET.get("chipset")
-    search = request.GET.get("q", "").strip()
     package_format = request.GET.get("package_format", "")
     if package_format not in dict(FirmwarePackageFormat.choices):
         package_format = ""
@@ -337,7 +394,6 @@ def firmware_browse(request: HttpRequest) -> HttpResponse:
         "brand_slug": brand_slug,
         "chipset": chipset,
         "package_format": package_format,
-        "search": search,
     }
     if firmware_type == "all" or not firmware_type:
         type_keys = [key for key, _cls in PUBLIC_FIRMWARE_TYPES]
@@ -346,11 +402,16 @@ def firmware_browse(request: HttpRequest) -> HttpResponse:
         if not model_class:
             raise Http404("Invalid firmware type")
         type_keys = [catalog.TYPE_KEY_BY_CLASS[model_class]]
-    querysets = {
-        key: _filtered_firmware_queryset(FIRMWARE_TYPES[key], **filters)
-        for key in type_keys
-    }
-    firmwares = _paginate_firmware(querysets, request.GET.get("page", 1))
+    outcome = search_querysets(
+        {
+            key: _filtered_firmware_queryset(FIRMWARE_TYPES[key], **filters)
+            for key in type_keys
+        },
+        request.GET.get("q"),
+        FIRMWARE_FIELDS,
+    )
+    firmwares = _paginate_firmware(outcome.querysets, request.GET.get("page", 1))
+    search = list_search_context(outcome, firmwares.paginator.count, user=request.user)
 
     chipsets = (
         Chipset.objects.annotate(model_total=Count("models", distinct=True))
@@ -365,7 +426,7 @@ def firmware_browse(request: HttpRequest) -> HttpResponse:
         "selected_type": firmware_type,
         "selected_chipset": chipset,
         "selected_package_format": package_format,
-        "search_query": search,
+        **search,
         "firmware_types": [
             ("all", "All Types"),
             *[
@@ -384,21 +445,20 @@ def firmware_browse(request: HttpRequest) -> HttpResponse:
 
 
 @require_GET
+@vary_on_headers("HX-Request")
 def brand_list(request: HttpRequest) -> HttpResponse:
-    """List all brands grouped by alphabet."""
-    brands = list(
-        Brand.objects.annotate(
-            model_count=Count("models", filter=Q(models__is_active=True))
-        ).order_by("name")
-    )
+    """List all brands grouped by alphabet; ``q`` filters through the shared engine."""
+    all_brands = Brand.objects.annotate(
+        model_count=Count("models", filter=Q(models__is_active=True))
+    ).order_by("name")
+    result = search_queryset(all_brands, request.GET.get("q"), BRAND_FIELDS)
+    brands = list(result.queryset)
     firmware_counts = public_counts("brand_id")
     total_firmwares = 0
-    total_models = 0
     brands_by_letter: dict[str, list] = defaultdict(list)
     for brand in brands:
         brand.firmware_count = firmware_counts.get(brand.pk, 0)
         total_firmwares += brand.firmware_count
-        total_models += brand.model_count
         letter = brand.name[:1].upper() if brand.name else "#"
         brands_by_letter[letter if letter.isalpha() else "#"].append(brand)
 
@@ -410,25 +470,47 @@ def brand_list(request: HttpRequest) -> HttpResponse:
         "grouped_brands": [(letter, brands_by_letter[letter]) for letter in letters],
         "alphabet": letters,
         "total_firmwares": total_firmwares,
-        "total_models": total_models,
+        "total_models": Model.objects.filter(is_active=True).count(),
+        "total_brands": all_brands.count(),
+        **list_search_context(
+            result, len(brands), user=request.user, kinds=("brand", "chipset")
+        ),
     }
+    if request.headers.get("HX-Request"):
+        return render(request, "firmwares/fragments/brand_groups.html", context)
     return render(request, "firmwares/brand_list.html", context)
 
 
 @require_GET
+@vary_on_headers("HX-Request")
 def brand_detail(request: HttpRequest, slug: str) -> HttpResponse:
-    """Brand page: logo, categories, chipsets, tools, guides, blog links, models."""
+    """Brand page: logo, categories, chipsets, tools, guides, blog links, models.
+
+    ``q`` filters the model list through the shared engine; HTMX requests receive
+    just the model cards.
+    """
     brand = get_object_or_404(Brand, slug=slug)
-    models_qs = (
-        Model.objects.filter(brand=brand, is_active=True)
-        .select_related("chipset_ref")
-        .order_by("name")
+    all_models = Model.objects.filter(brand=brand, is_active=True).select_related(
+        "chipset_ref"
     )
-    paginator = Paginator(models_qs, BRAND_MODEL_PAGE_SIZE)
+    result = search_queryset(all_models, request.GET.get("q"), MODEL_FIELDS)
+    paginator = Paginator(result.queryset.order_by("name"), BRAND_MODEL_PAGE_SIZE)
     models_page = paginator.get_page(request.GET.get("page"))
     model_counts = public_counts("model_id", brand=brand)
     for model in models_page:
         model.firmware_count = model_counts.get(model.pk, 0)
+    search = list_search_context(
+        result,
+        paginator.count,
+        user=request.user,
+        kinds=("model", "chipset", "firmware_type"),
+    )
+    if request.headers.get("HX-Request"):
+        return render(
+            request,
+            "firmwares/fragments/model_cards.html",
+            {"brand": brand, "models": models_page, **search},
+        )
 
     brand_filter = Q(models__brand=brand, models__is_active=True)
     chipsets = list(
@@ -441,7 +523,8 @@ def brand_detail(request: HttpRequest, slug: str) -> HttpResponse:
         "brand": brand,
         "logo_src": brand.logo_url if brand.logo_url.startswith("/") else "",
         "models": models_page,
-        "model_total": paginator.count,
+        "model_total": all_models.count() if result.is_active else paginator.count,
+        **search,
         "total_firmwares": sum(count for _k, _l, count in categories),
         "categories": categories,
         "chipsets": chipsets,
@@ -457,58 +540,92 @@ def brand_detail(request: HttpRequest, slug: str) -> HttpResponse:
 
 
 @require_GET
+@vary_on_headers("HX-Request")
 def chipset_list(request: HttpRequest) -> HttpResponse:
-    """All chipsets with the number of device models that use them."""
-    query = request.GET.get("q", "").strip()
-    chipsets = Chipset.objects.annotate(
+    """All chipsets with the number of device models that use them.
+
+    ``q`` goes through the shared search engine (name, vendor, family, aliases and
+    code names such as MT6985, typo tolerant); ``vendor`` narrows the list. HTMX
+    requests receive only the results fragment.
+    """
+    vendor = request.GET.get("vendor", "").strip()
+    base = Chipset.objects.all()
+    if vendor:
+        base = base.filter(vendor=vendor)
+    result = search_queryset(
+        base,
+        request.GET.get("q"),
+        CHIPSET_FIELDS,
+        annotations=CHIPSET_ANNOTATIONS,
+    )
+    chipsets = result.queryset.annotate(
         model_total=Count("models", filter=Q(models__is_active=True), distinct=True)
     ).order_by("vendor", "name")
-    if query:
-        chipsets = chipsets.filter(
-            Q(name__icontains=query)
-            | Q(vendor__icontains=query)
-            | Q(family__icontains=query)
-        )
     paginator = Paginator(chipsets, CHIPSET_PAGE_SIZE)
     page = paginator.get_page(request.GET.get("page"))
     context = {
         "chipsets": page,
         "total_chipsets": paginator.count,
-        "search_query": query,
-        "pagination_query": f"q={quote(query)}&" if query else "",
+        "selected_vendor": vendor,
         "vendors": list(
             Chipset.objects.order_by("vendor")
             .values_list("vendor", flat=True)
             .distinct()
         ),
+        **list_search_context(
+            result, paginator.count, user=request.user, kinds=("chipset", "brand")
+        ),
     }
+    if request.headers.get("HX-Request"):
+        return render(request, "firmwares/fragments/chipset_results.html", context)
     return render(request, "firmwares/chipset_list.html", context)
 
 
 @require_GET
+@vary_on_headers("HX-Request")
 def chipset_detail(request: HttpRequest, slug: str) -> HttpResponse:
-    """Chipset page: devices using it, firmware categories, tools and guides."""
+    """Chipset page: devices using it, firmware categories, tools and guides.
+
+    ``q`` filters the device list through the shared engine; HTMX requests
+    receive just the device cards.
+    """
     chipset = get_object_or_404(Chipset, slug=slug)
-    models_qs = (
+    all_models = (
         Model.objects.filter(
             Q(chipset_ref=chipset) | Q(variants__chipset_ref=chipset), is_active=True
         )
         .select_related("brand")
         .distinct()
-        .order_by("brand__name", "name")
     )
-    paginator = Paginator(models_qs, BRAND_MODEL_PAGE_SIZE)
+    result = search_queryset(all_models, request.GET.get("q"), MODEL_FIELDS)
+    paginator = Paginator(
+        result.queryset.order_by("brand__name", "name"), BRAND_MODEL_PAGE_SIZE
+    )
     models_page = paginator.get_page(request.GET.get("page"))
     model_counts = public_counts("model_id", catalog.chipset_filter(chipset))
     for model in models_page:
         model.firmware_count = model_counts.get(model.pk, 0)
+    search = list_search_context(
+        result,
+        paginator.count,
+        user=request.user,
+        kinds=("model", "brand", "firmware_type"),
+    )
+    if request.headers.get("HX-Request"):
+        return render(
+            request,
+            "firmwares/fragments/model_cards.html",
+            {"chipset": chipset, "models": models_page, "show_brand": True, **search},
+        )
 
     chipset_filter = catalog.chipset_filter(chipset)
     categories = _category_summary(chipset_filter)
     context = {
         "chipset": chipset,
         "models": models_page,
-        "model_total": paginator.count,
+        "show_brand": True,
+        "model_total": all_models.count() if result.is_active else paginator.count,
+        **search,
         "categories": categories,
         "total_firmwares": sum(count for _k, _l, count in categories),
         "tools": _tools_for(None, [chipset]),
@@ -606,13 +723,17 @@ def firmware_detail(
         ),
         id=firmware_id,
     )
-    model_class.objects.filter(id=firmware_id).update(view_count=F("view_count") + 1)
-    FirmwareView.log_view(
-        firmware,
-        user=request.user if request.user.is_authenticated else None,
-        session_key=request.session.session_key or "",
-        request=request,
-    )
+    if should_count(request, firmware_type, firmware.id):
+        model_class.objects.filter(id=firmware_id).update(
+            view_count=F("view_count") + 1
+        )
+        firmware.view_count += 1
+        FirmwareView.log_view(
+            firmware,
+            user=request.user if request.user.is_authenticated else None,
+            session_key=request.session.session_key or "",
+            request=request,
+        )
 
     related_firmwares = []
     related_blog_posts = []
@@ -639,6 +760,12 @@ def firmware_detail(
         "access": check_download_access(request.user, firmware),
         "changelog": (firmware.metadata or {}).get("changelog", ""),
         "login_url": f"{reverse('users:account_login')}?next={quote(request.path)}",
+        **_share_context(
+            request,
+            firmware,
+            firmware_type,
+            FIRMWARE_TYPE_DISPLAY.get(firmware_type, firmware_type),
+        ),
     }
     return render(request, "firmwares/firmware_detail.html", context)
 
@@ -733,6 +860,12 @@ def firmware_download(
         "refresh_seconds": max(remaining, ad_remaining),
         "external_host": _external_host(firmware),
         "gate_enabled": config["gate_enabled"],
+        **_share_context(
+            request,
+            firmware,
+            firmware_type,
+            FIRMWARE_TYPE_DISPLAY.get(firmware_type, firmware_type),
+        ),
     }
     return render(request, "firmwares/download.html", context)
 
@@ -930,225 +1063,45 @@ def api_firmware_stats(
     )
 
 
+AUTOCOMPLETE_KINDS: dict[str, tuple[str, ...]] = {
+    "all": ("brand", "model", "variant", "chipset", "firmware", "blog"),
+    "brands": ("brand",),
+    "chipsets": ("chipset",),
+    "models": ("model",),
+    "variants": ("variant",),
+    "firmwares": ("firmware",),
+    "blog": ("blog",),
+}
+
+
 @require_GET
 def api_search_autocomplete(request: HttpRequest) -> JsonResponse:
-    """Global search autocomplete: brands, models, variants, chipsets, firmware, blog."""
-    query = request.GET.get("q", "").strip()
-    search_type = request.GET.get("type", "all")
+    """Catalogue autocomplete JSON, answered by the central search engine.
+
+    Same ranking, synonyms, typo tolerance and visibility rules as the header
+    combobox; ``type`` narrows to brands, chipsets, models, variants, firmwares or
+    blog.
+    """
+    query = clean_query(request.GET.get("q"))
+    kinds = AUTOCOMPLETE_KINDS.get(request.GET.get("type", "all"), ())
     try:
         limit = max(1, min(int(request.GET.get("limit", 10)), 20))
     except ValueError:
         limit = 10
 
-    if len(query) < 2:
+    if len(query) < MIN_DEVICE_QUERY or not kinds:
         return JsonResponse({"results": [], "query": query})
 
-    results = []
-
-    if search_type in ("all", "brands"):
-        brands = (
-            Brand.objects.filter(Q(name__icontains=query) | Q(slug__icontains=query))
-            .annotate(model_total=Count("models"))
-            .order_by("name")[:limit]
-        )
-        for brand in brands:
-            results.append(
-                {
-                    "type": "brand",
-                    "id": brand.id,
-                    "name": brand.name,
-                    "slug": brand.slug,
-                    "url": reverse("firmwares:brand_detail", args=[brand.slug]),
-                    "icon": "building",
-                    "subtitle": f"{brand.model_total} model{'s' if brand.model_total != 1 else ''}",
-                }
-            )
-
-    if search_type in ("all", "chipsets"):
-        chipsets = Chipset.objects.filter(
-            Q(name__icontains=query)
-            | Q(vendor__icontains=query)
-            | Q(family__icontains=query)
-        ).order_by("vendor", "name")[:limit]
-        for chipset in chipsets:
-            results.append(
-                {
-                    "type": "chipset",
-                    "id": chipset.id,
-                    "name": chipset.display_name,
-                    "slug": chipset.slug,
-                    "url": reverse("firmwares:chipset_detail", args=[chipset.slug]),
-                    "icon": "cpu",
-                    "subtitle": chipset.family or chipset.vendor,
-                }
-            )
-
-    if search_type in ("all", "models"):
-        models_qs = (
-            Model.objects.filter(
-                Q(name__icontains=query)
-                | Q(slug__icontains=query)
-                | Q(marketing_name__icontains=query)
-                | Q(model_code__icontains=query)
-                | Q(description__icontains=query)
-                | Q(brand__name__icontains=query),
-                is_active=True,
-            )
-            .select_related("brand")
-            .order_by("name")[:limit]
-        )
-        for model in models_qs:
-            subtitle_parts = [model.brand.name]
-            if model.model_code:
-                subtitle_parts.append(model.model_code)
-            results.append(
-                {
-                    "type": "model",
-                    "id": model.id,
-                    "name": model.marketing_name or model.name,
-                    "slug": model.slug,
-                    "url": reverse(
-                        "firmwares:model_detail", args=[model.brand.slug, model.slug]
-                    ),
-                    "icon": "smartphone",
-                    "subtitle": " • ".join(subtitle_parts),
-                    "brand": model.brand.name,
-                    "model_code": model.model_code or "",
-                    "marketing_name": model.marketing_name or "",
-                }
-            )
-
-    if search_type in ("all", "variants"):
-        variants_qs = (
-            Variant.objects.filter(
-                Q(name__icontains=query)
-                | Q(slug__icontains=query)
-                | Q(region__icontains=query)
-                | Q(board_id__icontains=query)
-                | Q(chipset__icontains=query)
-                | Q(model__name__icontains=query)
-                | Q(model__model_code__icontains=query)
-                | Q(model__brand__name__icontains=query),
-                is_active=True,
-            )
-            .select_related("model", "model__brand")
-            .order_by("name")[:limit]
-        )
-        for variant in variants_qs:
-            subtitle_parts = [f"{variant.model.brand.name} {variant.model.name}"]
-            if variant.chipset:
-                subtitle_parts.append(variant.chipset)
-            if variant.region:
-                subtitle_parts.append(variant.region)
-            results.append(
-                {
-                    "type": "variant",
-                    "id": variant.id,
-                    "name": variant.name,
-                    "slug": variant.slug,
-                    "url": reverse(
-                        "firmwares:model_detail",
-                        args=[variant.model.brand.slug, variant.model.slug],
-                    ),
-                    "icon": "layers",
-                    "subtitle": " • ".join(subtitle_parts),
-                    "chipset": variant.chipset or "",
-                    "region": variant.region or "",
-                }
-            )
-
-    if search_type in ("all", "firmwares"):
-        remaining = limit - len(results) if search_type == "all" else limit
-        for type_key, model_class in PUBLIC_FIRMWARE_TYPES:
-            if remaining <= 0:
-                break
-            firmwares = (
-                get_public_firmware_queryset(model_class)
-                .filter(
-                    Q(original_file_name__icontains=query)
-                    | Q(chipset__icontains=query)
-                    | Q(android_version__icontains=query)
-                    | Q(build_number__icontains=query)
-                    | Q(brand__name__icontains=query)
-                    | Q(model__name__icontains=query)
-                    | Q(model__model_code__icontains=query)
-                    | Q(model__marketing_name__icontains=query)
-                    | Q(variant__name__icontains=query)
-                    | Q(variant__region__icontains=query)
-                    | Q(variant__chipset__icontains=query)
-                )
-                .select_related("brand", "model", "variant")[:remaining]
-            )
-            for firmware in firmwares:
-                subtitle_parts = [
-                    part
-                    for part in (
-                        firmware.brand.name if firmware.brand else "",
-                        firmware.model.name if firmware.model else "",
-                        firmware.variant.name if firmware.variant else "",
-                        firmware.chipset,
-                    )
-                    if part
-                ]
-                name = firmware.original_file_name
-                results.append(
-                    {
-                        "type": "firmware",
-                        "id": str(firmware.id),
-                        "name": name[:60] + ("..." if len(name) > 60 else ""),
-                        "url": reverse(
-                            "firmwares:firmware_detail", args=[type_key, firmware.id]
-                        ),
-                        "icon": "file-archive",
-                        "subtitle": " • ".join(subtitle_parts[:3]) or type_key.title(),
-                        "firmware_type": type_key,
-                        "chipset": firmware.chipset or "",
-                        "android_version": firmware.android_version or "",
-                    }
-                )
-                remaining -= 1
-
-    if search_type in ("all", "blog"):
-        remaining = limit - len(results) if search_type == "all" else limit
-        if remaining > 0:
-            posts = (
-                _published_posts()
-                .filter(
-                    Q(title__icontains=query)
-                    | Q(summary__icontains=query)
-                    | Q(category__name__icontains=query)
-                    | Q(tags__name__icontains=query)
-                )
-                .select_related("category")
-                .prefetch_related("tags")
-                .distinct()
-                .order_by("-published_at")[:remaining]
-            )
-            for post in posts:
-                tag_names = [
-                    tag.name
-                    for tag in post.tags.all()
-                    if tag.is_curated and tag.is_active and not tag.is_deleted
-                ][:3]
-                subtitle_parts = []
-                if post.category:
-                    subtitle_parts.append(post.category.name)
-                if tag_names:
-                    subtitle_parts.append(", ".join(tag_names))
-                if post.published_at:
-                    subtitle_parts.append(post.published_at.strftime("%b %d, %Y"))
-                results.append(
-                    {
-                        "type": "blog",
-                        "id": post.id,
-                        "name": post.title,
-                        "slug": post.slug,
-                        "url": reverse("blog:post_detail", args=[post.slug]),
-                        "icon": "file-text",
-                        "subtitle": " • ".join(subtitle_parts) or "Blog Post",
-                    }
-                )
-
-    return JsonResponse(
-        {"results": results[:limit], "query": query, "count": len(results)}
-    )
+    hits = engine_search(query, kinds=kinds, limit=limit, user=request.user)
+    results = [
+        {
+            "type": hit.kind,
+            "id": hit.value,
+            "name": hit.title,
+            "url": hit.url,
+            "icon": hit.icon,
+            "subtitle": hit.subtitle,
+        }
+        for hit in hits
+    ]
+    return JsonResponse({"results": results, "query": query, "count": len(results)})

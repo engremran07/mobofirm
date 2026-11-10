@@ -1,18 +1,14 @@
-{% extends "base.html" %}
+{% extends "account/_auth_layout.html" %}
 {% block title %}Save recovery codes | {{ site_name|default:"Mobofirm" }}{% endblock %}
-{% block content %}
-<div class="site-container py-5">
-  {% url 'users:dashboard' as account_url %}
-  {% include "components/breadcrumbs.html" with current="Recovery codes" parent_label="Account" parent_url=account_url %}
-  
-  <section class="surface-card auth-card p-4" aria-labelledby="mfa-backup-title">
-    <p class="section-eyebrow">Account security</p>
-    <h1 id="mfa-backup-title" class="h2">Save your recovery codes</h1>
-    <p>Each code works once. Store them somewhere private; they will not be shown again.</p>
-    <ul class="list-unstyled d-grid gap-2" aria-label="One-time recovery codes">
-      {% for code in backup_codes %}<li><code>{{ code }}</code></li>{% endfor %}
-    </ul>
-    <a class="btn btn-primary" href="{% url 'users:dashboard' %}">Continue to account</a>
-  </section>
-</div>
+{% block auth_crumbs %}{% url 'users:dashboard' as account_url %}{% include "components/breadcrumbs.html" with current="Recovery codes" parent_label="Account" parent_url=account_url %}{% endblock %}
+{% block auth_aside %}{% endblock %}
+{% block auth_icon %}key-round{% endblock %}
+{% block auth_eyebrow %}Account security{% endblock %}
+{% block auth_title %}Save your recovery codes{% endblock %}
+{% block auth_lead %}<p class="auth-card__lead">Each code works once. Store them somewhere private; they will not be shown again.</p>{% endblock %}
+{% block auth_body %}
+<ul class="recovery-grid" aria-label="One-time recovery codes">
+  {% for code in backup_codes %}<li><code>{{ code }}</code></li>{% endfor %}
+</ul>
+<a class="btn btn-primary btn-lg w-100" href="{% url 'users:dashboard' %}">Continue to account</a>
 {% endblock %}

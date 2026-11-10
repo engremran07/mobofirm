@@ -1,0 +1,436 @@
+/* Summernote (lite) theme for Mobofirm: design tokens, light/dark, responsive, RTL-safe.
+   Loaded only on pages that contain an editor. Variables fall back to literal values so
+   the editor also works inside the Unfold admin, which does not load the public tokens. */
+
+.note-editor.note-frame {
+  --mf-ed-bg: var(--mf-surface-raised, #ffffff);
+  --mf-ed-fg: var(--mf-text, #19272c);
+  --mf-ed-muted: var(--mf-text-muted, #52636a);
+  --mf-ed-border: var(--mf-border, #d9d2c7);
+  --mf-ed-soft: var(--mf-surface-soft, #ece7de);
+  --mf-ed-accent: var(--mf-accent, #0b7376);
+  --mf-ed-accent-ink: var(--mf-accent-ink, #ffffff);
+  --mf-ed-focus: var(--mf-focus, #07595d);
+  --mf-ed-danger: var(--mf-danger, #a43838);
+  --mf-ed-radius: var(--mf-radius-sm, 0.5rem);
+
+  border: 1px solid var(--mf-ed-border);
+  border-radius: var(--mf-ed-radius);
+  background: var(--mf-ed-bg);
+  color: var(--mf-ed-fg);
+  box-shadow: none;
+  font-family: inherit;
+}
+
+:root.dark .note-editor.note-frame,
+:root.dark .note-modal,
+:root.dark .note-dropdown-menu,
+:root.dark .note-popover {
+  --mf-ed-bg: #1d2730;
+  --mf-ed-fg: #edf4f1;
+  --mf-ed-muted: #adbbb8;
+  --mf-ed-border: #3a4a52;
+  --mf-ed-soft: #293740;
+  --mf-ed-accent: #72d9ce;
+  --mf-ed-accent-ink: #10201f;
+  --mf-ed-focus: #a8eee5;
+  --mf-ed-danger: #ff9292;
+}
+
+.note-editor.note-frame:focus-within {
+  outline: 2px solid var(--mf-ed-focus);
+  outline-offset: 2px;
+}
+
+.note-editor .note-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.5rem;
+  padding: 0.4rem 0.5rem;
+  border: 0;
+  border-bottom: 1px solid var(--mf-ed-border);
+  border-radius: var(--mf-ed-radius) var(--mf-ed-radius) 0 0;
+  background: var(--mf-ed-soft);
+}
+
+.note-editor .note-toolbar .note-btn-group {
+  display: inline-flex;
+  margin: 0;
+  gap: 0.125rem;
+}
+
+.note-editor .note-btn {
+  min-width: 2.25rem;
+  min-height: 2.25rem;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid transparent;
+  border-radius: calc(var(--mf-ed-radius) - 0.125rem);
+  background: transparent;
+  color: var(--mf-ed-fg);
+  font-size: 0.9rem;
+  line-height: 1.2;
+  cursor: pointer;
+}
+
+.note-editor .note-btn:hover,
+.note-editor .note-btn:focus-visible,
+.note-editor .note-btn.active {
+  border-color: var(--mf-ed-border);
+  background: var(--mf-ed-bg);
+  color: var(--mf-ed-fg);
+}
+
+.note-editor .note-btn:focus-visible {
+  outline: 2px solid var(--mf-ed-focus);
+  outline-offset: 1px;
+}
+
+.note-editor .note-btn.disabled,
+.note-editor .note-btn[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.note-editor .note-editing-area,
+.note-editor .note-editing-area .note-editable {
+  background: var(--mf-ed-bg);
+  color: var(--mf-ed-fg);
+}
+
+.note-editor .note-editing-area .note-editable {
+  min-height: 7.5rem;
+  padding: 0.85rem 1rem;
+  font-size: 1rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  text-align: start;
+}
+
+.note-editor .note-editing-area .note-editable:focus {
+  outline: none;
+}
+
+.note-editor .note-editable img {
+  max-width: 100%;
+  height: auto;
+}
+
+.note-editor .note-editable blockquote {
+  margin: 0.75rem 0;
+  padding-inline-start: 1rem;
+  border-inline-start: 3px solid var(--mf-ed-accent);
+  color: var(--mf-ed-muted);
+}
+
+.note-editor .note-editable pre {
+  padding: 0.65rem 0.85rem;
+  border-radius: var(--mf-ed-radius);
+  background: var(--mf-ed-soft);
+  color: var(--mf-ed-fg);
+  white-space: pre-wrap;
+}
+
+.note-editor .note-editable a {
+  color: var(--mf-ed-accent);
+}
+
+.note-editor .note-placeholder {
+  padding: 0.85rem 1rem;
+  color: var(--mf-ed-muted);
+}
+
+.note-editor .note-codable {
+  width: 100%;
+  min-height: 12rem;
+  padding: 0.85rem 1rem;
+  border: 0;
+  background: var(--mf-ed-bg);
+  color: var(--mf-ed-fg);
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 0.9rem;
+}
+
+.note-editor .note-statusbar {
+  border-top: 1px solid var(--mf-ed-border);
+  border-radius: 0 0 var(--mf-ed-radius) var(--mf-ed-radius);
+  background: var(--mf-ed-soft);
+}
+
+.note-editor.note-frame.fullscreen {
+  z-index: 1080;
+  border-radius: 0;
+}
+
+.note-editor.note-frame.fullscreen .note-editing-area {
+  background: var(--mf-ed-bg);
+}
+
+.note-dropdown-menu,
+.note-popover .popover-content,
+.note-popover .note-popover-content {
+  border: 1px solid var(--mf-ed-border, #d9d2c7);
+  border-radius: var(--mf-ed-radius, 0.5rem);
+  background: var(--mf-ed-bg, #ffffff);
+  color: var(--mf-ed-fg, #19272c);
+  box-shadow: var(--mf-shadow, 0 0.75rem 2rem rgb(0 0 0 / 18%));
+}
+
+.note-dropdown-menu {
+  z-index: 1085;
+  max-width: min(22rem, calc(100vw - 1.5rem));
+}
+
+.note-dropdown-item {
+  color: var(--mf-ed-fg, #19272c);
+}
+
+.note-dropdown-item:hover {
+  background: var(--mf-ed-soft, #ece7de);
+}
+
+.note-editor .note-dropdown-menu h2,
+.note-editor .note-dropdown-menu h3,
+.note-editor .note-dropdown-menu h4,
+.note-editor .note-dropdown-menu h5,
+.note-editor .note-dropdown-menu p,
+.note-editor .note-dropdown-menu blockquote,
+.note-editor .note-dropdown-menu pre {
+  margin: 0;
+  color: inherit;
+}
+
+.note-editor .note-dropdown-menu h2 { font-size: 1.35rem; }
+.note-editor .note-dropdown-menu h3 { font-size: 1.2rem; }
+.note-editor .note-dropdown-menu h4 { font-size: 1.05rem; }
+.note-editor .note-dropdown-menu h5 { font-size: 0.95rem; }
+
+/* Custom buttons: fonts, colours, alignment, emoji */
+.mf-ed-panel {
+  min-width: 11rem;
+  padding: 0.35rem;
+}
+
+.mf-ed-glyph {
+  font-weight: 600;
+  pointer-events: none;
+}
+
+.mf-ed-colorA {
+  border-bottom: 3px solid var(--mf-c-red, #c62f2f);
+  line-height: 1;
+}
+
+.mf-ed-choice {
+  display: block;
+  width: 100%;
+  padding: 0.4rem 0.6rem;
+  border: 0;
+  border-radius: 0.35rem;
+  background: transparent;
+  color: inherit;
+  text-align: start;
+  font: inherit;
+  cursor: pointer;
+}
+
+.mf-ed-choice:hover,
+.mf-ed-choice:focus-visible {
+  background: var(--mf-ed-soft, #ece7de);
+  outline: none;
+}
+
+.mf-ed-sep {
+  height: 1px;
+  margin: 0.25rem 0;
+  background: var(--mf-ed-border, #d9d2c7);
+}
+
+.mf-ed-label {
+  padding: 0.25rem 0.4rem 0.1rem;
+  color: var(--mf-ed-muted, #52636a);
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.mf-ed-swatches {
+  display: grid;
+  grid-template-columns: repeat(5, 1.75rem);
+  gap: 0.3rem;
+  padding: 0.3rem 0.4rem;
+}
+
+.mf-ed-swatch {
+  width: 1.75rem;
+  height: 1.75rem;
+  border: 2px solid var(--mf-ed-bg, #fff);
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--mf-ed-border, #d9d2c7);
+  cursor: pointer;
+}
+
+.mf-ed-swatch:focus-visible {
+  outline: 2px solid var(--mf-ed-focus, #07595d);
+  outline-offset: 2px;
+}
+
+.mf-ed-sw-red { background: var(--mf-c-red, #c62f2f); }
+.mf-ed-sw-orange { background: var(--mf-c-orange, #c25e0a); }
+.mf-ed-sw-amber { background: var(--mf-c-amber, #8a6a00); }
+.mf-ed-sw-green { background: var(--mf-c-green, #23794a); }
+.mf-ed-sw-teal { background: var(--mf-c-teal, #0e7274); }
+.mf-ed-sw-blue { background: var(--mf-c-blue, #2158b4); }
+.mf-ed-sw-indigo { background: var(--mf-c-indigo, #4a4ab8); }
+.mf-ed-sw-purple { background: var(--mf-c-purple, #7b3796); }
+.mf-ed-sw-pink { background: var(--mf-c-pink, #b8286f); }
+.mf-ed-sw-gray { background: var(--mf-c-gray, #57626f); }
+
+.mf-ed-help {
+  min-width: 16rem;
+}
+
+.mf-ed-shortcut {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.875rem;
+}
+
+.mf-ed-keys kbd {
+  padding: 0.1rem 0.35rem;
+  border: 1px solid var(--mf-ed-border, #d9d2c7);
+  border-radius: 0.3rem;
+  background: var(--mf-ed-soft, #ece7de);
+  color: inherit;
+  font-size: 0.75rem;
+}
+
+.mf-ed-emoji-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 2rem);
+  gap: 0.15rem;
+}
+
+.mf-ed-emoji-item {
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  border-radius: 0.35rem;
+  background: transparent;
+  font-size: 1.15rem;
+  cursor: pointer;
+}
+
+.mf-ed-emoji-item:hover,
+.mf-ed-emoji-item:focus-visible {
+  background: var(--mf-ed-soft, #ece7de);
+  outline: none;
+}
+
+/* Dialogs (link, image, video, help) */
+.note-modal {
+  color: var(--mf-ed-fg, #19272c);
+}
+
+.note-modal .note-modal-content {
+  max-width: calc(100vw - 1.5rem);
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
+  border: 1px solid var(--mf-ed-border, #d9d2c7);
+  border-radius: var(--mf-radius-md, 0.85rem);
+  background: var(--mf-ed-bg, #ffffff);
+  color: var(--mf-ed-fg, #19272c);
+}
+
+.note-modal .note-modal-header,
+.note-modal .note-modal-footer {
+  border-color: var(--mf-ed-border, #d9d2c7);
+}
+
+.note-modal .note-input,
+.note-modal input[type="text"],
+.note-modal input[type="url"] {
+  border: 1px solid var(--mf-ed-border, #d9d2c7);
+  border-radius: 0.4rem;
+  background: var(--mf-ed-bg, #fff);
+  color: var(--mf-ed-fg, #19272c);
+}
+
+.note-modal .note-btn-primary {
+  border-color: var(--mf-ed-accent, #0b7376);
+  background: var(--mf-ed-accent, #0b7376);
+  color: var(--mf-ed-accent-ink, #fff);
+}
+
+.note-modal-backdrop {
+  background: var(--mf-overlay, rgb(14 22 28 / 52%));
+}
+
+/* The server removes these link options, so do not offer them. */
+.note-modal .sn-checkbox-open-in-new-window,
+.note-modal .sn-checkbox-use-protocol {
+  display: none;
+}
+
+/* Status line: messages, character counter */
+.mf-editor-status {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-block-start: 0.35rem;
+  color: var(--mf-text-muted, #52636a);
+  font-size: 0.8125rem;
+}
+
+.mf-editor-status.is-error .mf-editor-message,
+.mf-editor-status.is-over .mf-editor-count {
+  color: var(--mf-danger, #a43838);
+  font-weight: 600;
+}
+
+:root.dark .mf-editor-status {
+  color: #adbbb8;
+}
+
+:root.dark .mf-editor-status.is-error .mf-editor-message,
+:root.dark .mf-editor-status.is-over .mf-editor-count {
+  color: #ff9292;
+}
+
+.mf-editor-preview {
+  max-width: 60rem;
+}
+
+@media (max-width: 40rem) {
+  .note-editor .note-toolbar {
+    padding: 0.3rem;
+  }
+
+  .note-editor .note-btn {
+    min-width: 2.5rem;
+    min-height: 2.5rem;
+  }
+
+  .mf-ed-emoji-grid {
+    grid-template-columns: repeat(6, 2.25rem);
+  }
+
+  .note-editor.note-frame {
+    max-width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .note-editor *,
+  .note-modal * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+[dir="rtl"] .note-editor .note-toolbar,
+[dir="rtl"] .note-editor .note-dropdown-menu {
+  direction: rtl;
+}

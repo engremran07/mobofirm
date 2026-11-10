@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load editor_tags %}
 {% block content %}
 {% url 'marketplace:listing_browse' as market_url %}
 <div class="site-container py-4 py-lg-5">
@@ -12,7 +13,7 @@
     <div class="col-12 col-lg-8">
       <section class="surface-card p-4" aria-labelledby="listing-about">
         <h2 class="h5" id="listing-about">About this listing</h2>
-        {% if listing.description %}<p>{{ listing.description|linebreaksbr }}</p>{% else %}<p class="muted">The seller has not added a description.</p>{% endif %}
+        {% if listing.description %}<div class="eco-prose">{{ listing.description|rich_text }}</div>{% else %}<p class="muted">The seller has not added a description.</p>{% endif %}
         {% if firmware %}
           <p class="mb-0"><i class="icon" data-lucide="download" aria-hidden="true"></i> Related firmware record: <a href="{% url 'firmwares:firmware_detail' firmware_type='official' firmware_id=firmware.pk %}">{{ firmware.brand.name }} {{ firmware.model.name }}</a></p>
         {% endif %}

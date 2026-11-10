@@ -1,0 +1,15 @@
+{# Context from {% content_stats obj %}: views, downloads, reading_time, updated, updated_ago, compact. #}
+<ul class="content-stats{% if compact %} content-stats--compact{% endif %}" aria-label="Content statistics">
+  {% if views is not None %}
+    <li class="content-stats__item" title="{{ views }} view{{ views|pluralize }}" aria-label="{{ views }} view{{ views|pluralize }}"><i data-lucide="eye" class="icon" aria-hidden="true"></i><span>{{ views_short }}<span class="content-stats__label"> view{{ views|pluralize }}</span></span></li>
+  {% endif %}
+  {% if downloads is not None %}
+    <li class="content-stats__item" title="{{ downloads }} download{{ downloads|pluralize }}" aria-label="{{ downloads }} download{{ downloads|pluralize }}"><i data-lucide="download" class="icon" aria-hidden="true"></i><span>{{ downloads_short }}<span class="content-stats__label"> download{{ downloads|pluralize }}</span></span></li>
+  {% endif %}
+  {% if reading_time %}
+    <li class="content-stats__item"><i data-lucide="book-open" class="icon" aria-hidden="true"></i><span>{{ reading_time }} min read</span></li>
+  {% endif %}
+  {% if updated %}
+    <li class="content-stats__item"><i data-lucide="refresh-cw" class="icon" aria-hidden="true"></i><span>Updated <time datetime="{{ updated|date:'c' }}" title="{{ updated|date:'j F Y, H:i' }}">{{ updated_ago }}</time></span></li>
+  {% endif %}
+</ul>

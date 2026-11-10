@@ -1,0 +1,115 @@
+@use "../abstracts" as *;
+
+// Base element styles. Bootstrap's reboot runs first; this layer re-skins it with tokens.
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: calc(var(--mf-header-height) + 1rem);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  min-width: 20rem;
+  background: var(--mf-page);
+  background-image: var(--mf-gradient-mesh);
+  background-repeat: no-repeat;
+  background-size: 100% 36rem;
+  color: var(--mf-text);
+  font-family: var(--mf-font-sans);
+  font-size: var(--mf-text-base);
+  line-height: var(--mf-leading-body);
+  font-feature-settings: "cv11", "ss01", "calt";
+  font-optical-sizing: auto;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizelegibility;
+}
+
+h1,
+h2,
+h3,
+.h1,
+.h2,
+.h3 {
+  letter-spacing: -0.03em;
+  line-height: var(--mf-leading-snug);
+  text-wrap: balance;
+}
+
+p,
+li {
+  text-wrap: pretty;
+}
+
+a {
+  text-underline-offset: 0.2em;
+  text-decoration-thickness: 0.07em;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--mf-accent) 28%, transparent);
+  color: var(--mf-text);
+}
+
+:focus-visible {
+  outline: 0.18rem solid var(--mf-focus);
+  outline-offset: 0.18rem;
+  border-radius: var(--mf-radius-xs);
+}
+
+// Fine, themed scrollbars (WebKit + standards).
+* {
+  scrollbar-color: color-mix(in srgb, var(--mf-text-muted) 45%, transparent) transparent;
+  scrollbar-width: thin;
+}
+
+hr {
+  border-color: var(--mf-border);
+  opacity: 1;
+}
+
+img,
+video {
+  max-width: 100%;
+  height: auto;
+}
+
+kbd {
+  display: inline-block;
+  min-width: 1.5em;
+  padding: 0.05em 0.45em;
+  border: 1px solid var(--mf-border);
+  border-bottom-width: 2px;
+  border-radius: var(--mf-radius-xs);
+  background: var(--mf-surface-soft);
+  box-shadow: none;
+  color: var(--mf-text-muted);
+  font-family: var(--mf-font-mono);
+  font-size: 0.72em;
+  font-weight: 600;
+  line-height: 1.5;
+  text-align: center;
+}
+
+// Same-document view transitions are opt-in per swap (hx-swap="... transition:true" or
+// withViewTransition() in modules/ui.js) and fall back to a plain swap where the API is
+// missing. Cross-document transitions are intentionally not enabled: they raise
+// unhandled "ViewTransition opt-in disabled" errors when a navigation interrupts them.
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
+
+// Forced colours / Windows high contrast: keep borders and focus visible.
+@media (forced-colors: active) {
+  .surface-card,
+  .card,
+  .btn,
+  .badge-ui,
+  .tabs-ui [role="tab"] {
+    border: 1px solid CanvasText;
+  }
+}

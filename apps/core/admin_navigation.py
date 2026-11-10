@@ -98,6 +98,11 @@ NAV_GROUPS: tuple[NavGroup, ...] = (
                 "Firmware requests (review)",
                 badge="apps.core.admin_navigation.badge_firmware_requests",
             ),
+            m(
+                "firmwares.accesschangerequest",
+                "swap_vert",
+                "Access change requests (review)",
+            ),
         ),
     ),
     NavGroup(
@@ -118,6 +123,8 @@ NAV_GROUPS: tuple[NavGroup, ...] = (
             m("firmwares.firmwarediff", "difference", "Firmware diffs"),
             m("firmwares.changelogentry", "history_edu", "Changelog"),
             m("firmwares.automatedbloglink", "link", "Automated blog links"),
+            m("firmwares.accesschangelog", "history", "Access change history"),
+            m("firmwares.autofeaturesettings", "auto_awesome", "Auto-feature settings"),
         ),
     ),
     NavGroup(
@@ -445,9 +452,12 @@ NAV_GROUPS: tuple[NavGroup, ...] = (
         "System",
         (
             m("site_settings.sitesettings", "settings", "Site settings"),
+            m("site_settings.editorprofile", "edit_note", "Editor profiles"),
+            m("site_settings.editorimage", "image", "Editor images"),
             m("site_settings.verificationmetatag", "code", "Verification meta tags"),
             m("site_settings.verificationfile", "upload_file", "Verification files"),
             m("core.appregistry", "toggle_on", "App registry"),
+            m("core.searchsettings", "search", "Search and popularity"),
             m("users.userssettings", "manage_accounts", "Users settings"),
             m("devices.deviceconfig", "devices_other", "Device settings"),
             m("blog.blogsettings", "article", "Blog settings"),

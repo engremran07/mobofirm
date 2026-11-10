@@ -1,0 +1,8 @@
+{# Contract: search_query, search_total, search_corrected, did_you_mean (from list_search_context); noun (singular, e.g. "chipset"), noun_plural (optional). Renders the screen-reader count (aria-live comes from the swapped container), the typo-correction notice and "Did you mean" suggestions. #}
+{% if search_query %}
+  <p class="muted small mb-3" role="status" data-search-status>
+    {{ search_total }} {% if search_total == 1 %}{{ noun }}{% else %}{{ noun_plural|default:noun }}{% if not noun_plural %}s{% endif %}{% endif %} for “{{ search_query }}”.
+    {% if search_corrected %}<span data-search-corrected>Showing matches for “{{ search_corrected }}” (spelling corrected).</span>{% endif %}
+  </p>
+{% endif %}
+{% include "components/did_you_mean.html" %}

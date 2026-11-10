@@ -1,118 +1,88 @@
 {% extends "base.html" %}
-{% load ad_tags seo_tags %}
+{% load ad_tags seo_tags search_tags %}
 {% block title %}{{ brand.name }} firmware, chipsets and devices | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block meta_description %}{{ brand.name }} device models, chipsets, flashing tools, guides and approved firmware downloads.{% endblock %}
 {% block content %}
-<div class="site-container py-5">
-  <nav aria-label="Breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="{% url 'firmwares:brand_list' %}">Brands</a></li><li class="breadcrumb-item active" aria-current="page">{{ brand.name }}</li></ol></nav>
-  <header class="hero-panel p-4 p-md-5 mb-5">
-    <div class="d-flex flex-column flex-md-row align-items-md-center gap-4">
-      {% if logo_src %}
-        <img class="rounded flex-shrink-0" src="{{ logo_src }}" alt="{{ brand.name }} logo" width="72" height="72">
-      {% else %}
-        <span class="brand-mark" aria-hidden="true">{{ brand.name|slice:":1"|upper }}</span>
-      {% endif %}
-      <div>
+<div class="site-container cat-page">
+  {% url 'firmwares:brand_list' as brands_url %}
+  {% include "components/breadcrumbs.html" with current=brand.name parent_label="Brands" parent_url=brands_url %}
+  <header class="hero-panel cat-head">
+    <div class="cat-head__lead">
+      <span class="logo-tile logo-tile--lg" {% if not logo_src %}aria-hidden="true"{% endif %}>{% if logo_src %}<img src="{{ logo_src }}" alt="{{ brand.name }} logo" width="72" height="72">{% else %}{{ brand.name|slice:":1"|upper }}{% endif %}</span>
+      <div class="cat-head__main">
         <p class="section-eyebrow">Manufacturer directory</p>
-        <h1 class="display-6 fw-bold mb-2">{{ brand.name }}</h1>
-        {% if brand.description %}<p class="hero-copy mb-3">{{ brand.description }}</p>{% endif %}
-        <p class="muted mb-0">{{ model_total }} active models · {{ total_firmwares }} public firmware records</p>
+        <h1 class="cat-head__title">{{ brand.name }}</h1>
+        {% if brand.description %}<p class="cat-head__text">{{ brand.description }}</p>{% endif %}
+        <p class="cat-head__sub">{{ model_total }} active models · {{ total_firmwares }} public firmware records</p>
       </div>
     </div>
-    <div class="d-flex flex-wrap gap-2 mt-4">
-      <a class="btn btn-primary" href="{% url 'firmwares:browse' %}?brand={{ brand.slug|urlencode }}">Browse {{ brand.name }} firmware</a>
-      <a class="btn btn-outline-secondary" href="{% url 'blog:brand_posts' brand_slug=brand.slug %}">Articles and guides</a>
-      {% if brand_post %}<a class="btn btn-outline-secondary" href="{{ brand_post.get_absolute_url }}">{{ brand.name }} catalogue article</a>{% endif %}
-      {% if brand.website_url %}<a class="btn btn-link" href="{{ brand.website_url }}" rel="noopener noreferrer" target="_blank">Manufacturer website <i data-lucide="external-link" aria-hidden="true"></i></a>{% endif %}
+    <div class="cat-head__actions">
+      <a class="btn btn-primary" href="{% url 'firmwares:browse' %}?brand={{ brand.slug|urlencode }}"><i data-lucide="download" aria-hidden="true"></i><span class="ms-1">Browse {{ brand.name }} firmware</span></a>
+      <a class="btn btn-soft" href="{% url 'blog:brand_posts' brand_slug=brand.slug %}"><i data-lucide="newspaper" aria-hidden="true"></i><span class="ms-1">Articles and guides</span></a>
+      {% if brand_post %}<a class="btn btn-soft" href="{{ brand_post.get_absolute_url }}">{{ brand.name }} catalogue article</a>{% endif %}
+      {% if brand.website_url %}<a class="btn btn-ghost" href="{{ brand.website_url }}" rel="noopener noreferrer" target="_blank">Manufacturer website <i data-lucide="external-link" aria-hidden="true"></i></a>{% endif %}
     </div>
   </header>
 
   {% if categories %}
-  <section class="mb-5" aria-labelledby="brand-categories-title">
-    <h2 id="brand-categories-title" class="h3 mb-3">Firmware by category</h2>
-    <div class="row g-3">
-      {% for key, label, count in categories %}
-        <div class="col-6 col-md-4 col-xl-2">
-          <a class="surface-card p-3 d-block text-decoration-none" href="{% url 'firmwares:browse' %}?brand={{ brand.slug|urlencode }}&type={{ key }}">
-            <span class="d-block fw-semibold">{{ label }}</span><span class="small muted">{{ count }} file{{ count|pluralize }}</span>
-          </a>
-        </div>
-      {% endfor %}
-    </div>
+  <section class="cat-section" aria-labelledby="brand-categories-title">
+    <div class="cat-section__head"><h2 id="brand-categories-title" class="cat-section__title">Firmware by category</h2></div>
+    {% include "firmwares/includes/category_tiles.html" with categories=categories filter_param="brand" filter_value=brand.slug %}
   </section>
   {% endif %}
 
-  <section class="mb-5" aria-labelledby="models-title">
-    <h2 id="models-title" class="h3 mb-3">Device models</h2>
-    {% if models %}
-      <div class="row g-3">
-      {% for model in models %}
-        <div class="col-12 col-md-6 col-xl-4">
-          <article class="surface-card p-4 h-100">
-            <p class="small section-eyebrow mb-2">{{ brand.name }}</p>
-            <h3 class="h5"><a href="{% url 'firmwares:model_detail' brand_slug=brand.slug model_slug=model.slug %}">{{ model.display_name }}</a></h3>
-            <p class="muted mb-2">{% if model.model_code %}<span class="model-code">{{ model.model_code }}</span>{% endif %}{% if model.codename %} · {{ model.codename }}{% endif %}</p>
-            {% if model.chipset_ref %}<p class="small mb-2"><a href="{% url 'firmwares:chipset_detail' slug=model.chipset_ref.slug %}">{{ model.chipset_ref.display_name }}</a></p>{% endif %}
-            <div class="d-flex justify-content-between small muted"><span>{{ model.firmware_count }} firmware records</span><span>{{ model.status|title }}</span></div>
-          </article>
-        </div>
-      {% endfor %}
-      </div>
-      {% include "firmwares/includes/pagination.html" with page=models label="Device model pages" query="" %}
-    {% else %}
-      <p class="empty-state p-4">No active device models are listed for this brand.</p>
-      {% include "components/request_cta.html" with kind="model" brand=brand heading="Is a "|add:brand.name|add:" model missing?" %}
-    {% endif %}
-    {% if models and models.paginator.count < 3 %}
-      {% include "components/request_cta.html" with kind="model" brand=brand heading="Is a "|add:brand.name|add:" model missing?" %}
-    {% endif %}
+  <section class="cat-section" aria-labelledby="models-title">
+    <div class="cat-section__head"><h2 id="models-title" class="cat-section__title">Device models</h2></div>
+    {% url 'firmwares:brand_detail' slug=brand.slug as models_url %}
+    <div class="filter-bar cat-filters"><div class="w-100">{% include "components/search_box.html" with action=models_url input_id="model-query" label="Search "|add:brand.name|add:" models" value=search_query placeholder="Model name, model code or codename" hx_target="#model-results" %}</div></div>
+    <div id="model-results" class="skeleton-host" aria-live="polite">{% include "firmwares/fragments/model_cards.html" %}</div>
   </section>
+  {% popular_blocks brand=brand.slug heading="Popular for "|add:brand.name %}
   {% ad_zone "in_content" %}
 
   {% if chipsets %}
-  <section class="mb-5" aria-labelledby="brand-chipsets-title">
-    <div class="d-flex justify-content-between align-items-end gap-2 mb-3"><h2 id="brand-chipsets-title" class="h3 mb-0">Chipsets used by {{ brand.name }}</h2><a href="{% url 'firmwares:chipset_list' %}">All chipsets</a></div>
-    <div class="row g-3">
+  <section class="cat-section" aria-labelledby="brand-chipsets-title">
+    <div class="cat-section__head"><h2 id="brand-chipsets-title" class="cat-section__title">Chipsets used by {{ brand.name }}</h2><a href="{% url 'firmwares:chipset_list' %}">All chipsets</a></div>
+    <div class="card-grid card-grid--tiles">
       {% for chipset in chipsets %}
-        <div class="col-12 col-md-6 col-xl-3"><a class="surface-card p-3 d-block text-decoration-none" href="{% url 'firmwares:chipset_detail' slug=chipset.slug %}"><span class="d-block fw-semibold">{{ chipset.display_name }}</span><span class="small muted">{{ chipset.model_total }} model{{ chipset.model_total|pluralize }}</span></a></div>
+        <article class="card-ui card-ui--tile">
+          <span class="logo-tile logo-tile--sm" aria-hidden="true"><i data-lucide="cpu"></i></span>
+          <span class="cat-tile__body"><a class="card-ui__link card-ui__title" href="{% url 'firmwares:chipset_detail' slug=chipset.slug %}">{{ chipset.display_name }}</a><span class="card-ui__text">{{ chipset.model_total }} model{{ chipset.model_total|pluralize }}</span></span>
+        </article>
       {% endfor %}
     </div>
   </section>
   {% endif %}
 
   {% if tools %}
-  <section class="mb-5" aria-labelledby="brand-tools-title">
-    <div class="d-flex justify-content-between align-items-end gap-2 mb-3"><h2 id="brand-tools-title" class="h3 mb-0">Flashing tools</h2><a href="{% url 'firmwares:flashing_tools' %}">Tools and guides hub</a></div>
-    <div class="row g-3">
-      {% for tool in tools %}
-        <div class="col-12 col-md-6 col-xl-4"><article class="surface-card p-3 h-100"><p class="section-eyebrow mb-1">{{ tool.get_platform_display }} · {{ tool.get_risk_level_display }}</p><h3 class="h5 mb-1"><a href="{% url 'firmwares:flashing_tool_detail' slug=tool.slug %}">{{ tool.name }}</a></h3><p class="small muted mb-0">{{ tool.description|truncatewords:20 }}</p></article></div>
-      {% endfor %}
-    </div>
+  <section class="cat-section" aria-labelledby="brand-tools-title">
+    <div class="cat-section__head"><h2 id="brand-tools-title" class="cat-section__title">Flashing tools</h2><a href="{% url 'firmwares:flashing_tools' %}">Tools and guides hub</a></div>
+    {% include "firmwares/includes/tool_cards.html" with tools=tools %}
   </section>
   {% endif %}
 
   {% if guides %}
-  <section class="mb-5" aria-labelledby="brand-guides-title">
-    <div class="d-flex justify-content-between align-items-end gap-2 mb-3"><h2 id="brand-guides-title" class="h3 mb-0">Flashing guides</h2><a href="{% url 'firmwares:flashing_guides' %}?brand={{ brand.slug|urlencode }}">All {{ brand.name }} guides</a></div>
-    <ul class="list-unstyled d-grid gap-2 mb-0">
-      {% for guide in guides %}<li><a href="{{ guide.post.get_absolute_url }}">{{ guide.post.title }}</a> <span class="small muted">· {{ guide.template.get_guide_type_display }}</span></li>{% endfor %}
-    </ul>
+  <section class="cat-section" aria-labelledby="brand-guides-title">
+    <div class="cat-section__head"><h2 id="brand-guides-title" class="cat-section__title">Flashing guides</h2><a href="{% url 'firmwares:flashing_guides' %}?brand={{ brand.slug|urlencode }}">All {{ brand.name }} guides</a></div>
+    <div class="cat-panel">{% include "firmwares/includes/guide_list.html" with guides=guides %}</div>
   </section>
   {% endif %}
 
   {% if blog_posts %}
-  <section class="mb-5" aria-labelledby="brand-blog-title">
-    <div class="d-flex justify-content-between align-items-end gap-2 mb-3"><h2 id="brand-blog-title" class="h3 mb-0">Latest articles</h2><a href="{% url 'blog:brand_posts' brand_slug=brand.slug %}">More {{ brand.name }} articles</a></div>
-    <ul class="list-unstyled d-grid gap-2 mb-0">
-      {% for post in blog_posts %}<li><a href="{{ post.get_absolute_url }}">{{ post.title }}</a></li>{% endfor %}
-    </ul>
+  <section class="cat-section" aria-labelledby="brand-blog-title">
+    <div class="cat-section__head"><h2 id="brand-blog-title" class="cat-section__title">Latest articles</h2><a href="{% url 'blog:brand_posts' brand_slug=brand.slug %}">More {{ brand.name }} articles</a></div>
+    <div class="cat-panel">
+      <ul class="cat-linklist">
+        {% for post in blog_posts %}<li><a href="{{ post.get_absolute_url }}"><i data-lucide="file-text" aria-hidden="true"></i><span>{{ post.title }}</span></a></li>{% endfor %}
+      </ul>
+    </div>
   </section>
   {% endif %}
 
   {% if other_brands %}
-  <section aria-labelledby="other-brands-title">
-    <h2 id="other-brands-title" class="h5 mb-3">Other brands</h2>
-    <p class="mb-0">{% for other in other_brands %}<a class="me-3" href="{% url 'firmwares:brand_detail' slug=other.slug %}">{{ other.name }}</a>{% endfor %}</p>
+  <section class="cat-section" aria-labelledby="other-brands-title">
+    <div class="cat-section__head"><h2 id="other-brands-title" class="cat-section__title">Other brands</h2></div>
+    <div class="chip-row">{% for other in other_brands %}<a class="chip-ui" href="{% url 'firmwares:brand_detail' slug=other.slug %}">{{ other.name }}</a>{% endfor %}</div>
   </section>
   {% endif %}
   {% related_links brand %}

@@ -2,33 +2,35 @@
 {% load mf_ui %}
 {% block title %}Leaderboard | {{ site_name }}{% endblock %}
 {% block content %}
-<div class="site-container py-4 py-lg-5">
+<div class="site-container py-4 py-lg-5 community-page">
   {% include "components/breadcrumbs.html" with current="Leaderboard" %}
   {% include "components/page_header.html" with eyebrow="Community" title="Leaderboard" lead="Top contributors ranked by XP earned from approved contributions. Members with a private profile are not listed." %}
-  <nav class="d-flex flex-wrap gap-2 mb-4" aria-label="Leaderboard period">
+  <nav class="chip-row community-nav" aria-label="Leaderboard period">
     {% for value, label in periods %}
-      <a class="btn btn-sm {% if value == period %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="?period={{ value }}"{% if value == period %} aria-current="page"{% endif %}>{{ label }}</a>
+      <a class="chip-ui{% if value == period %} is-active{% endif %}" href="?period={{ value }}"{% if value == period %} aria-current="page"{% endif %}>{{ label }}</a>
     {% endfor %}
-    <a class="btn btn-sm btn-link" href="{% url 'gamification:badges' %}">Badges</a>
+    <a class="chip-ui ms-auto" href="{% url 'gamification:badges' %}"><i data-lucide="medal" class="icon" aria-hidden="true"></i> Badges</a>
   </nav>
   {% if rows %}
+    {% with top_xp=rows.0.xp|default:1 %}
     {% table_scroll "Leaderboard" %}
-    <table class="table align-middle">
+    <table class="table align-middle leaderboard">
       <thead><tr><th scope="col">#</th><th scope="col">Member</th><th scope="col">Level</th><th scope="col" class="text-end">XP</th></tr></thead>
       <tbody>
         {% for row in rows %}
-          <tr{% if row.user_id == user.pk %} class="table-active"{% endif %}>
-            <th scope="row">{{ row.rank }}</th>
-            <td>{{ row.username }}{% if row.user_id == user.pk %} <span class="muted">(you)</span>{% endif %}</td>
+          <tr class="leaderboard__row leaderboard__row--r{% if row.rank <= 3 %}{{ row.rank }}{% else %}n{% endif %}{% if row.user_id == user.pk %} table-active is-you{% endif %}">
+            <th scope="row"><span class="rank-medal rank-medal--{% if row.rank <= 3 %}{{ row.rank }}{% else %}n{% endif %}">{% if row.rank == 1 %}<i data-lucide="trophy" class="icon" aria-hidden="true"></i>{% elif row.rank == 2 %}<i data-lucide="medal" class="icon" aria-hidden="true"></i>{% elif row.rank == 3 %}<i data-lucide="award" class="icon" aria-hidden="true"></i>{% endif %}<span class="rank-medal__n">{{ row.rank }}</span></span></th>
+            <td><span class="leaderboard__member"><span class="avatar avatar--sm avatar--v{{ forloop.counter0|divisibleby:2|yesno:'1,2' }}" aria-hidden="true">{{ row.username|slice:":1"|upper }}</span><span>{{ row.username }}{% if row.user_id == user.pk %} <span class="muted">(you)</span>{% endif %}</span></span></td>
             <td>{{ row.level }}</td>
-            <td class="text-end tabular-nums">{{ row.xp }}</td>
+            <td class="text-end tabular-nums leaderboard__xp"><span class="leaderboard__xp-n">{{ row.xp }}</span><progress class="rank-bar" max="{{ top_xp }}" value="{{ row.xp }}" aria-label="{{ row.xp }} of {{ top_xp }} XP of the leader"></progress></td>
           </tr>
         {% endfor %}
       </tbody>
     </table>
     {% endtable_scroll %}
+    {% endwith %}
   {% else %}
-    {% include "components/empty_state.html" with title="Nobody is ranked yet" message="Approved firmware uploads, fulfilled requests and helpful comments earn XP." %}
+    {% include "components/empty_ui.html" with icon="trophy" title="Nobody is ranked yet" message="Approved firmware uploads, fulfilled requests and helpful comments earn XP." %}
   {% endif %}
 </div>
 {% endblock %}

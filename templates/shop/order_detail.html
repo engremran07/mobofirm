@@ -3,16 +3,29 @@
 {% block content %}
 {% url 'shop:pricing' as shop_url %}
 {% url 'shop:order_history' as orders_url %}
-<div class="site-container py-4 py-lg-5">
+<div class="site-container cm-page py-4 py-lg-5">
   {% include "components/breadcrumbs.html" with current="Order" parent_label="My orders" parent_url=orders_url grandparent_label="Shop" grandparent_url=shop_url %}
   {% include "components/page_header.html" with eyebrow="Account" title="Order" %}
-  <p class="h5 mb-4">#{{ order.pk }} {% include "shop/_order_status.html" %}</p>
+  <div class="order-banner">
+    <p class="order-banner__id">#{{ order.pk }}</p>
+    {% include "shop/_order_status.html" %}
+  </div>
+  {% if order.status != "cancelled" %}
+    <ol class="stepper-ui" aria-label="Order progress">
+      <li class="is-done">Order placed</li>
+      <li class="{% if order.status == 'pending' %}is-current{% else %}is-done{% endif %}"{% if order.status == 'pending' %} aria-current="step"{% endif %}>Payment confirmed</li>
+      <li class="{% if order.status != 'pending' %}is-done{% endif %}">Fulfilled</li>
+    </ol>
+  {% else %}
+    <div class="mb-4">{% include "components/notice.html" with tone="danger" icon="x" message="This order was cancelled." %}</div>
+  {% endif %}
   {% if not online_payments_enabled and order.status == "pending" %}<div class="mb-4">{% include "shop/_payment_notice.html" %}</div>{% endif %}
 
-  <div class="row g-4">
-    <div class="col-12 col-lg-8">
+  <div class="cm-split">
+    <section class="cm-section" aria-labelledby="order-items">
+      <div class="cm-section__head"><h2 id="order-items">Items</h2></div>
       {% table_scroll "Order items" %}
-      <table class="table align-middle mb-0">
+      <table class="table table-ui align-middle mb-0">
         <thead><tr><th scope="col">Item</th><th scope="col">Kind</th><th scope="col">Price</th></tr></thead>
         <tbody>
           {% for item in order.items.all %}
@@ -23,27 +36,34 @@
             </tr>
           {% endfor %}
         </tbody>
-        <tfoot><tr><th scope="row" colspan="2" class="text-end">Total</th><td><strong>{{ order.total }} {{ order.currency }}</strong>{% if order.credits_spent %} <span class="small muted">({{ order.credits_spent }} credits)</span>{% endif %}</td></tr></tfoot>
+        <tfoot><tr><th scope="row" colspan="2" class="text-end">Total</th><td><strong>{{ order.total }} {{ order.currency }}</strong>{% if order.credits_spent %} <span class="small cm-muted">({{ order.credits_spent }} credits)</span>{% endif %}</td></tr></tfoot>
       </table>
       {% endtable_scroll %}
-    </div>
-    <div class="col-12 col-lg-4">
-      <section class="surface-card p-4" aria-labelledby="order-progress">
-        <h2 class="h5" id="order-progress">Progress</h2>
-        <dl class="eco-kv">
-          <dt>Placed</dt><dd>{{ order.created_at|date:"j M Y, H:i" }}</dd>
-          <dt>Payment</dt><dd>{{ order.get_payment_method_display }}</dd>
-          {% if order.paid_at %}<dt>Confirmed</dt><dd>{{ order.paid_at|date:"j M Y, H:i" }}</dd>{% endif %}
-          {% if order.payment_reference %}<dt>Reference</dt><dd>{{ order.payment_reference }}</dd>{% endif %}
-        </dl>
-        <p class="small muted mt-3 mb-0">
-          {% if order.status == "pending" %}Waiting for staff to confirm your payment.
-          {% elif order.status == "paid" %}{% if order.credits_spent %}Paid with {{ order.credits_spent }} credits and fulfilled immediately.{% else %}Payment confirmed and the order has been fulfilled.{% endif %} Bought files are listed in <a href="{% url 'library:my_files' %}">My files</a>.
-          {% elif order.status == "cancelled" %}This order was cancelled.
-          {% else %}This order was refunded; anything it unlocked has been withdrawn.{% endif %}
-        </p>
-      </section>
-    </div>
+    </section>
+
+    <section class="cm-section" aria-labelledby="order-progress">
+      <div class="cm-section__head"><h2 id="order-progress">Progress</h2></div>
+      <ol class="timeline-ui mb-4">
+        <li class="is-done"><div><strong>Placed</strong><time class="timeline-ui__time" datetime="{{ order.created_at|date:'c' }}">{{ order.created_at|date:"j M Y, H:i" }}</time></div></li>
+        {% if order.status == "pending" %}
+          <li class="is-current"><div><strong>Payment</strong><span class="timeline-ui__time">{{ order.get_payment_method_display }}</span></div></li>
+        {% elif order.status == "cancelled" %}
+          <li class="is-failed"><div><strong>Cancelled</strong></div></li>
+        {% else %}
+          <li class="is-done"><div><strong>Confirmed</strong>{% if order.paid_at %}<time class="timeline-ui__time" datetime="{{ order.paid_at|date:'c' }}">{{ order.paid_at|date:"j M Y, H:i" }}</time>{% endif %}</div></li>
+        {% endif %}
+      </ol>
+      <dl class="eco-kv">
+        <dt>Payment</dt><dd>{{ order.get_payment_method_display }}</dd>
+        {% if order.payment_reference %}<dt>Reference</dt><dd>{{ order.payment_reference }}</dd>{% endif %}
+      </dl>
+      <p class="small cm-muted mt-3 mb-0">
+        {% if order.status == "pending" %}Waiting for staff to confirm your payment.
+        {% elif order.status == "paid" %}{% if order.credits_spent %}Paid with {{ order.credits_spent }} credits and fulfilled immediately.{% else %}Payment confirmed and the order has been fulfilled.{% endif %} Bought files are listed in <a href="{% url 'library:my_files' %}">My files</a>.
+        {% elif order.status == "cancelled" %}This order was cancelled.
+        {% else %}This order was refunded; anything it unlocked has been withdrawn.{% endif %}
+      </p>
+    </section>
   </div>
 </div>
 {% endblock %}

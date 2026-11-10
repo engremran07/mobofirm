@@ -16,7 +16,7 @@ from django.utils.html import strip_tags
 from django.utils.safestring import SafeString, mark_safe
 from django.utils.text import slugify
 
-from apps.core.utils.sanitize import sanitize_html
+from apps.core.editor import sanitize_stored_html
 
 _HEADING = re.compile(r"<(h[23])((?:\s[^>]*)?)>(.*?)</\1>", re.IGNORECASE | re.DOTALL)
 _TABLE = re.compile(r"<table\b.*?</table>", re.IGNORECASE | re.DOTALL)
@@ -49,7 +49,7 @@ def _anchor(text: str, used: set[str]) -> str:
 
 def render_article(body: str, *, min_toc_entries: int = 3) -> RenderedArticle:
     """Return sanitised article HTML with heading ids and a table of contents."""
-    cleaned = sanitize_html(body or "")
+    cleaned = sanitize_stored_html(body or "")
     used: set[str] = set()
     toc: list[TocEntry] = []
 

@@ -1,0 +1,2 @@
+{# Contract: variant (free|paid|featured|verified|popular|new|warning|danger; default neutral), label (required), icon (optional Lucide name registered in modules/icons.js). #}
+<span class="badge-ui{% if variant %} badge-ui--{{ variant }}{% endif %}">{% if icon %}<i data-lucide="{{ icon }}" aria-hidden="true"></i>{% endif %}{{ label }}</span>

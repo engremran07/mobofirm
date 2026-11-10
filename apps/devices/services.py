@@ -10,6 +10,7 @@ from django.apps import apps as django_apps
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import DatabaseError, transaction
+from django.db.models import Q
 from django.http import HttpResponse
 from django.utils import timezone
 from django.utils.crypto import salted_hmac
@@ -18,7 +19,13 @@ from apps.core.utils.ip import get_client_ip
 
 if TYPE_CHECKING:
     from apps.devices.models import BehaviorInsight
-from apps.devices.models import AppPolicy, Device, DeviceConfig, DeviceEvent
+from apps.devices.models import (
+    AppPolicy,
+    Device,
+    DeviceBrowserLink,
+    DeviceConfig,
+    DeviceEvent,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -59,10 +66,14 @@ def hash_browser_key(key: str) -> str:
 
 
 def active_devices_queryset(user):
-    """The browsers that occupy a slot: approved, registered, unblocked, not revoked."""
+    """The registrations that occupy a slot: approved, identified, unblocked, not revoked.
+
+    One operating system (platform credential) is one slot however many browsers run
+    on it; a browser-only fallback registration is one slot per browser profile.
+    """
     return Device.objects.filter(
+        Q(browser_key_hash__gt="") | Q(os_credential_id_hash__gt=""),
         user=user,
-        browser_key_hash__gt="",
         is_trusted=True,
         is_blocked=False,
         revoked_at__isnull=True,
@@ -71,6 +82,45 @@ def active_devices_queryset(user):
 
 def get_active_device_count(user) -> int:
     return active_devices_queryset(user).count()
+
+
+def user_has_os_registration(user) -> bool:
+    """True when the account has a usable registered operating system."""
+    return Device.objects.filter(
+        user=user, os_credential_id_hash__gt="", revoked_at__isnull=True
+    ).exists()
+
+
+def os_link_max_age_days() -> int:
+    """How long a browser stays recognised on its OS before it re-proves the credential.
+
+    A browser profile restored onto a reinstalled OS keeps its cookie, so the link
+    cannot be permanent; the credential, which a reinstall destroys, is re-checked.
+    """
+    return max(1, int(getattr(settings, "DEVICE_OS_LINK_MAX_AGE_DAYS", 30)))
+
+
+def find_current_device(request, user, *, for_update: bool = False) -> Device | None:
+    """The registration the requesting browser maps to, without creating anything.
+
+    A browser that proved possession of an OS credential resolves to that OS's
+    ``Device`` through its ``DeviceBrowserLink``; otherwise the browser's own
+    cookie-keyed (fallback) registration is used.
+    """
+    key_hash = hash_browser_key(ensure_browser_key(request))
+    devices = Device.objects.select_for_update() if for_update else Device.objects
+    linked_id = (
+        DeviceBrowserLink.objects.filter(
+            user=user,
+            browser_key_hash=key_hash,
+            verified_at__gte=timezone.now() - timedelta(days=os_link_max_age_days()),
+        )
+        .values_list("device_id", flat=True)
+        .first()
+    )
+    if linked_id is not None:
+        return devices.filter(pk=linked_id, user=user).first()
+    return devices.filter(user=user, browser_key_hash=key_hash).first()
 
 
 def _entitled_device_limit(user) -> int | None:
@@ -135,6 +185,17 @@ def _parse_os_family(ua: str) -> str:
     if "linux" in ua_l:
         return "Linux"
     return "OS"
+
+
+def describe_platform(ua: str) -> tuple[str, str]:
+    """(operating-system family, device type) read from a User-Agent; a label only."""
+    os_family = _parse_os_family(ua)
+    ua_l = ua.lower()
+    if "ipad" in ua_l or ("android" in ua_l and "mobile" not in ua_l):
+        return os_family, "tablet"
+    if any(term in ua_l for term in ("mobile", "iphone", "android")):
+        return os_family, "phone"
+    return os_family, "computer"
 
 
 def mark_device_trusted(device_id, user_id) -> bool:
@@ -288,7 +349,7 @@ def resolve_identity(
     }
 
 
-def _enforce_registration_limits(user, policy: Policy, now) -> None:
+def enforce_registration_limits(user, policy: Policy, now) -> None:
     """Reject a new browser registration that would exceed configured quotas."""
     registrations = Device.objects.filter(user=user)
     pending_cap = int(getattr(settings, "DEVICE_MAX_PENDING_PER_USER", 10))
@@ -328,13 +389,7 @@ def resolve_or_create_device(
     ip = ident.get("ip", "") or ""
     key_hash = ident["browser_key_hash"]
     browser_family = _parse_browser_family(ua)
-    os_family = _parse_os_family(ua)
-    if "ipad" in ua.lower() or ("android" in ua.lower() and "mobile" not in ua.lower()):
-        device_type = "tablet"
-    elif any(term in ua.lower() for term in ("mobile", "iphone", "android")):
-        device_type = "phone"
-    else:
-        device_type = "computer"
+    os_family, device_type = describe_platform(ua)
     display_name = f"{os_family} {device_type} · {browser_family}"
 
     prev_event_ip = None
@@ -349,25 +404,15 @@ def resolve_or_create_device(
         prev_event_ip = last_evt.ip
         prev_country = last_evt.geo_region
 
-    device = Device.objects.filter(
-        user=user,
-        browser_key_hash=key_hash,
-    ).first()
+    device = find_current_device(request, user)
     is_new = device is None
 
     if device is None:
         with transaction.atomic():
             get_user_model().objects.select_for_update().get(pk=user.pk)
-            device = (
-                Device.objects.select_for_update()
-                .filter(
-                    user=user,
-                    browser_key_hash=key_hash,
-                )
-                .first()
-            )
+            device = find_current_device(request, user, for_update=True)
             if device is None:
-                _enforce_registration_limits(user, ident["policy_snapshot"], now)
+                enforce_registration_limits(user, ident["policy_snapshot"], now)
                 device = Device.objects.create(
                     user=user,
                     browser_key_hash=key_hash,
@@ -401,7 +446,12 @@ def resolve_or_create_device(
             reason="trust_expired",
         )
 
-    if device.revoked_at is None:
+    if device.revoked_at is None and device.is_os_identity:
+        # The label of an OS registration is fixed at registration time; the browser
+        # making this request is irrelevant to it.
+        device.last_seen_at = now
+        device.save(update_fields=["last_seen_at"])
+    elif device.revoked_at is None:
         device.last_seen_at = now
         device.display_name = display_name
         device.os_name = os_family
@@ -433,6 +483,10 @@ def resolve_or_create_device(
         device.save(update_fields=["risk_score"])
     ident["risk_score"] = risk
     ident["is_new"] = is_new
+    # A new, unrecognised browser of an account that already registered an OS may
+    # simply be another browser on that computer: ask for the OS check, not a
+    # "new device" alert.
+    ident["os_check_pending"] = bool(is_new and user_has_os_registration(user))
     active_count = get_active_device_count(user)
     maximum = get_device_limit(user)
     ident["remaining_devices"] = max(0, maximum - active_count)
@@ -443,48 +497,67 @@ def resolve_or_create_device(
 
 
 def approve_current_device(request, user) -> Device:
-    """Approve only the pending browser profile presented by this request."""
-    key = ensure_browser_key(request)
-    key_hash = hash_browser_key(key)
+    """Approve only the pending registration the requesting browser maps to.
 
+    That is the browser's own fallback registration, or the registered OS it was
+    recognised on (see ``DeviceBrowserLink``).
+    """
+    newly_trusted = False
     with transaction.atomic():
         get_user_model().objects.select_for_update().get(pk=user.pk)
-        device = (
-            Device.objects.select_for_update()
-            .filter(user=user, browser_key_hash=key_hash)
-            .first()
-        )
+        device = find_current_device(request, user, for_update=True)
         if device is None:
             raise DevicePolicyError("device_not_found")
         if device.is_blocked:
             raise DevicePolicyError("blocked_device", {"device": device})
         if device.revoked_at is not None:
             raise DevicePolicyError("revoked_device", {"device": device})
-        if device.is_trusted:
-            return device
-
-        active_count = get_active_device_count(user)
-        maximum = get_device_limit(user)
-        if active_count >= maximum:
-            raise DevicePolicyError(
-                "limit_reached",
-                {
-                    "device": device,
-                    "current_device_count": active_count,
-                    "max_devices": maximum,
-                },
-            )
-
-        device.is_trusted = True
-        device.save(update_fields=["is_trusted"])
-        DeviceEvent.objects.create(
-            device=device,
-            user=user,
-            event_type="device_trusted",
-            success=True,
-            reason="current_browser_approved",
-        )
+        if not device.is_trusted:
+            newly_trusted = True
+            trust_pending_device(user, device, reason="current_browser_approved")
+    if newly_trusted:
+        notify_device_registered(user, device, get_client_ip(request) or "")
     return device
+
+
+def trust_pending_device(user, device: Device, *, reason: str) -> None:
+    """Approve ``device`` within the account allowance; the caller holds the user lock."""
+    active_count = get_active_device_count(user)
+    maximum = get_device_limit(user)
+    if active_count >= maximum:
+        raise DevicePolicyError(
+            "limit_reached",
+            {
+                "device": device,
+                "current_device_count": active_count,
+                "max_devices": maximum,
+            },
+        )
+    device.is_trusted = True
+    device.save(update_fields=["is_trusted"])
+    DeviceEvent.objects.create(
+        device=device,
+        user=user,
+        event_type="device_trusted",
+        success=True,
+        reason=reason,
+    )
+
+
+def notify_device_registered(user, device: Device, ip: str) -> None:
+    """Tell the user a device is now registered (approved); never for a pending one."""
+    from apps.users.services.notifications import send_notification
+
+    kind = "computer" if device.is_os_identity else "browser"
+    label = device.display_name or f"{device.os_family or 'Unknown OS'} {kind}"
+    send_notification(
+        user,
+        "Device registered",
+        f"{label} is now registered to your account ({kind} registration, "
+        f"approved from {ip or 'unknown IP'}).",
+        level="info",
+        channel="web",
+    )
 
 
 def enforce_device_policy_for_login(
@@ -724,19 +797,27 @@ def _log_event(
             },
         )
 
-    # Notify user when a new device registers successfully
-    if success and payload["user"] and ctx.get("is_new"):
+    # A sign-in from a browser that is not registered yet is only *pending*: say so,
+    # and stay silent when the browser may just be another one on a registered OS
+    # (the OS check decides; a real registration notifies when it is approved).
+    if (
+        success
+        and payload["user"]
+        and ctx.get("is_new")
+        and not ctx.get("os_check_pending")
+    ):
         from apps.users.services.notifications import send_notification
 
         device_label = (
             getattr(device, "display_name", None)
-            or f"{getattr(device, 'os_family', '') or 'Unknown OS'} browser profile"
+            or f"{getattr(device, 'os_family', '') or 'Unknown OS'} browser"
         )
         send_notification(
             payload["user"],
-            "New device registered",
-            f"A new browser profile ({device_label}) was registered from "
-            f"{payload.get('ip') or 'unknown IP'}.",
+            "New device awaiting approval",
+            f"A new browser ({device_label}) signed in from "
+            f"{payload.get('ip') or 'unknown IP'}. It is not registered yet and "
+            "uses a device slot only after you approve it.",
             level="info",
             channel="web",
         )
@@ -751,6 +832,19 @@ def _log_event(
             "reason": reason,
         }
     )
+
+
+def log_device_event(
+    device: Device | None,
+    user,
+    event_type: str,
+    *,
+    success: bool,
+    reason: str,
+    ctx: dict[str, Any],
+) -> None:
+    """Public audit hook for the device-owned flows (OS registration/verification)."""
+    _log_event(device, user, event_type, success=success, reason=reason, ctx=ctx)
 
 
 def _emit_security_event(

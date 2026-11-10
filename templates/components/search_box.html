@@ -1,10 +1,11 @@
-{# Contract: action (required GET URL), input_id (required), label (required, visually hidden), value, name (default q), placeholder, hx_target (optional selector; enables debounced HTMX search with a working non-JS form), hx_get (optional URL for the fragment, defaults to action). #}
-<form class="search-box" role="search" method="get" action="{{ action }}">
+{# Contract: action (required GET URL), input_id (required), label (required, visually hidden), value, name (default q), placeholder, hidden (optional list of (name, value) pairs kept as hidden inputs so other filters survive), hx_target (optional selector of an aria-live container; enables live HTMX search per keystroke, debounced 250 ms, with a working non-JS GET form and a pushed URL), hx_get (optional fragment URL, defaults to action). The server answers HX-Request with the fragment only. #}
+<form class="search-box" role="search" method="get" action="{{ action }}"{% if hx_target %} hx-get="{{ hx_get|default:action }}" hx-trigger="submit" hx-target="{{ hx_target }}" hx-swap="innerHTML" hx-push-url="true" hx-sync="this:replace" hx-indicator="#{{ input_id }}-indicator"{% endif %}>
   <label class="visually-hidden" for="{{ input_id }}">{{ label }}</label>
+  {% for key, val in hidden %}<input type="hidden" name="{{ key }}" value="{{ val }}">{% endfor %}
   <div class="input-group">
-    <input class="form-control" type="search" id="{{ input_id }}" name="{{ name|default:'q' }}" value="{{ value|default:'' }}"
-           placeholder="{{ placeholder|default:'Search' }}" autocomplete="off" enterkeyhint="search"
-           {% if hx_target %}hx-get="{{ hx_get|default:action }}" hx-trigger="input changed delay:350ms" hx-target="{{ hx_target }}" hx-push-url="true" hx-indicator="#{{ input_id }}-indicator"{% endif %}>
+    <input class="form-control" type="search" id="{{ input_id }}" name="{{ name|default:'q' }}" value="{{ value|default:'' }}" maxlength="100"
+           placeholder="{{ placeholder|default:'Search' }}" autocomplete="off" enterkeyhint="search" data-live-search
+           {% if hx_target %}hx-get="{{ hx_get|default:action }}" hx-trigger="input changed delay:250ms, search" hx-include="closest form" hx-target="{{ hx_target }}" hx-swap="innerHTML" hx-push-url="true" hx-sync="closest form:replace" hx-indicator="#{{ input_id }}-indicator"{% endif %}>
     <button class="btn btn-primary" type="submit">Search</button>
   </div>
   {% if hx_target %}

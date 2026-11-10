@@ -1,15 +1,28 @@
 {% extends "base.html" %}
 {% block title %}Bounty: {{ bounty.target_label }} | {{ site_name }}{% endblock %}
 {% block content %}
-<div class="site-container py-4 py-lg-5">
+<div class="site-container py-4 py-lg-5 bounty-page">
   {% include "components/breadcrumbs.html" with current=bounty.target_label parent_label="Bounties" parent_url="/bounty/" %}
   {% if is_guide %}{% include "components/page_header.html" with eyebrow="Bounty" title=bounty.target_label lead="Write the requested method or guide. When staff approve and publish it the credits go to the author." %}{% else %}{% include "components/page_header.html" with eyebrow="Bounty" title=bounty.target_label lead="Upload a matching firmware. When staff approve it, the credits go to the uploader." %}{% endif %}
   {% if not available %}<div class="alert alert-warning" role="status">{{ paused_reason }}</div>{% endif %}
   <div class="row g-4">
     <div class="col-12 col-lg-8">
-      <section class="surface-card p-4 mb-4" aria-labelledby="bounty-summary">
-        <h2 class="h5" id="bounty-summary">{{ bounty.credits }} credits {% include "bounty/_status.html" with bounty=bounty %}</h2>
-        <dl class="eco-kv mb-0">
+      <section class="bounty-hero" aria-labelledby="bounty-summary">
+        <div class="bounty-hero__reward">
+          <span class="bounty-hero__icon" aria-hidden="true"><i data-lucide="trophy" class="icon"></i></span>
+          <div>
+            <p class="bounty-hero__label">Reward</p>
+            <h2 class="bounty-hero__amount" id="bounty-summary">{{ bounty.credits }} credits {% include "bounty/_status.html" with bounty=bounty %}</h2>
+          </div>
+        </div>
+        {% if bounty.status == "open" or bounty.status == "review" %}<p class="bounty-hero__escrow"><i data-lucide="shield-check" class="icon" aria-hidden="true"></i> Held in escrow. Paid to the author once staff approve a solution, returned to the poster otherwise.</p>{% endif %}
+        <ol class="stepper-ui bounty-timeline" aria-label="Bounty progress">
+          <li class="is-done"><span>Posted</span><small>{{ bounty.created_at|date:"j M Y" }}</small></li>
+          <li class="{% if bounty.status == 'review' or bounty.status == 'fulfilled' %}is-done{% elif bounty.status == 'open' %}is-current{% endif %}"><span>Open{% if claims %} · {{ claims|length }} working{% endif %}</span>{% if bounty.status == "open" %}<small>ends {{ bounty.expires_at|date:"j M Y" }}</small>{% endif %}</li>
+          <li class="{% if bounty.status == 'fulfilled' %}is-done{% elif bounty.status == 'review' %}is-current{% endif %}"><span>Staff review</span>{% if bounty.status == "review" %}<small>in progress</small>{% endif %}</li>
+          <li class="{% if bounty.status == 'fulfilled' %}is-done{% elif bounty.status == 'cancelled' or bounty.status == 'expired' %}is-current{% endif %}"><span>{% if bounty.status == "cancelled" %}Cancelled{% elif bounty.status == "expired" %}Expired{% else %}Paid{% endif %}</span>{% if bounty.status == "fulfilled" %}<small>{{ bounty.settled_at|date:"j M Y" }}</small>{% endif %}</li>
+        </ol>
+        <dl class="eco-kv bounty-hero__facts mb-0">
           <dt>Posted by</dt><dd>{{ bounty.creator.username }} on {{ bounty.created_at|date:"j M Y" }}</dd>
           <dt>For</dt><dd>{% if target_url %}<a href="{{ target_url }}">{{ bounty.target_label }}</a>{% else %}{{ bounty.target_label }}{% endif %}</dd>
           {% if bounty.status == "open" %}<dt>Ends</dt><dd>{{ bounty.expires_at|date:"j M Y H:i" }}</dd>{% endif %}
@@ -17,29 +30,37 @@
           {% if bounty.status == "review" %}<dt>Review</dt><dd>Staff are looking at this bounty: {{ bounty.review_reason }}</dd>{% endif %}
           {% if bounty.closed_reason %}<dt>Closed because</dt><dd>{{ bounty.closed_reason }}</dd>{% endif %}
         </dl>
-        {% if bounty.note %}<p class="mt-3 mb-0">{{ bounty.note|linebreaksbr }}</p>{% endif %}
+        {% if bounty.note %}<p class="bounty-hero__note mb-0">{{ bounty.note|linebreaksbr }}</p>{% endif %}
       </section>
-      <section class="surface-card p-4" aria-labelledby="bounty-claims">
+      <section class="surface-card p-4 mt-4" aria-labelledby="bounty-claims">
         <h2 class="h5" id="bounty-claims">Working on it ({{ claims|length }})</h2>
-        {% if claims %}<ul class="list-unstyled mb-0">{% for claim in claims %}<li>{{ claim.user.username }}{% if claim.note %} <span class="muted">— {{ claim.note }}</span>{% endif %}</li>{% endfor %}</ul>{% else %}<p class="muted mb-0">Nobody has said they are working on this yet.</p>{% endif %}
+        {% if claims %}
+          <ul class="bounty-claims">
+            {% for claim in claims %}
+              <li><span class="avatar avatar--sm avatar--v{{ forloop.counter0|divisibleby:2|yesno:'1,2' }}" aria-hidden="true">{{ claim.user.username|slice:":1"|upper }}</span><span>{{ claim.user.username }}{% if claim.note %} <span class="muted">— {{ claim.note }}</span>{% endif %}</span></li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="muted mb-0">Nobody has said they are working on this yet.</p>
+        {% endif %}
       </section>
     </div>
     <div class="col-12 col-lg-4">
-      <section class="surface-card p-4 d-grid gap-2" aria-labelledby="bounty-actions">
+      <section class="surface-card p-4 d-grid gap-2 bounty-actions" aria-labelledby="bounty-actions">
         <h2 class="h5" id="bounty-actions">Fulfil this bounty</h2>
         {% if bounty.status == "open" %}
           <a class="btn btn-primary" href="{{ upload_url }}">{% if is_guide %}Submit a solution{% else %}Upload firmware{% endif %}</a>
           {% if user.is_authenticated and not is_owner and not has_claimed %}
-            <form method="post" action="{% url 'bounty:claim' pk=bounty.pk %}">{% csrf_token %}<button class="btn btn-outline-primary w-100" type="submit">I'm working on this</button></form>
+            <form method="post" action="{% url 'bounty:claim' pk=bounty.pk %}">{% csrf_token %}<button class="btn btn-soft w-100" type="submit">I'm working on this</button></form>
           {% elif has_claimed %}<p class="small muted mb-0">You are listed as working on this.</p>
-          {% elif not user.is_authenticated %}<a class="btn btn-outline-primary" href="{% url 'users:account_login' %}?next={{ request.path|urlencode }}">Sign in to take part</a>{% endif %}
+          {% elif not user.is_authenticated %}<a class="btn btn-soft" href="{% url 'users:account_login' %}?next={{ request.path|urlencode }}">Sign in to take part</a>{% endif %}
         {% else %}
           <p class="muted mb-0">This bounty is {{ bounty.get_status_display|lower }}.</p>
         {% endif %}
         {% if can_cancel %}
           <a class="btn btn-outline-danger" href="{% url 'bounty:cancel_dialog' pk=bounty.pk %}" hx-get="{% url 'bounty:cancel_dialog' pk=bounty.pk %}" hx-target="#dialog-slot" hx-swap="innerHTML">Cancel and get credits back</a>
         {% endif %}
-        {% if can_report %}<a class="btn btn-link" href="{% url 'bounty:report' pk=bounty.pk %}">Report a problem</a>{% endif %}
+        {% if can_report %}<a class="btn btn-ghost" href="{% url 'bounty:report' pk=bounty.pk %}"><i data-lucide="flag" class="icon" aria-hidden="true"></i> Report a problem</a>{% endif %}
       </section>
     </div>
   </div>

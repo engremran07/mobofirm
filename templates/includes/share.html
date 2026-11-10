@@ -1,0 +1,13 @@
+{# Context from {% share_widget %}: links, url, title, text, heading, heading_id, copy_message. Plain outbound links, a copy-link button (toast via the shared copy handler) and a native-share button that modules/share.js reveals when the browser supports it. #}
+{% if links %}
+<section class="share" aria-labelledby="{{ heading_id }}" data-share data-share-url="{{ url }}" data-share-title="{{ title }}" data-share-text="{{ text }}">
+  <h2 class="share__title" id="{{ heading_id }}"><i data-lucide="share-2" class="icon" aria-hidden="true"></i> {{ heading }}</h2>
+  <ul class="share__list">
+    <li data-share-native-item hidden><button class="share__link" type="button" data-share-native><i data-lucide="share-2" class="icon" aria-hidden="true"></i>Share&hellip;</button></li>
+    <li><button class="share__link share__link--copy" type="button" data-copy="{{ url }}" data-copy-message="{{ copy_message }}"><i data-lucide="link" class="icon" aria-hidden="true"></i>Copy link</button></li>
+    {% for link in links %}
+      <li><a class="share__link" href="{{ link.href }}"{% if link.is_web %} target="_blank" rel="noopener noreferrer"{% endif %}><i data-lucide="{{ link.icon }}" class="icon" aria-hidden="true"></i>{{ link.label }}{% if link.is_web %}<span class="visually-hidden"> (opens in a new tab)</span>{% endif %}</a></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}

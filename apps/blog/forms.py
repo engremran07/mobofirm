@@ -1,15 +1,15 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any, ClassVar
 
 from django import forms
 
-from apps.firmwares.models import Brand, Chipset
-from apps.firmwares.models import Model as DeviceModel
+from apps.core.editor.forms import RichTextFormMixin
 from apps.tags.selectors import public_tags
 
 from .access import can_set_premium_access
-from .models import Category, GuideRequest, Post, PostAccess
+from .models import Category, Post, PostAccess
 
 
 class SearchForm(forms.Form):
@@ -33,51 +33,9 @@ class CategoryForm(forms.ModelForm):
         }
 
 
-class GuideRequestForm(forms.Form):
-    """A member asks for a flashing method, unlock pattern, trick or guide."""
+class PostForm(RichTextFormMixin, forms.ModelForm):
+    rich_text_fields: ClassVar[Mapping[str, str]] = {"body": "blog_post"}
 
-    title = forms.CharField(
-        label="What do you need?",
-        min_length=8,
-        max_length=200,
-        widget=forms.TextInput(attrs={"class": "form-control"}),
-        help_text="e.g. “Bypass FRP on Samsung A14 without a PC”.",
-    )
-    kind = forms.ChoiceField(
-        label="Type of request",
-        choices=GuideRequest.Kind.choices,
-        initial=GuideRequest.Kind.GUIDE,
-        widget=forms.Select(attrs={"class": "form-select"}),
-    )
-    description = forms.CharField(
-        label="Details",
-        min_length=20,
-        max_length=2000,
-        widget=forms.Textarea(attrs={"rows": 5, "class": "form-control"}),
-        help_text="The device state, what you tried and what a good answer covers.",
-    )
-    brand = forms.ModelChoiceField(
-        queryset=Brand.objects.all(), required=False, widget=forms.HiddenInput
-    )
-    model = forms.ModelChoiceField(
-        queryset=DeviceModel.objects.select_related("brand"),
-        required=False,
-        widget=forms.HiddenInput,
-    )
-    chipset = forms.ModelChoiceField(
-        queryset=Chipset.objects.all(), required=False, widget=forms.HiddenInput
-    )
-
-    def clean(self):
-        super().clean()
-        cleaned = self.cleaned_data
-        brand, model = cleaned.get("brand"), cleaned.get("model")
-        if brand and model and model.brand_id != brand.pk:
-            self.add_error("model", "This model does not belong to the chosen brand.")
-        return cleaned
-
-
-class PostForm(forms.ModelForm):
     class Meta:
         model = Post
         fields = (

@@ -1,0 +1,60 @@
+{% extends "admin/staff_page.html" %}
+{% load i18n %}
+{% comment %}
+  Confirm page of a bulk approve/reject on a catalogue request queue (admin shell).
+  Posts back to the changelist with the original action and the selected ids; the
+  "confirm" field makes the action apply. Context: form, requests, reject,
+  action_name, cancel_url, opts.
+{% endcomment %}
+{% block mf_body %}
+<form method="post" class="mf-ui-card" data-bulk-request-decision="{{ action_name }}" novalidate>
+  {% csrf_token %}
+  <input type="hidden" name="action" value="{{ action_name }}">
+  <input type="hidden" name="select_across" value="0">
+  <input type="hidden" name="index" value="0">
+  <input type="hidden" name="confirm" value="1">
+  {% for pending in requests %}<input type="hidden" name="_selected_action" value="{{ pending.pk }}">{% endfor %}
+
+  <h2 class="mf-ui-card__title">
+    {% if reject %}{% trans "Reject the selected requests" %}{% else %}{% trans "Approve the selected requests" %}{% endif %}
+  </h2>
+  <p class="mf-ui-help">
+    {% if reject %}
+      {% trans "Each request is closed with the reason below and its requester is notified." %}
+    {% else %}
+      {% trans "Each request creates (or links) its catalogue record from the requested data and its requester is notified. Open a request on its own to correct its data first." %}
+    {% endif %}
+  </p>
+
+  <div class="mf-ui-table-wrap">
+    <table class="mf-ui-table">
+      <caption class="visually-hidden">{% trans "Selected requests" %}</caption>
+      <thead><tr><th scope="col">{% trans "Request" %}</th><th scope="col">{% trans "Requested by" %}</th><th scope="col">{% trans "Filed" %}</th></tr></thead>
+      <tbody>
+        {% for pending in requests %}
+          <tr>
+            <td>{{ pending }}</td>
+            <td>{{ pending.requested_by|default:"—" }}</td>
+            <td>{{ pending.created_at|date:"SHORT_DATETIME_FORMAT" }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  {% if form.non_field_errors %}<div class="mf-ui-note mf-ui-note--danger" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+  <div class="mf-ui-field">
+    <label for="{{ form.reason.id_for_label }}">{{ form.reason.label }}{% if form.reason.field.required %} *{% endif %}</label>
+    {{ form.reason }}
+    {% if form.reason.help_text %}<p class="mf-ui-help" id="{{ form.reason.id_for_label }}-help">{{ form.reason.help_text }}</p>{% endif %}
+    {% if form.reason.errors %}<p class="mf-ui-note mf-ui-note--danger" role="alert">{{ form.reason.errors|join:" " }}</p>{% endif %}
+  </div>
+
+  <div class="mf-ui-row">
+    <button type="submit" class="mf-ui-btn mf-ui-btn--primary{% if reject %} mf-ui-btn--danger{% endif %}">
+      {% if reject %}{% trans "Reject requests" %}{% else %}{% trans "Approve requests" %}{% endif %}
+    </button>
+    <a class="mf-ui-btn" href="{{ cancel_url }}">{% trans "Cancel" %}</a>
+  </div>
+</form>
+{% endblock %}

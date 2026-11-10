@@ -8,11 +8,13 @@
 {% endcomment %}
 {% block title %}{% block head_title %}{% endblock %} | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block main %}
-  <div class="site-container py-5">
+  <div class="site-container auth-page">
     {% allauth_breadcrumbs %}
-    <section class="surface-card allauth-shell p-4 mx-auto">
-      {% block content %}{% endblock %}
-    </section>
+    <div class="auth-layout auth-layout--solo">
+      <section class="auth-card auth-card--wide allauth-shell">
+        {% block content %}{% endblock %}
+      </section>
+    </div>
   </div>
 {% endblock %}
 {% block extra_scripts %}{% block extra_body %}{% endblock %}{% endblock %}

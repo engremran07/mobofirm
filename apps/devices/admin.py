@@ -6,7 +6,7 @@ from collections.abc import Callable, Iterable
 from urllib.parse import unquote
 
 from django.contrib import admin, messages
-from django.db.models import QuerySet
+from django.db.models import Q, QuerySet
 from django.http import Http404, HttpRequest, HttpResponse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -39,6 +39,7 @@ from apps.devices.models import (
     AppPolicy,
     BehaviorInsight,
     Device,
+    DeviceBrowserLink,
     DeviceConfig,
     DeviceEvent,
     DeviceFingerprint,
@@ -109,6 +110,7 @@ class DeviceAdmin(ModelAdmin):
     list_display = (
         "user",
         "display_name",
+        "identity",
         "os_family",
         "browser_family",
         "state",
@@ -126,6 +128,12 @@ class DeviceAdmin(ModelAdmin):
     raw_id_fields = ("user",)
     readonly_fields = (
         "browser_key_hash",
+        "os_credential_id",
+        "os_credential_id_hash",
+        "os_credential_public_key",
+        "os_credential_alg",
+        "os_credential_sign_count",
+        "os_credential_rp_id",
         "first_seen_at",
         "last_seen_at",
         "revoked_at",
@@ -135,6 +143,14 @@ class DeviceAdmin(ModelAdmin):
     actions = ("mark_trusted", "block_devices", "unblock_devices", "revoke_devices")
     actions_row = ("trust", "block", "unblock", "revoke", "reset_slots")
     actions_detail = ("trust", "block", "unblock", "revoke", "reset_slots")
+
+    @display(description=_("Identity"))
+    def identity(self, obj: Device) -> str:
+        if obj.is_os_identity:
+            return str(_("This computer (OS)"))
+        if obj.browser_key_hash:
+            return str(_("This browser only"))
+        return str(_("Legacy"))
 
     @display(description=_("State"), label=BADGE_DEVICE_STATE)
     def state(self, obj: Device) -> tuple[str, str]:
@@ -172,7 +188,9 @@ class DeviceAdmin(ModelAdmin):
     ) -> tuple[str, int]:
         trusted = 0
         eligible = queryset.filter(
-            browser_key_hash__gt="", is_blocked=False, revoked_at__isnull=True
+            Q(browser_key_hash__gt="") | Q(os_credential_id_hash__gt=""),
+            is_blocked=False,
+            revoked_at__isnull=True,
         ).select_related("user")
         for device in eligible:
             if mark_device_trusted(device.pk, device.user_id):
@@ -207,9 +225,14 @@ class DeviceAdmin(ModelAdmin):
     ) -> tuple[str, int]:
         active = queryset.filter(revoked_at__isnull=True)
         devices = list(active.select_related("user"))
+        # Revoking disables the OS credential: its browsers stop being recognised
+        # on it and must register (or verify another credential) again.
+        DeviceBrowserLink.objects.filter(
+            device_id__in=[device.pk for device in devices]
+        ).delete()
         updated = active.update(is_trusted=False, revoked_at=timezone.now())
         self._audit(request, devices, "policy_violation", "revoked_by_admin")
-        return f"{updated} browser registration(s) revoked.", messages.SUCCESS
+        return f"{updated} device registration(s) revoked.", messages.SUCCESS
 
     # -- bulk actions ---------------------------------------------------------
     @action(description=_("Mark selected devices as trusted"), permissions=["change"])
@@ -299,8 +322,11 @@ class DeviceAdmin(ModelAdmin):
         variant=ActionVariant.WARNING,
         permissions=["change"],
         dialog=confirm_dialog(
-            _("Revoke this browser registration?"),
-            _("The browser must register again before it is trusted."),
+            _("Revoke this device registration?"),
+            _(
+                "The registration and its computer credential stop working; the "
+                "browser or computer must register again before it is trusted."
+            ),
             submit=_("Revoke"),
         ),
     )

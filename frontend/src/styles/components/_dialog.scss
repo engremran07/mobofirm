@@ -1,0 +1,235 @@
+@use "../abstracts" as *;
+
+// App-owned dialogs (templates/components/dialog.html, modules/dialogs.js).
+// Core owns this shell only; apps supply the content. Tokens only, no inline styles.
+//
+// Anatomy: header (title + close) / body (scrolls, edge shadows) / sticky footer actions.
+// Sizes: sm (default) md lg xl, and a bottom sheet below 576px. States: danger, inline
+// (no-JavaScript page), loading (HTMX request or submit in flight).
+
+.app-dialog {
+  --app-dialog-width: 30rem;
+  --app-dialog-from: translateY(0.75rem) scale(0.98);
+  width: min(var(--app-dialog-width), calc(100vw - 2rem));
+  max-width: none;
+  max-height: calc(100dvh - 2rem);
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--mf-glass-border);
+  border-radius: var(--mf-radius-xl);
+  background: var(--mf-surface-raised);
+  box-shadow: var(--mf-elev-4);
+  color: var(--mf-text);
+}
+
+.app-dialog--md {
+  --app-dialog-width: 40rem;
+}
+
+.app-dialog--lg {
+  --app-dialog-width: 56rem;
+}
+
+.app-dialog--xl {
+  --app-dialog-width: 72rem;
+}
+
+.app-dialog--danger {
+  border-top: 0.25rem solid var(--mf-danger);
+}
+
+.app-dialog::backdrop,
+.device-registration-dialog::backdrop,
+.sheet-ui::backdrop {
+  background: var(--mf-overlay);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+
+// Scroll lock while any modal dialog is open (no JavaScript needed). The scrollbar
+// gutter is reserved on <html> (components/_overlays.scss), so the page never shifts.
+html:has(dialog:modal) {
+  overflow: hidden;
+}
+
+// The no-JavaScript fallback renders the same dialog open, inside the page.
+.app-dialog--inline {
+  position: static;
+  max-height: none;
+  margin: 0 auto;
+  box-shadow: var(--mf-elev-2);
+}
+
+.app-dialog__form {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 2rem);
+  margin: 0;
+}
+
+.app-dialog--inline .app-dialog__form {
+  max-height: none;
+}
+
+.app-dialog__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: clamp(1rem, 4vw, 1.5rem) clamp(1.25rem, 4vw, 1.75rem) 0.25rem;
+}
+
+.app-dialog__title {
+  margin: 0;
+  font-size: var(--mf-text-xl);
+  font-weight: 740;
+  letter-spacing: -0.025em;
+  overflow-wrap: anywhere;
+}
+
+.app-dialog__header .btn-close {
+  flex-shrink: 0;
+  margin: -0.25rem -0.4rem 0 0;
+  border-radius: var(--mf-radius-pill);
+  opacity: 0.7;
+
+  &:hover {
+    opacity: 1;
+  }
+}
+
+// Only the body scrolls. Edge shadows (pure CSS "scroll shadows") appear on the side
+// that still has hidden content, so long forms and text are visibly scrollable.
+.app-dialog__body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 0.75rem clamp(1.25rem, 4vw, 1.75rem) 1rem;
+  overflow-wrap: anywhere;
+  background:
+    linear-gradient(var(--mf-surface-raised) 30%, transparent) center top / 100% 1.5rem no-repeat local,
+    linear-gradient(transparent, var(--mf-surface-raised) 70%) center bottom / 100% 1.5rem no-repeat local,
+    radial-gradient(farthest-side at 50% 0, rgb(var(--mf-shadow-rgb) / 18%), transparent) center top / 100% 0.6rem no-repeat scroll,
+    radial-gradient(farthest-side at 50% 100%, rgb(var(--mf-shadow-rgb) / 18%), transparent) center bottom / 100% 0.6rem no-repeat scroll;
+}
+
+.app-dialog__message {
+  margin-bottom: 1rem;
+  color: var(--mf-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.app-dialog__body > :last-child {
+  margin-bottom: 0;
+}
+
+// Sticky footer: stays visible while the body scrolls. Actions read left-to-right as
+// secondary, primary (danger replaces primary for destructive confirms).
+.app-dialog__footer {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.75rem clamp(1.25rem, 4vw, 1.75rem) clamp(1rem, 4vw, 1.5rem);
+  border-top: 1px solid var(--mf-border);
+  background: color-mix(in srgb, var(--mf-surface-soft) 45%, var(--mf-surface-raised));
+}
+
+.app-dialog__quote {
+  margin: 0 0 1rem;
+  padding: 0.5rem 0.75rem;
+  border-left: 0.25rem solid var(--mf-border);
+  border-radius: var(--mf-radius-sm);
+  background: var(--mf-surface-soft);
+  overflow-wrap: anywhere;
+}
+
+// Loading: the submit button shows a spinner and ignores clicks while the request
+// runs (HTMX adds .htmx-request to the form; modules/dialogs.js sets data-submitting
+// for plain form posts). The server's answer replaces the dialog or closes it.
+.app-dialog__form.htmx-request,
+.app-dialog__form[data-loading],
+.app-dialog__form[data-submitting] {
+  .btn[type="submit"] {
+    @include busy-button;
+  }
+
+  .btn-outline-secondary[type="submit"] {
+    @include busy-button(var(--mf-text-muted));
+  }
+
+  .app-dialog__body {
+    opacity: 0.7;
+    pointer-events: none;
+  }
+}
+
+.app-dialog__form.htmx-request .btn-danger[type="submit"]::after,
+.app-dialog__form[data-loading] .btn-danger[type="submit"]::after,
+.app-dialog__form[data-submitting] .btn-danger[type="submit"]::after {
+  border-color: var(--mf-danger-ink);
+  border-right-color: transparent;
+}
+
+@keyframes app-dialog-in {
+  from {
+    opacity: 0;
+    transform: var(--app-dialog-from);
+  }
+}
+
+@keyframes app-dialog-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root:not([data-motion="reduce"]) {
+    .app-dialog[open]:not(.app-dialog--inline) {
+      animation: app-dialog-in var(--mf-duration-base) var(--mf-ease-out);
+    }
+
+    .app-dialog[open]:not(.app-dialog--inline)::backdrop {
+      animation: app-dialog-fade var(--mf-duration-base) linear;
+    }
+  }
+}
+
+// Below 576px a modal becomes a bottom sheet with a drag-handle affordance.
+@media (max-width: 575.98px) {
+  .app-dialog:not(.app-dialog--inline) {
+    --app-dialog-from: translateY(100%);
+    width: 100vw;
+    max-height: 92dvh;
+    margin: auto 0 0;
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: var(--mf-radius-xl) var(--mf-radius-xl) 0 0;
+
+    &::before {
+      content: "";
+      display: block;
+      width: 2.75rem;
+      height: 0.3rem;
+      margin: 0.55rem auto 0;
+      border-radius: var(--mf-radius-pill);
+      background: var(--mf-border);
+    }
+
+    .app-dialog__form {
+      max-height: calc(92dvh - 1rem);
+    }
+  }
+
+  .app-dialog__footer {
+    flex-direction: column-reverse;
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+
+    .btn {
+      width: 100%;
+    }
+  }
+}

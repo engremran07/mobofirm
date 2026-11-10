@@ -1,27 +1,26 @@
+{# Swapped into #firmware-table-content by HTMX and included by the full page. Context: firmwares (page), brands, chipsets, selected_*, firmware_types, package_formats, search_* (list_search_context). #}
+{% include "components/search_feedback.html" with noun="firmware file" noun_plural="firmware files" %}
+<div class="cat-active" data-active-filters>
+  <p class="cat-active__count" role="status">{{ firmwares.paginator.count }} firmware file{{ firmwares.paginator.count|pluralize }}</p>
+  {% if search_query %}<span class="chip-ui is-active">Search: {{ search_query }}<button type="button" class="chip-ui__remove" data-filter-clear="q" data-filter-form="firmware-filters" aria-label="Remove search filter"><i data-lucide="x" aria-hidden="true"></i></button></span>{% endif %}
+  {% if selected_brand %}<span class="chip-ui is-active">Brand: {% for brand in brands %}{% if brand.slug == selected_brand %}{{ brand.name }}{% endif %}{% endfor %}<button type="button" class="chip-ui__remove" data-filter-clear="brand" data-filter-form="firmware-filters" aria-label="Remove brand filter"><i data-lucide="x" aria-hidden="true"></i></button></span>{% endif %}
+  {% if selected_type and selected_type != "all" %}<span class="chip-ui is-active">Type: {% for value, label in firmware_types %}{% if value == selected_type %}{{ label }}{% endif %}{% endfor %}<button type="button" class="chip-ui__remove" data-filter-clear="type" data-filter-form="firmware-filters" aria-label="Remove type filter"><i data-lucide="x" aria-hidden="true"></i></button></span>{% endif %}
+  {% if selected_package_format %}<span class="chip-ui is-active">Format: {% for value, label in package_formats %}{% if value == selected_package_format %}{{ label }}{% endif %}{% endfor %}<button type="button" class="chip-ui__remove" data-filter-clear="package_format" data-filter-form="firmware-filters" aria-label="Remove format filter"><i data-lucide="x" aria-hidden="true"></i></button></span>{% endif %}
+  {% if selected_chipset %}<span class="chip-ui is-active">Chipset: {% for chipset in chipsets %}{% if chipset.slug == selected_chipset %}{{ chipset.display_name }}{% endif %}{% endfor %}<button type="button" class="chip-ui__remove" data-filter-clear="chipset" data-filter-form="firmware-filters" aria-label="Remove chipset filter"><i data-lucide="x" aria-hidden="true"></i></button></span>{% endif %}
+  {% if search_query or selected_brand or selected_chipset or selected_package_format or selected_type != "all" and selected_type %}<a class="btn btn-ghost btn-sm" href="{% url 'firmwares:browse' %}" data-filter-reset data-filter-form="firmware-filters">Clear all</a>{% endif %}
+</div>
 {% if firmwares %}
-  <div class="catalog-table-wrap" role="region" tabindex="0" aria-label="Firmware catalogue results">
-    <table class="table table-hover catalog-table">
-      <caption class="visually-hidden">Firmware catalogue results</caption>
-      <thead><tr><th scope="col">Device</th><th scope="col">Build / file</th><th scope="col">Region</th><th scope="col">Android</th><th scope="col">Size</th><th scope="col">Source</th><th scope="col">Access</th><th scope="col"><span class="visually-hidden">Details</span></th></tr></thead>
-      <tbody>
-      {% for firmware in firmwares %}
-        <tr>
-          <td><span class="d-block fw-semibold">{{ firmware.model.display_name|default:"Device not specified" }}</span><span class="small muted">{{ firmware.brand.name|default:"Brand not specified" }}{% if firmware.model.model_code %} · <span class="model-code">{{ firmware.model.model_code }}</span>{% endif %}</span></td>
-          <td><span class="build-code">{{ firmware.build_number|default:firmware.original_file_name }}</span><span class="d-block small muted">{{ firmware.firmware_type_display }} · {{ firmware.get_package_format_display }}</span></td>
-          <td>{% if firmware.variant %}{{ firmware.variant.region|default:firmware.variant.name }}{% else %}Not specified{% endif %}</td>
-          <td>{{ firmware.android_version|default:"Not specified" }}</td>
-          <td class="numeric">{% if firmware.file_size %}{{ firmware.file_size|filesizeformat }}{% else %}Not specified{% endif %}</td>
-          <td>{% if firmware.is_external %}<span class="badge text-bg-secondary">External download</span>{% else %}<span class="status-verified"><i data-lucide="shield-check" aria-hidden="true"></i> Hosted</span>{% endif %}</td>
-          <td>{% include "firmwares/includes/tier_badge.html" with firmware=firmware %}</td>
-          <td><a class="btn btn-sm btn-outline-secondary" href="{% url 'firmwares:firmware_detail' firmware_type=firmware.firmware_type firmware_id=firmware.pk %}">Details<span class="visually-hidden"> for {{ firmware.original_file_name }}</span></a></td>
-        </tr>
-      {% endfor %}
-      </tbody>
-    </table>
+  <h2 class="visually-hidden">Firmware results</h2>
+  <div class="card-grid" data-reveal-list>
+    {% for firmware in firmwares %}{% include "firmwares/includes/firmware_card.html" with firmware=firmware show_device=True %}{% endfor %}
   </div>
   {% include "components/pagination.html" with page_obj=firmwares label="Firmware result pages" hx_target="#firmware-table-content" %}
 {% else %}
-  <p class="empty-state p-4 mb-0">No approved firmware matches these filters.</p>
+  <div class="empty-ui empty-state" role="status">
+    <span class="empty-ui__icon"><i data-lucide="file-search" aria-hidden="true"></i></span>
+    <p class="empty-ui__title">No approved firmware matches these filters.</p>
+    <p class="mb-0">Try a broader search, remove a filter or request the file you need.</p>
+  </div>
   {% include "components/request_cta.html" with kind="firmware" query=search_query heading="Looking for a file that is not listed?" %}
   {% if search_query %}{% include "components/request_cta.html" with kind="model" query=search_query heading="Is the device itself missing?" %}{% endif %}
 {% endif %}

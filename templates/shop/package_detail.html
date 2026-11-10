@@ -2,57 +2,63 @@
 {% block title %}{{ package.name }}{% endblock %}
 {% block content %}
 {% url 'shop:pricing' as shop_url %}
-<div class="site-container py-4 py-lg-5">
+<div class="site-container cm-page py-4 py-lg-5">
   {% include "components/breadcrumbs.html" with current=package.name parent_label="Packages" parent_url=shop_url %}
   {% include "components/page_header.html" with eyebrow="Download package" title=package.name %}
+  <ol class="stepper-ui" aria-label="How ordering works">
+    <li class="is-done">Choose a package</li>
+    <li class="is-current" aria-current="step">Request the order</li>
+    <li>Staff confirm payment</li>
+    <li>Package active</li>
+  </ol>
   {% if not online_payments_enabled %}<div class="mb-4">{% include "shop/_payment_notice.html" %}</div>{% endif %}
-  <div class="row g-4">
-    <div class="col-12 col-lg-7">
-      <section class="surface-card p-4" aria-labelledby="about-package">
-        <h2 class="h5" id="about-package">What you get</h2>
-        {% if package.description %}<p>{{ package.description|linebreaksbr }}</p>{% endif %}
-        <p class="package-summary fw-semibold">{{ package.summary }}</p>
-        <dl class="eco-kv mb-0">
-          <dt>Download quota</dt><dd>{{ package.quota_text }}</dd>
-          {% if package.extra_text %}<dt>Extra</dt><dd>{{ package.extra_text }}</dd>{% endif %}
-          <dt>Item types</dt><dd>{{ package.types_text|capfirst }}{% if package.paid_discount_percent %} · {{ package.paid_discount_percent }}% off paid files{% endif %}</dd>
-          <dt>Devices</dt><dd>{{ package.devices_text|capfirst }}</dd>
-          <dt>Duration</dt><dd>{{ package.duration_text }}</dd>
-          {% if package.perk_labels %}<dt>Perks</dt><dd>{{ package.perk_labels|join:", " }}</dd>{% endif %}
-        </dl>
-      </section>
-    </div>
-    <div class="col-12 col-lg-5">
-      <section class="surface-card p-4" aria-labelledby="request-order">
-        {% load shop_tags %}{% package_promo package as promo %}
-        {% if promo %}
-          <p class="eco-price mb-1"><s class="muted fs-6">{{ package.price_text }}</s> {{ promo.price_text }}{% if package.credit_price %} <small>or {{ promo.credit_price }} credits</small>{% endif %}</p>
-          <p class="small mb-3"><a href="{{ promo.url }}">{{ promo.name }}</a>{% if promo.ends_at %} · ends {{ promo.ends_at|date:"j M" }}{% endif %}</p>
+
+  <div class="cm-split">
+    <section class="cm-section" aria-labelledby="about-package">
+      <div class="cm-section__head"><h2 id="about-package">What you get</h2></div>
+      {% if package.description %}<p>{{ package.description|linebreaksbr }}</p>{% endif %}
+      <p class="plan-card__summary package-summary">{{ package.summary }}</p>
+      <dl class="eco-kv mb-0">
+        <dt>Download quota</dt><dd>{{ package.quota_text }}</dd>
+        {% if package.extra_text %}<dt>Extra</dt><dd>{{ package.extra_text }}</dd>{% endif %}
+        <dt>Item types</dt><dd>{{ package.types_text|capfirst }}{% if package.paid_discount_percent %} · {{ package.paid_discount_percent }}% off paid files{% endif %}</dd>
+        <dt>Devices</dt><dd>{{ package.devices_text|capfirst }}</dd>
+        <dt>Duration</dt><dd>{{ package.duration_text }}</dd>
+        {% if package.perk_labels %}<dt>Perks</dt><dd>{{ package.perk_labels|join:", " }}</dd>{% endif %}
+      </dl>
+    </section>
+
+    <section class="plan-card is-featured" aria-labelledby="request-order">
+      {% load shop_tags %}{% package_promo package as promo %}
+      {% if promo %}
+        <p class="plan-card__price eco-price"><s>{{ package.price_text }}</s> <span>{{ promo.price_text }}</span>{% if package.credit_price %} <span class="plan-card__credits">&middot; {{ promo.credit_price }} credits</span>{% endif %}</p>
+        <p class="plan-card__promo"><a href="{{ promo.url }}">{{ promo.name }}</a>{% if promo.ends_at %} &middot; ends {{ promo.ends_at|date:"j M" }}{% endif %}</p>
+      {% else %}
+        <p class="plan-card__price eco-price"><span>{{ package.price_text }}</span>{% if package.credit_price %} <span class="plan-card__credits">&middot; {{ package.credit_price }} credits</span>{% endif %}</p>
+      {% endif %}
+      <h2 class="h5 mb-0" id="request-order">Get this package</h2>
+      {% if not orderable %}
+        <p class="mb-0 cm-muted">This package is included with every account; there is nothing to order.</p>
+      {% elif user.is_authenticated %}
+        {% if not user.is_verified %}
+          {% include "components/notice.html" with tone="warning" icon="info" message="Verify your email address before placing an order." %}
         {% else %}
-        <p class="eco-price mb-3">{{ package.price_text }}{% if package.credit_price %} <small>or {{ package.credit_price }} credits</small>{% endif %}</p>
-        {% endif %}
-        <h2 class="h5" id="request-order">Get this package</h2>
-        {% if not orderable %}
-          <p class="mb-0 muted">This package is included with every account; there is nothing to order.</p>
-        {% elif user.is_authenticated %}
-          {% if not user.is_verified %}
-            {% include "components/notice.html" with tone="warning" icon="info" message="Verify your email address before placing an order." %}
-          {% else %}
-            <form method="post" action="{% url 'shop:place_order' slug=package.slug %}" class="d-grid gap-3 mb-3">
-              {% csrf_token %}
-              <button type="submit" class="btn btn-primary">Request this package</button>
-              <p class="small muted mb-0">Nothing is charged. Staff contact you with payment instructions and activate the package once payment is confirmed.</p>
-            </form>
-            {% if credits_available and package.credit_price %}
-              <a class="btn btn-outline-primary w-100" href="{% url 'shop:package_credits' slug=package.slug %}" hx-get="{% url 'shop:package_credits' slug=package.slug %}" hx-target="#dialog-slot" hx-swap="innerHTML">Pay {% if promo %}{{ promo.credit_price }}{% else %}{{ package.credit_price }}{% endif %} credits</a>
-              {% if credit_balance is not None %}<p class="small muted mt-2 mb-0">Your balance: {{ credit_balance }} credits.</p>{% endif %}
-            {% endif %}
+          <form method="post" action="{% url 'shop:place_order' slug=package.slug %}" class="d-grid gap-3">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-primary btn-lg">Request this package</button>
+            <p class="small cm-muted mb-0">Nothing is charged. Staff contact you with payment instructions and activate the package once payment is confirmed.</p>
+          </form>
+          {% if credits_available and package.credit_price %}
+            <div class="plan-card__cta mt-0">
+              <a class="btn btn-outline-primary" href="{% url 'shop:package_credits' slug=package.slug %}" hx-get="{% url 'shop:package_credits' slug=package.slug %}" hx-target="#dialog-slot" hx-swap="innerHTML">Pay {% if promo %}{{ promo.credit_price }}{% else %}{{ package.credit_price }}{% endif %} credits</a>
+              {% if credit_balance is not None %}<p class="small cm-muted mb-0">Your balance: {{ credit_balance }} credits.</p>{% endif %}
+            </div>
           {% endif %}
-        {% else %}
-          <p class="mb-0"><a href="{% url 'account_login' %}?next={{ request.path|urlencode }}">Sign in</a> to get this package.</p>
         {% endif %}
-      </section>
-    </div>
+      {% else %}
+        <p class="mb-0"><a class="btn btn-primary" href="{% url 'account_login' %}?next={{ request.path|urlencode }}">Sign in</a> <span class="cm-muted">to get this package.</span></p>
+      {% endif %}
+    </section>
   </div>
   <div id="dialog-slot"></div>
 </div>

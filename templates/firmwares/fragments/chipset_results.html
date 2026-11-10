@@ -1,0 +1,28 @@
+{# Swapped into #chipset-results by HTMX; also included by the full page. Context: chipsets (page), total_chipsets, search_* (list_search_context), selected_vendor. #}
+{% include "components/search_feedback.html" with noun="chipset" %}
+{% if chipsets %}
+  <h2 class="visually-hidden">Chipsets</h2>
+  <div class="card-grid card-grid--tiles">
+    {% for chipset in chipsets %}
+      <article class="card-ui card-ui--tile card-ui--chipset-tile">
+        <span class="logo-tile" aria-hidden="true"><i data-lucide="cpu"></i></span>
+        <div class="cat-tile__body">
+          <h3 class="card-ui__title"><a class="card-ui__link" href="{% url 'firmwares:chipset_detail' slug=chipset.slug %}"><strong>{{ chipset.display_name }}</strong></a></h3>
+          <p class="card-ui__text">{% if chipset.family %}{{ chipset.family }} · {% endif %}{{ chipset.model_total }} model{{ chipset.model_total|pluralize }}</p>
+        </div>
+        <i class="icon cat-tile__go" data-lucide="chevron-right" aria-hidden="true"></i>
+      </article>
+    {% endfor %}
+  </div>
+  {% include "components/pagination.html" with page_obj=chipsets label="Chipset pages" hx_target="#chipset-results" %}
+{% else %}
+  <div class="empty-ui empty-state" role="status">
+    <span class="empty-ui__icon"><i data-lucide="cpu" aria-hidden="true"></i></span>
+    <p class="empty-ui__title">No chipsets match this search.</p>
+    <p class="mb-0">Try a chipset code such as MT6985, or a vendor name.</p>
+  </div>
+  {% include "components/request_cta.html" with kind="chipset" query=search_query %}
+{% endif %}
+{% if search_query and chipsets and chipsets|length < 3 %}
+  {% include "components/request_cta.html" with kind="chipset" query=search_query heading="Not the chipset you were looking for?" %}
+{% endif %}

@@ -1,0 +1,150 @@
+   [
+    "INPUT.form-control",
+    83,
+    141,
+    "block",
+    "row",
+    "0px",
+    "clip"
+   ],
+   [
+    "DIV.input-group journal-search",
+    41,
+    268,
+    "flex",
+    "row",
+    "auto",
+    "visible"
+   ],
+   [
+    "DIV.journal-filters__row",
+    41,
+    268,
+    "grid",
+    "row",
+    "auto",
+    "visible"
+   ],
+   [
+    "FORM.journal-filters filter-bar",
+    28,
+    294,
+    "flex",
+    "column",
+    "0px",
+    "visible"
+   ],
+   [
+    "DIV.site-container py-4 py-lg-5 journal-page",
+    16,
+    318,
+    "block",
+    "row",
+    "0px",
+    "visible"
+   ],
+   [
+    "MAIN.site-main",
+    0,
+    350,
+    "block",
+    "row",
+    "0px",
+    "visible"
+   ],
+   [
+    "BODY.",
+    0,
+    350,
+    "block",
+    "row",
+    "320px",
+    "visible"
+   ]
+  ],
+  "wide": []
+ },
+ "blog_form": [
+  294,
+  268,
+  268,
+  268,
+  "268px"
+ ],
+ "login": {
+  "lim": 360,
+  "sw": 366,
+  "chain": [
+   [
+    "H1.auth-card__title",
+    45,
+    260,
+    "block",
+    "row",
+    "0px",
+    "visible"
+   ],
+   [
+    "HEADER.auth-card__head",
+    45,
+    260,
+    "block",
+    "row",
+    "0px",
+    "visible"
+   ],
+   [
+    "SECTION.auth-card",
+    28,
+    294,
+    "block",
+    "row",
+    "auto",
+    "visible"
+   ],
+   [
+    "DIV.auth-layout",
+    28,
+    294,
+    "grid",
+    "row",
+    "0px",
+    "visible"
+   ],
+   [
+    "DIV.site-container auth-page",
+    16,
+    318,
+    "block",
+    "row",
+    "0px",
+    "visible"
+   ],
+   [
+    "MAIN.site-main",
+    0,
+    350,
+    "block",
+    "row",
+    "0px",
+    "visible"
+   ],
+   [
+    "BODY.",
+    0,
+    350,
+    "block",
+    "row",
+    "320px",
+    "visible"
+   ]
+  ],
+  "wide": []
+ },
+ "login_scroll": [
+  "MAIN.site-main sw=366 cw=350",
+  "DIV.site-container auth-page sw=350 cw=318"
+ ]
+}
+.
+1 passed in 132.42s (0:02:12)

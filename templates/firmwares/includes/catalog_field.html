@@ -1,12 +1,8 @@
 {# Contract: field (BoundField holding the chosen id), input_id (unique), label, kinds (search kind: brand|model|variant), display (text of the current choice); optional depends_on (parent input_id) + depends_param (search filter, e.g. brand), placeholder, help, optional (true when not required), request_url (request form the "not listed" link opens), request_text, request_source (input id whose typed text prefills it), request_context ("param=input_id,..." mapping chosen parents into the link). Wraps components/combobox.html (central search, cascade) with label, errors and a request-it link. #}
-<div class="mb-3 catalog-field">
+<div class="mb-3 catalog-field" data-field>
   <label class="form-label" for="{{ input_id }}">{{ label }}{% if optional %} <span class="muted fw-normal">(optional)</span>{% endif %}</label>
-  {% include "components/combobox.html" with name=field.html_name value=field.value display=display kinds=kinds depends_on=depends_on depends_param=depends_param placeholder=placeholder required=required invalid=field.errors name_label=label describedby=input_id|add:"_help" %}
-  {% if field.errors %}
-    <div class="invalid-feedback d-block" id="{{ input_id }}_errors" role="alert">
-      {% for error in field.errors %}<p class="mb-0">{{ error }}</p>{% endfor %}
-    </div>
-  {% endif %}
+  {% include "components/combobox.html" with name=field.html_name value=field.value display=display kinds=kinds depends_on=depends_on depends_param=depends_param placeholder=placeholder required=required invalid=field.errors name_label=label describedby=input_id|add:"_help "|add:input_id|add:"_errors" %}
+  <div class="invalid-feedback field-error" id="{{ input_id }}_errors" role="alert" data-field-error{% if not field.errors %} hidden{% endif %}>{% for error in field.errors %}<p class="mb-0">{{ error }}</p>{% endfor %}</div>
   <div class="form-text" id="{{ input_id }}_help">
     {% if help %}{{ help }} {% endif %}{% if request_url %}Not listed? <a href="{{ request_url }}" data-request-link data-source="{{ request_source|default:input_id }}" data-param="name"{% if request_context %} data-context="{{ request_context }}"{% endif %}>{{ request_text }}</a>{% endif %}
   </div>

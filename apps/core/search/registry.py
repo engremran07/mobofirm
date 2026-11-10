@@ -6,6 +6,7 @@ import logging
 from threading import RLock
 
 from .types import SearchProvider
+from .vocabulary import connect_invalidation
 
 logger = logging.getLogger(__name__)
 
@@ -28,15 +29,18 @@ def register(provider: SearchProvider) -> SearchProvider:
                 f"{type(existing).__name__}; cannot register {type(provider).__name__}."
             )
         _providers[kind] = provider
+    connect_invalidation(provider)
     return provider
 
 
 def unregister(kind: str) -> None:
+    """Remove the provider of ``kind`` (tests, optional apps)."""
     with _lock:
         _providers.pop(kind, None)
 
 
 def get_provider(kind: str) -> SearchProvider | None:
+    """The registered provider of ``kind``, if any."""
     with _lock:
         return _providers.get(kind)
 

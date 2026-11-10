@@ -1,29 +1,17 @@
-{% extends "base.html" %}
-{% load socialaccount %}
+{% extends "account/_auth_layout.html" %}
 {% block title %}Create account | {{ site_name|default:"Mobofirm" }}{% endblock %}
-{% block content %}
-{% get_providers as social_providers %}
-<div class="site-container py-5">
-  {% include "components/breadcrumbs.html" with current="Create account" %}
-  
-  <section class="surface-card auth-card p-4 mx-auto" aria-labelledby="signup-title">
-    <p class="section-eyebrow">Join Mobofirm</p>
-    <h1 id="signup-title" class="h2 mb-4">Create your account</h1>
-    <form method="post" action="">
-      {% csrf_token %}
-      {% include "components/form_errors.html" %}
-      {% for field in form %}{% include "components/form_field.html" %}{% endfor %}
-      <button class="btn btn-primary w-100" type="submit">Create account</button>
-    </form>
-    {% for provider in social_providers %}
-      {% if provider.id == "google" %}
-        <form method="post" action="{% provider_login_url provider.id process='login' %}" class="mt-3">
-          {% csrf_token %}
-          <button class="btn btn-outline-secondary w-100" type="submit">Continue with Google</button>
-        </form>
-      {% endif %}
-    {% endfor %}
-    <p class="mt-4 mb-0">Already registered? <a href="{% url 'users:account_login' %}">Sign in</a></p>
-  </section>
-</div>
+{% block auth_crumbs %}{% include "components/breadcrumbs.html" with current="Create account" %}{% endblock %}
+{% block auth_icon %}sparkles{% endblock %}
+{% block auth_eyebrow %}Join {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block auth_title %}Create your account{% endblock %}
+{% block auth_lead %}<p class="auth-card__lead">It takes a minute. We will email you a code to verify your address.</p>{% endblock %}
+{% block auth_body %}
+<form method="post" action="" class="auth-form" data-auth-form novalidate>
+  {% csrf_token %}
+  {% include "components/form_errors.html" %}
+  {% for field in form %}{% include "account/_field.html" %}{% endfor %}
+  <button class="btn btn-primary btn-lg w-100" type="submit">Create account</button>
+</form>
+{% include "account/_social_buttons.html" %}
 {% endblock %}
+{% block auth_footer %}<p class="auth-card__foot">Already registered? <a href="{% url 'users:account_login' %}">Sign in</a></p>{% endblock %}

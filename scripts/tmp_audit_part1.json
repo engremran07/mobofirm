@@ -1,0 +1,6355 @@
+[
+ {
+  "label": "staffadmin",
+  "kind": "page",
+  "path": "/admin/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffadmin_comments_comment__status__exact=pe",
+  "kind": "page",
+  "path": "/admin/comments/comment/?status__exact=pending",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/comments/comment/?status__exact=pending",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffadmin_consent_consentdecision_stats",
+  "kind": "page",
+  "path": "/admin/consent/consentdecision/stats/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/consent/consentdecision/stats/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffadmin_distribution_channel_analytics",
+  "kind": "page",
+  "path": "/admin/distribution/channel/analytics/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/distribution/channel/analytics/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 1,
+    "need": 4.5,
+    "text": "Link analytics",
+    "el": "A."
+   },
+   {
+    "ratio": 1,
+    "need": 4.5,
+    "text": "30 days",
+    "el": "A."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffadmin_distribution_channel_calendar",
+  "kind": "page",
+  "path": "/admin/distribution/channel/calendar/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/distribution/channel/calendar/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 1,
+    "need": 4.5,
+    "text": "Calendar",
+    "el": "A."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffadmin_distribution_channel_dashboard",
+  "kind": "page",
+  "path": "/admin/distribution/channel/dashboard/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/distribution/channel/dashboard/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 1,
+    "need": 4.5,
+    "text": "Dashboard",
+    "el": "A."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffadmin_distribution_channel_review",
+  "kind": "page",
+  "path": "/admin/distribution/channel/review/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/distribution/channel/review/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 1,
+    "need": 4.5,
+    "text": "Approvals",
+    "el": "A."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffadmin_users_notification_dashboard",
+  "kind": "page",
+  "path": "/admin/users/notification/dashboard/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/notification/dashboard/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffads_dashboard",
+  "kind": "page",
+  "path": "/ads/dashboard/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/ads/dashboard/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 1,
+    "need": 4.5,
+    "text": "Dashboard",
+    "el": "A."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffads_manage_placements",
+  "kind": "page",
+  "path": "/ads/manage/placements/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/ads/manage/placements/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 1,
+    "need": 4.5,
+    "text": "Placement manager",
+    "el": "A."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffadmin",
+  "kind": "page",
+  "path": "/admin/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Dashboard",
+    "el": "SPAN."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffadmin_comments_comment__status__exact=pe",
+  "kind": "page",
+  "path": "/admin/comments/comment/?status__exact=pending",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/comments/comment/?status__exact=pending",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Comments",
+    "el": "SPAN."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffadmin_consent_consentdecision_stats",
+  "kind": "page",
+  "path": "/admin/consent/consentdecision/stats/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/consent/consentdecision/stats/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Consent statistics",
+    "el": "SPAN."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffadmin_distribution_channel_analytics",
+  "kind": "page",
+  "path": "/admin/distribution/channel/analytics/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/distribution/channel/analytics/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Link analytics",
+    "el": "SPAN."
+   },
+   {
+    "ratio": 2.66,
+    "need": 4.5,
+    "text": "Link analytics",
+    "el": "A."
+   },
+   {
+    "ratio": 2.66,
+    "need": 4.5,
+    "text": "30 days",
+    "el": "A."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Clicks are counted on first-party /go/ l",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Channel",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Platform",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Posts sent",
+    "el": "TH.is-number"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Clicks",
+    "el": "TH.is-number"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffadmin_distribution_channel_calendar",
+  "kind": "page",
+  "path": "/admin/distribution/channel/calendar/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/distribution/channel/calendar/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Content calendar",
+    "el": "SPAN."
+   },
+   {
+    "ratio": 2.66,
+    "need": 4.5,
+    "text": "Calendar",
+    "el": "A."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Nothing scheduled and nothing sent in th",
+    "el": "P.mf-ui-empty"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffadmin_distribution_channel_dashboard",
+  "kind": "page",
+  "path": "/admin/distribution/channel/dashboard/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/distribution/channel/dashboard/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Dashboard",
+    "el": "SPAN."
+   },
+   {
+    "ratio": 2.66,
+    "need": 4.5,
+    "text": "Dashboard",
+    "el": "A."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "No channels yet.",
+    "el": "P.mf-ui-empty"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "to start sharing new firmware and posts.",
+    "el": "P.mf-ui-empty"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "No tracked clicks yet.",
+    "el": "P.mf-ui-empty"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Nothing has failed.",
+    "el": "P.mf-ui-empty"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffadmin_distribution_channel_review",
+  "kind": "page",
+  "path": "/admin/distribution/channel/review/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/distribution/channel/review/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Approval queue",
+    "el": "SPAN."
+   },
+   {
+    "ratio": 2.66,
+    "need": 4.5,
+    "text": "Approvals",
+    "el": "A."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Nothing is waiting for approval. Set a c",
+    "el": "P.mf-ui-empty"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffadmin_users_notification_dashboard",
+  "kind": "page",
+  "path": "/admin/users/notification/dashboard/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/notification/dashboard/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Notification dashboard",
+    "el": "SPAN."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffads_dashboard",
+  "kind": "page",
+  "path": "/ads/dashboard/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/ads/dashboard/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Ads dashboard",
+    "el": "SPAN."
+   },
+   {
+    "ratio": 2.66,
+    "need": 4.5,
+    "text": "Dashboard",
+    "el": "A."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Visitors also need to allow the \u201cadverti",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Starts 0 \u00b7 Completed 0 (0%) \u00b7 Rewards gr",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Placement",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Where",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "State",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Creatives",
+    "el": "TH."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffads_manage_placements",
+  "kind": "page",
+  "path": "/ads/manage/placements/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/ads/manage/placements/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.66,
+    "need": 4.5,
+    "text": "Placement manager",
+    "el": "A."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Declared by the shared layout. A site-wi",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Zone",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Default size",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Placement",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Header banner",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Leaderboard under the site navigation, a",
+    "el": "SPAN.mf-ui-help"
+   },
+   {
+    "ratio": 3.6,
+    "need": 4.5,
+    "text": "Remove",
+    "el": "A.mf-ui-btn mf-ui-btn--small mf-ui-btn--danger"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffadmin",
+  "kind": "page",
+  "path": "/admin/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffadmin_comments_comment__status__exact=pe",
+  "kind": "page",
+  "path": "/admin/comments/comment/?status__exact=pending",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/comments/comment/?status__exact=pending",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffadmin_consent_consentdecision_stats",
+  "kind": "page",
+  "path": "/admin/consent/consentdecision/stats/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/consent/consentdecision/stats/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffadmin_distribution_channel_analytics",
+  "kind": "page",
+  "path": "/admin/distribution/channel/analytics/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/distribution/channel/analytics/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 1,
+    "need": 4.5,
+    "text": "Link analytics",
+    "el": "A."
+   },
+   {
+    "ratio": 1,
+    "need": 4.5,
+    "text": "30 days",
+    "el": "A."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffadmin_distribution_channel_calendar",
+  "kind": "page",
+  "path": "/admin/distribution/channel/calendar/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/distribution/channel/calendar/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 1,
+    "need": 4.5,
+    "text": "Calendar",
+    "el": "A."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffadmin_distribution_channel_dashboard",
+  "kind": "page",
+  "path": "/admin/distribution/channel/dashboard/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/distribution/channel/dashboard/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 1,
+    "need": 4.5,
+    "text": "Dashboard",
+    "el": "A."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffadmin_distribution_channel_review",
+  "kind": "page",
+  "path": "/admin/distribution/channel/review/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/distribution/channel/review/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 1,
+    "need": 4.5,
+    "text": "Approvals",
+    "el": "A."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffadmin_users_notification_dashboard",
+  "kind": "page",
+  "path": "/admin/users/notification/dashboard/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/notification/dashboard/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffads_dashboard",
+  "kind": "page",
+  "path": "/ads/dashboard/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/ads/dashboard/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 1,
+    "need": 4.5,
+    "text": "Dashboard",
+    "el": "A."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffads_manage_placements",
+  "kind": "page",
+  "path": "/ads/manage/placements/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/ads/manage/placements/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 1,
+    "need": 4.5,
+    "text": "Placement manager",
+    "el": "A."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffadmin",
+  "kind": "page",
+  "path": "/admin/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffadmin_comments_comment__status__exact=pe",
+  "kind": "page",
+  "path": "/admin/comments/comment/?status__exact=pending",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/comments/comment/?status__exact=pending",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffadmin_consent_consentdecision_stats",
+  "kind": "page",
+  "path": "/admin/consent/consentdecision/stats/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/consent/consentdecision/stats/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffadmin_distribution_channel_analytics",
+  "kind": "page",
+  "path": "/admin/distribution/channel/analytics/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/distribution/channel/analytics/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.66,
+    "need": 4.5,
+    "text": "Link analytics",
+    "el": "A."
+   },
+   {
+    "ratio": 2.66,
+    "need": 4.5,
+    "text": "30 days",
+    "el": "A."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Clicks are counted on first-party /go/ l",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Channel",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Platform",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Posts sent",
+    "el": "TH.is-number"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Clicks",
+    "el": "TH.is-number"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Clicks per post",
+    "el": "TH.is-number"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffadmin_distribution_channel_calendar",
+  "kind": "page",
+  "path": "/admin/distribution/channel/calendar/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/distribution/channel/calendar/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.66,
+    "need": 4.5,
+    "text": "Calendar",
+    "el": "A."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Nothing scheduled and nothing sent in th",
+    "el": "P.mf-ui-empty"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffadmin_distribution_channel_dashboard",
+  "kind": "page",
+  "path": "/admin/distribution/channel/dashboard/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/distribution/channel/dashboard/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.66,
+    "need": 4.5,
+    "text": "Dashboard",
+    "el": "A."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "No channels yet.",
+    "el": "P.mf-ui-empty"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "to start sharing new firmware and posts.",
+    "el": "P.mf-ui-empty"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "No tracked clicks yet.",
+    "el": "P.mf-ui-empty"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Nothing has failed.",
+    "el": "P.mf-ui-empty"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffadmin_distribution_channel_review",
+  "kind": "page",
+  "path": "/admin/distribution/channel/review/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/distribution/channel/review/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.66,
+    "need": 4.5,
+    "text": "Approvals",
+    "el": "A."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Nothing is waiting for approval. Set a c",
+    "el": "P.mf-ui-empty"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffadmin_users_notification_dashboard",
+  "kind": "page",
+  "path": "/admin/users/notification/dashboard/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/notification/dashboard/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffads_dashboard",
+  "kind": "page",
+  "path": "/ads/dashboard/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/ads/dashboard/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.66,
+    "need": 4.5,
+    "text": "Dashboard",
+    "el": "A."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Visitors also need to allow the \u201cadverti",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Starts 0 \u00b7 Completed 0 (0%) \u00b7 Rewards gr",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Placement",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Where",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "State",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Creatives",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Impr.",
+    "el": "TH.is-number"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffads_manage_placements",
+  "kind": "page",
+  "path": "/ads/manage/placements/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/ads/manage/placements/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.66,
+    "need": 4.5,
+    "text": "Placement manager",
+    "el": "A."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Declared by the shared layout. A site-wi",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Zone",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Default size",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Placement",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Header banner",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Leaderboard under the site navigation, a",
+    "el": "SPAN.mf-ui-help"
+   },
+   {
+    "ratio": 3.6,
+    "need": 4.5,
+    "text": "Remove",
+    "el": "A.mf-ui-btn mf-ui-btn--small mf-ui-btn--danger"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffads_manage_suggestions",
+  "kind": "page",
+  "path": "/ads/manage/suggestions/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/ads/manage/suggestions/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 1,
+    "need": 4.5,
+    "text": "Scan suggestions",
+    "el": "A."
+   },
+   {
+    "ratio": 1,
+    "need": 4.5,
+    "text": "Pending (0)",
+    "el": "A."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffcomments_moderation",
+  "kind": "page",
+  "path": "/comments/moderation/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/comments/moderation/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffdevices_events",
+  "kind": "page",
+  "path": "/devices/events/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/devices/events/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [
+   "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'sha256-1kn+agGaGZdaFPNbx228buXQB9KXcy9RVE6NMUiW4SQ=''. Either the 'unsafe-inline' keyword, a hash ('sh",
+   "pageerror Evaluating a string as JavaScript violates the following Content Security Policy directive because 'unsafe-eval' is not an allowed source of script: script-src 'self'\".\n",
+   "pageerror Evaluating a string as JavaScript violates the following Content Security Policy directive because 'unsafe-eval' is not an allowed source of script: script-src 'self'\".\n",
+   "pageerror Evaluating a string as JavaScript violates the following Content Security Policy directive because 'unsafe-eval' is not an allowed source of script: script-src 'self'\".\n"
+  ],
+  "failed": []
+ },
+ {
+  "label": "staffseo_dashboard",
+  "kind": "page",
+  "path": "/seo/dashboard/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/seo/dashboard/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 1,
+    "need": 4.5,
+    "text": "Overview",
+    "el": "A."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffseo_guides",
+  "kind": "page",
+  "path": "/seo/guides/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/seo/guides/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 1,
+    "need": 4.5,
+    "text": "Flash guides",
+    "el": "A."
+   },
+   {
+    "ratio": 1,
+    "need": 4.5,
+    "text": "Per model",
+    "el": "A."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffseo_inspect",
+  "kind": "page",
+  "path": "/seo/inspect/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/seo/inspect/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 1,
+    "need": 4.5,
+    "text": "Page inspector",
+    "el": "A."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffseo_inventory",
+  "kind": "page",
+  "path": "/seo/inventory/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/seo/inventory/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 1,
+    "need": 4.5,
+    "text": "Page inventory",
+    "el": "A."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffseo_issues",
+  "kind": "page",
+  "path": "/seo/issues/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/seo/issues/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 1,
+    "need": 4.5,
+    "text": "Issues board",
+    "el": "A."
+   },
+   {
+    "ratio": 1,
+    "need": 4.5,
+    "text": "All",
+    "el": "A."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffseo_jobs",
+  "kind": "page",
+  "path": "/seo/jobs/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/seo/jobs/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 1,
+    "need": 4.5,
+    "text": "Jobs",
+    "el": "A."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffseo_ledger",
+  "kind": "page",
+  "path": "/seo/ledger/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/seo/ledger/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 1,
+    "need": 4.5,
+    "text": "Change ledger",
+    "el": "A."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffads_manage_suggestions",
+  "kind": "page",
+  "path": "/ads/manage/suggestions/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/ads/manage/suggestions/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.66,
+    "need": 4.5,
+    "text": "Scan suggestions",
+    "el": "A."
+   },
+   {
+    "ratio": 2.66,
+    "need": 4.5,
+    "text": "Pending (0)",
+    "el": "A."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "No suggestions are waiting. Run a scan i",
+    "el": "P.mf-ui-empty"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "to find new ad spots.",
+    "el": "P.mf-ui-empty"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffcomments_moderation",
+  "kind": "page",
+  "path": "/comments/moderation/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/comments/moderation/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Moderation queue",
+    "el": "SPAN."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Article",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Author",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Status",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Date",
+    "el": "TH."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffdevices_events",
+  "kind": "page",
+  "path": "/devices/events/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/devices/events/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [
+   "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'sha256-1kn+agGaGZdaFPNbx228buXQB9KXcy9RVE6NMUiW4SQ=''. Either the 'unsafe-inline' keyword, a hash ('sh",
+   "pageerror Evaluating a string as JavaScript violates the following Content Security Policy directive because 'unsafe-eval' is not an allowed source of script: script-src 'self'\".\n",
+   "pageerror Evaluating a string as JavaScript violates the following Content Security Policy directive because 'unsafe-eval' is not an allowed source of script: script-src 'self'\".\n",
+   "pageerror Evaluating a string as JavaScript violates the following Content Security Policy directive because 'unsafe-eval' is not an allowed source of script: script-src 'self'\".\n"
+  ],
+  "failed": []
+ },
+ {
+  "label": "staffseo_dashboard",
+  "kind": "page",
+  "path": "/seo/dashboard/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/seo/dashboard/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "SEO dashboard",
+    "el": "SPAN."
+   },
+   {
+    "ratio": 2.66,
+    "need": 4.5,
+    "text": "Overview",
+    "el": "A."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Object type",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Open issues",
+    "el": "TH.is-number"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Posts",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Firmware",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Models",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Brands",
+    "el": "TH."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffseo_guides",
+  "kind": "page",
+  "path": "/seo/guides/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/seo/guides/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Flash guides",
+    "el": "SPAN."
+   },
+   {
+    "ratio": 2.66,
+    "need": 4.5,
+    "text": "Flash guides",
+    "el": "A."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "The firmware automation owns exactly one",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.66,
+    "need": 4.5,
+    "text": "Per model",
+    "el": "A."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Model",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Guide",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Tools",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Firmware list",
+    "el": "TH."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffseo_inspect",
+  "kind": "page",
+  "path": "/seo/inspect/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/seo/inspect/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Page inspector",
+    "el": "SPAN."
+   },
+   {
+    "ratio": 2.66,
+    "need": 4.5,
+    "text": "Page inspector",
+    "el": "A."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffseo_inventory",
+  "kind": "page",
+  "path": "/seo/inventory/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/seo/inventory/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Inventory",
+    "el": "SPAN."
+   },
+   {
+    "ratio": 2.66,
+    "need": 4.5,
+    "text": "Page inventory",
+    "el": "A."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "1597 discovered URLs from the URL conf a",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Path",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Type",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Title",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Index",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Sitemap",
+    "el": "TH."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffseo_issues",
+  "kind": "page",
+  "path": "/seo/issues/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/seo/issues/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Issues board",
+    "el": "SPAN."
+   },
+   {
+    "ratio": 2.66,
+    "need": 4.5,
+    "text": "Issues board",
+    "el": "A."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Last scan 1\u00a0day, 4\u00a0hours ago covered 102",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.66,
+    "need": 4.5,
+    "text": "All",
+    "el": "A."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "1727 issues match.",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "/firmwares/asus/",
+    "el": "SPAN.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "/firmwares/fairphone/",
+    "el": "SPAN.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "/firmwares/google/",
+    "el": "SPAN.mf-ui-help"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffseo_jobs",
+  "kind": "page",
+  "path": "/seo/jobs/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/seo/jobs/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Job queue",
+    "el": "SPAN."
+   },
+   {
+    "ratio": 2.66,
+    "need": 4.5,
+    "text": "Jobs",
+    "el": "A."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "1195 pending, 0 failed. Jobs are recorde",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Kind",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Key",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Status",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Attempts",
+    "el": "TH.is-number"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Result / error",
+    "el": "TH."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffseo_ledger",
+  "kind": "page",
+  "path": "/seo/ledger/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/seo/ledger/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Change ledger",
+    "el": "SPAN."
+   },
+   {
+    "ratio": 2.66,
+    "need": 4.5,
+    "text": "Change ledger",
+    "el": "A."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "No changes recorded.",
+    "el": "P.mf-ui-empty"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffads_manage_suggestions",
+  "kind": "page",
+  "path": "/ads/manage/suggestions/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/ads/manage/suggestions/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 1,
+    "need": 4.5,
+    "text": "Scan suggestions",
+    "el": "A."
+   },
+   {
+    "ratio": 1,
+    "need": 4.5,
+    "text": "Pending (0)",
+    "el": "A."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffcomments_moderation",
+  "kind": "page",
+  "path": "/comments/moderation/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/comments/moderation/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffdevices_events",
+  "kind": "page",
+  "path": "/devices/events/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/devices/events/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [
+   "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'sha256-1kn+agGaGZdaFPNbx228buXQB9KXcy9RVE6NMUiW4SQ=''. Either the 'unsafe-inline' keyword, a hash ('sh",
+   "pageerror Evaluating a string as JavaScript violates the following Content Security Policy directive because 'unsafe-eval' is not an allowed source of script: script-src 'self'\".\n",
+   "pageerror Evaluating a string as JavaScript violates the following Content Security Policy directive because 'unsafe-eval' is not an allowed source of script: script-src 'self'\".\n",
+   "pageerror Evaluating a string as JavaScript violates the following Content Security Policy directive because 'unsafe-eval' is not an allowed source of script: script-src 'self'\".\n"
+  ],
+  "failed": []
+ },
+ {
+  "label": "staffseo_dashboard",
+  "kind": "page",
+  "path": "/seo/dashboard/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/seo/dashboard/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 1,
+    "need": 4.5,
+    "text": "Overview",
+    "el": "A."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffseo_guides",
+  "kind": "page",
+  "path": "/seo/guides/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/seo/guides/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 1,
+    "need": 4.5,
+    "text": "Flash guides",
+    "el": "A."
+   },
+   {
+    "ratio": 1,
+    "need": 4.5,
+    "text": "Per model",
+    "el": "A."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffseo_inspect",
+  "kind": "page",
+  "path": "/seo/inspect/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/seo/inspect/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 1,
+    "need": 4.5,
+    "text": "Page inspector",
+    "el": "A."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffseo_inventory",
+  "kind": "page",
+  "path": "/seo/inventory/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/seo/inventory/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 1,
+    "need": 4.5,
+    "text": "Page inventory",
+    "el": "A."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffseo_issues",
+  "kind": "page",
+  "path": "/seo/issues/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/seo/issues/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 1,
+    "need": 4.5,
+    "text": "Issues board",
+    "el": "A."
+   },
+   {
+    "ratio": 1,
+    "need": 4.5,
+    "text": "All",
+    "el": "A."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffseo_jobs",
+  "kind": "page",
+  "path": "/seo/jobs/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/seo/jobs/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 1,
+    "need": 4.5,
+    "text": "Jobs",
+    "el": "A."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffseo_ledger",
+  "kind": "page",
+  "path": "/seo/ledger/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/seo/ledger/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 1,
+    "need": 4.5,
+    "text": "Change ledger",
+    "el": "A."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffads_manage_suggestions",
+  "kind": "page",
+  "path": "/ads/manage/suggestions/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/ads/manage/suggestions/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.66,
+    "need": 4.5,
+    "text": "Scan suggestions",
+    "el": "A."
+   },
+   {
+    "ratio": 2.66,
+    "need": 4.5,
+    "text": "Pending (0)",
+    "el": "A."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "No suggestions are waiting. Run a scan i",
+    "el": "P.mf-ui-empty"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "to find new ad spots.",
+    "el": "P.mf-ui-empty"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffcomments_moderation",
+  "kind": "page",
+  "path": "/comments/moderation/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/comments/moderation/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Article",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Author",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Status",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Date",
+    "el": "TH."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffdevices_events",
+  "kind": "page",
+  "path": "/devices/events/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/devices/events/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [
+   "Applying inline style violates the following Content Security Policy directive 'style-src 'self' 'sha256-1kn+agGaGZdaFPNbx228buXQB9KXcy9RVE6NMUiW4SQ=''. Either the 'unsafe-inline' keyword, a hash ('sh",
+   "pageerror Evaluating a string as JavaScript violates the following Content Security Policy directive because 'unsafe-eval' is not an allowed source of script: script-src 'self'\".\n",
+   "pageerror Evaluating a string as JavaScript violates the following Content Security Policy directive because 'unsafe-eval' is not an allowed source of script: script-src 'self'\".\n",
+   "pageerror Evaluating a string as JavaScript violates the following Content Security Policy directive because 'unsafe-eval' is not an allowed source of script: script-src 'self'\".\n"
+  ],
+  "failed": []
+ },
+ {
+  "label": "staffseo_dashboard",
+  "kind": "page",
+  "path": "/seo/dashboard/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/seo/dashboard/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.66,
+    "need": 4.5,
+    "text": "Overview",
+    "el": "A."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Object type",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Open issues",
+    "el": "TH.is-number"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Posts",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Firmware",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Models",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Brands",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Chipsets",
+    "el": "TH."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffseo_guides",
+  "kind": "page",
+  "path": "/seo/guides/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/seo/guides/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.66,
+    "need": 4.5,
+    "text": "Flash guides",
+    "el": "A."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "The firmware automation owns exactly one",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.66,
+    "need": 4.5,
+    "text": "Per model",
+    "el": "A."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Model",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Guide",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Tools",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Firmware list",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Status",
+    "el": "TH."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffseo_inspect",
+  "kind": "page",
+  "path": "/seo/inspect/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/seo/inspect/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.66,
+    "need": 4.5,
+    "text": "Page inspector",
+    "el": "A."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffseo_inventory",
+  "kind": "page",
+  "path": "/seo/inventory/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/seo/inventory/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.66,
+    "need": 4.5,
+    "text": "Page inventory",
+    "el": "A."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "1597 discovered URLs from the URL conf a",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Path",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Type",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Title",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Index",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Sitemap",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Words",
+    "el": "TH.is-number"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffseo_issues",
+  "kind": "page",
+  "path": "/seo/issues/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/seo/issues/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.66,
+    "need": 4.5,
+    "text": "Issues board",
+    "el": "A."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Last scan 1\u00a0day, 4\u00a0hours ago covered 102",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.66,
+    "need": 4.5,
+    "text": "All",
+    "el": "A."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "1727 issues match.",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "/firmwares/asus/",
+    "el": "SPAN.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "/firmwares/fairphone/",
+    "el": "SPAN.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "/firmwares/google/",
+    "el": "SPAN.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "/firmwares/honor/",
+    "el": "SPAN.mf-ui-help"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffseo_jobs",
+  "kind": "page",
+  "path": "/seo/jobs/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/seo/jobs/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.66,
+    "need": 4.5,
+    "text": "Jobs",
+    "el": "A."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "1195 pending, 0 failed. Jobs are recorde",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Kind",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Key",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Status",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Attempts",
+    "el": "TH.is-number"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Result / error",
+    "el": "TH."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffseo_ledger",
+  "kind": "page",
+  "path": "/seo/ledger/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/seo/ledger/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.66,
+    "need": 4.5,
+    "text": "Change ledger",
+    "el": "A."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "No changes recorded.",
+    "el": "P.mf-ui-empty"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffseo_links",
+  "kind": "page",
+  "path": "/seo/links/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/seo/links/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 1,
+    "need": 4.5,
+    "text": "Interlinking",
+    "el": "A."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffseo_settings",
+  "kind": "page",
+  "path": "/seo/settings/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/seo/settings/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 1,
+    "need": 4.5,
+    "text": "Settings",
+    "el": "A."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffstorage",
+  "kind": "page",
+  "path": "/storage/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/storage/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "stafftags_duplicates_review",
+  "kind": "page",
+  "path": "/tags/duplicates/review/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/tags/duplicates/review/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "stafftags_keywords_review",
+  "kind": "page",
+  "path": "/tags/keywords/review/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/tags/keywords/review/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "stafftags_manage",
+  "kind": "page",
+  "path": "/tags/manage/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/tags/manage/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "stafffirmwares_admin_requests",
+  "kind": "page",
+  "path": "/firmwares/admin/requests/",
+  "w": 1440,
+  "theme": "light",
+  "status": 404,
+  "final": "/firmwares/admin/requests/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [
+   "Failed to load resource: the server responded with a status of 404 (Not Found)"
+  ],
+  "failed": [
+   "404 http://127.0.0.1:8011/firmwares/admin/requests/"
+  ]
+ },
+ {
+  "label": "users.profile",
+  "kind": "list",
+  "path": "/admin/users/profile/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/profile/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.profile",
+  "kind": "add",
+  "path": "/admin/users/profile/add/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/profile/add/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.profile",
+  "kind": "change",
+  "path": "/admin/users/profile/1/change/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/profile/1/change/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffseo_links",
+  "kind": "page",
+  "path": "/seo/links/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/seo/links/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Interlinking",
+    "el": "SPAN."
+   },
+   {
+    "ratio": 2.66,
+    "need": 4.5,
+    "text": "Interlinking",
+    "el": "A."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Every proposal comes from a real relatio",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "No proposed proposals match. Use \"Genera",
+    "el": "P.mf-ui-empty"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffseo_settings",
+  "kind": "page",
+  "path": "/seo/settings/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/seo/settings/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "SEO control settings",
+    "el": "SPAN."
+   },
+   {
+    "ratio": 2.66,
+    "need": 4.5,
+    "text": "Settings",
+    "el": "A."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Derive titles and descriptions from real",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Emit JSON-LD structured data.",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Falls back to SITE_NAME.",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Handle without the @.",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Model pages with fewer public firmware f",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "OAI-SearchBot, PerplexityBot, Claude-Sea",
+    "el": "P.mf-ui-help"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffstorage",
+  "kind": "page",
+  "path": "/storage/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/storage/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Storage status",
+    "el": "SPAN."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "32.6\u00a0GB of 96.7\u00a0GB in use.",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Root: D:\\Ninfinity\\storage",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Allow-listed hosts (FIRMWARE_EXTERNAL_UR",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Disabled: STORAGE_GOOGLE_DRIVE_ENABLED i",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Disabled: STORAGE_S3_ENABLED is false.",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Local filesystem storage is the default.",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Firmware",
+    "el": "TH."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "stafftags_duplicates_review",
+  "kind": "page",
+  "path": "/tags/duplicates/review/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/tags/duplicates/review/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Similar tags",
+    "el": "SPAN."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "stafftags_keywords_review",
+  "kind": "page",
+  "path": "/tags/keywords/review/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/tags/keywords/review/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Keyword review",
+    "el": "SPAN."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "No keyword suggestions are waiting.",
+    "el": "P.mf-ui-empty"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "stafftags_manage",
+  "kind": "page",
+  "path": "/tags/manage/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/tags/manage/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Tag manager",
+    "el": "SPAN."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Tag",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Suggested",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Listing",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "An External",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "How Mobofirm",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "External",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Chipset",
+    "el": "TH."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "stafffirmwares_admin_requests",
+  "kind": "page",
+  "path": "/firmwares/admin/requests/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 404,
+  "final": "/firmwares/admin/requests/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [
+   "Failed to load resource: the server responded with a status of 404 (Not Found)"
+  ],
+  "failed": [
+   "404 http://127.0.0.1:8011/firmwares/admin/requests/"
+  ]
+ },
+ {
+  "label": "users.profile",
+  "kind": "list",
+  "path": "/admin/users/profile/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/profile/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Profiles",
+    "el": "SPAN."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.profile",
+  "kind": "add",
+  "path": "/admin/users/profile/add/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/profile/add/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Profiles",
+    "el": "SPAN."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.profile",
+  "kind": "change",
+  "path": "/admin/users/profile/1/change/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/profile/1/change/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Profiles",
+    "el": "SPAN."
+   },
+   {
+    "ratio": 3.35,
+    "need": 4.5,
+    "text": "masoomno420@gmail.com",
+    "el": "A.flex items-center h-[38px] justify-center ml-4 rounded-defau"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffseo_links",
+  "kind": "page",
+  "path": "/seo/links/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/seo/links/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 1,
+    "need": 4.5,
+    "text": "Interlinking",
+    "el": "A."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffseo_settings",
+  "kind": "page",
+  "path": "/seo/settings/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/seo/settings/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 1,
+    "need": 4.5,
+    "text": "Settings",
+    "el": "A."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffstorage",
+  "kind": "page",
+  "path": "/storage/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/storage/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "stafftags_duplicates_review",
+  "kind": "page",
+  "path": "/tags/duplicates/review/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/tags/duplicates/review/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "stafftags_keywords_review",
+  "kind": "page",
+  "path": "/tags/keywords/review/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/tags/keywords/review/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "stafftags_manage",
+  "kind": "page",
+  "path": "/tags/manage/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/tags/manage/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "stafffirmwares_admin_requests",
+  "kind": "page",
+  "path": "/firmwares/admin/requests/",
+  "w": 360,
+  "theme": "light",
+  "status": 404,
+  "final": "/firmwares/admin/requests/",
+  "overflow": {
+   "sw": 506,
+   "iw": 360,
+   "bad": [
+    "TABLE.meta r438",
+    "TBODY. r438",
+    "TR. r438"
+   ]
+  },
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [
+   "Failed to load resource: the server responded with a status of 404 (Not Found)"
+  ],
+  "failed": [
+   "404 http://127.0.0.1:8011/firmwares/admin/requests/"
+  ]
+ },
+ {
+  "label": "users.profile",
+  "kind": "list",
+  "path": "/admin/users/profile/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/profile/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.profile",
+  "kind": "add",
+  "path": "/admin/users/profile/add/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/profile/add/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.profile",
+  "kind": "change",
+  "path": "/admin/users/profile/1/change/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/profile/1/change/",
+  "overflow": {
+   "sw": 365,
+   "iw": 360,
+   "bad": [
+    "FIELDSET.module relative   r365",
+    "DIV.rounded-default dark:border-base-800 aligned shadow-xs overflow-hidden r365",
+    "DIV.form-row group/row field-row  r364"
+   ]
+  },
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffseo_links",
+  "kind": "page",
+  "path": "/seo/links/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/seo/links/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.66,
+    "need": 4.5,
+    "text": "Interlinking",
+    "el": "A."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Every proposal comes from a real relatio",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "No proposed proposals match. Use \"Genera",
+    "el": "P.mf-ui-empty"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffseo_settings",
+  "kind": "page",
+  "path": "/seo/settings/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/seo/settings/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.66,
+    "need": 4.5,
+    "text": "Settings",
+    "el": "A."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Derive titles and descriptions from real",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Emit JSON-LD structured data.",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Falls back to SITE_NAME.",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Handle without the @.",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Model pages with fewer public firmware f",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "OAI-SearchBot, PerplexityBot, Claude-Sea",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "ChatGPT-User, Claude-User, Perplexity-Us",
+    "el": "P.mf-ui-help"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "staffstorage",
+  "kind": "page",
+  "path": "/storage/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/storage/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "32.6\u00a0GB of 96.7\u00a0GB in use.",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Root: D:\\Ninfinity\\storage",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Allow-listed hosts (FIRMWARE_EXTERNAL_UR",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Disabled: STORAGE_GOOGLE_DRIVE_ENABLED i",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Disabled: STORAGE_S3_ENABLED is false.",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Local filesystem storage is the default.",
+    "el": "P.mf-ui-help"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Firmware",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Provider",
+    "el": "TH."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "stafftags_duplicates_review",
+  "kind": "page",
+  "path": "/tags/duplicates/review/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/tags/duplicates/review/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "stafftags_keywords_review",
+  "kind": "page",
+  "path": "/tags/keywords/review/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/tags/keywords/review/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "No keyword suggestions are waiting.",
+    "el": "P.mf-ui-empty"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "stafftags_manage",
+  "kind": "page",
+  "path": "/tags/manage/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/tags/manage/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Tag",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Suggested",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Listing",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "An External",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "How Mobofirm",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "External",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Chipset",
+    "el": "TH."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Each",
+    "el": "TH."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "stafffirmwares_admin_requests",
+  "kind": "page",
+  "path": "/firmwares/admin/requests/",
+  "w": 360,
+  "theme": "dark",
+  "status": 404,
+  "final": "/firmwares/admin/requests/",
+  "overflow": {
+   "sw": 506,
+   "iw": 360,
+   "bad": [
+    "TABLE.meta r438",
+    "TBODY. r438",
+    "TR. r438"
+   ]
+  },
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [
+   "Failed to load resource: the server responded with a status of 404 (Not Found)"
+  ],
+  "failed": [
+   "404 http://127.0.0.1:8011/firmwares/admin/requests/"
+  ]
+ },
+ {
+  "label": "users.profile",
+  "kind": "list",
+  "path": "/admin/users/profile/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/profile/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.profile",
+  "kind": "add",
+  "path": "/admin/users/profile/add/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/profile/add/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.profile",
+  "kind": "change",
+  "path": "/admin/users/profile/1/change/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/profile/1/change/",
+  "overflow": {
+   "sw": 365,
+   "iw": 360,
+   "bad": [
+    "FIELDSET.module relative   r365",
+    "DIV.rounded-default dark:border-base-800 aligned shadow-xs overflow-hidden r365",
+    "DIV.form-row group/row field-row  r364"
+   ]
+  },
+  "contrast": [
+   {
+    "ratio": 3.35,
+    "need": 4.5,
+    "text": "masoomno420@gmail.com",
+    "el": "A.flex items-center h-[38px] justify-center ml-4 rounded-defau"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.reputation",
+  "kind": "list",
+  "path": "/admin/users/reputation/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/reputation/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.reputation",
+  "kind": "add",
+  "path": "/admin/users/reputation/add/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/reputation/add/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.reputation",
+  "kind": "change",
+  "path": "/admin/users/reputation/10/change/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/reputation/10/change/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.following",
+  "kind": "list",
+  "path": "/admin/users/following/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/following/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.following",
+  "kind": "add",
+  "path": "/admin/users/following/add/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/following/add/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.activityfeed",
+  "kind": "list",
+  "path": "/admin/users/activityfeed/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/activityfeed/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.activityfeed",
+  "kind": "add",
+  "path": "/admin/users/activityfeed/add/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/activityfeed/add/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.customuser",
+  "kind": "list",
+  "path": "/admin/users/customuser/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/customuser/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.customuser",
+  "kind": "add",
+  "path": "/admin/users/customuser/add/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/customuser/add/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.customuser",
+  "kind": "change",
+  "path": "/admin/users/customuser/15/change/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/customuser/15/change/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.reputation",
+  "kind": "list",
+  "path": "/admin/users/reputation/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/reputation/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Reputation",
+    "el": "SPAN."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.reputation",
+  "kind": "add",
+  "path": "/admin/users/reputation/add/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/reputation/add/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Reputation",
+    "el": "SPAN."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.reputation",
+  "kind": "change",
+  "path": "/admin/users/reputation/10/change/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/reputation/10/change/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Reputation",
+    "el": "SPAN."
+   },
+   {
+    "ratio": 3.35,
+    "need": 4.5,
+    "text": "reader-hamza-raza@seed.mobofirm.invalid",
+    "el": "A.flex items-center h-[38px] justify-center ml-4 rounded-defau"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.following",
+  "kind": "list",
+  "path": "/admin/users/following/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/following/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Following",
+    "el": "SPAN."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.following",
+  "kind": "add",
+  "path": "/admin/users/following/add/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/following/add/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Following",
+    "el": "SPAN."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.activityfeed",
+  "kind": "list",
+  "path": "/admin/users/activityfeed/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/activityfeed/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Activity feed",
+    "el": "SPAN."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.activityfeed",
+  "kind": "add",
+  "path": "/admin/users/activityfeed/add/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/activityfeed/add/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Activity feed",
+    "el": "SPAN."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.customuser",
+  "kind": "list",
+  "path": "/admin/users/customuser/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/customuser/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Users",
+    "el": "SPAN."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.customuser",
+  "kind": "add",
+  "path": "/admin/users/customuser/add/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/customuser/add/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Users",
+    "el": "SPAN."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.customuser",
+  "kind": "change",
+  "path": "/admin/users/customuser/15/change/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/customuser/15/change/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Users",
+    "el": "SPAN."
+   },
+   {
+    "ratio": 3.35,
+    "need": 4.5,
+    "text": "Additional info",
+    "el": "A.active"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Note: Enter times in the server timezone",
+    "el": "DIV.help timezonewarning"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.reputation",
+  "kind": "list",
+  "path": "/admin/users/reputation/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/reputation/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.reputation",
+  "kind": "add",
+  "path": "/admin/users/reputation/add/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/reputation/add/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.reputation",
+  "kind": "change",
+  "path": "/admin/users/reputation/10/change/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/reputation/10/change/",
+  "overflow": {
+   "sw": 473,
+   "iw": 360,
+   "bad": [
+    "FIELDSET.module relative   r473",
+    "DIV.rounded-default dark:border-base-800 aligned shadow-xs overflow-hidden r473",
+    "DIV.form-row group/row field-row  r472"
+   ]
+  },
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.following",
+  "kind": "list",
+  "path": "/admin/users/following/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/following/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.following",
+  "kind": "add",
+  "path": "/admin/users/following/add/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/following/add/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.activityfeed",
+  "kind": "list",
+  "path": "/admin/users/activityfeed/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/activityfeed/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.activityfeed",
+  "kind": "add",
+  "path": "/admin/users/activityfeed/add/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/activityfeed/add/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.customuser",
+  "kind": "list",
+  "path": "/admin/users/customuser/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/customuser/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.customuser",
+  "kind": "add",
+  "path": "/admin/users/customuser/add/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/customuser/add/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.customuser",
+  "kind": "change",
+  "path": "/admin/users/customuser/15/change/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/customuser/15/change/",
+  "overflow": {
+   "sw": 855,
+   "iw": 360,
+   "bad": [
+    "FIELDSET.module relative   r855",
+    "H2.bg-base-100 flex flex-row font-semibold h-[38px] gap-1 items-center mb r855",
+    "DIV.rounded-default dark:border-base-800 aligned shadow-xs overflow-hidden r855"
+   ]
+  },
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.reputation",
+  "kind": "list",
+  "path": "/admin/users/reputation/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/reputation/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.reputation",
+  "kind": "add",
+  "path": "/admin/users/reputation/add/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/reputation/add/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.reputation",
+  "kind": "change",
+  "path": "/admin/users/reputation/10/change/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/reputation/10/change/",
+  "overflow": {
+   "sw": 473,
+   "iw": 360,
+   "bad": [
+    "FIELDSET.module relative   r473",
+    "DIV.rounded-default dark:border-base-800 aligned shadow-xs overflow-hidden r473",
+    "DIV.form-row group/row field-row  r472"
+   ]
+  },
+  "contrast": [
+   {
+    "ratio": 3.35,
+    "need": 4.5,
+    "text": "reader-hamza-raza@seed.mobofirm.invalid",
+    "el": "A.flex items-center h-[38px] justify-center ml-4 rounded-defau"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.following",
+  "kind": "list",
+  "path": "/admin/users/following/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/following/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.following",
+  "kind": "add",
+  "path": "/admin/users/following/add/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/following/add/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.activityfeed",
+  "kind": "list",
+  "path": "/admin/users/activityfeed/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/activityfeed/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.activityfeed",
+  "kind": "add",
+  "path": "/admin/users/activityfeed/add/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/activityfeed/add/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.customuser",
+  "kind": "list",
+  "path": "/admin/users/customuser/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/customuser/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.customuser",
+  "kind": "add",
+  "path": "/admin/users/customuser/add/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/customuser/add/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.customuser",
+  "kind": "change",
+  "path": "/admin/users/customuser/15/change/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/customuser/15/change/",
+  "overflow": {
+   "sw": 855,
+   "iw": 360,
+   "bad": [
+    "FIELDSET.module relative   r855",
+    "H2.bg-base-100 flex flex-row font-semibold h-[38px] gap-1 items-center mb r855",
+    "DIV.rounded-default dark:border-base-800 aligned shadow-xs overflow-hidden r855"
+   ]
+  },
+  "contrast": [
+   {
+    "ratio": 3.35,
+    "need": 4.5,
+    "text": "Additional info",
+    "el": "A.active"
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Note: Enter times in the server timezone",
+    "el": "DIV.help timezonewarning"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.notification",
+  "kind": "list",
+  "path": "/admin/users/notification/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/notification/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.notification",
+  "kind": "add",
+  "path": "/admin/users/notification/add/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/notification/add/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.notification",
+  "kind": "change",
+  "path": "/admin/users/notification/754/change/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/notification/754/change/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.announcement",
+  "kind": "list",
+  "path": "/admin/users/announcement/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/announcement/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.announcement",
+  "kind": "add",
+  "path": "/admin/users/announcement/add/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/announcement/add/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.userssettings",
+  "kind": "list",
+  "path": "/admin/users/userssettings/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/userssettings/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.userssettings",
+  "kind": "add",
+  "path": "/admin/users/userssettings/add/",
+  "w": 1440,
+  "theme": "light",
+  "status": 403,
+  "final": "/admin/users/userssettings/add/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.73,
+    "need": 4.5,
+    "text": "Return home",
+    "el": "A.btn btn-primary"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 53,
+  "errors": [
+   "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+  ],
+  "failed": [
+   "403 http://127.0.0.1:8011/admin/users/userssettings/add/"
+  ]
+ },
+ {
+  "label": "users.userssettings",
+  "kind": "change",
+  "path": "/admin/users/userssettings/1/change/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/userssettings/1/change/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.notificationpreferences",
+  "kind": "list",
+  "path": "/admin/users/notificationpreferences/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/notificationpreferences/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.notificationpreferences",
+  "kind": "add",
+  "path": "/admin/users/notificationpreferences/add/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/notificationpreferences/add/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.notification",
+  "kind": "list",
+  "path": "/admin/users/notification/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/notification/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Notifications",
+    "el": "SPAN."
+   },
+   {
+    "ratio": 3.07,
+    "need": 4.5,
+    "text": "1",
+    "el": "SPAN.font-medium text-primary-600"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.notification",
+  "kind": "add",
+  "path": "/admin/users/notification/add/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/notification/add/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Notifications",
+    "el": "SPAN."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.notification",
+  "kind": "change",
+  "path": "/admin/users/notification/754/change/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/notification/754/change/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Notifications",
+    "el": "SPAN."
+   },
+   {
+    "ratio": 3.35,
+    "need": 4.5,
+    "text": "masoomno420@gmail.com",
+    "el": "A.flex items-center h-[38px] justify-center ml-4 rounded-defau"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.announcement",
+  "kind": "list",
+  "path": "/admin/users/announcement/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/announcement/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Announcements",
+    "el": "SPAN."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.announcement",
+  "kind": "add",
+  "path": "/admin/users/announcement/add/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/announcement/add/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Announcements",
+    "el": "SPAN."
+   },
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Note: Enter times in the server timezone",
+    "el": "DIV.help timezonewarning"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.userssettings",
+  "kind": "list",
+  "path": "/admin/users/userssettings/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/userssettings/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Users settings",
+    "el": "SPAN."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.userssettings",
+  "kind": "add",
+  "path": "/admin/users/userssettings/add/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 403,
+  "final": "/admin/users/userssettings/add/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.73,
+    "need": 4.5,
+    "text": "Return home",
+    "el": "A.btn btn-primary"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 53,
+  "errors": [
+   "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+  ],
+  "failed": [
+   "403 http://127.0.0.1:8011/admin/users/userssettings/add/"
+  ]
+ },
+ {
+  "label": "users.userssettings",
+  "kind": "change",
+  "path": "/admin/users/userssettings/1/change/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/userssettings/1/change/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Users settings",
+    "el": "SPAN."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.notificationpreferences",
+  "kind": "list",
+  "path": "/admin/users/notificationpreferences/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/notificationpreferences/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Preferences",
+    "el": "SPAN."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.notificationpreferences",
+  "kind": "add",
+  "path": "/admin/users/notificationpreferences/add/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/notificationpreferences/add/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Preferences",
+    "el": "SPAN."
+   },
+   {
+    "ratio": 3.35,
+    "need": 4.5,
+    "text": "Email notifications",
+    "el": "A.active"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.notification",
+  "kind": "list",
+  "path": "/admin/users/notification/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/notification/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.notification",
+  "kind": "add",
+  "path": "/admin/users/notification/add/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/notification/add/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.notification",
+  "kind": "change",
+  "path": "/admin/users/notification/754/change/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/notification/754/change/",
+  "overflow": {
+   "sw": 365,
+   "iw": 360,
+   "bad": [
+    "FIELDSET.module relative   r365",
+    "DIV.rounded-default dark:border-base-800 aligned shadow-xs overflow-hidden r365",
+    "DIV.form-row group/row field-row  r364"
+   ]
+  },
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.announcement",
+  "kind": "list",
+  "path": "/admin/users/announcement/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/announcement/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.announcement",
+  "kind": "add",
+  "path": "/admin/users/announcement/add/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/announcement/add/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.userssettings",
+  "kind": "list",
+  "path": "/admin/users/userssettings/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/userssettings/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.userssettings",
+  "kind": "add",
+  "path": "/admin/users/userssettings/add/",
+  "w": 360,
+  "theme": "light",
+  "status": 403,
+  "final": "/admin/users/userssettings/add/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.73,
+    "need": 4.5,
+    "text": "Return home",
+    "el": "A.btn btn-primary"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 53,
+  "errors": [
+   "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+  ],
+  "failed": [
+   "403 http://127.0.0.1:8011/admin/users/userssettings/add/"
+  ]
+ },
+ {
+  "label": "users.userssettings",
+  "kind": "change",
+  "path": "/admin/users/userssettings/1/change/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/userssettings/1/change/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.notificationpreferences",
+  "kind": "list",
+  "path": "/admin/users/notificationpreferences/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/notificationpreferences/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.notificationpreferences",
+  "kind": "add",
+  "path": "/admin/users/notificationpreferences/add/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/notificationpreferences/add/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.notification",
+  "kind": "list",
+  "path": "/admin/users/notification/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/notification/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 3.05,
+    "need": 4.5,
+    "text": "1",
+    "el": "SPAN.font-medium text-primary-600"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.notification",
+  "kind": "add",
+  "path": "/admin/users/notification/add/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/notification/add/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.notification",
+  "kind": "change",
+  "path": "/admin/users/notification/754/change/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/notification/754/change/",
+  "overflow": {
+   "sw": 365,
+   "iw": 360,
+   "bad": [
+    "FIELDSET.module relative   r365",
+    "DIV.rounded-default dark:border-base-800 aligned shadow-xs overflow-hidden r365",
+    "DIV.form-row group/row field-row  r364"
+   ]
+  },
+  "contrast": [
+   {
+    "ratio": 3.35,
+    "need": 4.5,
+    "text": "masoomno420@gmail.com",
+    "el": "A.flex items-center h-[38px] justify-center ml-4 rounded-defau"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.announcement",
+  "kind": "list",
+  "path": "/admin/users/announcement/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/announcement/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.announcement",
+  "kind": "add",
+  "path": "/admin/users/announcement/add/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/announcement/add/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.74,
+    "need": 4.5,
+    "text": "Note: Enter times in the server timezone",
+    "el": "DIV.help timezonewarning"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.userssettings",
+  "kind": "list",
+  "path": "/admin/users/userssettings/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/userssettings/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.userssettings",
+  "kind": "add",
+  "path": "/admin/users/userssettings/add/",
+  "w": 360,
+  "theme": "dark",
+  "status": 403,
+  "final": "/admin/users/userssettings/add/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.73,
+    "need": 4.5,
+    "text": "Return home",
+    "el": "A.btn btn-primary"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 53,
+  "errors": [
+   "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+  ],
+  "failed": [
+   "403 http://127.0.0.1:8011/admin/users/userssettings/add/"
+  ]
+ },
+ {
+  "label": "users.userssettings",
+  "kind": "change",
+  "path": "/admin/users/userssettings/1/change/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/userssettings/1/change/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.notificationpreferences",
+  "kind": "list",
+  "path": "/admin/users/notificationpreferences/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/notificationpreferences/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.notificationpreferences",
+  "kind": "add",
+  "path": "/admin/users/notificationpreferences/add/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/notificationpreferences/add/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 3.35,
+    "need": 4.5,
+    "text": "Email notifications",
+    "el": "A.active"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.pushsubscription",
+  "kind": "list",
+  "path": "/admin/users/pushsubscription/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/pushsubscription/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.pushsubscription",
+  "kind": "add",
+  "path": "/admin/users/pushsubscription/add/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/pushsubscription/add/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "socialaccount.socialapp",
+  "kind": "list",
+  "path": "/admin/socialaccount/socialapp/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/socialaccount/socialapp/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "socialaccount.socialapp",
+  "kind": "add",
+  "path": "/admin/socialaccount/socialapp/add/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/socialaccount/socialapp/add/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.securityquestion",
+  "kind": "list",
+  "path": "/admin/users/securityquestion/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/securityquestion/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.securityquestion",
+  "kind": "add",
+  "path": "/admin/users/securityquestion/add/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/securityquestion/add/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.mfadevice",
+  "kind": "list",
+  "path": "/admin/users/mfadevice/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/mfadevice/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.mfadevice",
+  "kind": "add",
+  "path": "/admin/users/mfadevice/add/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/mfadevice/add/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "core.searchsettings",
+  "kind": "list",
+  "path": "/admin/core/searchsettings/",
+  "w": 1440,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/core/searchsettings/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "core.searchsettings",
+  "kind": "add",
+  "path": "/admin/core/searchsettings/add/",
+  "w": 1440,
+  "theme": "light",
+  "status": 403,
+  "final": "/admin/core/searchsettings/add/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.73,
+    "need": 4.5,
+    "text": "Return home",
+    "el": "A.btn btn-primary"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 53,
+  "errors": [
+   "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+  ],
+  "failed": [
+   "403 http://127.0.0.1:8011/admin/core/searchsettings/add/"
+  ]
+ },
+ {
+  "label": "users.pushsubscription",
+  "kind": "list",
+  "path": "/admin/users/pushsubscription/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/pushsubscription/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Push subscriptions",
+    "el": "SPAN."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.pushsubscription",
+  "kind": "add",
+  "path": "/admin/users/pushsubscription/add/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/pushsubscription/add/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Push subscriptions",
+    "el": "SPAN."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "socialaccount.socialapp",
+  "kind": "list",
+  "path": "/admin/socialaccount/socialapp/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/socialaccount/socialapp/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Social apps",
+    "el": "SPAN."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "socialaccount.socialapp",
+  "kind": "add",
+  "path": "/admin/socialaccount/socialapp/add/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/socialaccount/socialapp/add/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Social apps",
+    "el": "SPAN."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.securityquestion",
+  "kind": "list",
+  "path": "/admin/users/securityquestion/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/securityquestion/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Security questions",
+    "el": "SPAN."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.securityquestion",
+  "kind": "add",
+  "path": "/admin/users/securityquestion/add/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/securityquestion/add/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Security questions",
+    "el": "SPAN."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.mfadevice",
+  "kind": "list",
+  "path": "/admin/users/mfadevice/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/mfadevice/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "MFA devices",
+    "el": "SPAN."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.mfadevice",
+  "kind": "add",
+  "path": "/admin/users/mfadevice/add/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/mfadevice/add/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "MFA devices",
+    "el": "SPAN."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "core.searchsettings",
+  "kind": "list",
+  "path": "/admin/core/searchsettings/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/core/searchsettings/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.91,
+    "need": 4.5,
+    "text": "Search and popularity",
+    "el": "SPAN."
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "core.searchsettings",
+  "kind": "add",
+  "path": "/admin/core/searchsettings/add/",
+  "w": 1440,
+  "theme": "dark",
+  "status": 403,
+  "final": "/admin/core/searchsettings/add/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.73,
+    "need": 4.5,
+    "text": "Return home",
+    "el": "A.btn btn-primary"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 53,
+  "errors": [
+   "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+  ],
+  "failed": [
+   "403 http://127.0.0.1:8011/admin/core/searchsettings/add/"
+  ]
+ },
+ {
+  "label": "users.pushsubscription",
+  "kind": "list",
+  "path": "/admin/users/pushsubscription/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/pushsubscription/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.pushsubscription",
+  "kind": "add",
+  "path": "/admin/users/pushsubscription/add/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/pushsubscription/add/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "socialaccount.socialapp",
+  "kind": "list",
+  "path": "/admin/socialaccount/socialapp/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/socialaccount/socialapp/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "socialaccount.socialapp",
+  "kind": "add",
+  "path": "/admin/socialaccount/socialapp/add/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/socialaccount/socialapp/add/",
+  "overflow": {
+   "sw": 881,
+   "iw": 360,
+   "bad": [
+    "FIELDSET.module relative   r881",
+    "H2.bg-base-100 flex flex-row font-semibold h-[38px] gap-1 items-center mb r881",
+    "DIV.rounded-default dark:border-base-800 aligned shadow-xs overflow-hidden r881"
+   ]
+  },
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.securityquestion",
+  "kind": "list",
+  "path": "/admin/users/securityquestion/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/securityquestion/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.securityquestion",
+  "kind": "add",
+  "path": "/admin/users/securityquestion/add/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/securityquestion/add/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.mfadevice",
+  "kind": "list",
+  "path": "/admin/users/mfadevice/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/mfadevice/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.mfadevice",
+  "kind": "add",
+  "path": "/admin/users/mfadevice/add/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/users/mfadevice/add/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "core.searchsettings",
+  "kind": "list",
+  "path": "/admin/core/searchsettings/",
+  "w": 360,
+  "theme": "light",
+  "status": 200,
+  "final": "/admin/core/searchsettings/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "core.searchsettings",
+  "kind": "add",
+  "path": "/admin/core/searchsettings/add/",
+  "w": 360,
+  "theme": "light",
+  "status": 403,
+  "final": "/admin/core/searchsettings/add/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.73,
+    "need": 4.5,
+    "text": "Return home",
+    "el": "A.btn btn-primary"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 53,
+  "errors": [
+   "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+  ],
+  "failed": [
+   "403 http://127.0.0.1:8011/admin/core/searchsettings/add/"
+  ]
+ },
+ {
+  "label": "users.pushsubscription",
+  "kind": "list",
+  "path": "/admin/users/pushsubscription/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/pushsubscription/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.pushsubscription",
+  "kind": "add",
+  "path": "/admin/users/pushsubscription/add/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/pushsubscription/add/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "socialaccount.socialapp",
+  "kind": "list",
+  "path": "/admin/socialaccount/socialapp/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/socialaccount/socialapp/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "socialaccount.socialapp",
+  "kind": "add",
+  "path": "/admin/socialaccount/socialapp/add/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/socialaccount/socialapp/add/",
+  "overflow": {
+   "sw": 881,
+   "iw": 360,
+   "bad": [
+    "FIELDSET.module relative   r881",
+    "H2.bg-base-100 flex flex-row font-semibold h-[38px] gap-1 items-center mb r881",
+    "DIV.rounded-default dark:border-base-800 aligned shadow-xs overflow-hidden r881"
+   ]
+  },
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.securityquestion",
+  "kind": "list",
+  "path": "/admin/users/securityquestion/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/securityquestion/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.securityquestion",
+  "kind": "add",
+  "path": "/admin/users/securityquestion/add/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/securityquestion/add/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.mfadevice",
+  "kind": "list",
+  "path": "/admin/users/mfadevice/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/mfadevice/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "users.mfadevice",
+  "kind": "add",
+  "path": "/admin/users/mfadevice/add/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/users/mfadevice/add/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "core.searchsettings",
+  "kind": "list",
+  "path": "/admin/core/searchsettings/",
+  "w": 360,
+  "theme": "dark",
+  "status": 200,
+  "final": "/admin/core/searchsettings/",
+  "overflow": null,
+  "contrast": [],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 0,
+  "errors": [],
+  "failed": []
+ },
+ {
+  "label": "core.searchsettings",
+  "kind": "add",
+  "path": "/admin/core/searchsettings/add/",
+  "w": 360,
+  "theme": "dark",
+  "status": 403,
+  "final": "/admin/core/searchsettings/add/",
+  "overflow": null,
+  "contrast": [
+   {
+    "ratio": 2.73,
+    "need": 4.5,
+    "text": "Return home",
+    "el": "A.btn btn-primary"
+   }
+  ],
+  "icons": 0,
+  "iconSamples": [],
+  "clipped": [],
+  "lucideUnrendered": 53,
+  "errors": [
+   "Failed to load resource: the server responded with a status of 403 (Forbidden)"
+  ],
+  "failed": [
+   "403 http://127.0.0.1:8011/admin/core/searchsettings/add/"
+  ]
+ }
+]

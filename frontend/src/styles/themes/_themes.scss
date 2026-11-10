@@ -1,0 +1,53 @@
+// Theme refinements that cannot live in tokens.css: they restyle components per theme.
+// Mode switching (auto | light | dark) and contrast are attributes on <html>:
+//   data-bs-theme="light|dark"  resolved theme (also drives Bootstrap)
+//   data-theme-mode="auto|light|dark"  the visitor's choice
+//   data-contrast="high"  high-contrast colour tokens (tokens.css)
+//   data-motion="reduce"  forces reduced motion (themes/_motion.scss)
+
+:root[data-bs-theme="dark"] {
+  --mf-inset-highlight: inset 0 1px 0 color-mix(in srgb, #fff 8%, transparent);
+
+  .hero-panel,
+  .hero-ui {
+    box-shadow: var(--mf-elev-4), inset 0 1px 0 color-mix(in srgb, #fff 8%, transparent);
+  }
+
+  body {
+    background-size: 100% 42rem;
+  }
+
+  .surface-card,
+  .card-ui,
+  .stat-tile {
+    border-color: color-mix(in srgb, #fff 9%, var(--mf-border));
+  }
+}
+
+// High contrast: drop decoration that lowers legibility, strengthen borders.
+:root[data-contrast="high"] {
+  body {
+    background-image: none;
+  }
+
+  .hero-panel::before,
+  .hero-ui::before {
+    display: none;
+  }
+
+  .surface-card,
+  .card-ui,
+  .btn-outline-secondary,
+  .form-control,
+  .form-select {
+    border-width: 2px;
+  }
+
+  a:not(.btn):not(.site-nav-link):not(.card-ui__link) {
+    text-decoration: underline;
+  }
+}
+
+:root[data-bs-theme="light"] {
+  --mf-inset-highlight: inset 0 1px 0 color-mix(in srgb, #fff 55%, transparent);
+}

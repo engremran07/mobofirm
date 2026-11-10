@@ -528,7 +528,7 @@ class PackageQuotaOverrideAdmin(ModelAdmin):
 
 @register(ShopSettings)
 class ShopSettingsAdmin(SingletonModelAdmin):
-    """Shop-wide prices (the one-file price of featured files)."""
+    """Shop-wide prices and the download lifetime rules."""
 
     readonly_fields = ("credits_equivalent",)
     fieldsets = (
@@ -536,6 +536,24 @@ class ShopSettingsAdmin(SingletonModelAdmin):
             _("Featured files"),
             {
                 "fields": ("featured_file_price", "credits_equivalent"),
+            },
+        ),
+        (
+            _("Download expiry and history"),
+            {
+                "description": _(
+                    "Free files keep a bounded re-download allowance after the first "
+                    "download. Files downloaded under a package leave the active "
+                    "library when the package ends and stay in the read-only history "
+                    "until the user starts a new package; the history of the old "
+                    "package is then purged after the retention below. Files bought "
+                    "one by one (cash or credits) never expire."
+                ),
+                "fields": (
+                    "free_redownload_window_days",
+                    "free_redownload_max",
+                    "package_history_retention_days",
+                ),
             },
         ),
     )
@@ -846,7 +864,14 @@ class OrderAdmin(NoAddModelAdmin):
 
 @register(QuotaConsumption)
 class QuotaConsumptionAdmin(ReadOnlyModelAdmin):
-    list_display = ("user", "reason", "size_mb", "consumed_at", "object_id")
+    list_display = (
+        "user",
+        "reason",
+        "size_mb",
+        "consumed_at",
+        "user_package",
+        "object_id",
+    )
     list_filter = (
         ("reason", ChoicesDropdownFilter),
         ("consumed_at", RangeDateTimeFilter),

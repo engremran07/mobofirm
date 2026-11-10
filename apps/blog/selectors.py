@@ -8,12 +8,22 @@ from datetime import datetime
 from urllib.parse import urlencode
 
 from django.conf import settings
-from django.db import connection
-from django.db.models import Case, Count, F, Q, QuerySet, TextField, Value, When
+from django.db.models import (
+    Case,
+    Count,
+    F,
+    FloatField,
+    Q,
+    QuerySet,
+    TextField,
+    Value,
+    When,
+)
 from django.utils import timezone
 
 from apps.blog.models import Category, Post, PostAccess
 from apps.blog.paywall import public_excerpt
+from apps.core.search import ListSearch, search_queryset
 from apps.tags.models import Tag
 from apps.tags.selectors import public_tags
 
@@ -156,49 +166,52 @@ class ListingFilters:
         return urlencode({key: value for key, value in values.items() if value})
 
 
-def _use_full_text() -> bool:
-    return connection.vendor == "postgresql"
+POST_SEARCH_FIELDS = (
+    "title",
+    "summary",
+    "open_body",
+    "category__name",
+    "firmware_brand__name",
+    "firmware_model__name",
+)
+# A gated body must not decide what matches: it would reveal hidden text.
+_OPEN_BODY = {
+    "open_body": Case(
+        When(access=PostAccess.FREE, then=F("body")),
+        default=Value(""),
+        output_field=TextField(),
+    )
+}
+
+
+def search_posts(posts: QuerySet[Post], query: str | None) -> ListSearch:
+    """Filter ``posts`` through the shared engine (synonyms, typo tolerance)."""
+    return search_queryset(posts, query, POST_SEARCH_FIELDS, annotations=_OPEN_BODY)
 
 
 def apply_search(posts: QuerySet[Post], query: str) -> tuple[QuerySet[Post], bool]:
     """Filter by ``query``; the flag says whether the result is ranked by relevance."""
     if not query:
         return posts, False
-    if _use_full_text():
-        from django.contrib.postgres.search import (
-            SearchQuery,
-            SearchRank,
-            SearchVector,
-        )
+    return _ranked(search_posts(posts, query)), True
 
-        # A gated body must not decide what matches: it would reveal hidden text.
-        open_body = Case(
-            When(access=PostAccess.FREE, then=F("body")),
-            default=Value(""),
-            output_field=TextField(),
+
+def _ranked(result: ListSearch) -> QuerySet[Post]:
+    """Title phrase matches first, then summary, then everything else."""
+    return result.queryset.annotate(
+        rank=Case(
+            When(title__icontains=result.query, then=Value(3.0)),
+            When(summary__icontains=result.query, then=Value(2.0)),
+            default=Value(1.0),
+            output_field=FloatField(),
         )
-        vector = (
-            SearchVector("title", weight="A")
-            + SearchVector("summary", weight="B")
-            + SearchVector(open_body, weight="C")
-        )
-        ranked = posts.annotate(rank=SearchRank(vector, SearchQuery(query))).filter(
-            rank__gte=0.01
-        )
-        return ranked, True
-    return (
-        posts.filter(
-            Q(title__icontains=query)
-            | Q(summary__icontains=query)
-            | Q(body__icontains=query, access=PostAccess.FREE)
-        ),
-        False,
     )
 
 
-def filtered_posts(filters: ListingFilters) -> QuerySet[Post]:
-    posts = live_posts()
-    posts, ranked = apply_search(posts, filters.q)
+def listing(filters: ListingFilters) -> tuple[QuerySet[Post], ListSearch]:
+    """The journal listing for ``filters`` and the search outcome behind it."""
+    result = search_posts(live_posts(), filters.q)
+    posts = _ranked(result) if filters.q else result.queryset
     if filters.category:
         posts = posts.filter(
             Q(category__slug=filters.category)
@@ -208,16 +221,21 @@ def filtered_posts(filters: ListingFilters) -> QuerySet[Post]:
         posts = posts.filter(tags__slug=filters.tag, tags__in=public_tags())
     if filters.author:
         posts = posts.filter(author__username=filters.author)
-    sort = filters.sort or ("relevance" if ranked else "recent")
+    sort = filters.sort or ("relevance" if filters.q else "recent")
     if sort == "relevance":
-        return posts.order_by(F("rank").desc(), "-published_at")
+        return posts.order_by(F("rank").desc(), "-published_at"), result
     if sort == "popular":
-        return posts.order_by("-views_count", "-published_at")
+        return posts.order_by("-views_count", "-published_at"), result
     if sort == "oldest":
-        return posts.order_by("published_at")
+        return posts.order_by("published_at"), result
     if sort == "title":
-        return posts.order_by("title")
-    return posts.order_by("-published_at", "-pk")
+        return posts.order_by("title"), result
+    return posts.order_by("-published_at", "-pk"), result
+
+
+def filtered_posts(filters: ListingFilters) -> QuerySet[Post]:
+    """The journal listing for ``filters`` (see ``listing`` for search details)."""
+    return listing(filters)[0]
 
 
 def lead_story() -> Post | None:

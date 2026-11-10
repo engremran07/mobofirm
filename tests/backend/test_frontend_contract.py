@@ -48,6 +48,17 @@ def _request(path: str = "/"):
     return request
 
 
+def _site_style_sources() -> str:
+    """The public stylesheet sources (``main.scss`` and every partial it layers)."""
+    styles = FRONTEND / "styles"
+    parts = [
+        path.read_text(encoding="utf-8")
+        for path in sorted(styles.rglob("*.scss"))
+        if "admin" not in path.name
+    ]
+    return "\n".join(parts)
+
+
 def test_every_template_icon_is_registered_in_the_icon_set():
     """Each Lucide icon used in a template is registered in the icon module."""
     icon_source = (FRONTEND / "modules" / "icons.js").read_text(encoding="utf-8")
@@ -180,7 +191,7 @@ def test_device_registration_prompt_has_no_blocking_backdrop_element():
 
     assert "data-device-registration-dialog" in html
     assert "device-registration-backdrop" not in html
-    site_css = (FRONTEND / "styles" / "site.css").read_text(encoding="utf-8")
+    site_css = _site_style_sources()
     assert "device-registration-backdrop" not in site_css
 
 
@@ -386,6 +397,8 @@ def test_token_pairs_meet_wcag_aa_contrast(theme):
         ("page", "success"),
         ("page", "warning"),
         ("page", "danger"),
+        ("info", "page"),
+        ("info", "surface"),
     ]
     failures = {
         f"{fg} on {bg}": round(_contrast(tokens[fg], tokens[bg]), 2)
@@ -407,7 +420,7 @@ def test_htmx_triggers_never_listen_to_the_first_input_in_the_document():
 
 def test_card_hover_lift_is_scoped_to_interactive_cards():
     """Hover lift applies only to link cards and ad placeholders stay collapsed."""
-    css = (FRONTEND / "styles" / "site.css").read_text(encoding="utf-8")
+    css = _site_style_sources()
 
     assert not re.search(r"(^|\n)\.surface-card:hover", css)
     assert "a.surface-card:hover" in css

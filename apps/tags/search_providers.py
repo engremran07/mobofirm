@@ -10,15 +10,21 @@ from apps.core.search import QuerySetProvider, SearchContext, SearchHit, registe
 from .models import Tag
 from .selectors import public_tags, with_live_post_counts
 
+TAG_FIELDS = ("name", "normalized_name", "synonyms_text")
+
 
 class TagProvider(QuerySetProvider[Tag]):
+    """Public tags that label at least one live post."""
+
     kind = "tag"
     label = "Tag"
     label_plural = "Tags"
     icon = "hash"
     priority = 80
-    search_fields = ("name", "slug", "normalized_name", "synonyms_text")
+    search_fields = TAG_FIELDS
     ordering = ("-usage_count", "name")
+    suggestible = True
+    watches = (Tag,)
 
     def get_queryset(self, context: SearchContext) -> QuerySet[Tag]:
         return with_live_post_counts(public_tags()).filter(live_count__gt=0)

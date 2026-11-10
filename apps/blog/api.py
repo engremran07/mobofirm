@@ -4,6 +4,7 @@ from typing import Any
 
 from django.db import DatabaseError
 
+from apps.blog import freshness
 from apps.blog.models import BlogSettings
 
 
@@ -23,4 +24,9 @@ def get_settings() -> dict[str, Any]:
     }
 
 
-__all__ = ["get_settings"]
+def stale_post_count() -> int:
+    """Live articles not updated within the configured window (editors' signal)."""
+    return freshness.stale_post_count()
+
+
+__all__ = ["get_settings", "stale_post_count"]

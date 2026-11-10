@@ -88,17 +88,26 @@ def dialog_success(
     HTMX: an empty 204 carrying ``HX-Trigger`` (``dialog:close`` and
     ``dialog:done`` with ``payload``) and ``HX-Redirect`` to ``redirect_url`` or,
     without one, ``HX-Refresh``. With ``refresh=False`` the page stays put and
-    listeners (``hx-trigger="dialog:done from:body"``) update what changed. Other
-    requests get a POST-Redirect-GET.
+    listeners (``hx-trigger="dialog:done from:body"``) update what changed; the
+    ``message`` then reaches the visitor as an immediate success toast (a ``toast``
+    trigger event) instead of a flash message that would only appear on the next
+    page. Other requests get a POST-Redirect-GET.
     """
-    if message:
+    stays = bool(
+        message and is_dialog_request(request) and not redirect_url and not refresh
+    )
+    if message and not stays:
         messages.success(request, message)
     if not is_dialog_request(request):
         return HttpResponseRedirect(redirect_url or safe_next_url(request, "/") or "/")
     response = HttpResponse(status=204)
-    response["HX-Trigger"] = json.dumps(
-        {"dialog:close": {}, "dialog:done": dict(payload or {})}
-    )
+    triggers: dict[str, Any] = {
+        "dialog:close": {},
+        "dialog:done": dict(payload or {}),
+    }
+    if stays:
+        triggers["toast"] = {"message": message, "level": "success"}
+    response["HX-Trigger"] = json.dumps(triggers)
     if redirect_url:
         response["HX-Redirect"] = redirect_url
     elif refresh:

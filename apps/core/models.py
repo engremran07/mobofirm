@@ -1,3 +1,4 @@
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from solo.models import SingletonModel
 
@@ -36,10 +37,42 @@ class AppRegistry(SingletonModel):
         return "Application Registry"
 
 
+class SearchSettings(SingletonModel):
+    """Staff-editable behaviour of the unified search and the popular blocks."""
+
+    popular_enabled = models.BooleanField(
+        default=True,
+        help_text="Show 'Popular models', 'Popular firmware' and 'Popular articles'.",
+    )
+    popular_window_days = models.PositiveSmallIntegerField(
+        default=30,
+        validators=[MinValueValidator(1), MaxValueValidator(365)],
+        help_text="Downloads and views of the last N days decide what is popular.",
+    )
+    popular_limit = models.PositiveSmallIntegerField(
+        default=6,
+        validators=[MinValueValidator(1), MaxValueValidator(24)],
+        help_text="How many entries each popular block lists.",
+    )
+    popular_cache_minutes = models.PositiveSmallIntegerField(
+        default=10,
+        validators=[MinValueValidator(1), MaxValueValidator(1440)],
+        help_text="How long a computed popular list is reused before recomputing.",
+    )
+
+    class Meta:
+        verbose_name = "Search and popularity settings"
+        verbose_name_plural = "Search and popularity settings"
+
+    def __str__(self) -> str:
+        return "Search and popularity settings"
+
+
 __all__ = [
     "AppRegistry",
     "AuditFieldsModel",
     "Metric",
+    "SearchSettings",
     "SoftDeleteModel",
     "TimestampedModel",
 ]

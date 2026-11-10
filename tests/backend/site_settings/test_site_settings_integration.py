@@ -90,5 +90,12 @@ class SingleAuthorityTests(TestCase):
         models = {m.__name__ for m in apps.get_app_config("site_settings").get_models()}
 
         self.assertEqual(
-            models, {"SiteSettings", "VerificationMetaTag", "VerificationFile"}
+            models,
+            {
+                "SiteSettings",
+                "VerificationMetaTag",
+                "VerificationFile",
+                "EditorProfile",
+                "EditorImage",
+            },
         )

@@ -1,7 +1,18 @@
 {% extends "base.html" %}
 {% block title %}Site map | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block content %}
-<div class="site-container py-5"><p class="section-eyebrow">Navigation</p><h1 class="h2">Site map</h1>
-  <div class="row g-4">{% for section in sections %}<section class="col-12 col-md-6"><div class="surface-card p-4"><h2 class="h4">{{ section.title }}</h2><ul>{% for link in section.links %}<li><a href="{{ link.url }}">{{ link.label }}</a></li>{% endfor %}</ul></div></section>{% endfor %}</div>
+<div class="site-container py-4 py-lg-5">
+  {% include "components/breadcrumbs.html" with current="Site map" %}
+  {% include "components/page_header.html" with eyebrow="Navigation" title="Site map" lead="Every main section of the site in one place." %}
+  <div class="card-grid sitemap-grid">
+    {% for section in sections %}
+      <section class="surface-card sitemap-card" aria-labelledby="sitemap-{{ forloop.counter }}">
+        <h2 id="sitemap-{{ forloop.counter }}" class="sitemap-card__title">{{ section.title }}</h2>
+        <ul class="sitemap-card__list">
+          {% for link in section.links %}{% if link.url %}<li><a href="{{ link.url }}">{{ link.label }}</a></li>{% endif %}{% endfor %}
+        </ul>
+      </section>
+    {% endfor %}
+  </div>
 </div>
 {% endblock %}

@@ -489,11 +489,18 @@ class TellUsAboutYouForm(forms.Form):
         p2 = cleaned.get("password2") or ""
 
         if self.require_password:
-            if not p1 or not p2:
-                raise ValidationError(_("Password is required."))
-            if p1 != p2:
-                raise ValidationError(_("Passwords do not match."))
-            validate_password(p1, self.user)
+            # Field-level errors so each message lands next to the input it concerns.
+            if not p1:
+                self.add_error("password1", _("Password is required."))
+            elif not p2:
+                self.add_error("password2", _("Confirm your password."))
+            elif p1 != p2:
+                self.add_error("password2", _("Passwords do not match."))
+            else:
+                try:
+                    validate_password(p1, self.user)
+                except ValidationError as error:
+                    self.add_error("password1", error)
 
         return cleaned
 

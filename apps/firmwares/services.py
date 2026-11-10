@@ -24,6 +24,8 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import DatabaseError, IntegrityError, transaction
 from django.utils import timezone
 
+from apps.core.editor.sanitizer import sanitize_stored_html, text_length
+
 from . import conf
 from .access import is_seller
 from .catalog_requests import fulfil_matching_requests
@@ -177,9 +179,12 @@ def submission_metadata(
     metadata: dict[str, str] = {}
     for key, value in (release_info or {}).items():
         text = (value or "").strip()
+        if key == "changelog":
+            text = sanitize_stored_html(text)
         if not text:
             continue
-        if len(text) > RELEASE_INFO_LIMITS.get(key, MAX_NOTES_LENGTH):
+        size = text_length(text) if key == "changelog" else len(text)
+        if size > RELEASE_INFO_LIMITS.get(key, MAX_NOTES_LENGTH):
             raise FirmwareUploadError(
                 f"{key.replace('_', ' ').capitalize()} is too long."
             )

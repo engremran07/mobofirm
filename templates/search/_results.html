@@ -1,40 +1,56 @@
-{# Context: query, groups, total, kind_filters, selected. Swapped into #search-results by HTMX. #}
-<nav class="d-flex flex-wrap gap-2 mb-4" aria-label="Filter results by type">
-  <a class="btn btn-sm {% if not selected %}btn-primary{% else %}btn-outline-secondary{% endif %}"{% if not selected %} aria-current="true"{% endif %} href="{% url 'search:results' %}?q={{ query|urlencode }}">All</a>
+{# Context: query, groups, total, did_you_mean, kind_filters, selected. Swapped into #search-results by HTMX. #}
+{% load search_tags %}
+<nav class="filter-bar search-filters" aria-label="Filter results by type">
+  <a class="chip-ui{% if not selected %} is-active{% endif %}"{% if not selected %} aria-current="true"{% endif %} href="{% url 'search:results' %}?q={{ query|urlencode }}">All</a>
   {% for item in kind_filters %}
-    <a class="btn btn-sm {% if item.kind in selected %}btn-primary{% else %}btn-outline-secondary{% endif %}"{% if item.kind in selected %} aria-current="true"{% endif %} href="{% url 'search:results' %}?q={{ query|urlencode }}&amp;kinds={{ item.kind }}">{{ item.label }}</a>
+    <a class="chip-ui{% if item.kind in selected %} is-active{% endif %}"{% if item.kind in selected %} aria-current="true"{% endif %} href="{% url 'search:results' %}?q={{ query|urlencode }}&amp;kinds={{ item.kind }}">{{ item.label }}</a>
   {% endfor %}
 </nav>
+{% if query %}{% include "components/did_you_mean.html" %}{% endif %}
 {% if not query %}
-  <p class="muted">Enter a device, brand, chipset, tool, firmware build, article, tag or page to search.</p>
+  <div class="empty-ui search-empty">
+    <span class="empty-ui__icon"><i data-lucide="search" aria-hidden="true"></i></span>
+    <p class="empty-ui__title">What are you looking for?</p>
+    <p class="mb-0">Enter a device, brand, chipset, tool, firmware build, article, tag or page to search.</p>
+    <button type="button" class="btn btn-link btn-sm" data-recent-toggle="off" hidden>Turn off recent searches</button>
+  </div>
+  {% popular_blocks heading="Popular right now" %}
 {% elif not groups %}
-  {% include "components/empty_state.html" with title="No results" message="Nothing matched. Try fewer words, a model code or a brand name." %}
+  <div class="empty-ui search-empty" role="status">
+    <span class="empty-ui__icon"><i data-lucide="search-x" aria-hidden="true"></i></span>
+    <p class="empty-ui__title">No results</p>
+    <p class="mb-0">Nothing matched. Try fewer words, a model code or a brand name.</p>
+  </div>
+  {% popular_blocks heading="Popular right now" %}
 {% else %}
-  <p class="muted" role="status">{{ total }} result{{ total|pluralize }} for “{{ query }}”.</p>
+  <p class="search-summary" role="status"><strong>{{ total }}</strong> result{{ total|pluralize }} for “{{ query }}”.</p>
   {% for group in groups %}
-    <section class="search-group mb-4" aria-labelledby="search-group-{{ group.kind }}">
-      <h2 id="search-group-{{ group.kind }}" class="h5 d-flex align-items-center gap-2">
-        <i data-lucide="{{ group.icon }}" aria-hidden="true"></i>{{ group.label_plural }}
-        <span class="muted small">({{ group.hits|length }})</span>
+    <section class="search-group" aria-labelledby="search-group-{{ group.kind }}">
+      <h2 id="search-group-{{ group.kind }}" class="search-group__title">
+        <span class="search-group__icon" aria-hidden="true"><i data-lucide="{{ group.icon }}"></i></span>{{ group.label_plural }}
+        <span class="search-group__count">{{ group.hits|length }}</span>
       </h2>
-      <ul class="list-group">
+      <ul class="search-hits">
         {% for hit in group.hits %}
-          <li class="list-group-item search-hit">
-            {% if hit.url %}<a class="fw-semibold" href="{{ hit.url }}">{{ hit.title }}</a>{% else %}<span class="fw-semibold">{{ hit.title }}</span>{% endif %}
-            {% if hit.subtitle %}<span class="muted d-block small">{{ hit.subtitle }}</span>{% endif %}
+          <li class="search-hit">
+            {% if hit.url %}
+              <a class="search-hit__link" href="{{ hit.url }}"><span class="search-hit__title">{{ hit.title }}</span>{% if hit.subtitle %}<span class="search-hit__sub">{{ hit.subtitle }}</span>{% endif %}<i class="icon search-hit__go" data-lucide="arrow-right" aria-hidden="true"></i></a>
+            {% else %}
+              <span class="search-hit__link"><span class="search-hit__title">{{ hit.title }}</span>{% if hit.subtitle %}<span class="search-hit__sub">{{ hit.subtitle }}</span>{% endif %}</span>
+            {% endif %}
           </li>
         {% endfor %}
       </ul>
       {% if selected|length != 1 and group.hits|length >= 10 %}
-        <a class="small d-inline-block mt-2" href="{% url 'search:results' %}?q={{ query|urlencode }}&amp;kinds={{ group.kind }}">Show more {{ group.label_plural|lower }}</a>
+        <a class="btn btn-ghost btn-sm search-group__more" href="{% url 'search:results' %}?q={{ query|urlencode }}&amp;kinds={{ group.kind }}">Show more {{ group.label_plural|lower }} <i data-lucide="arrow-right" aria-hidden="true"></i></a>
       {% endif %}
     </section>
   {% endfor %}
 {% endif %}
 {% if query %}
-  <section id="request-missing" class="mt-5" aria-labelledby="request-missing-title">
-    <h2 id="request-missing-title" class="h5">Can’t find it?</h2>
-    <div class="d-grid gap-2">
+  <section id="request-missing" class="search-request" aria-labelledby="request-missing-title">
+    <h2 id="request-missing-title" class="search-request__title">Can’t find it?</h2>
+    <div class="search-request__grid">
       {% include "components/request_cta.html" with kind="brand" query=query %}
       {% include "components/request_cta.html" with kind="model" query=query %}
       {% include "components/request_cta.html" with kind="variant" query=query %}

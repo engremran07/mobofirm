@@ -1,12 +1,7 @@
-{% extends "base.html" %}
+{% extends "errors/_error_page.html" %}
 {% block title %}Bad request | {{ site_name|default:"Mobofirm" }}{% endblock %}
-{% block content %}
-<div class="site-container py-5">
-  <section class="surface-card allauth-shell p-4 mx-auto" aria-labelledby="error-title">
-    <p class="section-eyebrow">Request error</p>
-    <h1 id="error-title" class="h2">We could not process that request.</h1>
-    <p>Check the submitted information and try again.</p>
-    <a class="btn btn-primary" href="{% url 'home' %}">Return home</a>
-  </section>
-</div>
-{% endblock %}
+{% block code %}400{% endblock %}
+{% block icon %}circle-help{% endblock %}
+{% block eyebrow %}Request error{% endblock %}
+{% block error_title %}We could not process that request.{% endblock %}
+{% block message %}Check the submitted information and try again.{% endblock %}

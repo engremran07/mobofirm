@@ -22,25 +22,31 @@
   {% include "includes/messages.html" %}
   {% if request.session.device_registration_prompt %}
     <dialog open class="device-registration-dialog" aria-labelledby="device-registration-title" aria-describedby="device-registration-description" data-device-registration-dialog>
-      <p class="section-eyebrow">Account security</p>
-      <h2 id="device-registration-title" class="h4">Review this browser</h2>
-      <p id="device-registration-description">
-        Mobofirm recognizes a browser profile using a random first-party cookie. It does not identify a physical computer or detect an operating-system reinstall.
-      </p>
-      <dl class="device-registration-details">
-        <div><dt>Device</dt><dd>{{ request.session.device_registration_prompt.device_name }}</dd></div>
-        <div><dt>Operating system</dt><dd>{{ request.session.device_registration_prompt.os_family }}</dd></div>
-        <div><dt>Browser</dt><dd>{{ request.session.device_registration_prompt.browser_family }}</dd></div>
-        <div><dt>Approved devices</dt><dd>{{ request.session.device_registration_prompt.active_devices }} / {{ request.session.device_registration_prompt.max_devices }}</dd></div>
-      </dl>
-      <p class="muted small">
-        Clearing browser data or using another browser profile may require a new registration. Users cannot remove approved devices; contact an administrator for a reset.
-      </p>
-      <form method="post" action="{% url 'devices:acknowledge_new_device' %}" class="d-flex flex-wrap gap-2">
+      <header class="device-registration-dialog__head" data-dialog-drag-handle title="Drag to move">
+        <span class="device-registration-dialog__grip" aria-hidden="true"></span>
+        <p class="section-eyebrow mb-1">Account security</p>
+        <h2 id="device-registration-title" class="h4 mb-0">Review this computer</h2>
+      </header>
+      <div class="device-registration-dialog__body">
+        <p id="device-registration-description">
+          Register this computer once and every browser on it is recognised. Reinstalling the operating system removes the registration.
+        </p>
+        <dl class="device-registration-details">
+          <div><dt>Computer</dt><dd>{{ request.session.device_registration_prompt.device_name }}</dd></div>
+          <div><dt>Operating system</dt><dd>{{ request.session.device_registration_prompt.os_family }}</dd></div>
+          <div><dt>Browser</dt><dd>{{ request.session.device_registration_prompt.browser_family }}</dd></div>
+          <div><dt>Approved devices</dt><dd>{{ request.session.device_registration_prompt.active_devices }} / {{ request.session.device_registration_prompt.max_devices }}</dd></div>
+        </dl>
+        {% load device_tags %}{% device_os_identity %}
+        <p class="muted small mb-0">
+          If this computer cannot be registered, Mobofirm remembers this browser only, so clearing its data or switching browser needs another registration. Users cannot remove approved devices; contact an administrator for a reset.
+        </p>
+      </div>
+      <form method="post" action="{% url 'devices:acknowledge_new_device' %}" class="device-registration-dialog__actions">
         {% csrf_token %}
         <input type="hidden" name="next" value="{{ request.get_full_path }}">
         {% if request.session.device_registration_prompt.can_approve %}
-          <button type="submit" name="decision" value="approve" class="btn btn-primary" autofocus>Register this browser</button>
+          <button type="submit" name="decision" value="approve" class="btn btn-primary" autofocus>Register this browser only</button>
         {% else %}
           <p class="alert alert-warning w-100 mb-0" role="status">Your approved-device allowance is full. Ask an administrator to reset or revoke a registration.</p>
         {% endif %}
@@ -56,6 +62,8 @@
   {% ad_zone "footer" %}
   {% include "includes/site_footer.html" %}
   {% consent_banner %}
+  <div id="toast-region" class="toast-region" role="region" aria-label="Notifications" data-toast-region></div>
+  {% include "components/command_palette.html" %}
   <div id="dialog-slot" data-dialog-slot></div>
   {% include "components/dialog_js_template.html" %}
   <script type="module" src="{% static 'build/site.js' %}"></script>

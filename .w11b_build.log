@@ -1,0 +1,21 @@
+
+> build
+> vite build
+
+node:internal/buffer:1095
+  return new FastBuffer(createUnsafeArrayBuffer(size));
+                        ^
+
+RangeError: Array buffer allocation failed
+    at createUnsafeBuffer (node:internal/buffer:1095:25)
+    at allocate (node:buffer:460:10)
+    at Buffer.allocUnsafe (node:buffer:433:10)
+    at tryCreateBuffer (node:fs:399:21)
+    at readFileSync (node:fs:450:14)
+    at getSourceSync (node:internal/modules/esm/load:37:14)
+    at defaultLoadSync (node:internal/modules/esm/load:153:34)
+    at #loadAndMaybeBlockOnLoaderThread (node:internal/modules/esm/loader:790:12)
+    at #loadSync (node:internal/modules/esm/loader:810:49)
+    at ModuleLoader.load (node:internal/modules/esm/loader:775:26)
+
+Node.js v25.5.0

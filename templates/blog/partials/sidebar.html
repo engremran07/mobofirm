@@ -1,8 +1,10 @@
-{# Journal sidebar: trending, latest, topics and catalogue shortcuts. Context: trending, latest, cloud. #}
+{# Journal sidebar: popular articles, devices and firmware, latest, topics and catalogue shortcuts. Context: trending, latest, cloud. #}
+{% load search_tags %}
 <aside class="journal-aside" aria-label="Journal sidebar">
-  {% include "blog/partials/mini_list.html" with title="Most read" cards=trending heading_id="trending-title" %}
+  {% include "blog/partials/mini_list.html" with title="Popular articles" cards=trending heading_id="trending-title" icon="flame" %}
+  {% popular_blocks "model,firmware" layout="stack" %}
   {% include "blog/partials/tag_cloud.html" %}
-  {% if latest %}{% include "blog/partials/mini_list.html" with title="Latest" cards=latest heading_id="latest-title" %}{% endif %}
+  {% if latest %}{% include "blog/partials/mini_list.html" with title="Latest" cards=latest heading_id="latest-title" icon="clock" %}{% endif %}
   <section class="side-widget" aria-labelledby="catalogue-title">
     <h2 class="side-widget__title" id="catalogue-title">Explore the catalogue</h2>
     <ul class="side-links">

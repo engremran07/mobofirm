@@ -20,6 +20,7 @@ from apps.firmwares.models import (
     Variant,
     VariantCreationRequest,
 )
+from apps.firmwares.variant_rules import VariantIdentity
 
 
 def client_for(user):
@@ -215,7 +216,10 @@ class TestApproval:
         self, make_user, catalog, reviewer
     ):
         pending = service.submit_variant_request(
-            make_user("approved-variant"), model=catalog.model, name="EU", region="EU"
+            make_user("approved-variant"),
+            model=catalog.model,
+            name="EU",
+            identity=VariantIdentity(region="EU"),
         )
 
         variant, created = service.approve_variant_request(pending, reviewer)
@@ -315,12 +319,23 @@ class TestRequestApi:
         )
         valid = api.post(
             url,
-            {"brand": catalog.brand.pk, "model": catalog.model.pk, "name": "India"},
+            {
+                "brand": catalog.brand.pk,
+                "model": catalog.model.pk,
+                "name": "India",
+                "region": "IN",
+            },
+            format="json",
+        )
+        no_identity = api.post(
+            url,
+            {"brand": catalog.brand.pk, "model": catalog.model.pk, "name": "Other"},
             format="json",
         )
 
         assert missing.status_code == 400
         assert mismatch.status_code == 400
+        assert no_identity.status_code == 400
         assert valid.status_code == 201, valid.content
 
     def test_the_model_request_accepts_an_optional_chipset(

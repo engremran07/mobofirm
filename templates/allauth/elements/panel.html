@@ -1,6 +1,6 @@
 {% load allauth %}
-<section class="mb-4">
-  <h2 class="h5">{% slot title %}{% endslot %}</h2>
+<section class="auth-panel">
+  <h2 class="auth-panel__title">{% slot title %}{% endslot %}</h2>
   {% slot body %}
   {% endslot %}
   {% if slots.actions %}

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from django.db.models import Count, Q, QuerySet
 from django.urls import reverse
 from django.utils import timezone
@@ -14,13 +16,31 @@ from .models import Category, Post
 
 
 class BlogPostProvider(QuerySetProvider[Post]):
+    """Live articles; the popular list ranks by total reads (no windowed counter)."""
+
     kind = "blog"
     label = "Article"
     label_plural = "Articles"
+    popular_title = "Popular articles"
     icon = "newspaper"
     priority = 70
     search_fields = ("title", "summary", "category__name", "tags__name")
     ordering = ("-published_at", "-pk")
+
+    def popular(
+        self, *, limit: int, window_days: int, scope: Mapping[str, str]
+    ) -> list[SearchHit]:
+        posts = Post.objects.live().select_related("category")
+        if scope.get("brand"):
+            posts = posts.filter(firmware_brand__slug=scope["brand"])
+        if scope.get("chipset"):
+            posts = posts.filter(
+                Q(firmware_model__chipset_ref__slug=scope["chipset"])
+                | Q(firmware_automation_link__chipset__slug=scope["chipset"])
+            )
+        context = SearchContext(query="", tokens=(), limit=limit)
+        rows = posts.order_by("-views_count", "-published_at")[:limit]
+        return [self.build_hit(post, 0.0, context) for post in rows]
 
     def is_visible_to(self, user: object | None) -> bool:
         return blog_enabled_for(user)
@@ -51,6 +71,8 @@ class BlogPostProvider(QuerySetProvider[Post]):
 
 
 class BlogCategoryProvider(QuerySetProvider[Category]):
+    """Article categories that have at least one live post."""
+
     kind = "blog_category"
     label = "Article category"
     label_plural = "Article categories"
@@ -58,6 +80,8 @@ class BlogCategoryProvider(QuerySetProvider[Category]):
     priority = 75
     search_fields = ("name", "slug")
     ordering = ("name",)
+    suggestible = True
+    watches = (Category,)
 
     def is_visible_to(self, user: object | None) -> bool:
         return blog_enabled_for(user)

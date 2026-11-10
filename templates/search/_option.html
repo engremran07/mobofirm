@@ -1,0 +1,22 @@
+{# One combobox option. Context: row {hit, index, kind}, mode, prefix, show_kind. Links only for same-site paths. #}
+{% with hit=row.hit %}
+  {% if mode == "navigate" and hit.url and hit.url|slice:":1" == "/" and hit.url|slice:":2" != "//" %}
+    <a id="{{ prefix }}-option-{{ row.index }}" class="combobox-option" role="option" aria-selected="false" tabindex="-1" href="{{ hit.url }}" data-kind="{{ hit.kind }}" data-recent-query="{{ query }}">
+      <span class="combobox-icon" aria-hidden="true"><i data-lucide="{{ hit.icon }}"></i></span>
+      <span class="combobox-text">
+        <span class="combobox-title">{{ hit.title }}</span>
+        {% if hit.subtitle %}<span class="combobox-subtitle">{{ hit.subtitle }}</span>{% endif %}
+      </span>
+      {% if show_kind %}<span class="combobox-kind">{{ row.kind }}</span>{% endif %}
+    </a>
+  {% else %}
+    <div id="{{ prefix }}-option-{{ row.index }}" class="combobox-option" role="option" aria-selected="false"
+         data-value="{{ hit.picked_value }}" data-label="{{ hit.picked_label }}" data-kind="{{ hit.kind }}"{% for key, extra in hit.extra %} data-{{ key }}="{{ extra }}"{% endfor %}>
+      <span class="combobox-text">
+        {% if show_kind %}<span class="combobox-kind">{{ row.kind }}</span>{% endif %}
+        <span class="combobox-title">{{ hit.title }}</span>
+        {% if hit.subtitle %}<span class="combobox-subtitle">{{ hit.subtitle }}</span>{% endif %}
+      </span>
+    </div>
+  {% endif %}
+{% endwith %}

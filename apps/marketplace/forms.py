@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Mapping
+from typing import Any, ClassVar
 
 from django import forms
 from django.core.exceptions import ValidationError
 from django.forms import BaseFormSet, formset_factory
 
+from apps.core.editor.forms import RichTextFormMixin
 from apps.firmwares.models import Brand, Chipset
 
 from .earnings import PAYOUT_METHODS
@@ -183,7 +185,9 @@ class PayoutRequestForm(forms.Form):
     )
 
 
-class ListingForm(forms.ModelForm):
+class ListingForm(RichTextFormMixin, forms.ModelForm):
+    rich_text_fields: ClassVar[Mapping[str, str]] = {"description": "listing"}
+
     class Meta:
         model = Listing
         fields = ("title", "description", "price", "discount_price")

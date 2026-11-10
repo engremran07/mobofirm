@@ -1,15 +1,22 @@
 {% extends "base.html" %}
 {% block title %}Search devices | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block content %}
-<div class="site-container py-5">
-  <p class="section-eyebrow">Catalogue search</p>
-  <h1 class="h2 mb-4">Find a device</h1>
-  <form class="row g-2 mb-4" method="get" action="{% url 'firmwares:universal_search' %}"
-        hx-get="{% url 'firmwares:universal_search' %}" hx-trigger="input changed delay:350ms from:find input, submit"
-        hx-target="#search-results" hx-swap="innerHTML">
-    <div class="col"><label class="visually-hidden" for="search-query">Search</label><input id="search-query" class="form-control" type="search" name="q" value="{{ query }}" placeholder="Model, codename, model code, or brand"></div>
-    <div class="col-auto"><button class="btn btn-primary" type="submit">Search</button></div>
+<div class="site-container cat-page">
+  {% include "components/breadcrumbs.html" with current="Find a device" %}
+  <header class="hero-panel cat-head">
+    <div class="cat-head__main">
+      <p class="section-eyebrow"><i class="icon" data-lucide="search" aria-hidden="true"></i> Catalogue search</p>
+      <h1 class="cat-head__title">Find a <span class="text-gradient">device</span></h1>
+      <p class="cat-head__text">Search by model, codename, model code or brand.</p>
+    </div>
+  </header>
+  <form class="filter-bar cat-filters" method="get" action="{% url 'firmwares:universal_search' %}"
+        hx-get="{% url 'firmwares:universal_search' %}" hx-trigger="input changed delay:250ms from:find input, search, submit"
+        hx-target="#search-results" hx-swap="innerHTML" hx-push-url="true" hx-sync="this:replace" hx-indicator="#device-search-indicator">
+    <div class="cat-filters__field cat-filters__field--search"><label class="visually-hidden" for="search-query">Search</label><i data-lucide="search" aria-hidden="true"></i><input id="search-query" class="form-control" type="search" name="q" value="{{ query }}" maxlength="100" autocomplete="off" enterkeyhint="search" data-live-search placeholder="Model, codename, model code, or brand"></div>
+    <div class="cat-filters__actions"><button class="btn btn-primary" type="submit">Search</button></div>
+    <span id="device-search-indicator" class="htmx-indicator cat-filters__status align-items-center gap-2 muted" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span><span>Searching</span></span>
   </form>
-  <div id="search-results" aria-live="polite">{% include "firmwares/fragments/search_results.html" %}</div>
+  <div id="search-results" class="skeleton-host" aria-live="polite">{% include "firmwares/fragments/search_results.html" %}</div>
 </div>
 {% endblock %}

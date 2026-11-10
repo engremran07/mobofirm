@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load shop_tags marketplace_tags %}
+{% load shop_tags marketplace_tags editor_tags %}
 {% block title %}Account overview | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block content %}
 <div class="site-container py-5">
@@ -28,7 +28,7 @@
     <a class="btn btn-outline-secondary" href="{% url 'users:notification_settings' %}">Notification settings</a>
     <a class="btn btn-outline-secondary" href="{% url 'users:mfa_setup' %}">Two-factor authentication</a>
   </nav>
-  {% if announcements %}<section aria-labelledby="announcements-title"><h2 id="announcements-title" class="h4">Announcements</h2>{% for announcement in announcements %}<article class="surface-card p-3 mb-2"><h3 class="h5">{{ announcement.title }}</h3><p class="mb-0">{{ announcement.message|linebreaksbr }}</p></article>{% endfor %}</section>{% endif %}
+  {% if announcements %}<section aria-labelledby="announcements-title"><h2 id="announcements-title" class="h4">Announcements</h2>{% for announcement in announcements %}<article class="surface-card p-3 mb-2"><h3 class="h5">{{ announcement.title }}</h3><p class="mb-0">{{ announcement.message|rich_text }}</p></article>{% endfor %}</section>{% endif %}
   {% if notifications %}<section class="mt-4" aria-labelledby="recent-notifications-title"><h2 id="recent-notifications-title" class="h4">Recent notifications</h2>{% for notification in notifications %}<p><a href="{% url 'users:notification_detail' pk=notification.pk %}">{{ notification.title }}</a> — {{ notification.message|truncatewords:20 }}</p>{% endfor %}</section>{% endif %}
 </div>
 {% endblock %}

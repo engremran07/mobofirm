@@ -1,5 +1,5 @@
 {# Contract: bounty. #}
-{% if bounty.status == "open" %}{% include "components/status_pill.html" with label="Open" tone="success" %}
-{% elif bounty.status == "fulfilled" %}{% include "components/status_pill.html" with label="Fulfilled" tone="accent" icon="check" %}
-{% elif bounty.status == "review" %}{% include "components/status_pill.html" with label="In staff review" tone="warning" %}
-{% else %}{% include "components/status_pill.html" with label=bounty.get_status_display %}{% endif %}
+{% if bounty.status == "open" %}{% include "components/badge.html" with variant="free" label="Open" icon="circle-check" %}
+{% elif bounty.status == "fulfilled" %}{% include "components/badge.html" with variant="verified" label="Fulfilled" icon="check" %}
+{% elif bounty.status == "review" %}{% include "components/badge.html" with variant="warning" label="In staff review" icon="clock" %}
+{% else %}{% include "components/badge.html" with label=bounty.get_status_display %}{% endif %}

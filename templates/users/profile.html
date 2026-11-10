@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load users_ui %}
 {% block title %}Profile | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block content %}
 <div class="site-container py-5">
@@ -40,20 +41,24 @@
   </form>
   <section class="surface-card p-4 mb-4" aria-labelledby="profile-password-title">
     <h2 id="profile-password-title" class="h4">Change password</h2>
-    <form method="post" action="{% url 'users:profile' %}">
+    <form method="post" action="{% url 'users:profile' %}" novalidate>
       {% csrf_token %}
       <input type="hidden" name="action" value="change_password">
-      <div class="mb-3">
+      <div class="mb-3" data-field>
         <label class="form-label" for="current-password">Current password</label>
         <input class="form-control" id="current-password" type="password" name="current_password" autocomplete="current-password" required>
+        <div class="invalid-feedback field-error" id="current-password_errors" role="alert" data-field-error hidden></div>
       </div>
-      <div class="mb-3">
+      <div class="mb-3" data-field>
         <label class="form-label" for="new-password-1">New password</label>
         <input class="form-control" id="new-password-1" type="password" name="new_password1" autocomplete="new-password" required>
+        <div class="invalid-feedback field-error" id="new-password-1_errors" role="alert" data-field-error hidden></div>
+        {% password_checklist "new_password1" "new_password2" %}
       </div>
-      <div class="mb-3">
+      <div class="mb-3" data-field>
         <label class="form-label" for="new-password-2">Confirm new password</label>
         <input class="form-control" id="new-password-2" type="password" name="new_password2" autocomplete="new-password" required>
+        <div class="invalid-feedback field-error" id="new-password-2_errors" role="alert" data-field-error hidden></div>
       </div>
       <button class="btn btn-primary" type="submit">Update password</button>
     </form>

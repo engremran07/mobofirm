@@ -1,9 +1,9 @@
 {% load mf_ui %}
-{# Contract: field (required BoundField); help (optional override of the field help text). Wires label, errors and aria-describedby. #}
+{# Contract: field (required BoundField); help (optional override of the field help text). Wires label, errors and aria-describedby. The [data-field-error] container is always present (hidden while empty): the server fills it on a failed POST and the inline-validation module fills it in the browser. #}
 {% if field.is_hidden %}
   {{ field }}
 {% else %}
-  <div class="mb-3{% if field|mf_is_check %} form-check{% endif %}">
+  <div class="mb-3{% if field|mf_is_check %} form-check{% endif %}" data-field>
     {% if field|mf_is_check %}
       {{ field|mf_widget }}
       <label class="form-check-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
@@ -11,11 +11,7 @@
       <label class="form-label"{% if field|mf_is_group %} id="{{ field.auto_id }}_label"{% endif %} for="{{ field.id_for_label }}">{{ field.label }}</label>
       {% if field|mf_is_combobox %}{% combobox_field field %}{% else %}{{ field|mf_widget }}{% endif %}
     {% endif %}
-    {% if field.errors %}
-      <div class="invalid-feedback d-block" id="{{ field.auto_id }}_errors" role="alert">
-        {% for error in field.errors %}<p class="mb-0">{{ error }}</p>{% endfor %}
-      </div>
-    {% endif %}
+    <div class="invalid-feedback field-error" id="{{ field.auto_id }}_errors" role="alert" data-field-error{% if not field.errors %} hidden{% endif %}>{% for error in field.errors %}<p class="mb-0">{{ error }}</p>{% endfor %}</div>
     {% if field.help_text %}<div class="form-text" id="{{ field.auto_id }}_help">{{ help|default:field.help_text }}</div>{% endif %}
   </div>
 {% endif %}

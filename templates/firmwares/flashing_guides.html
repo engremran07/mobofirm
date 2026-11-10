@@ -2,23 +2,33 @@
 {% block title %}Flashing guides | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block meta_description %}Step-by-step flashing guides for mobile devices, by guide type and brand.{% endblock %}
 {% block content %}
-<div class="site-container py-5">
-  <nav aria-label="Breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="{% url 'firmwares:flashing_tools' %}">Tools and guides</a></li><li class="breadcrumb-item active" aria-current="page">Guides</li></ol></nav>
-  <h1 class="h2 mb-3">Flashing guides</h1>
-  <form class="row g-2 mb-4" method="get" action="{% url 'firmwares:flashing_guides' %}">
-    <div class="col-12 col-md-4"><label class="form-label" for="guide-type">Guide type</label><select id="guide-type" class="form-select" name="type"><option value="">All types</option>{% for value, label in guide_types %}<option value="{{ value }}"{% if selected_type == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
-    <div class="col-12 col-md-4"><label class="form-label" for="guide-brand">Brand</label><select id="guide-brand" class="form-select" name="brand"><option value="">All brands</option>{% for brand in brands %}<option value="{{ brand.slug }}"{% if selected_brand == brand.slug %} selected{% endif %}>{{ brand.name }}</option>{% endfor %}</select></div>
-    <div class="col-12 col-md-auto d-flex align-items-end"><button class="btn btn-primary" type="submit">Filter</button></div>
-  </form>
-  {% if guides %}
-    <div class="row g-3">
-      {% for guide in guides %}
-        <div class="col-12 col-md-6 col-xl-4"><article class="surface-card p-3 h-100"><p class="section-eyebrow mb-1">{{ guide.template.get_guide_type_display }}</p><h2 class="h5"><a href="{{ guide.post.get_absolute_url }}">{{ guide.post.title }}</a></h2><p class="small muted mb-0">{{ guide.brand.name }}{% if guide.model %} · {{ guide.model.name }}{% endif %}</p></article></div>
-      {% endfor %}
+{% url 'firmwares:flashing_guides' as guides_url %}
+{% url 'firmwares:flashing_tools' as tools_url %}
+<div class="site-container cat-page">
+  {% include "components/breadcrumbs.html" with current="Guides" parent_label="Tools and guides" parent_url=tools_url %}
+  <header class="hero-panel cat-head">
+    <div class="cat-head__main">
+      <p class="section-eyebrow"><i class="icon" data-lucide="book-open" aria-hidden="true"></i> Step by step</p>
+      <h1 class="cat-head__title">Flashing <span class="text-gradient">guides</span></h1>
+      <p class="cat-head__text">Find the method for your device by guide type and brand. Can’t find yours? Open a device page and request a new method.</p>
     </div>
-    {% include "firmwares/includes/pagination.html" with page=guides label="Guide pages" query="" %}
-  {% else %}
-    <p class="empty-state p-4">No published guides match these filters.</p>
-  {% endif %}
+  </header>
+  <form id="guide-filters" class="filter-bar cat-filters" role="search" method="get" action="{{ guides_url }}" data-catalog-filters
+        hx-get="{{ guides_url }}" hx-trigger="change, submit" hx-include="this" hx-target="#guide-results"
+        hx-swap="innerHTML" hx-push-url="true" hx-sync="this:replace" hx-indicator="#guide-indicator">
+    <div class="cat-filters__field cat-filters__field--search">
+      <label class="form-label" for="guide-query">Search guides</label>
+      <i data-lucide="search" aria-hidden="true"></i>
+      <input id="guide-query" class="form-control" type="search" name="q" value="{{ search_query }}" maxlength="100" autocomplete="off" enterkeyhint="search" data-live-search
+             placeholder="Device, model code or method"
+             hx-get="{{ guides_url }}" hx-trigger="input changed delay:250ms, search" hx-include="closest form"
+             hx-target="#guide-results" hx-swap="innerHTML" hx-push-url="true" hx-sync="closest form:replace" hx-indicator="#guide-indicator">
+    </div>
+    <div class="cat-filters__field"><label class="form-label" for="guide-type">Guide type</label><select id="guide-type" class="form-select" name="type"><option value="">All types</option>{% for value, label in guide_types %}<option value="{{ value }}"{% if selected_type == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+    <div class="cat-filters__field"><label class="form-label" for="guide-brand">Brand</label><select id="guide-brand" class="form-select" name="brand"><option value="">All brands</option>{% for brand in brands %}<option value="{{ brand.slug }}"{% if selected_brand == brand.slug %} selected{% endif %}>{{ brand.name }}</option>{% endfor %}</select></div>
+    <div class="cat-filters__actions"><button class="btn btn-primary" type="submit">Filter</button></div>
+    <span id="guide-indicator" class="htmx-indicator cat-filters__status align-items-center gap-2 muted" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span><span>Searching</span></span>
+  </form>
+  <div id="guide-results" class="skeleton-host" aria-live="polite">{% include "firmwares/fragments/guide_results.html" %}</div>
 </div>
 {% endblock %}

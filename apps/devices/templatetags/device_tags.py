@@ -1,14 +1,46 @@
-"""Template tags for the devices app — brand logo SVG generation."""
+"""Template tags for the devices app: OS-registration prompt and brand logo SVGs."""
 
 from __future__ import annotations
 
 import hashlib
+from typing import Any
 
 from django import template
 from django.utils.html import format_html
 from django.utils.safestring import SafeString
 
+from apps.devices import os_identity
+from apps.devices.services import find_current_device, user_has_os_registration
+
 register = template.Library()
+
+
+@register.inclusion_tag("devices/includes/os_identity.html", takes_context=True)
+def device_os_identity(context: template.Context) -> dict[str, Any]:
+    """Offer "Register/Verify this computer" unless this OS is already recognised.
+
+    The partial stays hidden until the script confirms a platform authenticator
+    exists; without one (or without JavaScript) the per-browser fallback form is the
+    only path.
+    """
+    hidden: dict[str, Any] = {"show": False}
+    request = context.get("request")
+    user = getattr(request, "user", None)
+    if request is None or user is None or not user.is_authenticated:
+        return hidden
+    if not os_identity.os_identity_enabled():
+        return hidden
+    current = find_current_device(request, user)
+    if current is not None and (
+        current.is_blocked or current.revoked_at is not None or current.is_os_identity
+    ):
+        return hidden
+    return {
+        "show": True,
+        "mode": "verify" if user_has_os_registration(user) else "register",
+        "csrf_token": context.get("csrf_token", ""),
+    }
+
 
 # Curated palette — high contrast on dark and light backgrounds
 _BRAND_COLORS = [

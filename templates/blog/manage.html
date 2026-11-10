@@ -14,8 +14,8 @@
       <a class="btn btn-primary" href="{% url 'blog:post_create' %}">Write a post</a>
     </div>
   </header>
-  <section class="surface-card p-3 p-md-4 mb-4" aria-label="Filter posts">
-    <form class="row g-3 align-items-end" method="get" action="{% url 'blog:manage_posts' %}">
+  <section class="filter-bar workspace-filters" aria-label="Filter posts">
+    <form class="row g-3 align-items-end w-100 m-0" method="get" action="{% url 'blog:manage_posts' %}">
       <div class="col-12 col-md-5">
         <label class="form-label" for="editorial-query">Search posts</label>
         <input class="form-control" id="editorial-query" type="search" name="q" value="{{ query }}" maxlength="200">
@@ -64,7 +64,7 @@
               {% if can_moderate %}<td><input class="form-check-input" type="checkbox" name="post_id" value="{{ post.pk }}" form="bulk-form" aria-label="Select {{ post.title }}"></td>{% endif %}
               <th scope="row">{% if post.is_live %}<a href="{{ post.get_absolute_url }}">{{ post.title }}</a>{% else %}{{ post.title }}{% endif %}</th>
               {% if can_manage_all %}<td>{{ post.author.public_display_name }}</td>{% endif %}
-              <td><span class="badge text-bg-secondary">{{ post.get_status_display }}</span></td>
+              <td><span class="badge-ui badge-ui--{% if post.status == 'published' %}free{% elif post.status == 'review' %}warning{% elif post.status == 'scheduled' %}verified{% endif %}">{{ post.get_status_display }}</span></td>
               <td>{% if post.is_ai_generated %}Automated{% else %}Manual{% endif %}</td>
               <td><time datetime="{{ post.updated_at|date:'c' }}">{{ post.updated_at|date:"M j, Y" }}</time></td>
               <td>
@@ -92,7 +92,7 @@
       {% include "components/pagination.html" with page_obj=page_obj label="Post pages" %}
     {% else %}
       {% url 'blog:post_create' as create_url %}
-      {% include "components/empty_state.html" with title="No posts match these filters" message="Try another status or source, or write a new post." action_label="Write a post" action_url=create_url %}
+      {% include "components/empty_ui.html" with icon="newspaper" title="No posts match these filters" message="Try another status or source, or write a new post." action_label="Write a post" action_url=create_url %}
     {% endif %}
   </section>
 </div>

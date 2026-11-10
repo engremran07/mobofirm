@@ -4,6 +4,7 @@ from decimal import Decimal
 from typing import ClassVar
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.core.validators import (
     MaxLengthValidator,
     MaxValueValidator,
@@ -18,7 +19,8 @@ from django.utils import timezone
 from django.utils.text import slugify
 from solo.models import SingletonModel
 
-from apps.core.utils.sanitize import is_same_origin_path, sanitize_html
+from apps.core.editor import sanitize_stored_html
+from apps.core.utils.sanitize import is_same_origin_path
 
 
 class PostStatus(models.TextChoices):
@@ -71,11 +73,43 @@ class PostQuerySet(models.QuerySet):
         return self.filter(status=PostStatus.PUBLISHED, publish_at__lte=timezone.now())
 
 
+class PostSeries(models.Model):
+    """An ordered collection of posts read in sequence (a multi-part guide)."""
+
+    title = models.CharField(max_length=160, unique=True)
+    slug = models.SlugField(max_length=180, unique=True, blank=True)
+    description = models.TextField(
+        blank=True,
+        default="",
+        validators=[MaxLengthValidator(600)],
+        help_text="Shown above the list of parts (up to 600 characters).",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ["title"]
+        verbose_name = "Post series"
+        verbose_name_plural = "Post series"
+
+    def __str__(self) -> str:
+        return self.title
+
+    def get_absolute_url(self) -> str:
+        return reverse("blog:series_detail", kwargs={"slug": self.slug})
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.title)[:180] or "series"
+        super().save(*args, **kwargs)
+
+
 class Post(models.Model):
     objects = PostQuerySet.as_manager()
 
     # Set by the pre_save signal so the post_save hook can detect a first publication.
     was_published_before_save: bool = False
+    # The slug as loaded from the database, used to record renamed slugs.
+    _loaded_slug: str | None = None
 
     title = models.CharField(
         max_length=200,
@@ -219,6 +253,26 @@ class Post(models.Model):
         help_text="The approved guide request this post answers.",
     )
 
+    series = models.ForeignKey(
+        PostSeries,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="posts",
+        help_text="Optional multi-part guide this post belongs to.",
+    )
+    series_order = models.PositiveIntegerField(
+        default=0,
+        help_text="Position inside the series (1 is the first part).",
+    )
+    preview_epoch = models.PositiveIntegerField(
+        default=0,
+        help_text=(
+            "Draft preview links embed this number; raising it revokes every "
+            "link issued before."
+        ),
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -263,8 +317,14 @@ class Post(models.Model):
         """The hero image when it is served from this site (``img-src 'self'``)."""
         return self.hero_image if is_same_origin_path(self.hero_image) else ""
 
+    @classmethod
+    def from_db(cls, db, field_names, values):
+        instance = super().from_db(db, field_names, values)
+        instance._loaded_slug = instance.__dict__.get("slug")
+        return instance
+
     def save(self, *args, **kwargs):
-        self.body = sanitize_html(self.body)
+        self.body = sanitize_stored_html(self.body)
         if self.access == PostAccess.FREE:
             self.price = self.proposed_price = None
             self.price_approved_by = None
@@ -303,10 +363,97 @@ class Post(models.Model):
         self.reading_time = max(1, round(words / 200)) if words else 1
 
         super().save(*args, **kwargs)
+        saved_fields = kwargs.get("update_fields")
+        if saved_fields is None or "slug" in saved_fields:
+            self._sync_slug_history()
+
+    def _sync_slug_history(self) -> None:
+        """Keep old addresses alive: a renamed slug is remembered for a 301.
+
+        A slug that is live again (or taken by a new post) always wins over history,
+        so the matching history row is dropped.
+        """
+        previous = self._loaded_slug
+        if previous == self.slug:
+            return
+        PostSlugHistory.objects.filter(slug__iexact=self.slug).delete()
+        if previous:
+            PostSlugHistory.objects.update_or_create(
+                slug=previous, defaults={"post": self}
+            )
+        self._loaded_slug = self.slug
 
     @property
     def seo_ready(self) -> bool:
         return bool(self.seo_title and self.seo_description)
+
+
+class PostSlugHistory(models.Model):
+    """A former slug of a post; the public URL redirects permanently to the post."""
+
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="slug_history")
+    slug = models.SlugField(max_length=240, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ["-created_at", "-pk"]
+        verbose_name = "Former slug"
+        verbose_name_plural = "Former slugs"
+
+    def __str__(self) -> str:
+        return f"{self.slug} → {self.post_id}"
+
+
+class PostCoAuthor(models.Model):
+    """An additional credited author of a post (the owner stays ``Post.author``)."""
+
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="coauthor_links")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="coauthored_post_links",
+    )
+    position = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ["position", "pk"]
+        constraints = (
+            models.UniqueConstraint(
+                fields=["post", "user"], name="blog_postcoauthor_unique_user_post"
+            ),
+        )
+        verbose_name = "Co-author"
+        verbose_name_plural = "Co-authors"
+
+    def __str__(self) -> str:
+        return f"{self.user_id} co-authors {self.post_id}"
+
+    def clean(self) -> None:
+        if self.post_id and self.user_id and self.post.author_id == self.user_id:
+            raise ValidationError("The post owner is already credited as its author.")
+
+
+class PostBookmark(models.Model):
+    """A member's saved article (reading list); one row per user and post."""
+
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="bookmarks")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="post_bookmarks",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ["-created_at", "-pk"]
+        constraints = (
+            models.UniqueConstraint(
+                fields=["post", "user"], name="blog_postbookmark_unique_user_post"
+            ),
+        )
+
+    def __str__(self) -> str:
+        return f"{self.user_id} saved {self.post_id}"
 
 
 class PostLike(models.Model):
@@ -362,8 +509,47 @@ class GuideRequest(models.Model):
         help_text="8-200 characters.",
     )
     description = models.TextField(
-        validators=[MinLengthValidator(20), MaxLengthValidator(2000)],
-        help_text="What you need, the device situation and what you already tried.",
+        blank=True,
+        validators=[MaxLengthValidator(2000)],
+        help_text="Optional extra details: the device situation and what a good answer covers.",
+    )
+    tried = models.TextField(
+        blank=True,
+        validators=[MaxLengthValidator(2000)],
+        help_text="What the requester already tried: tools, steps, error messages, firmware version.",
+    )
+    expected_outcome = models.CharField(
+        max_length=300,
+        blank=True,
+        help_text="What a working answer should achieve.",
+    )
+    bounty_offer = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Credits the requester intends to offer once the request is approved.",
+    )
+    model_code = models.CharField(
+        max_length=64,
+        blank=True,
+        help_text="Model code as the member typed it, e.g. SM-A145F.",
+    )
+    variant_code = models.CharField(
+        max_length=64,
+        blank=True,
+        help_text="Variant code as the member typed it, e.g. AI2401_A.",
+    )
+    search_keywords = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text="Keywords the member searched before asking.",
+    )
+    related_post = models.ForeignKey(
+        "blog.Post",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="followup_requests",
+        help_text="The article that did not resolve the issue.",
     )
     kind = models.CharField(max_length=10, choices=Kind.choices, default=Kind.GUIDE)
     brand = models.ForeignKey(
@@ -375,6 +561,13 @@ class GuideRequest(models.Model):
     )
     firmware_model = models.ForeignKey(
         "firmwares.Model",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="guide_requests",
+    )
+    variant = models.ForeignKey(
+        "firmwares.Variant",
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
@@ -436,15 +629,47 @@ class GuideRequest(models.Model):
 
     @property
     def label(self) -> str:
-        """Short device context for lists: brand, model and chipset when set."""
-        parts = [
-            self.brand.name if self.brand_id and self.brand else "",
+        """Short device context for lists: brand, model, variant and chipset."""
+        model = (
             self.firmware_model.name
             if self.firmware_model_id and self.firmware_model
-            else "",
+            else self.model_code
+        )
+        variant = (
+            self.variant.name if self.variant_id and self.variant else self.variant_code
+        )
+        parts = [
+            self.brand.name if self.brand_id and self.brand else "",
+            model,
+            variant,
             self.chipset.display_name if self.chipset_id and self.chipset else "",
         ]
         return " · ".join(part for part in parts if part)
+
+
+class GuideRequestFollower(models.Model):
+    """A member who also needs the answer to a public request ("me too" / bump)."""
+
+    request = models.ForeignKey(
+        GuideRequest, on_delete=models.CASCADE, related_name="followers"
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="followed_guide_requests",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ["-created_at", "-id"]
+        constraints = (
+            models.UniqueConstraint(
+                fields=["request", "user"], name="blog_guidereq_follower_unique"
+            ),
+        )
+
+    def __str__(self) -> str:
+        return f"{self.user_id} follows {self.request_id}"
 
 
 class PostDraft(models.Model):
@@ -517,6 +742,14 @@ class BlogSettings(SingletonModel):
         validators=[MinValueValidator(1), MaxValueValidator(50)],
         help_text="Most pending or approved requests one member may have at once.",
     )
+    stale_after_days = models.PositiveIntegerField(
+        default=180,
+        validators=[MinValueValidator(30), MaxValueValidator(1825)],
+        help_text=(
+            "Published articles not updated for this many days are flagged as stale "
+            "for editors (admin list, filter and dashboard). Readers never see it."
+        ),
+    )
 
     class Meta:
         verbose_name = "Blog Settings"
@@ -553,7 +786,7 @@ class PostTranslation(models.Model):
         return f"{self.post} [{self.language}]"
 
     def save(self, *args, **kwargs):
-        self.body = sanitize_html(self.body)
+        self.body = sanitize_stored_html(self.body)
         super().save(*args, **kwargs)
 
 

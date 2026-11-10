@@ -1,7 +1,7 @@
 {# Context: card, author_initials, author_post_count, is_editorial, post. #}
 <section class="author-box" aria-labelledby="author-title">
   <span class="avatar avatar--lg avatar--v{{ card.variant }}" aria-hidden="true">{{ author_initials }}</span>
-  <div>
+  <div class="author-box__text">
     <p class="author-box__label mb-1">Written by</p>
     <h2 class="author-box__name" id="author-title">{{ card.author }}</h2>
     {% if is_editorial %}

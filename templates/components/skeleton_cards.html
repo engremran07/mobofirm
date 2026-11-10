@@ -1,0 +1,14 @@
+{# Contract: no parameters (six placeholder cards). Shown while a list loads; place it inside a .skeleton-host that carries the hx-indicator, or return it as the HTMX "loading" fragment. Decorative only: hidden from assistive technology. #}
+<div class="card-grid" aria-hidden="true">
+  {% for _ in "123456" %}
+    <div class="skeleton-card">
+      <span class="skeleton skeleton--media"></span>
+      <div class="skeleton-card__body">
+        <span class="skeleton skeleton--pill"></span>
+        <span class="skeleton skeleton--title"></span>
+        <span class="skeleton skeleton--text"></span>
+        <span class="skeleton skeleton--text"></span>
+      </div>
+    </div>
+  {% endfor %}
+</div>

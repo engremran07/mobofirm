@@ -20,9 +20,13 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.core.app_service import AppService, app_enabled
+from apps.core.search import ItemSearch, search_items
 from apps.core.utils.managers import base_manager, default_manager
 
 TIERS = (("free", "Free"), ("featured", "Featured"), ("paid", "Paid"))
+ACTIVE = "active"
+HISTORY = "history"
+LIBRARY_TABS = ((ACTIVE, "Active"), (HISTORY, "History"))
 UPLOAD_STATUSES = (
     ("pending", "Awaiting review"),
     ("approved", "Approved"),
@@ -33,10 +37,12 @@ MAX_LIBRARY_ROWS = 1000
 
 
 def firmwares_available() -> bool:
+    """Whether the firmware app is installed and switched on."""
     return django_apps.is_installed("apps.firmwares") and app_enabled("firmwares")
 
 
 def shop_available() -> bool:
+    """Whether the shop app is installed and switched on."""
     return django_apps.is_installed("apps.shop") and app_enabled("shop")
 
 
@@ -91,10 +97,21 @@ class LibraryEntry:
     detail_url: str
     download_url: str
     available: bool
+    state: str = "active"
+    state_code: str = "active"
+    state_message: str = ""
+    renew_url: str = ""
+    rule_note: str = ""
 
     @property
-    def search_text(self) -> str:
-        return f"{self.name} {self.brand} {self.device} {self.variant} {self.type_label}".lower()
+    def can_download(self) -> bool:
+        """Whether the file may be fetched now (still published and entitled)."""
+        return self.available and self.state == ACTIVE
+
+    @property
+    def search_fields(self) -> tuple[str, ...]:
+        """Strings the library search matches, most important first."""
+        return (self.name, self.brand, self.device, self.variant, self.type_label)
 
 
 def _tier_label(tier: str, counted: bool) -> str:
@@ -125,11 +142,49 @@ def _firmware_rows(rows: list[Any]) -> dict[tuple[int, Any], Any]:
     return resolved
 
 
+def _entry_for(row: Any, firmware: Any, status: Any, renew_url: str) -> LibraryEntry:
+    """One library entry from a served row, its firmware record and its status."""
+    from apps.firmwares.catalog import FIRMWARE_TYPE_DISPLAY, TYPE_KEY_BY_CLASS
+
+    type_key = TYPE_KEY_BY_CLASS.get(type(firmware)) if firmware else None
+    links = None
+    if type_key:
+        kwargs = {"firmware_type": type_key, "firmware_id": row.object_id}
+        links = (
+            reverse("firmwares:firmware_detail", kwargs=kwargs),
+            reverse("firmwares:firmware_download", kwargs=kwargs),
+        )
+    return LibraryEntry(
+        name=firmware.original_file_name if firmware else "Removed file",
+        brand=firmware.brand.name if firmware and firmware.brand else "",
+        brand_slug=firmware.brand.slug if firmware and firmware.brand else "",
+        device=str(firmware.model.name) if firmware and firmware.model else "",
+        variant=str(firmware.variant.name) if firmware and firmware.variant else "",
+        type_label=FIRMWARE_TYPE_DISPLAY.get(type_key or "", ""),
+        tier=row.tier,
+        tier_label=_tier_label(row.tier, row.charged_quota),
+        paid_amount=row.paid_amount,
+        counted_in_quota=row.charged_quota,
+        served_at=row.served_at,
+        last_served_at=row.last_served_at,
+        times_served=row.times_served,
+        detail_url=links[0] if links else "",
+        download_url=links[1] if links else "",
+        available=bool(
+            firmware and firmware.is_active and firmware.is_verified and links
+        ),
+        state=ACTIVE if status.active else HISTORY,
+        state_code=status.code,
+        state_message=status.message,
+        renew_url=renew_url if status.code == "package_expired" else "",
+    )
+
+
 def library_entries(user: Any) -> list[LibraryEntry]:
     """Everything served to ``user``, newest first (empty without the firmware app)."""
     if not firmwares_available():
         return []
-    from apps.firmwares.catalog import FIRMWARE_TYPE_DISPLAY, TYPE_KEY_BY_CLASS
+    from apps.firmwares.access import served_statuses
 
     served_model = django_apps.get_model("firmwares", "ServedDownload")
     rows = list(
@@ -138,51 +193,36 @@ def library_entries(user: Any) -> list[LibraryEntry]:
         .order_by("-served_at")[:MAX_LIBRARY_ROWS]
     )
     firmware_by_ref = _firmware_rows(rows)
-    entries: list[LibraryEntry] = []
-    for row in rows:
-        firmware = firmware_by_ref.get((row.content_type_id, row.object_id))
-        type_key = TYPE_KEY_BY_CLASS.get(type(firmware)) if firmware else None
-        links = None
-        if type_key:
-            kwargs = {"firmware_type": type_key, "firmware_id": row.object_id}
-            links = (
-                reverse("firmwares:firmware_detail", kwargs=kwargs),
-                reverse("firmwares:firmware_download", kwargs=kwargs),
-            )
-        entries.append(
-            LibraryEntry(
-                name=firmware.original_file_name if firmware else "Removed file",
-                brand=firmware.brand.name if firmware and firmware.brand else "",
-                brand_slug=firmware.brand.slug if firmware and firmware.brand else "",
-                device=(
-                    str(firmware.model.name) if firmware and firmware.model else ""
-                ),
-                variant=str(firmware.variant.name)
-                if firmware and firmware.variant
-                else "",
-                type_label=FIRMWARE_TYPE_DISPLAY.get(type_key or "", ""),
-                tier=row.tier,
-                tier_label=_tier_label(row.tier, row.charged_quota),
-                paid_amount=row.paid_amount,
-                counted_in_quota=row.charged_quota,
-                served_at=row.served_at,
-                last_served_at=row.last_served_at,
-                times_served=row.times_served,
-                detail_url=links[0] if links else "",
-                download_url=links[1] if links else "",
-                available=bool(
-                    firmware and firmware.is_active and firmware.is_verified and links
-                ),
-            )
+    statuses = served_statuses(user, rows)
+    renew_url = reverse("shop:pricing") if shop_available() else ""
+    return [
+        _entry_for(
+            row,
+            firmware_by_ref.get((row.content_type_id, row.object_id)),
+            statuses[row.pk],
+            renew_url,
         )
-    return entries
+        for row in rows
+    ]
+
+
+def entries_for_tab(entries: list[LibraryEntry], tab: str) -> list[LibraryEntry]:
+    """The entries of one library tab: Active (fetchable now) or History."""
+    wanted = HISTORY if tab == HISTORY else ACTIVE
+    return [entry for entry in entries if entry.state == wanted]
 
 
 def filter_library(
     entries: list[LibraryEntry], filters: LibraryFilters
 ) -> list[LibraryEntry]:
     """Apply the Library tab filters (tier, brand, served-date range, search)."""
-    needle = filters.query.lower()
+    return search_library(entries, filters).items
+
+
+def search_library(
+    entries: list[LibraryEntry], filters: LibraryFilters
+) -> ItemSearch[LibraryEntry]:
+    """Library filters plus the shared text search (words, synonyms, typos)."""
     start = (
         timezone.make_aware(datetime.combine(filters.date_from, time.min))
         if filters.date_from
@@ -193,15 +233,15 @@ def filter_library(
         if filters.date_to
         else None
     )
-    return [
+    narrowed = [
         entry
         for entry in entries
         if (not filters.tier or entry.tier == filters.tier)
         and (not filters.brand or entry.brand_slug == filters.brand)
-        and (not needle or needle in entry.search_text)
         and (start is None or entry.served_at >= start)
         and (end is None or entry.served_at <= end)
     ]
+    return search_items(narrowed, filters.query, lambda entry: entry.search_fields)
 
 
 def brand_choices(entries: list[LibraryEntry]) -> list[tuple[str, str]]:

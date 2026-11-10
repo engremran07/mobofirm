@@ -1,32 +1,30 @@
 {% extends "base.html" %}
 {% block title %}Badges | {{ site_name }}{% endblock %}
 {% block content %}
-<div class="site-container py-4 py-lg-5">
+<div class="site-container py-4 py-lg-5 community-page">
   {% include "components/breadcrumbs.html" with current="Badges" %}
   {% include "components/page_header.html" with eyebrow="Community" title="Badges" lead="Badges recognise real contributions: approved firmware, fulfilled requests, helpful comments and more." %}
-  <nav class="d-flex flex-wrap gap-2 mb-4" aria-label="Community pages">
-    <a class="btn btn-sm btn-primary" href="{% url 'gamification:badges' %}" aria-current="page">Badges</a>
-    <a class="btn btn-sm btn-outline-secondary" href="{% url 'gamification:leaderboard' %}">Leaderboard</a>
-    {% if user.is_authenticated %}<a class="btn btn-sm btn-outline-secondary" href="{% url 'gamification:progress' %}">My progress</a>{% endif %}
+  <nav class="chip-row community-nav" aria-label="Community pages">
+    <a class="chip-ui is-active" href="{% url 'gamification:badges' %}" aria-current="page">Badges</a>
+    <a class="chip-ui" href="{% url 'gamification:leaderboard' %}">Leaderboard</a>
+    {% if user.is_authenticated %}<a class="chip-ui" href="{% url 'gamification:progress' %}">My progress</a>{% endif %}
   </nav>
   {% if badges %}
-    <div class="row g-3">
+    <div class="badge-grid">
       {% for badge in badges %}
-        <div class="col-12 col-md-6 col-xl-3">
-          <article class="surface-card h-100 badge-card{% if badge.pk in earned_ids %} is-earned{% endif %}" aria-labelledby="badge-{{ badge.pk }}">
-            <span class="badge-card__icon badge-card__icon--{{ badge.tier }}"><i class="icon" data-lucide="{{ badge.icon }}" aria-hidden="true"></i></span>
-            <h2 class="h6 mb-1" id="badge-{{ badge.pk }}">{{ badge.name }}</h2>
-            <p class="small muted mb-2">{{ badge.description }}</p>
-            <p class="small mb-0">
-              {% if badge.pk in earned_ids %}{% include "components/status_pill.html" with label="Earned" tone="success" icon="check" %}{% else %}{% include "components/status_pill.html" with label=badge.get_tier_display %}{% endif %}
-              <span class="muted">{{ badge.holders }} earned</span>
-            </p>
-          </article>
-        </div>
+        <article class="surface-card badge-card badge-card--{{ badge.tier }}{% if badge.pk in earned_ids %} is-earned{% endif %}" aria-labelledby="badge-{{ badge.pk }}" data-reveal>
+          <span class="badge-card__icon badge-card__icon--{{ badge.tier }}"><i class="icon" data-lucide="{{ badge.icon }}" aria-hidden="true"></i></span>
+          <h2 class="h6 mb-1" id="badge-{{ badge.pk }}">{{ badge.name }}</h2>
+          <p class="small muted mb-2">{{ badge.description }}</p>
+          <p class="badge-card__foot small mb-0">
+            {% if badge.pk in earned_ids %}{% include "components/badge.html" with variant="free" label="Earned" icon="check" %}{% else %}{% include "components/badge.html" with label=badge.get_tier_display icon="lock" %}{% endif %}
+            <span class="muted">{{ badge.holders }} earned</span>
+          </p>
+        </article>
       {% endfor %}
     </div>
   {% else %}
-    {% include "components/empty_state.html" with title="No badges yet" message="Badges appear here once staff publish them." %}
+    {% include "components/empty_ui.html" with icon="medal" title="No badges yet" message="Badges appear here once staff publish them." %}
   {% endif %}
 </div>
 {% endblock %}

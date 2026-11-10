@@ -1,7 +1,7 @@
 {# Context: rows, kind. One table per request kind; every row shows status and the reviewer's reason. #}
 {% load mf_ui %}
 {% table_scroll "Requests" %}
-<table class="table table-hover align-middle mb-0">
+<table class="table table-ui align-middle mb-0">
   <thead><tr><th scope="col">Request</th><th scope="col">Status</th><th scope="col">Sent</th><th scope="col">Reviewer note</th></tr></thead>
   <tbody>
     {% for row in rows %}
@@ -15,9 +15,9 @@
         </td>
         <td>
           {% if kind == "firmware" %}
-            <span class="badge {% if row.status == 'fulfilled' %}text-bg-success{% elif row.status == 'rejected' %}text-bg-danger{% elif row.status == 'in_progress' %}text-bg-info{% else %}text-bg-warning{% endif %}">{{ row.get_status_display }}</span>
+            <span class="badge-ui {% if row.status == 'fulfilled' %}badge-ui--free{% elif row.status == 'rejected' %}badge-ui--danger{% elif row.status == 'in_progress' %}badge-ui--verified{% else %}badge-ui--warning{% endif %}">{{ row.get_status_display }}</span>
           {% else %}
-            <span class="badge {% if row.status == 'approved' %}text-bg-success{% elif row.status == 'rejected' %}text-bg-danger{% else %}text-bg-warning{% endif %}">{{ row.status|capfirst }}</span>
+            <span class="badge-ui {% if row.status == 'approved' %}badge-ui--free{% elif row.status == 'rejected' %}badge-ui--danger{% else %}badge-ui--warning{% endif %}">{{ row.status|capfirst }}</span>
           {% endif %}
         </td>
         <td>{{ row.created_at|date:"M j, Y" }}</td>

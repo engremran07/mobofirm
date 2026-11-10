@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Final
 
 from django.db import DatabaseError
 
 from .registry import get_providers
+from .suggest import FEW_RESULTS
 from .text import clean_query, tokenize
 from .types import SearchContext, SearchHit, SearchProvider
 
@@ -71,6 +72,24 @@ def _plan(
     return providers, context
 
 
+def _gather(
+    providers: list[SearchProvider], context: SearchContext
+) -> dict[str, list[SearchHit]]:
+    """Hits per provider kind; a typo-tolerant second pass runs when few were found.
+
+    Only providers that found nothing are asked again, so strict matches are never
+    diluted by near misses.
+    """
+    found = {provider.kind: _provider_hits(provider, context) for provider in providers}
+    if not context.tokens or sum(len(hits) for hits in found.values()) >= FEW_RESULTS:
+        return found
+    relaxed = replace(context, fuzzy=True)
+    for provider in providers:
+        if not found[provider.kind]:
+            found[provider.kind] = _provider_hits(provider, relaxed)
+    return found
+
+
 def search(
     query: str | None,
     *,
@@ -83,14 +102,16 @@ def search(
 
     ``kinds`` restricts the search (and may name pick-only kinds). Queries shorter
     than a provider's ``min_length`` skip that provider; an empty query returns a
-    browse list only when ``kinds`` names providers that support it (pickers). Sorting is by score, then
-    provider priority, then title, so results are deterministic.
+    browse list only when ``kinds`` names providers that support it (pickers).
+    Sorting is by score, then provider priority, then title, so results are
+    deterministic. When fewer than ``FEW_RESULTS`` hits are found, providers that
+    found nothing are asked again with typo tolerance.
     """
     providers, context = _plan(query, kinds, limit, user, filters)
     priority = {provider.kind: provider.priority for provider in providers}
     hits: list[SearchHit] = []
-    for provider in providers:
-        hits.extend(_provider_hits(provider, context))
+    for found in _gather(providers, context).values():
+        hits.extend(found)
     hits.sort(key=lambda hit: (-hit.score, priority.get(hit.kind, 999), hit.title))
     return hits[: context.limit]
 
@@ -106,9 +127,10 @@ def search_grouped(
     """Results of ``search`` split into one group per kind (best group first)."""
     providers, context = _plan(query, kinds, per_kind, user, filters)
     ranked: dict[str, tuple[SearchProvider, list[SearchHit]]] = {}
+    gathered = _gather(providers, context)
     for provider in providers:
         hits = sorted(
-            _provider_hits(provider, context),
+            gathered[provider.kind],
             key=lambda hit: (-hit.score, hit.title),
         )
         if hits:

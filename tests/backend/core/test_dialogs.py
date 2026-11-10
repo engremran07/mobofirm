@@ -261,6 +261,18 @@ def test_dialog_success_can_stay_on_the_page_for_listeners():
     assert "HX-Redirect" not in response
 
 
+def test_staying_dialog_success_sends_its_message_as_an_immediate_toast():
+    """Without a redirect or refresh the message is a ``toast`` event, not a flash."""
+    request = RequestFactory().post("/x/", HTTP_HX_REQUEST="true")
+
+    response = dialog_success(request, message="Note saved.", refresh=False)
+
+    triggers = json.loads(response["HX-Trigger"])
+    assert triggers["toast"] == {"message": "Note saved.", "level": "success"}
+    assert triggers["dialog:close"] == {}
+    assert "HX-Refresh" not in response
+
+
 def test_dialog_success_without_htmx_redirects_to_a_safe_default():
     request = RequestFactory().post("/x/")
     response = dialog_success(request)

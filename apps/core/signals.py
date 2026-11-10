@@ -11,8 +11,10 @@ from __future__ import annotations
 import logging
 
 from django.apps import apps as django_apps
-from django.db.models.signals import post_migrate
+from django.db.models.signals import post_delete, post_migrate, post_save
 from django.dispatch import receiver
+
+from apps.core.admin_dashboard import invalidate_metrics
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +56,33 @@ def ensure_singletons() -> None:
 @receiver(post_migrate)
 def seed_singletons(**kwargs):  # pragma: no cover - signal hook
     ensure_singletons()
+
+
+REVIEW_QUEUE_MODELS = (
+    "firmwares.BrandCreationRequest",
+    "firmwares.ModelCreationRequest",
+    "firmwares.VariantCreationRequest",
+    "firmwares.ChipsetCreationRequest",
+    "firmwares.FirmwareRequest",
+)
+
+
+def refresh_review_counts(**_kwargs: object) -> None:
+    """Request queues changed: the dashboard KPI and sidebar badges recount."""
+    invalidate_metrics()
+
+
+for _queue_model in REVIEW_QUEUE_MODELS:
+    post_save.connect(
+        refresh_review_counts,
+        sender=_queue_model,
+        dispatch_uid=f"core.review_counts.save.{_queue_model}",
+    )
+    post_delete.connect(
+        refresh_review_counts,
+        sender=_queue_model,
+        dispatch_uid=f"core.review_counts.delete.{_queue_model}",
+    )
 
 
 # ============================================================================

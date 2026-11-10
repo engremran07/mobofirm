@@ -1,140 +1,151 @@
 {% extends "base.html" %}
-{% load ad_tags %}
+{% load ad_tags search_tags %}
 {% block title %}Firmware intelligence for mobile devices | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block meta_description %}Search device models, codenames, regions, and reviewed firmware records in the Mobofirm catalogue.{% endblock %}
 {% block content %}
-<div class="site-container py-4 py-lg-5">
-  <section class="hero-panel p-4 p-md-5" aria-labelledby="home-title">
-    <p class="hero-eyebrow mb-3">Mobile firmware intelligence</p>
-    <h1 id="home-title" class="hero-title mb-3">Find the right firmware for your device.</h1>
-    <p class="hero-copy mb-4">Search by device name, model code, codename, or manufacturer. Review exact model details before choosing a file.</p>
-    <form id="universal-search" class="row g-2" method="get" action="{% url 'firmwares:universal_search' %}"
-          hx-get="{% url 'firmwares:universal_search' %}" hx-trigger="input changed delay:350ms from:find input, submit"
-          hx-target="#search-results" hx-swap="innerHTML">
-      <div class="col-12 col-md">
+<div class="site-container home-page">
+  <section class="hero-panel hero-ui home-hero" aria-labelledby="home-title">
+    <span class="home-hero__glow home-hero__glow--a" aria-hidden="true"></span>
+    <span class="home-hero__glow home-hero__glow--b" aria-hidden="true"></span>
+    <div class="home-hero__inner">
+      <p class="hero-eyebrow mb-3"><span class="home-pulse" aria-hidden="true"></span>Mobile firmware intelligence</p>
+      <h1 id="home-title" class="hero-title mb-3">Find the right firmware <span class="text-gradient">for your device.</span></h1>
+      <p class="hero-copy mb-4">Search by device name, model code, codename, or manufacturer. Review exact model details before choosing a file.</p>
+      <form id="universal-search" class="home-search" method="get" action="{% url 'firmwares:universal_search' %}"
+            hx-get="{% url 'firmwares:universal_search' %}" hx-trigger="input changed delay:250ms from:find input, search, submit"
+            hx-target="#search-results" hx-swap="innerHTML" hx-sync="this:replace">
         <label class="visually-hidden" for="catalog-query">Search devices and firmware</label>
-        <input id="catalog-query" class="form-control form-control-lg" type="search" name="q"
-               value="{{ search_query }}" minlength="2" autocomplete="off"
+        <span class="home-search__icon" aria-hidden="true"><i data-lucide="search"></i></span>
+        <input id="catalog-query" class="form-control form-control-lg home-search__input" type="search" name="q"
+               value="{{ search_query }}" minlength="2" maxlength="100" autocomplete="off" data-live-search
                placeholder="Model, codename, model code, or brand">
-      </div>
-      <div class="col-12 col-md-auto">
-        <button class="btn btn-primary btn-lg w-100" type="submit">
-          <i data-lucide="search" aria-hidden="true"></i><span class="ms-2">Search catalogue</span>
+        <button class="btn btn-primary btn-lg home-search__submit" type="submit">
+          <span>Search catalogue</span><i data-lucide="arrow-right" aria-hidden="true"></i>
         </button>
+      </form>
+      <div id="search-results" class="home-hero__results" aria-live="polite">
+        {% if search_query %}
+          {% include "firmwares/fragments/search_results.html" %}
+        {% else %}
+          <p class="small muted mb-0">Search results will appear here. Search works without JavaScript too.</p>
+        {% endif %}
       </div>
-    </form>
-    <div id="search-results" class="mt-3" aria-live="polite">
-      {% if search_query %}
-        {% include "firmwares/fragments/search_results.html" %}
-      {% else %}
-        <p class="small muted mb-0">Search results will appear here. Search works without JavaScript too.</p>
-      {% endif %}
+      <ul class="home-stats" aria-label="Catalogue at a glance">
+        <li><a class="home-stat" href="{% url 'firmwares:brand_list' %}"><span class="home-stat__value">{{ total_brands }}</span><span class="home-stat__label">Brands</span></a></li>
+        <li><a class="home-stat" href="{% url 'firmwares:browse' %}"><span class="home-stat__value">{{ total_models }}</span><span class="home-stat__label">Active models</span></a></li>
+        <li><a class="home-stat" href="{% url 'firmwares:browse' %}"><span class="home-stat__value">{{ total_firmwares }}</span><span class="home-stat__label">Public official records</span></a></li>
+        <li><a class="home-stat" href="{% url 'firmwares:chipset_list' %}"><span class="home-stat__value">{{ total_chipsets }}</span><span class="home-stat__label">Chipsets</span></a></li>
+      </ul>
     </div>
   </section>
+
   {% render_ad_slot "after-hero" %}
+  {% popular_blocks heading="Popular right now" %}
 
-  <section class="py-5" aria-labelledby="catalog-overview-title">
-    <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-end gap-3 mb-3">
+  <section class="home-section" aria-labelledby="featured-brands-title">
+    <div class="section-ui">
       <div>
-        <p class="section-eyebrow mb-2">Explore</p>
-        <h2 id="catalog-overview-title" class="h3 mb-0">A catalogue built around device identity</h2>
+        <p class="section-eyebrow mb-1">Browse by manufacturer</p>
+        <h2 id="featured-brands-title" class="section-ui__title">Featured brands</h2>
       </div>
-      <a class="btn btn-outline-secondary" href="{% url 'firmwares:brand_list' %}">
-        All brands <i data-lucide="arrow-right" aria-hidden="true"></i>
-      </a>
-    </div>
-    <div class="row g-3">
-      <div class="col-6 col-lg-3"><div class="surface-card p-3"><span class="muted small">Brands</span><div class="stat-value fs-3 fw-bold">{{ total_brands }}</div></div></div>
-      <div class="col-6 col-lg-3"><div class="surface-card p-3"><span class="muted small">Active models</span><div class="stat-value fs-3 fw-bold">{{ total_models }}</div></div></div>
-      <div class="col-6 col-lg-3"><div class="surface-card p-3"><span class="muted small">Public official records</span><div class="stat-value fs-3 fw-bold">{{ total_firmwares }}</div></div></div>
-      <div class="col-6 col-lg-3"><div class="surface-card p-3"><span class="muted small">Chipsets</span><div class="stat-value fs-3 fw-bold">{{ total_chipsets }}</div></div></div>
-    </div>
-  </section>
-
-  <section class="pb-5" aria-labelledby="featured-brands-title">
-    <div class="d-flex justify-content-between align-items-end mb-3">
-      <div>
-        <p class="section-eyebrow mb-2">Browse by manufacturer</p>
-        <h2 id="featured-brands-title" class="h3 mb-0">Featured brands</h2>
-      </div>
+      <a class="btn btn-ghost btn-sm" href="{% url 'firmwares:brand_list' %}">All brands <i data-lucide="arrow-right" aria-hidden="true"></i></a>
     </div>
     {% if featured_brands %}
-      <div class="row g-3">
-        {% for brand in featured_brands %}
-          <div class="col-6 col-md-4 col-xl-3">
-            <a class="surface-card p-3 d-flex align-items-center gap-3 text-decoration-none" href="{% url 'firmwares:brand_detail' slug=brand.slug %}">
-              <span class="brand-mark" aria-hidden="true">{% if brand.name %}{{ brand.name|slice:":1"|upper }}{% endif %}</span>
-              <span class="min-w-0"><span class="d-block fw-semibold">{{ brand.name }}</span><span class="small muted">{{ brand.model_count }} models</span></span>
-              <i class="icon ms-auto muted" data-lucide="chevron-right" aria-hidden="true"></i>
-            </a>
-          </div>
-        {% endfor %}
+      <div class="card-grid card-grid--tiles">
+        {% for brand in featured_brands %}{% include "firmwares/includes/brand_tile.html" with brand=brand %}{% endfor %}
       </div>
     {% else %}
-      <p class="empty-state p-4 mb-0">No featured brands are configured yet. Browse all available manufacturers instead.</p>
+      <div class="empty-ui empty-state" role="status">
+        <span class="empty-ui__icon"><i data-lucide="building-2" aria-hidden="true"></i></span>
+        <p class="empty-ui__title">No featured brands are configured yet.</p>
+        <p class="mb-0">Browse all available manufacturers instead.</p>
+        <a class="btn btn-outline-secondary mt-2" href="{% url 'firmwares:brand_list' %}">Browse brands</a>
+      </div>
     {% endif %}
   </section>
 
-  <section class="pb-5" aria-labelledby="all-brands-title">
-    <div class="d-flex justify-content-between align-items-end mb-3">
+  <section class="home-section" aria-labelledby="all-brands-title">
+    <div class="section-ui">
       <div>
-        <p class="section-eyebrow mb-2">Current catalogue</p>
-        <h2 id="all-brands-title" class="h3 mb-0">Browse available brands</h2>
+        <p class="section-eyebrow mb-1">Current catalogue</p>
+        <h2 id="all-brands-title" class="section-ui__title">Browse available brands</h2>
       </div>
-      <a href="{% url 'firmwares:brand_list' %}">View directory</a>
+      <a class="btn btn-ghost btn-sm" href="{% url 'firmwares:brand_list' %}">View directory <i data-lucide="arrow-right" aria-hidden="true"></i></a>
     </div>
     {% include "firmwares/fragments/brand_list.html" %}
   </section>
 
-  <section class="pb-5" aria-labelledby="latest-models-title">
-    <div class="d-flex flex-column flex-sm-row justify-content-between align-items-sm-end gap-3 mb-3">
+  <section class="home-section" aria-labelledby="latest-models-title">
+    <div class="section-ui">
       <div>
-        <p class="section-eyebrow mb-2">Recently added</p>
-        <h2 id="latest-models-title" class="h3 mb-0">Device profiles</h2>
+        <p class="section-eyebrow mb-1">Recently added</p>
+        <h2 id="latest-models-title" class="section-ui__title">Device profiles</h2>
       </div>
-      <a href="{% url 'firmwares:brand_list' %}">Explore all manufacturers</a>
+      <a class="btn btn-ghost btn-sm" href="{% url 'firmwares:brand_list' %}">Explore all manufacturers <i data-lucide="arrow-right" aria-hidden="true"></i></a>
     </div>
     {% if latest_models %}
-      <div class="row g-3">
+      <div class="card-grid">
         {% for model in latest_models %}
-          <div class="col-12 col-md-6 col-xl-4">
-            <article class="surface-card p-4">
-              <p class="small section-eyebrow mb-2">{{ model.brand.name }}</p>
-              <h3 class="h5 mb-2"><a href="{% url 'firmwares:model_detail' brand_slug=model.brand.slug model_slug=model.slug %}">{{ model.display_name }}</a></h3>
-              <p class="muted small mb-0">{% if model.model_code %}<span class="model-code">{{ model.model_code }}</span>{% endif %}{% if model.codename %} · {{ model.codename }}{% endif %}</p>
-            </article>
-          </div>
+          <article class="card-ui">
+            <div class="card-ui__body">
+              <span class="card-ui__eyebrow">{{ model.brand.name }}</span>
+              <h3 class="card-ui__title"><a class="card-ui__link" href="{% url 'firmwares:model_detail' brand_slug=model.brand.slug model_slug=model.slug %}">{{ model.display_name }}</a></h3>
+              <p class="card-ui__text">{% if model.model_code %}<span class="model-code">{{ model.model_code }}</span>{% endif %}{% if model.codename %}{% if model.model_code %} · {% endif %}{{ model.codename }}{% endif %}</p>
+            </div>
+          </article>
         {% endfor %}
       </div>
     {% else %}
-      <p class="empty-state p-4 mb-0">Device profiles will appear here as they are added to the catalogue.</p>
+      <div class="empty-ui empty-state" role="status">
+        <span class="empty-ui__icon"><i data-lucide="smartphone" aria-hidden="true"></i></span>
+        <p class="empty-ui__title">Device profiles will appear here as they are added to the catalogue.</p>
+      </div>
     {% endif %}
   </section>
 
   {% if home_widgets %}
-    <section class="pb-5" aria-labelledby="home-widgets-title">
-      <p class="section-eyebrow mb-2">What is new</p>
-      <h2 id="home-widgets-title" class="h3 mb-0">Fresh from the library</h2>
+    <section class="home-section" aria-labelledby="home-widgets-title">
+      <div class="section-ui">
+        <div>
+          <p class="section-eyebrow mb-1">What is new</p>
+          <h2 id="home-widgets-title" class="section-ui__title">Fresh from the library</h2>
+        </div>
+      </div>
       {% include "pages/partials/home_widgets.html" with latest_firmwares=home_widgets.firmwares latest_posts=home_widgets.posts latest_tools=home_widgets.tools %}
     </section>
   {% endif %}
 
   {% if ecosystem.shop or ecosystem.marketplace or ecosystem.pages %}
-    <section class="pb-5" aria-labelledby="home-more-title">
-      <p class="section-eyebrow mb-2">More from {{ site_name|default:"Mobofirm" }}</p>
-      <h2 id="home-more-title" class="h3 mb-3">Packages, marketplace and help</h2>
-      <div class="row g-3">
+    <section class="home-section" aria-labelledby="home-more-title">
+      <div class="section-ui">
+        <div>
+          <p class="section-eyebrow mb-1">More from {{ site_name|default:"Mobofirm" }}</p>
+          <h2 id="home-more-title" class="section-ui__title">Packages, marketplace and help</h2>
+        </div>
+      </div>
+      <div class="card-grid">
         {% if ecosystem.shop %}
-          <div class="col-12 col-md-4"><a class="surface-card surface-card--interactive eco-tile" href="{% url 'shop:pricing' %}"><span class="eco-tile__icon"><i data-lucide="package" aria-hidden="true"></i></span><span class="fw-semibold">Download packages</span><span class="small muted">Compare download allowances. Orders are confirmed by our team.</span></a></div>
+          <a class="card-ui card-ui--feature" href="{% url 'shop:pricing' %}"><span class="home-feature__icon" aria-hidden="true"><i data-lucide="package"></i></span><span class="card-ui__title">Download packages</span><span class="card-ui__text">Compare download allowances. Orders are confirmed by our team.</span></a>
         {% endif %}
         {% if ecosystem.marketplace %}
-          <div class="col-12 col-md-4"><a class="surface-card surface-card--interactive eco-tile" href="{% url 'marketplace:listing_browse' %}"><span class="eco-tile__icon"><i data-lucide="store" aria-hidden="true"></i></span><span class="fw-semibold">Marketplace</span><span class="small muted">Listings from verified sellers, reviewed by staff.</span></a></div>
+          <a class="card-ui card-ui--feature" href="{% url 'marketplace:listing_browse' %}"><span class="home-feature__icon" aria-hidden="true"><i data-lucide="store"></i></span><span class="card-ui__title">Marketplace</span><span class="card-ui__text">Listings from verified sellers, reviewed by staff.</span></a>
         {% endif %}
         {% if ecosystem.pages %}
-          <div class="col-12 col-md-4"><a class="surface-card surface-card--interactive eco-tile" href="{% url 'pages:index' %}"><span class="eco-tile__icon"><i data-lucide="book-open" aria-hidden="true"></i></span><span class="fw-semibold">Help and information</span><span class="small muted">How to flash, FAQ, and how firmware is reviewed.</span></a></div>
+          <a class="card-ui card-ui--feature" href="{% url 'pages:index' %}"><span class="home-feature__icon" aria-hidden="true"><i data-lucide="book-open"></i></span><span class="card-ui__title">Help and information</span><span class="card-ui__text">How to flash, FAQ, and how firmware is reviewed.</span></a>
         {% endif %}
       </div>
     </section>
   {% endif %}
+
+  <section class="home-cta" aria-labelledby="home-cta-title">
+    <div>
+      <h2 id="home-cta-title" class="home-cta__title">Missing a device or a firmware?</h2>
+      <p class="home-cta__text">Ask for a brand, model or build to be added, or share a file for review. Every submission is checked by a reviewer and you are notified of the decision.</p>
+    </div>
+    <div class="home-cta__actions">
+      <a class="btn btn-primary btn-lg" href="{% url 'firmwares:requests_hub' %}"><i data-lucide="plus" aria-hidden="true"></i><span class="ms-2">Request it</span></a>
+      <a class="btn btn-outline-secondary btn-lg" href="{% url 'firmwares:upload' %}"><i data-lucide="upload" aria-hidden="true"></i><span class="ms-2">Upload firmware</span></a>
+    </div>
+  </section>
 </div>
 {% endblock %}

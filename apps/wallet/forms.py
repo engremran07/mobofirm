@@ -32,6 +32,22 @@ class PayoutForm(forms.Form):
 
 
 class LedgerFilterForm(forms.Form):
+    """Filters of the credit history: free text, direction and reason."""
+
+    q = forms.CharField(
+        label="Search history",
+        required=False,
+        max_length=100,
+        widget=forms.TextInput(
+            attrs={
+                "type": "search",
+                "placeholder": "Note, reference or reason",
+                "autocomplete": "off",
+                "enterkeyhint": "search",
+                "data-live-search": "",
+            }
+        ),
+    )
     direction = forms.ChoiceField(
         label="Type",
         required=False,

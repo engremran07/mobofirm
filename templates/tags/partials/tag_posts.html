@@ -6,5 +6,5 @@
   </div>
   {% include "components/pagination.html" with page_obj=page_obj label="Article pages" hx_target="#tag-posts" %}
 {% else %}
-  {% include "components/empty_state.html" with title="No published articles yet" message="Articles using this topic appear here once published." %}
+  {% include "components/empty_ui.html" with icon="newspaper" title="No published articles yet" message="Articles using this topic appear here once published." %}
 {% endif %}

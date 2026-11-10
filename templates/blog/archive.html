@@ -25,7 +25,7 @@
         </div>
         {% include "components/pagination.html" with page_obj=page_obj label="Archive pages" %}
       {% else %}
-        {% include "components/empty_state.html" with title="Nothing published in this period" action_label="Back to the journal" action_url=journal_url %}
+        {% include "components/empty_ui.html" with icon="newspaper" title="Nothing published in this period" action_label="Back to the journal" action_url=journal_url %}
       {% endif %}
     </div>
     {% include "blog/partials/sidebar.html" %}

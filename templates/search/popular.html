@@ -1,0 +1,20 @@
+{# Popular blocks (see apps/core/templatetags/search_tags.py). Context: blocks [{kind, title, icon, hits}], heading. #}
+{% if blocks %}
+  <section class="popular-blocks" aria-label="{{ heading|default:'Popular right now' }}" data-popular-blocks>
+    {% if heading %}<h2 class="popular-blocks__heading"><i data-lucide="trending-up" aria-hidden="true"></i>{{ heading }}</h2>{% endif %}
+    <div class="popular-blocks__grid{% if stack %} is-stacked{% endif %}">
+      {% for block in blocks %}
+        <section class="popular-block" aria-labelledby="popular-{{ block.kind }}-title" data-popular-kind="{{ block.kind }}">
+          <h3 id="popular-{{ block.kind }}-title" class="popular-block__title"><span class="popular-block__icon" aria-hidden="true"><i data-lucide="{{ block.icon }}"></i></span>{{ block.title }}</h3>
+          <ol class="popular-list">
+            {% for hit in block.hits %}
+              {% if hit.url|slice:":1" == "/" and hit.url|slice:":2" != "//" %}
+                <li><a class="popular-list__link" href="{{ hit.url }}"><span class="popular-list__rank" aria-hidden="true">{{ forloop.counter }}</span><span class="popular-list__text"><span class="popular-list__title">{{ hit.title }}</span>{% if hit.subtitle %}<span class="popular-list__sub">{{ hit.subtitle }}</span>{% endif %}</span></a></li>
+              {% endif %}
+            {% endfor %}
+          </ol>
+        </section>
+      {% endfor %}
+    </div>
+  </section>
+{% endif %}

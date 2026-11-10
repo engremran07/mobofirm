@@ -21,9 +21,13 @@ from apps.comments.models import (
     CommentVote,
 )
 from apps.comments.services.moderation import ModerationResult, assess_comment
+from apps.core.editor import sanitize_rich_text, text_length, text_with_links
 from apps.core.utils.logging import log_event
 
 logger = logging.getLogger(__name__)
+
+# Markup overhead is allowed on top of the visible-text limit (the stored value is HTML).
+COMMENT_STORED_MAX_LENGTH = COMMENT_MAX_LENGTH * 4
 
 MAX_THREAD_DEPTH = 3
 EDIT_WINDOW = timedelta(hours=24)
@@ -49,12 +53,14 @@ class SubmissionResult:
 
 
 def clean_body(body: str) -> str:
-    text = (body or "").strip()
-    if len(text) < COMMENT_MIN_LENGTH:
+    """Sanitise the submitted HTML with the comment editor profile and check length."""
+    text = sanitize_rich_text(body, "comment", paragraphs=True)
+    visible = text_length(text)
+    if visible < COMMENT_MIN_LENGTH:
         raise ValidationError(
             f"Comments need at least {COMMENT_MIN_LENGTH} characters."
         )
-    if len(text) > COMMENT_MAX_LENGTH:
+    if visible > COMMENT_MAX_LENGTH or len(text) > COMMENT_STORED_MAX_LENGTH:
         raise ValidationError(
             f"Comments are limited to {COMMENT_MAX_LENGTH} characters."
         )
@@ -101,7 +107,9 @@ def _assess(user, body: str, *, exclude_pk: int | None = None) -> ModerationResu
     if exclude_pk:
         recent = recent.exclude(pk=exclude_pk)
     result = assess_comment(
-        body, max_links=config.max_links, duplicate_of_recent=recent.exists()
+        text_with_links(body),
+        max_links=config.max_links,
+        duplicate_of_recent=recent.exists(),
     )
     if result.label == "approved" and not config.auto_approve_clean:
         return ModerationResult("pending", result.score, ("auto-approval is off",))

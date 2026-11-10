@@ -36,12 +36,8 @@ PROFILE_COMPLETION_URL_NAME: Final[str] = "users:tell_us_about_you"
 
 def profile_interests(user: CustomUser) -> list[str]:
     """Return the interests stored on the user's profile."""
-    links = (
-        Profile.objects.filter(user=user).values_list("social_links", flat=True).first()
-    )
-    if not isinstance(links, dict):
-        return []
-    interests = links.get("interests")
+    profile = Profile.objects.filter(user=user).first()
+    interests = profile.social_links_data.get("interests") if profile else None
     if not isinstance(interests, list):
         return []
     return [str(item) for item in interests if item]

@@ -38,7 +38,9 @@ decision. `scripts/app_imports.py` prints the current graph as JSON.
 | Public firmware queryset | `firmwares.catalog` | pages, marketplace, storage, shop, users |
 | SafeFetcher | `seo.fetcher` | distribution |
 | Event bus (`shop.order_paid`, `contribution.approved`, ...) | `core.events` | marketplace, referral, gamification, bounty, promotions |
+| `search_queryset`, `search_querysets`, `search_items`, `list_search_context`, `did_you_mean`, `popular_entries`, `search` (unified engine; apps contribute `search_providers.py`) | `core.search` | firmwares, blog, tags, marketplace, wallet, users, pages |
 | Search providers (`search_providers.py`) | each app, registered with `core.search` | core search |
+| `RichTextFormMixin`, `RichTextField`, `RichTextAdminMixin`, `sanitize_rich_text`, `sanitize_stored_html`, `render_rich_text`, `video_embed_options` (rich-text editor library; profile overrides plug in with `register_profile_source`) | `core.editor` | blog, comments, pages, marketplace, promotions, users, site_settings |
 
 ## Known exceptions in the baseline
 
@@ -50,7 +52,9 @@ These existed before the rule and are listed so they stay visible:
 - `core` imports `models` of `ads`, `blog`, `comments`, `devices`, `firmwares` and
   `users` for the cleanup command, the admin dashboard and the seed orchestrator.
 - `users->devices`, `users->firmwares`, `users->wallet` for the account pages and the
-  Device and My files views.
+  Device and My files views. `users->firmwares` includes `access` (the My files
+  Active/History tabs read `served_statuses`, the one place that applies the download
+  lifetime rules).
 
 Reducing these (events or contracts instead of model imports) is welcome and never
 needs a baseline change.

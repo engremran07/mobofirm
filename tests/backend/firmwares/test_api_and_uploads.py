@@ -449,7 +449,12 @@ class CreationRequestApiTests(StorageTestCase):
         )
         variants_response = self.api.post(
             reverse("firmwares:variant-requests-list"),
-            {"brand": brand.pk, "model": model.pk, "name": "Requested Variant"},
+            {
+                "brand": brand.pk,
+                "model": model.pk,
+                "name": "Requested Variant",
+                "region": "EU",
+            },
             format="json",
         )
         listing = self.api.get(reverse("firmwares:model-requests-list"))

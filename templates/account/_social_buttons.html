@@ -1,0 +1,21 @@
+{% load users_ui %}
+{# Social sign-in buttons for the login and sign-up pages. Every supported provider is always listed: a configured one starts its OAuth flow (CSRF-protected POST), an unconfigured one opens an app-owned dialog and submits nothing. Configured-state comes only from apps.users.services.social_providers. #}
+{% social_providers as providers %}
+{% if providers %}
+  <div class="auth-divider" role="separator"><span>or</span></div>
+  <div class="auth-social" data-social-providers>
+    {% for provider in providers %}
+      {% if provider.configured %}
+        <form method="post" action="{{ provider.login_url }}" class="auth-social__form" data-social-provider="{{ provider.id }}" data-configured="true">
+          {% csrf_token %}
+          <button class="btn btn-outline-secondary btn-lg w-100" type="submit"><i data-lucide="{{ provider.icon }}" aria-hidden="true"></i><span class="ms-2">{{ provider.label }}</span></button>
+        </form>
+      {% else %}
+        {% with dialog_id="social-unavailable-"|add:provider.id %}
+          <button class="btn btn-outline-secondary btn-lg w-100" type="button" data-social-provider="{{ provider.id }}" data-configured="false" data-dialog-open="{{ dialog_id }}" aria-haspopup="dialog"><i data-lucide="{{ provider.icon }}" aria-hidden="true"></i><span class="ms-2">{{ provider.label }}</span></button>
+          {% include "account/_social_unavailable.html" with dialog_id=dialog_id dialog_title="Sign-in not available" dialog_message=provider.unavailable_message cancel_label="Close" %}
+        {% endwith %}
+      {% endif %}
+    {% endfor %}
+  </div>
+{% endif %}

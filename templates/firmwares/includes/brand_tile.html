@@ -1,0 +1,9 @@
+{# Contract: brand (name, slug, logo_url; model_count / firmware_count optional). A brand logo tile card used by the brand list, home and search fragments. #}
+<article class="card-ui card-ui--tile card-ui--brand-tile">
+  <span class="logo-tile" aria-hidden="true">{% if brand.logo_url|slice:":1" == "/" %}<img src="{{ brand.logo_url }}" alt="" width="52" height="52" loading="lazy">{% else %}{{ brand.name|slice:":1"|upper }}{% endif %}</span>
+  <div class="cat-tile__body">
+    <h3 class="card-ui__title"><a class="card-ui__link" href="{% url 'firmwares:brand_detail' slug=brand.slug %}">{{ brand.name }}</a></h3>
+    <p class="card-ui__text">{{ brand.model_count|default:0 }} model{{ brand.model_count|default:0|pluralize }}{% if brand.firmware_count is not None %} · {{ brand.firmware_count }} firmware{% endif %}</p>
+  </div>
+  <i class="icon cat-tile__go" data-lucide="chevron-right" aria-hidden="true"></i>
+</article>

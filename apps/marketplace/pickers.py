@@ -5,9 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Final
 
-from django.db.models import Q
 from django.urls import reverse
 
+from apps.core.search import search
 from apps.firmwares.models import Brand, Chipset
 
 from .models import MAX_SPECIALITIES
@@ -56,22 +56,21 @@ def selected_options(kind: str, ids: list[int]) -> list[PickerOption]:
 
 
 def search_options(kind: str, query: str, exclude: list[int]) -> list[PickerOption]:
-    query = query.strip()[:MAX_QUERY_LENGTH]
-    if kind == "brands":
-        brands = Brand.objects.exclude(pk__in=exclude)
-        if query:
-            brands = brands.filter(name__icontains=query)
-        else:
-            brands = brands.order_by("-is_featured", "name")
-        return [_brand_option(b) for b in brands[:RESULT_LIMIT]]
-    chipsets = Chipset.objects.exclude(pk__in=exclude)
-    if query:
-        chipsets = chipsets.filter(
-            Q(name__icontains=query)
-            | Q(vendor__icontains=query)
-            | Q(family__icontains=query)
+    """Brand or chipset suggestions from the central engine, minus the selected."""
+    hits = search(
+        query.strip()[:MAX_QUERY_LENGTH],
+        kinds=(PICKER_LABELS[kind][1],),
+        limit=RESULT_LIMIT + len(exclude),
+    )
+    excluded = {str(pk) for pk in exclude}
+    options = [
+        PickerOption(
+            int(hit.value), hit.label, "" if kind == "brands" else hit.subtitle
         )
-    return [_chipset_option(c) for c in chipsets[:RESULT_LIMIT]]
+        for hit in hits
+        if hit.value not in excluded
+    ]
+    return options[:RESULT_LIMIT]
 
 
 def picker_context(

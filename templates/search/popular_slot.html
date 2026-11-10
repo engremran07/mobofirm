@@ -1,0 +1,2 @@
+{# Context: url. HTMX replaces this element with the popular blocks (or nothing) once the page has loaded. #}
+<div class="popular-slot" data-popular-slot hx-get="{{ url }}" hx-trigger="load" hx-swap="outerHTML"></div>

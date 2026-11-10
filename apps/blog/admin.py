@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any, ClassVar
 
 from django import forms
@@ -11,11 +11,14 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import QuerySet
 from django.forms import ModelForm
 from django.http import Http404, HttpRequest, HttpResponse
+from django.urls import reverse
 from django.utils import timezone
+from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
 from unfold.contrib.filters.admin import (
     BooleanRadioFilter,
     ChoicesDropdownFilter,
+    DropdownFilter,
     RangeDateTimeFilter,
     RelatedDropdownFilter,
 )
@@ -38,8 +41,10 @@ from apps.core.admin_base import (
     htmx_redirect,
     return_url,
 )
+from apps.core.editor.admin import RichTextAdminMixin
+from apps.core.editor.sanitizer import render_rich_text
 
-from . import guide_requests, shop_gateway
+from . import freshness, guide_requests, shop_gateway
 from .models import (
     AutoTopic,
     BlogSettings,
@@ -64,6 +69,7 @@ BADGE_POST_STATUS: dict[str, str] = {
     PostStatus.ARCHIVED: "danger",
 }
 BADGE_SOURCE: dict[str, str] = {"automated": "info", "manual": "success"}
+BADGE_FRESHNESS: dict[str, str] = {"stale": "warning", "fresh": "success", "idle": "info"}
 
 
 class ScheduleForm(ConfirmForm):
@@ -96,6 +102,30 @@ class PostRevisionInline(TabularInline):
         return False
 
 
+class FreshnessFilter(DropdownFilter):
+    """Editors' content-freshness filter driven by ``BlogSettings.stale_after_days``."""
+
+    title = _("freshness")
+    parameter_name = "freshness"
+
+    def lookups(
+        self, request: HttpRequest, model_admin: admin.ModelAdmin
+    ) -> list[tuple[str, str]]:
+        days = freshness.stale_after_days()
+        return [
+            ("stale", str(_("Stale (not updated for %(days)s days)")) % {"days": days}),
+            ("fresh", str(_("Not stale"))),
+        ]
+
+    def queryset(self, request: HttpRequest, queryset: QuerySet[Post]) -> QuerySet[Post]:
+        value = self.value()
+        if value == "stale":
+            return freshness.stale_posts(queryset)
+        if value == "fresh":
+            return queryset.exclude(pk__in=freshness.stale_posts(queryset).values("pk"))
+        return queryset
+
+
 @admin.register(Category)
 class CategoryAdmin(ModelAdmin):
     list_display = ("name", "parent", "slug")
@@ -105,7 +135,8 @@ class CategoryAdmin(ModelAdmin):
 
 
 @admin.register(Post)
-class PostAdmin(ModelAdmin):
+class PostAdmin(RichTextAdminMixin, ModelAdmin):
+    rich_text_fields: ClassVar[Mapping[str, str]] = {"body": "blog_post"}
     list_display = (
         "title",
         "status_badge",
@@ -118,9 +149,12 @@ class PostAdmin(ModelAdmin):
         "allow_comments",
         "noindex",
         "published_at",
+        "views_count",
         "updated_at",
+        "freshness_badge",
     )
     list_filter = (
+        FreshnessFilter,
         ("status", ChoicesDropdownFilter),
         ("access", ChoicesDropdownFilter),
         ("category", RelatedDropdownFilter),
@@ -259,6 +293,16 @@ class PostAdmin(ModelAdmin):
     @display(description=_("Status"), ordering="status", label=BADGE_POST_STATUS)
     def status_badge(self, obj: Post) -> tuple[str, str]:
         return obj.status, obj.get_status_display()
+
+    @display(description=_("Freshness"), ordering="updated_at", label=BADGE_FRESHNESS)
+    def freshness_badge(self, obj: Post) -> tuple[str, str]:
+        """Stale live posts are flagged with how long ago they were last updated."""
+        if not obj.is_live:
+            return "idle", "—"
+        if freshness.is_stale(obj):
+            days = freshness.days_since_update(obj)
+            return "stale", str(_("Stale · %(days)s days")) % {"days": days}
+        return "fresh", str(_("Fresh"))
 
     @display(description=_("Source"), ordering="is_ai_generated", label=BADGE_SOURCE)
     def content_source(self, obj: Post) -> tuple[str, str]:
@@ -464,6 +508,7 @@ class BlogSettingsAdmin(SingletonModelAdmin):
         (None, {"fields": ("enable_blog", "enable_blog_comments")}),
         (_("User posting"), {"fields": ("allow_user_blog_posts",)}),
         (_("Featured and paid articles"), {"fields": ("teaser_words",)}),
+        (_("Content freshness"), {"fields": ("stale_after_days",)}),
         (
             _("Guide requests"),
             {
@@ -498,23 +543,42 @@ class GuideRequestAdmin(NoAddModelAdmin):
         ("kind", ChoicesDropdownFilter),
         ("created_at", RangeDateTimeFilter),
     )
-    search_fields = ("title", "description", "requester__username", "requester__email")
+    search_fields = (
+        "title",
+        "description",
+        "tried",
+        "model_code",
+        "variant_code",
+        "requester__username",
+        "requester__email",
+    )
     list_select_related = (
         "requester",
         "brand",
         "firmware_model",
+        "variant",
         "chipset",
+        "related_post",
         "reviewed_by",
     )
     ordering = ("status", "-created_at")
     readonly_fields = (
         "requester",
         "title",
-        "description",
+        "tried_text",
+        "expected_outcome",
+        "bounty_offer",
+        "description_text",
         "kind",
         "brand",
         "firmware_model",
+        "model_code",
+        "variant",
+        "variant_code",
         "chipset",
+        "search_keywords",
+        "related_article",
+        "follower_total",
         "status",
         "reviewed_by",
         "reviewed_at",
@@ -525,8 +589,34 @@ class GuideRequestAdmin(NoAddModelAdmin):
         "updated_at",
     )
     fieldsets = (
-        (None, {"fields": ("title", "kind", "description", "requester")}),
-        (_("Device"), {"fields": ("brand", "firmware_model", "chipset")}),
+        (None, {"fields": ("title", "kind", "requester")}),
+        (
+            _("What the requester tried"),
+            {
+                "fields": (
+                    "tried_text",
+                    "expected_outcome",
+                    "bounty_offer",
+                    "description_text",
+                )
+            },
+        ),
+        (
+            _("Device and article"),
+            {
+                "fields": (
+                    "brand",
+                    "firmware_model",
+                    "model_code",
+                    "variant",
+                    "variant_code",
+                    "chipset",
+                    "search_keywords",
+                    "related_article",
+                    "follower_total",
+                )
+            },
+        ),
         (
             _("Decision"),
             {
@@ -549,15 +639,42 @@ class GuideRequestAdmin(NoAddModelAdmin):
     def has_delete_permission(
         self, request: HttpRequest, obj: GuideRequest | None = None
     ) -> bool:
+        """Requests are never deleted: they are cancelled or rejected."""
         return False
 
     @display(description=_("Status"), ordering="status", label=BADGE_APPROVAL)
     def status_badge(self, obj: GuideRequest) -> tuple[str, str]:
+        """Status as a coloured badge."""
         return obj.status, obj.get_status_display()
 
     @display(description=_("Device"))
     def context(self, obj: GuideRequest) -> str:
+        """Brand, model, variant and chipset the request is about."""
         return obj.label or "—"
+
+    @display(description=_("Article that did not help"))
+    def related_article(self, obj: GuideRequest) -> str:
+        """Link to the article the requester says did not resolve the issue."""
+        post = obj.related_post
+        if post is None:
+            return "—"
+        url = reverse("admin:blog_post_change", args=[post.pk])
+        return format_html('<a href="{}">{}</a>', url, post.title)
+
+    @display(description=_("What the requester tried"))
+    def tried_text(self, obj: GuideRequest) -> str:
+        """The requester's formatted text, re-sanitised for display."""
+        return render_rich_text(obj.tried) or "—"
+
+    @display(description=_("Extra details"))
+    def description_text(self, obj: GuideRequest) -> str:
+        """The requester's optional formatted details, re-sanitised for display."""
+        return render_rich_text(obj.description) or "—"
+
+    @display(description=_("Followers"))
+    def follower_total(self, obj: GuideRequest) -> int:
+        """Members who also need this answer."""
+        return obj.followers.count()
 
     def _decide(
         self,
@@ -582,6 +699,7 @@ class GuideRequestAdmin(NoAddModelAdmin):
     def approve_selected(
         self, request: HttpRequest, queryset: QuerySet[GuideRequest]
     ) -> None:
+        """Approve every pending request in the selection."""
         done = skipped = 0
         for item in queryset.filter(status=GuideRequest.Status.PENDING):
             try:
@@ -600,7 +718,8 @@ class GuideRequestAdmin(NoAddModelAdmin):
         dialog=confirm_dialog(
             _("Approve this request?"),
             _(
-                "It becomes public and can carry credit bounties. The requester is notified."
+                "It becomes public and can carry credit bounties. "
+                "The requester is notified."
             ),
             submit=_("Approve"),
         ),
@@ -608,6 +727,7 @@ class GuideRequestAdmin(NoAddModelAdmin):
     def approve_request(
         self, request: HttpRequest, _form: ConfirmForm, object_id: str
     ) -> HttpResponse:
+        """Approve the request through the service (idempotent, notifies)."""
         return self._decide(
             request,
             object_id,
@@ -630,6 +750,7 @@ class GuideRequestAdmin(NoAddModelAdmin):
     def reject_request(
         self, request: HttpRequest, form: ReasonForm, object_id: str
     ) -> HttpResponse:
+        """Reject the request with the reason the requester will read."""
         reason = str(form.cleaned_data.get("reason", ""))
         return self._decide(
             request,
@@ -680,7 +801,8 @@ class AutoTopicAdmin(ModelAdmin):
 
 
 @admin.register(PostTranslation)
-class PostTranslationAdmin(ModelAdmin):
+class PostTranslationAdmin(RichTextAdminMixin, ModelAdmin):
+    rich_text_fields: ClassVar[Mapping[str, str]] = {"body": "blog_post"}
     list_display = ("post", "language", "title")
     list_filter = ("language",)
     search_fields = ("title", "summary", "post__title")

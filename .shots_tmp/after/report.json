@@ -1,0 +1,544 @@
+{
+ "home-360-light": {
+  "h1": "Find the right firmware for your device.",
+  "fs": "26.4px",
+  "lh": "29.568px",
+  "h1h": 89,
+  "over": -10,
+  "height": 5220,
+  "off": [
+   "SPAN.home-hero__glow home-hero__glow--a",
+   "SPAN.home-hero__glow home-hero__glow--b"
+  ]
+ },
+ "firmwares-360-light": {
+  "h1": "Find the right firmware for your device.",
+  "fs": "26.4px",
+  "lh": "29.568px",
+  "h1h": 89,
+  "over": -10,
+  "height": 5220,
+  "off": [
+   "SPAN.home-hero__glow home-hero__glow--a",
+   "SPAN.home-hero__glow home-hero__glow--b"
+  ]
+ },
+ "browse-360-light": {
+  "h1": "Firmware catalogue",
+  "fs": "30.4px",
+  "lh": "32.832px",
+  "h1h": 66,
+  "over": -10,
+  "height": 3288,
+  "off": []
+ },
+ "blog-360-light": {
+  "h1": "The Mobofirm journal",
+  "fs": "30.4px",
+  "lh": "32.832px",
+  "h1h": 66,
+  "over": -10,
+  "height": 7288,
+  "off": [
+   "SPAN.chip",
+   "INPUT.chip__input",
+   "LABEL.chip__label",
+   "SPAN.chip__count"
+  ]
+ },
+ "marketplace-360-light": {
+  "h1": "Listings from verified sellers",
+  "fs": "28px",
+  "lh": "31.36px",
+  "h1h": 63,
+  "over": -10,
+  "height": 1683,
+  "off": []
+ },
+ "shop-360-light": {
+  "h1": "Download packages",
+  "fs": "30.04px",
+  "lh": "33.6448px",
+  "h1h": 34,
+  "over": -10,
+  "height": 2112,
+  "off": []
+ },
+ "login-360-light": {
+  "h1": "Sign in",
+  "fs": "24.26px",
+  "lh": "30.325px",
+  "h1h": 30,
+  "over": -10,
+  "height": 1532,
+  "off": []
+ },
+ "home-768-light": {
+  "h1": "Find the right firmware for your device.",
+  "fs": "32.256px",
+  "lh": "36.1267px",
+  "h1h": 72,
+  "over": -10,
+  "height": 3933,
+  "off": [
+   "SPAN.home-hero__glow home-hero__glow--a"
+  ]
+ },
+ "firmwares-768-light": {
+  "h1": "Find the right firmware for your device.",
+  "fs": "32.256px",
+  "lh": "36.1267px",
+  "h1h": 72,
+  "over": -10,
+  "height": 3933,
+  "off": [
+   "SPAN.home-hero__glow home-hero__glow--a"
+  ]
+ },
+ "browse-768-light": {
+  "h1": "Firmware catalogue",
+  "fs": "38.56px",
+  "lh": "41.6448px",
+  "h1h": 42,
+  "over": -10,
+  "height": 2175,
+  "off": []
+ },
+ "blog-768-light": {
+  "h1": "The Mobofirm journal",
+  "fs": "38.56px",
+  "lh": "41.6448px",
+  "h1h": 42,
+  "over": -10,
+  "height": 4905,
+  "off": []
+ },
+ "marketplace-768-light": {
+  "h1": "Listings from verified sellers",
+  "fs": "30.72px",
+  "lh": "34.4064px",
+  "h1h": 34,
+  "over": -10,
+  "height": 1216,
+  "off": []
+ },
+ "shop-768-light": {
+  "h1": "Download packages",
+  "fs": "37.792px",
+  "lh": "42.327px",
+  "h1h": 42,
+  "over": -10,
+  "height": 1537,
+  "off": []
+ },
+ "login-768-light": {
+  "h1": "Sign in",
+  "fs": "28.544px",
+  "lh": "35.68px",
+  "h1h": 36,
+  "over": -10,
+  "height": 1304,
+  "off": []
+ },
+ "home-1280-light": {
+  "h1": "Find the right firmware for your device.",
+  "fs": "40px",
+  "lh": "44.8px",
+  "h1h": 90,
+  "over": -10,
+  "height": 3879,
+  "off": [
+   "SPAN.home-hero__glow home-hero__glow--a"
+  ]
+ },
+ "firmwares-1280-light": {
+  "h1": "Find the right firmware for your device.",
+  "fs": "40px",
+  "lh": "44.8px",
+  "h1h": 90,
+  "over": -10,
+  "height": 3879,
+  "off": [
+   "SPAN.home-hero__glow home-hero__glow--a"
+  ]
+ },
+ "browse-1280-light": {
+  "h1": "Firmware catalogue",
+  "fs": "48px",
+  "lh": "51.84px",
+  "h1h": 52,
+  "over": -10,
+  "height": 1950,
+  "off": []
+ },
+ "blog-1280-light": {
+  "h1": "The Mobofirm journal",
+  "fs": "48px",
+  "lh": "51.84px",
+  "h1h": 52,
+  "over": -10,
+  "height": 2906,
+  "off": []
+ },
+ "marketplace-1280-light": {
+  "h1": "Listings from verified sellers",
+  "fs": "40px",
+  "lh": "44.8px",
+  "h1h": 45,
+  "over": -10,
+  "height": 1329,
+  "off": []
+ },
+ "shop-1280-light": {
+  "h1": "Download packages",
+  "fs": "46.4px",
+  "lh": "51.968px",
+  "h1h": 52,
+  "over": -10,
+  "height": 1466,
+  "off": []
+ },
+ "login-1280-light": {
+  "h1": "Sign in",
+  "fs": "33.6px",
+  "lh": "42px",
+  "h1h": 42,
+  "over": -10,
+  "height": 1413,
+  "off": []
+ },
+ "home-1920-light": {
+  "h1": "Find the right firmware for your device.",
+  "fs": "40px",
+  "lh": "44.8px",
+  "h1h": 90,
+  "over": -10,
+  "height": 3945,
+  "off": []
+ },
+ "firmwares-1920-light": {
+  "h1": "Find the right firmware for your device.",
+  "fs": "40px",
+  "lh": "44.8px",
+  "h1h": 90,
+  "over": -10,
+  "height": 3945,
+  "off": []
+ },
+ "browse-1920-light": {
+  "h1": "Firmware catalogue",
+  "fs": "48px",
+  "lh": "51.84px",
+  "h1h": 52,
+  "over": -10,
+  "height": 1960,
+  "off": []
+ },
+ "blog-1920-light": {
+  "h1": "The Mobofirm journal",
+  "fs": "48px",
+  "lh": "51.84px",
+  "h1h": 52,
+  "over": -10,
+  "height": 2915,
+  "off": []
+ },
+ "marketplace-1920-light": {
+  "h1": "Listings from verified sellers",
+  "fs": "40px",
+  "lh": "44.8px",
+  "h1h": 45,
+  "over": -10,
+  "height": 1339,
+  "off": []
+ },
+ "shop-1920-light": {
+  "h1": "Download packages",
+  "fs": "46.4px",
+  "lh": "51.968px",
+  "h1h": 52,
+  "over": -10,
+  "height": 1476,
+  "off": []
+ },
+ "login-1920-light": {
+  "h1": "Sign in",
+  "fs": "33.6px",
+  "lh": "42px",
+  "h1h": 42,
+  "over": -10,
+  "height": 1431,
+  "off": []
+ },
+ "home-360-dark": {
+  "h1": "Find the right firmware for your device.",
+  "fs": "26.4px",
+  "lh": "29.568px",
+  "h1h": 89,
+  "over": -10,
+  "height": 5220,
+  "off": [
+   "SPAN.home-hero__glow home-hero__glow--a",
+   "SPAN.home-hero__glow home-hero__glow--b"
+  ]
+ },
+ "firmwares-360-dark": {
+  "h1": "Find the right firmware for your device.",
+  "fs": "26.4px",
+  "lh": "29.568px",
+  "h1h": 89,
+  "over": -10,
+  "height": 5220,
+  "off": [
+   "SPAN.home-hero__glow home-hero__glow--a",
+   "SPAN.home-hero__glow home-hero__glow--b"
+  ]
+ },
+ "browse-360-dark": {
+  "h1": "Firmware catalogue",
+  "fs": "30.4px",
+  "lh": "32.832px",
+  "h1h": 66,
+  "over": -10,
+  "height": 3288,
+  "off": []
+ },
+ "blog-360-dark": {
+  "h1": "The Mobofirm journal",
+  "fs": "30.4px",
+  "lh": "32.832px",
+  "h1h": 66,
+  "over": -10,
+  "height": 7288,
+  "off": [
+   "SPAN.chip",
+   "INPUT.chip__input",
+   "LABEL.chip__label",
+   "SPAN.chip__count"
+  ]
+ },
+ "marketplace-360-dark": {
+  "h1": "Listings from verified sellers",
+  "fs": "28px",
+  "lh": "31.36px",
+  "h1h": 63,
+  "over": -10,
+  "height": 1683,
+  "off": []
+ },
+ "shop-360-dark": {
+  "h1": "Download packages",
+  "fs": "30.04px",
+  "lh": "33.6448px",
+  "h1h": 34,
+  "over": -10,
+  "height": 2112,
+  "off": []
+ },
+ "login-360-dark": {
+  "h1": "Sign in",
+  "fs": "24.26px",
+  "lh": "30.325px",
+  "h1h": 30,
+  "over": -10,
+  "height": 1532,
+  "off": []
+ },
+ "home-768-dark": {
+  "h1": "Find the right firmware for your device.",
+  "fs": "32.256px",
+  "lh": "36.1267px",
+  "h1h": 72,
+  "over": -10,
+  "height": 3933,
+  "off": [
+   "SPAN.home-hero__glow home-hero__glow--a"
+  ]
+ },
+ "firmwares-768-dark": {
+  "h1": "Find the right firmware for your device.",
+  "fs": "32.256px",
+  "lh": "36.1267px",
+  "h1h": 72,
+  "over": -10,
+  "height": 3933,
+  "off": [
+   "SPAN.home-hero__glow home-hero__glow--a"
+  ]
+ },
+ "browse-768-dark": {
+  "h1": "Firmware catalogue",
+  "fs": "38.56px",
+  "lh": "41.6448px",
+  "h1h": 42,
+  "over": -10,
+  "height": 2175,
+  "off": []
+ },
+ "blog-768-dark": {
+  "h1": "The Mobofirm journal",
+  "fs": "38.56px",
+  "lh": "41.6448px",
+  "h1h": 42,
+  "over": -10,
+  "height": 4905,
+  "off": []
+ },
+ "marketplace-768-dark": {
+  "h1": "Listings from verified sellers",
+  "fs": "30.72px",
+  "lh": "34.4064px",
+  "h1h": 34,
+  "over": -10,
+  "height": 1216,
+  "off": []
+ },
+ "shop-768-dark": {
+  "h1": "Download packages",
+  "fs": "37.792px",
+  "lh": "42.327px",
+  "h1h": 42,
+  "over": -10,
+  "height": 1537,
+  "off": []
+ },
+ "login-768-dark": {
+  "h1": "Sign in",
+  "fs": "28.544px",
+  "lh": "35.68px",
+  "h1h": 36,
+  "over": -10,
+  "height": 1304,
+  "off": []
+ },
+ "home-1280-dark": {
+  "h1": "Find the right firmware for your device.",
+  "fs": "40px",
+  "lh": "44.8px",
+  "h1h": 90,
+  "over": -10,
+  "height": 3879,
+  "off": [
+   "SPAN.home-hero__glow home-hero__glow--a"
+  ]
+ },
+ "firmwares-1280-dark": {
+  "h1": "Find the right firmware for your device.",
+  "fs": "40px",
+  "lh": "44.8px",
+  "h1h": 90,
+  "over": -10,
+  "height": 3879,
+  "off": [
+   "SPAN.home-hero__glow home-hero__glow--a"
+  ]
+ },
+ "browse-1280-dark": {
+  "h1": "Firmware catalogue",
+  "fs": "48px",
+  "lh": "51.84px",
+  "h1h": 52,
+  "over": -10,
+  "height": 1950,
+  "off": []
+ },
+ "blog-1280-dark": {
+  "h1": "The Mobofirm journal",
+  "fs": "48px",
+  "lh": "51.84px",
+  "h1h": 52,
+  "over": -10,
+  "height": 2906,
+  "off": []
+ },
+ "marketplace-1280-dark": {
+  "h1": "Listings from verified sellers",
+  "fs": "40px",
+  "lh": "44.8px",
+  "h1h": 45,
+  "over": -10,
+  "height": 1329,
+  "off": []
+ },
+ "shop-1280-dark": {
+  "h1": "Download packages",
+  "fs": "46.4px",
+  "lh": "51.968px",
+  "h1h": 52,
+  "over": -10,
+  "height": 1466,
+  "off": []
+ },
+ "login-1280-dark": {
+  "h1": "Sign in",
+  "fs": "33.6px",
+  "lh": "42px",
+  "h1h": 42,
+  "over": -10,
+  "height": 1413,
+  "off": []
+ },
+ "home-1920-dark": {
+  "h1": "Find the right firmware for your device.",
+  "fs": "40px",
+  "lh": "44.8px",
+  "h1h": 90,
+  "over": -10,
+  "height": 3945,
+  "off": []
+ },
+ "firmwares-1920-dark": {
+  "h1": "Find the right firmware for your device.",
+  "fs": "40px",
+  "lh": "44.8px",
+  "h1h": 90,
+  "over": -10,
+  "height": 3945,
+  "off": []
+ },
+ "browse-1920-dark": {
+  "h1": "Firmware catalogue",
+  "fs": "48px",
+  "lh": "51.84px",
+  "h1h": 52,
+  "over": -10,
+  "height": 1960,
+  "off": []
+ },
+ "blog-1920-dark": {
+  "h1": "The Mobofirm journal",
+  "fs": "48px",
+  "lh": "51.84px",
+  "h1h": 52,
+  "over": -10,
+  "height": 2915,
+  "off": []
+ },
+ "marketplace-1920-dark": {
+  "h1": "Listings from verified sellers",
+  "fs": "40px",
+  "lh": "44.8px",
+  "h1h": 45,
+  "over": -10,
+  "height": 1339,
+  "off": []
+ },
+ "shop-1920-dark": {
+  "h1": "Download packages",
+  "fs": "46.4px",
+  "lh": "51.968px",
+  "h1h": 52,
+  "over": -10,
+  "height": 1476,
+  "off": []
+ },
+ "login-1920-dark": {
+  "h1": "Sign in",
+  "fs": "33.6px",
+  "lh": "42px",
+  "h1h": 42,
+  "over": -10,
+  "height": 1431,
+  "off": []
+ }
+}

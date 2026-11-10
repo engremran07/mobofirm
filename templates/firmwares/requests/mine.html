@@ -2,35 +2,40 @@
 {% block title %}My requests | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block content %}
 {% url 'firmwares:requests_hub' as hub_url %}
-<div class="site-container py-5">
+<div class="site-container cat-page">
   {% include "components/breadcrumbs.html" with current="My requests" parent_label="Requests" parent_url=hub_url %}
   {% include "components/page_header.html" with eyebrow="Requests" title="My requests" lead="Everything you asked for, with the reviewer’s decision and reason." %}
   {% if not mine.total %}
-    {% include "components/empty_state.html" with title="You have not sent any requests yet" message="Ask for a missing brand, model, variant, chipset or firmware." action_label="Make a request" action_url=hub_url %}
+    <div class="empty-ui empty-state" role="status">
+      <span class="empty-ui__icon"><i data-lucide="send" aria-hidden="true"></i></span>
+      <p class="empty-ui__title">You have not sent any requests yet</p>
+      <p class="mb-0">Ask for a missing brand, model, variant, chipset or firmware.</p>
+      <a class="btn btn-primary mt-2" href="{{ hub_url }}">Make a request</a>
+    </div>
   {% endif %}
 
   {% if mine.brands %}
-    <section class="mb-4" aria-labelledby="mine-brands"><h2 id="mine-brands" class="h5">Brands</h2>
+    <section class="cat-section" aria-labelledby="mine-brands"><h2 id="mine-brands" class="cat-section__title mb-3">Brands</h2>
       {% include "firmwares/requests/_mine_table.html" with rows=mine.brands kind="brand" %}
     </section>
   {% endif %}
   {% if mine.models %}
-    <section class="mb-4" aria-labelledby="mine-models"><h2 id="mine-models" class="h5">Models</h2>
+    <section class="cat-section" aria-labelledby="mine-models"><h2 id="mine-models" class="cat-section__title mb-3">Models</h2>
       {% include "firmwares/requests/_mine_table.html" with rows=mine.models kind="model" %}
     </section>
   {% endif %}
   {% if mine.variants %}
-    <section class="mb-4" aria-labelledby="mine-variants"><h2 id="mine-variants" class="h5">Variants</h2>
+    <section class="cat-section" aria-labelledby="mine-variants"><h2 id="mine-variants" class="cat-section__title mb-3">Variants</h2>
       {% include "firmwares/requests/_mine_table.html" with rows=mine.variants kind="variant" %}
     </section>
   {% endif %}
   {% if mine.chipsets %}
-    <section class="mb-4" aria-labelledby="mine-chipsets"><h2 id="mine-chipsets" class="h5">Chipsets</h2>
+    <section class="cat-section" aria-labelledby="mine-chipsets"><h2 id="mine-chipsets" class="cat-section__title mb-3">Chipsets</h2>
       {% include "firmwares/requests/_mine_table.html" with rows=mine.chipsets kind="chipset" %}
     </section>
   {% endif %}
   {% if mine.firmware %}
-    <section class="mb-4" aria-labelledby="mine-firmware"><h2 id="mine-firmware" class="h5">Firmware</h2>
+    <section class="cat-section" aria-labelledby="mine-firmware"><h2 id="mine-firmware" class="cat-section__title mb-3">Firmware</h2>
       {% include "firmwares/requests/_mine_table.html" with rows=mine.firmware kind="firmware" %}
     </section>
   {% endif %}

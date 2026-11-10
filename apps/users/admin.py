@@ -3,15 +3,18 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Mapping
 from datetime import timedelta
 from typing import Any, ClassVar
 
 from allauth.account.models import EmailAddress
+from allauth.socialaccount.adapter import get_adapter
 from allauth.socialaccount.admin import SocialAppAdmin as BaseSocialAppAdmin
 from allauth.socialaccount.models import SocialApp
 from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from django.core.exceptions import PermissionDenied
+from django.contrib.sites.models import Site
+from django.core.exceptions import ImproperlyConfigured, PermissionDenied
 from django.db import DatabaseError
 from django.db.models import QuerySet
 from django.http import HttpRequest, HttpResponse
@@ -19,7 +22,7 @@ from django.shortcuts import redirect
 from django.template.response import TemplateResponse
 from django.urls import URLPattern, path
 from django.utils import timezone
-from django.utils.html import format_html
+from django.utils.html import format_html, format_html_join
 from django.utils.translation import gettext_lazy as _
 from unfold.contrib.filters.admin import (
     ChoicesDropdownFilter,
@@ -37,6 +40,7 @@ from apps.core.admin_base import (
     action,
     display,
 )
+from apps.core.editor.admin import RichTextAdminMixin
 
 from .models import (
     Announcement,
@@ -51,6 +55,7 @@ from .models import (
 from .notification_stats import notification_dashboard_context
 from .profile_models import ActivityFeed, Following, Profile, Reputation
 from .request_user import current_user
+from .services.social_providers import credentials_complete
 
 logger = logging.getLogger(__name__)
 
@@ -353,7 +358,8 @@ class NotificationAdmin(ModelAdmin):
 
 
 @admin.register(Announcement)
-class AnnouncementAdmin(ModelAdmin):
+class AnnouncementAdmin(RichTextAdminMixin, ModelAdmin):
+    rich_text_fields: ClassVar[Mapping[str, str]] = {"message": "announcement"}
     list_display = (
         "title",
         "audience",
@@ -856,9 +862,26 @@ class PushSubscriptionAdmin(ModelAdmin):
 # --------------------------------------------------------------------------
 admin.site.unregister(SocialApp)
 
+# provider id -> (name, console URL, where to click) shown in the SocialApp admin.
+PROVIDER_GUIDES = {
+    "google": (
+        "Google",
+        "https://console.cloud.google.com/apis/credentials",
+        "Google Cloud Console → APIs & Services → Credentials → "
+        "Create credentials → OAuth client ID → Web application",
+    ),
+}
+
 
 @admin.register(SocialApp)
 class EnhancedSocialAppAdmin(BaseSocialAppAdmin, ModelAdmin):
+    """Admin-managed OAuth keys: the database path behind "Continue with Google".
+
+    A SocialApp row here (client id + secret + the site it serves) is read by
+    allauth exactly like the ``GOOGLE_OAUTH_*`` environment variables, so an admin
+    can switch a provider on without a deploy. See docs/04-backend/social-sign-in.md.
+    """
+
     list_display = ("name", "provider", "status_display", "sites_list")
     list_filter = ("provider",)
     search_fields = ("name", "provider", "client_id")
@@ -867,11 +890,14 @@ class EnhancedSocialAppAdmin(BaseSocialAppAdmin, ModelAdmin):
         (
             None,
             {
-                "fields": ("provider", "name"),
+                "fields": ("provider", "name", "setup_guide"),
                 "description": _("Configure OAuth providers for social sign-in."),
             },
         ),
-        (_("OAuth credentials"), {"fields": ("client_id", "secret", "key")}),
+        (
+            _("OAuth credentials"),
+            {"fields": ("client_id", "secret", "key", "callback_url")},
+        ),
         (_("Configuration"), {"fields": ("sites", "settings")}),
     )
 
@@ -880,19 +906,111 @@ class EnhancedSocialAppAdmin(BaseSocialAppAdmin, ModelAdmin):
         label={"Configured": "success", "Placeholder": "warning"},
     )
     def status_display(self, obj: SocialApp) -> str:
-        if obj.client_id.startswith("your-") or len(obj.client_id) < 10:
-            return "Placeholder"
-        return "Configured"
+        if credentials_complete(obj.client_id, obj.secret):
+            return "Configured"
+        return "Placeholder"
 
     @display(description=_("Sites"))
     def sites_list(self, obj: SocialApp) -> str:
         domains = [site.domain for site in obj.sites.all()[:3]]
         return ", ".join(domains) or "No sites"
 
+    @staticmethod
+    def _site_domain() -> str:
+        try:
+            return Site.objects.get_current().domain
+        except (Site.DoesNotExist, ImproperlyConfigured, DatabaseError):
+            return "your-domain.example"
+
+    @display(description=_("Redirect URI to register"))
+    def callback_url(self, obj: SocialApp | None) -> str:
+        """The exact callback address the provider's console must list."""
+        provider = obj.provider if obj and obj.provider else "<provider>"
+        return f"https://{self._site_domain()}/accounts/{provider}/login/callback/"
+
+    @display(description=_("How to get the keys"))
+    def setup_guide(self, obj: SocialApp | None) -> str:
+        """Short in-admin instructions; the long form is the social sign-in guide."""
+        guides = [
+            guide
+            for provider, guide in PROVIDER_GUIDES.items()
+            if obj is None or not obj.provider or obj.provider == provider
+        ] or list(PROVIDER_GUIDES.values())
+        items = format_html_join(
+            "",
+            '<li><strong>{}</strong>: <a href="{}" target="_blank" '
+            'rel="noopener noreferrer">{}</a></li>',
+            guides,
+        )
+        return format_html(
+            "<p>Create an OAuth client with the provider, add the redirect URI "
+            "shown below under “OAuth credentials” to it, then paste the "
+            "Client ID and Secret here and select the site. Until a provider has "
+            "both keys, visitors see its sign-in button with a “not set up yet” "
+            "notice.</p><ul>{}</ul>",
+            items,
+        )
+
     def get_readonly_fields(
         self, request: HttpRequest, obj: SocialApp | None = None
     ) -> tuple[str, ...]:
-        return ("provider",) if obj else ()
+        extra = ("setup_guide", "callback_url")
+        return (*extra, "provider") if obj else extra
+
+    def get_changeform_initial_data(self, request: HttpRequest) -> dict[str, Any]:
+        """New apps start attached to the current site (the one SITE_ID names)."""
+        initial = super().get_changeform_initial_data(request)
+        try:
+            initial.setdefault("sites", [Site.objects.get_current().pk])
+        except (Site.DoesNotExist, ImproperlyConfigured, DatabaseError):
+            logger.warning("Current site is unavailable; sites left empty")
+        return initial
+
+    def save_related(
+        self, request: HttpRequest, form: Any, formsets: Any, change: bool
+    ) -> None:
+        """A provider only works for the sites it is attached to: never save none."""
+        super().save_related(request, form, formsets, change)
+        app = form.instance
+        if app.sites.exists():
+            return
+        try:
+            current = Site.objects.get_current()
+        except (Site.DoesNotExist, ImproperlyConfigured, DatabaseError):
+            self.message_user(
+                request,
+                _("Select at least one site, or the provider stays unavailable."),
+                messages.WARNING,
+            )
+            return
+        app.sites.add(current)
+        self.message_user(
+            request,
+            _("No site was selected, so %(domain)s was attached.")
+            % {"domain": current.domain},
+            messages.INFO,
+        )
+
+    def save_model(
+        self, request: HttpRequest, obj: SocialApp, form: Any, change: bool
+    ) -> None:
+        super().save_model(request, obj, form, change)
+        env_apps = [
+            app
+            for app in get_adapter().list_apps(None, provider=obj.provider)
+            if app.pk is None
+        ]
+        if env_apps:
+            self.message_user(
+                request,
+                _(
+                    "%(provider)s is also configured through environment "
+                    "variables. The admin-saved keys are used; remove the "
+                    "environment keys to avoid confusion."
+                )
+                % {"provider": obj.provider},
+                messages.WARNING,
+            )
 
 
 @admin.register(SecurityQuestion)

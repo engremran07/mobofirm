@@ -1,6 +1,7 @@
 {% extends "base.html" %}
-{% load ad_tags seo_tags %}
+{% load ad_tags seo_tags blog_requests content_tags share_tags %}
 {% block content %}
+<div class="read-progress" data-read-progress aria-hidden="true"><span class="read-progress__bar"></span></div>
 <article class="article-page">
   <div class="site-container py-4 py-lg-5">
     {% url 'blog:post_list' as journal_url %}
@@ -14,18 +15,17 @@
       <div class="alert alert-warning" role="status"><strong>Preview.</strong> This article is {{ post.get_status_display|lower }} and not visible to readers yet.</div>
     {% endif %}
     <header class="article-header">
-      <p class="section-eyebrow mb-2">{% if post.category %}{{ post.category.name }}{% else %}{{ card.kind }}{% endif %}{% if post.is_gated %} <span class="badge text-bg-warning ms-2">{{ post.get_access_display }}</span>{% endif %}</p>
+      <p class="article-eyebrow"><span class="section-eyebrow">{% if post.category %}{{ post.category.name }}{% else %}{{ card.kind }}{% endif %}</span>{% include "blog/partials/access_badge.html" with post=post %}</p>
       <h1 class="article-title">{{ post.title }}</h1>
       {% if post.summary %}<p class="article-dek">{{ post.summary }}</p>{% endif %}
-      {% if post.guide_request_id %}<p class="muted small" data-testid="solution-of">Solution to the request <a href="{{ post.guide_request.get_absolute_url }}">{{ post.guide_request.title }}</a>.</p>{% endif %}
+      {% if post.guide_request_id %}<p class="article-solution" data-testid="solution-of"><i data-lucide="circle-check" class="icon" aria-hidden="true"></i> Solution to the request <a href="{{ post.guide_request.get_absolute_url }}">{{ post.guide_request.title }}</a>.</p>{% endif %}
       <div class="article-meta">
         <span class="avatar avatar--sm avatar--v{{ card.variant }}" aria-hidden="true">{{ author_initials }}</span>
         <span class="article-meta__author">{{ card.author }}</span>
         {% if post.published_at %}<span aria-hidden="true">·</span><time datetime="{{ post.published_at|date:'c' }}">{{ post.published_at|date:"F j, Y" }}</time>{% endif %}
-        {% if post.updated_at and post.published_at and post.updated_at|date:"Ymd" != post.published_at|date:"Ymd" %}<span aria-hidden="true">·</span><span>Updated <time datetime="{{ post.updated_at|date:'c' }}">{{ post.updated_at|date:"M j, Y" }}</time></span>{% endif %}
-        <span aria-hidden="true">·</span><span><i data-lucide="clock" class="icon" aria-hidden="true"></i> {{ post.reading_time }} min read</span>
+        <span aria-hidden="true">·</span>{% content_stats post %}
         {% if comments_open %}<span aria-hidden="true">·</span><a href="#comments"><i data-lucide="message-circle" class="icon" aria-hidden="true"></i> {{ comment_count }} comment{{ comment_count|pluralize }}</a>{% endif %}
-        {% if can_edit %}<a class="btn btn-outline-secondary btn-sm ms-auto" href="{% url 'blog:post_create' %}?edit={{ post.slug }}"><i data-lucide="pencil" class="icon" aria-hidden="true"></i> Edit</a>{% endif %}
+        {% if can_edit %}<a class="btn btn-soft btn-sm ms-auto" href="{% url 'blog:post_create' %}?edit={{ post.slug }}"><i data-lucide="pencil" class="icon" aria-hidden="true"></i> Edit</a>{% endif %}
       </div>
     </header>
     {% if cover %}
@@ -42,16 +42,17 @@
           </details>
         {% endif %}
         {% if not gate.locked %}{% render_ad_slot "in-article-top" %}{% endif %}
-        <div class="article-body{% if gate.locked %} article-body--teaser{% endif %}">{{ article.html }}</div>
+        <div class="article-body{% if gate.locked %} article-body--teaser{% endif %}" data-article-body>{{ article.html }}</div>
         {% if gate.locked %}{% include "blog/partials/paywall.html" %}{% else %}{% render_ad_slot "in-article-mid" %}
         {% ad_zone "in_content" %}{% endif %}
         {% if show_inventory and not gate.locked %}{% include "blog/partials/firmware_inventory.html" %}{% endif %}
+        {% request_method_cta post %}
         {% if tags %}
           <ul class="tag-row" aria-label="Article tags">
             {% for tag in tags %}<li><a class="tag-pill" href="{% url 'tags:detail' slug=tag.slug %}"><i data-lucide="hash" class="icon" aria-hidden="true"></i>{{ tag.name }}</a></li>{% endfor %}
           </ul>
         {% endif %}
-        {% include "blog/partials/share.html" %}
+        {% if not is_preview %}{% share_widget share_url post.title text=post.summary heading="Share this article" copy_message="Article link copied." %}{% endif %}
         {% include "blog/partials/author_box.html" %}
         {% include "blog/partials/post_nav.html" %}
         {% if not gate.locked %}{% related_links post %}{% endif %}
@@ -67,13 +68,13 @@
       </div>
       <aside class="article-aside" aria-label="Article sidebar">
         {% ad_zone "sidebar" %}        {% if article.toc %}
-          <nav class="toc toc--sticky d-none d-lg-block" aria-label="Table of contents">
+          <nav class="toc toc--sticky d-none d-lg-block" aria-label="Table of contents" data-toc>
             <h2 class="toc__title"><i data-lucide="list" class="icon" aria-hidden="true"></i> In this article</h2>
             <ol class="toc__list">{% for entry in article.toc %}<li class="toc__item toc__item--h{{ entry.level }}"><a href="#{{ entry.anchor }}">{{ entry.text }}</a></li>{% endfor %}</ol>
           </nav>
         {% endif %}
         {% if firmware %}{% include "blog/partials/firmware_panel.html" %}{% endif %}
-        {% include "blog/partials/mini_list.html" with title="Latest" cards=latest heading_id="aside-latest-title" %}
+        {% include "blog/partials/mini_list.html" with title="Latest" cards=latest heading_id="aside-latest-title" icon="clock" %}
         {% include "blog/partials/tag_cloud.html" %}
       </aside>
     </div>

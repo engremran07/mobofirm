@@ -1,0 +1,377 @@
+@use "../abstracts" as *;
+
+// ---- Badges ----
+.badge-ui {
+  --badge-color: var(--mf-text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.18rem 0.6rem;
+  border: 1px solid color-mix(in srgb, var(--badge-color) 28%, transparent);
+  border-radius: var(--mf-radius-pill);
+  background: color-mix(in srgb, var(--badge-color) 12%, transparent);
+  color: var(--badge-color);
+  font-size: var(--mf-text-2xs);
+  font-weight: 720;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+  white-space: nowrap;
+
+  .icon,
+  [data-lucide] {
+    width: 0.95em;
+    height: 0.95em;
+  }
+}
+
+.badge-ui--free {
+  --badge-color: var(--mf-success);
+}
+
+.badge-ui--paid {
+  --badge-color: var(--mf-accent-strong);
+}
+
+:root[data-bs-theme="light"] .badge-ui--paid {
+  --badge-color: var(--mf-accent-cool);
+}
+
+.badge-ui--verified {
+  --badge-color: var(--mf-info);
+}
+
+.badge-ui--popular {
+  --badge-color: var(--mf-accent-warm);
+}
+
+:root[data-bs-theme="light"] .badge-ui--popular {
+  --badge-color: #a2492c;
+}
+
+.badge-ui--new {
+  --badge-color: var(--mf-accent);
+}
+
+.badge-ui--warning {
+  --badge-color: var(--mf-warning);
+}
+
+.badge-ui--danger {
+  --badge-color: var(--mf-danger);
+}
+
+.badge-ui--featured {
+  --badge-color: var(--mf-warning);
+  border-color: transparent;
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--mf-accent-warm) 24%, transparent),
+    color-mix(in srgb, var(--mf-accent) 18%, transparent)
+  );
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--mf-accent-warm) 35%, transparent);
+}
+
+// ---- Tabs (role=tablist; modules/ui.js adds roving focus) ----
+.tabs-ui {
+  display: flex;
+  gap: 0.25rem;
+  margin: 0 0 var(--mf-space-4);
+  padding: 0.25rem;
+  overflow-x: auto;
+  border: 1px solid var(--mf-border);
+  border-radius: var(--mf-radius-pill);
+  background: var(--mf-surface-soft);
+  scrollbar-width: none;
+
+  [role="tab"] {
+    flex: 0 0 auto;
+    padding: 0.45rem 1rem;
+    border: 0;
+    border-radius: var(--mf-radius-pill);
+    background: transparent;
+    color: var(--mf-text-muted);
+    font-size: var(--mf-text-sm);
+    font-weight: 650;
+    white-space: nowrap;
+    transition:
+      background-color var(--mf-duration-fast) linear,
+      color var(--mf-duration-fast) linear;
+
+    &:hover {
+      color: var(--mf-text);
+    }
+
+    &[aria-selected="true"] {
+      background: var(--mf-surface-raised);
+      box-shadow: var(--mf-elev-1);
+      color: var(--mf-text);
+    }
+  }
+}
+
+[role="tabpanel"][hidden] {
+  display: none;
+}
+
+[role="tabpanel"]:not([hidden]) {
+  @include motion {
+    animation: mf-fade-up var(--mf-duration-base) var(--mf-ease-out);
+  }
+}
+
+// ---- Accordion (native <details>: keyboard, a11y and no JavaScript) ----
+.accordion-ui {
+  display: grid;
+  gap: var(--mf-space-2);
+
+  details {
+    border: 1px solid var(--mf-border);
+    border-radius: var(--mf-radius-md);
+    background: var(--mf-surface);
+    transition: border-color var(--mf-duration-fast) linear;
+
+    &[open] {
+      border-color: color-mix(in srgb, var(--mf-accent) 35%, var(--mf-border));
+      box-shadow: var(--mf-elev-1);
+    }
+  }
+
+  summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--mf-space-3);
+    padding: var(--mf-space-3) var(--mf-space-4);
+    cursor: pointer;
+    font-weight: 650;
+    list-style: none;
+
+    &::-webkit-details-marker {
+      display: none;
+    }
+
+    &::after {
+      content: "";
+      flex: 0 0 0.6rem;
+      width: 0.6rem;
+      height: 0.6rem;
+      border-right: 2px solid var(--mf-text-muted);
+      border-bottom: 2px solid var(--mf-text-muted);
+      transform: rotate(45deg);
+      transition: transform var(--mf-duration-base) var(--mf-ease-out);
+    }
+  }
+
+  details[open] > summary::after {
+    transform: rotate(-135deg);
+  }
+
+  .accordion-ui__body {
+    padding: 0 var(--mf-space-4) var(--mf-space-4);
+    color: var(--mf-text-muted);
+  }
+}
+
+// ---- Tooltip + popover. CSS tooltips need no JavaScript; popover uses the native API. ----
+[data-tooltip] {
+  position: relative;
+
+  &::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    z-index: var(--mf-z-mega);
+    bottom: calc(100% + 0.45rem);
+    left: 50%;
+    width: max-content;
+    max-width: 16rem;
+    padding: 0.35rem 0.65rem;
+    transform: translate(-50%, 4px);
+    visibility: hidden;
+    opacity: 0;
+    border-radius: var(--mf-radius-sm);
+    background: var(--mf-text);
+    box-shadow: var(--mf-elev-3);
+    color: var(--mf-page);
+    font-size: var(--mf-text-xs);
+    font-weight: 560;
+    line-height: 1.35;
+    pointer-events: none;
+    text-align: center;
+    transition:
+      opacity var(--mf-duration-fast) linear,
+      transform var(--mf-duration-base) var(--mf-ease-out),
+      visibility 0s linear var(--mf-duration-fast);
+  }
+
+  &:hover::after,
+  &:focus-visible::after {
+    transform: translate(-50%, 0);
+    visibility: visible;
+    opacity: 1;
+    transition-delay: 0.25s;
+  }
+}
+
+.popover-ui {
+  max-width: min(22rem, calc(100vw - 2rem));
+  margin: 0;
+  padding: var(--mf-space-4);
+  border: 1px solid var(--mf-glass-border);
+  border-radius: var(--mf-radius-lg);
+  background: var(--mf-surface-raised);
+  box-shadow: var(--mf-elev-4);
+  color: var(--mf-text);
+  inset: auto;
+
+  &:popover-open {
+    @include motion {
+      animation: mf-pop var(--mf-duration-base) var(--mf-ease-out);
+    }
+  }
+}
+
+// ---- Toasts (modules/toasts.js). The region is a polite live region. ----
+.toast-region {
+  position: fixed;
+  z-index: var(--mf-z-toast);
+  inset: 4.75rem 1rem auto auto;
+  display: flex;
+  width: min(24rem, calc(100vw - 2rem));
+  flex-direction: column;
+  gap: 0.6rem;
+  pointer-events: none;
+
+  @include down("sm") {
+    inset: 4.5rem 0.75rem auto 0.75rem;
+    width: auto;
+  }
+}
+
+.toast-ui {
+  --toast-color: var(--mf-info);
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.2rem 0.75rem;
+  align-items: start;
+  padding: 0.85rem 0.9rem;
+  overflow: hidden;
+  border: 1px solid var(--mf-glass-border);
+  border-inline-start: 0.28rem solid var(--toast-color);
+  border-radius: var(--mf-radius-md);
+  background: var(--mf-surface-raised);
+  box-shadow: var(--mf-elev-4);
+  color: var(--mf-text);
+  pointer-events: auto;
+
+  @include motion {
+    animation: mf-toast-in var(--mf-duration-slow) var(--mf-ease-spring);
+  }
+
+  &.is-leaving {
+    opacity: 0;
+    transform: translateX(1rem);
+    transition:
+      opacity var(--mf-duration-base) linear,
+      transform var(--mf-duration-base) var(--mf-ease-out);
+  }
+}
+
+.toast-ui--success {
+  --toast-color: var(--mf-success);
+}
+
+.toast-ui--warning {
+  --toast-color: var(--mf-warning);
+}
+
+.toast-ui--danger {
+  --toast-color: var(--mf-danger);
+}
+
+.toast-ui__icon {
+  display: grid;
+  width: 1.5rem;
+  height: 1.5rem;
+  place-items: center;
+  color: var(--toast-color);
+}
+
+.toast-ui__title {
+  margin: 0;
+  font-size: var(--mf-text-sm);
+  font-weight: 700;
+}
+
+.toast-ui__message {
+  grid-column: 2;
+  margin: 0;
+  color: var(--mf-text-muted);
+  font-size: var(--mf-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.toast-ui__close {
+  grid-column: 3;
+  grid-row: 1;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--mf-text-muted);
+  line-height: 1;
+
+  &:hover {
+    background: var(--mf-surface-soft);
+    color: var(--mf-text);
+  }
+}
+
+.toast-ui__bar {
+  position: absolute;
+  inset: auto 0 0;
+  height: 0.18rem;
+  transform-origin: left;
+  background: var(--toast-color);
+  opacity: 0.5;
+
+  @include motion {
+    animation: mf-toast-timer var(--toast-duration, 6s) linear forwards;
+  }
+}
+
+// Server-rendered Django messages (includes/messages.html) stay in the page without
+// JavaScript; modules/toasts.js turns them into toasts when it runs.
+
+@keyframes mf-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem) scale(0.96);
+  }
+}
+
+@keyframes mf-toast-timer {
+  from {
+    transform: scaleX(1);
+  }
+
+  to {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes mf-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(0.5rem);
+  }
+}
+
+@keyframes mf-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-0.25rem);
+  }
+}

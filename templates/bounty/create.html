@@ -7,11 +7,17 @@
     <div class="col-12 col-lg-8 col-xl-7">
       {% include "components/page_header.html" with eyebrow="Bounty" title="Add a bounty" lead="Your credits are held in escrow. They are paid to whoever uploads a firmware staff approve for this, or returned to you if nobody does." %}
       {% if not available %}<div class="alert alert-warning" role="status">{{ paused_reason }}</div>{% endif %}
+      <ol class="stepper-ui bounty-timeline mb-4" aria-label="How a bounty works">
+        <li class="is-current"><span>Escrow credits</span></li>
+        <li><span>Writers or uploaders respond</span></li>
+        <li><span>Staff approve</span></li>
+        <li><span>Credits paid</span></li>
+      </ol>
       <form method="post" class="surface-card p-4" novalidate>
         {% csrf_token %}
         {% include "components/form_errors.html" with form=form %}
         {% if target %}
-          <p class="mb-3"><span class="muted">For:</span> <strong>{{ target.label }}</strong></p>
+          <p class="bounty-target mb-3"><i data-lucide="gift" class="icon" aria-hidden="true"></i><span><span class="muted">For:</span> <strong>{{ target.label }}</strong></span></p>
         {% else %}
           <p class="alert alert-info">Open this page from a firmware request, model or variant to choose what the bounty is for. <a href="/firmwares/requests/">Browse requests</a></p>
         {% endif %}

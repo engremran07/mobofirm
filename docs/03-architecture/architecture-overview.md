@@ -18,8 +18,9 @@ HTTP / Django ASGI or WSGI
   +----------+-----------------------------------------------+
   | users | devices | firmwares | ads | blog | comments      |
   | tags  | core | storage | seo | pages                      |
-  | shop  | marketplace | site_settings                      |
-  | wallet | referral                                          |
+  | shop  | marketplace | site_settings | wallet | referral   |
+  | consent | gamification | bounty | distribution           |
+  | promotions                                                |
   +----------+-----------------------------------------------+
              |
        Django ORM / PostgreSQL
@@ -31,14 +32,14 @@ HTTP / Django ASGI or WSGI
 
 ## Integration seams
 
-- `governance` is the controlled review/fulfillment boundary for posts, comments, pending firmware, and tags.
+- Moderation is app-owned; there is no `governance` Django app (it was removed by owner decision and `tests/backend/integrations/test_governance_app_removed.py` keeps it removed). Firmware moderation (pending/approved/rejected with reviewer, timestamp and reason) lives in `firmwares`, the post status workflow in `blog`, comment decisions in `comments` and tag curation in `tags`; each is operated by staff holding the relevant model permission. "Governance" is documentation only (`docs/00-governance/`).
 - `users` owns identity/profile/notification state and exposes user API/routes.
-- `devices` owns browser-profile registrations, trust/revocation state, device policy, and registration events. It issues a random first-party browser key and stores only a keyed digest; this identifies a browser profile, not a physical machine, and cannot detect an operating-system reinstall.
+- `devices` owns operating-system registrations (a platform WebAuthn credential shared by every browser on that OS and destroyed by a reinstall), fallback browser-profile registrations, trust/revocation state, device policy, and registration events. It issues a random first-party browser key (stores only a keyed digest) used as the fallback where no platform authenticator is usable; a website cannot read hardware or an install id, so the credential is the closest web-only OS identity.
 - `users` authentication calls the Devices service contract for login policy; Users does not own device registration or trust state.
-- `firmwares` owns firmware catalog/download lifecycle and uses governance for staged content. Generated blog guides use the blog app's history/review services; an automation setting may request review, never direct publication.
+- `firmwares` owns firmware catalog/download lifecycle and its own staging and approval services (staged content stays pending until staff approve it). Generated blog guides use the blog app's history/review services; an automation setting may request review, never direct publication.
 - `blog`, `comments`, and `tags` are connected through content ownership, moderation, and tagging.
 - `blog` owns editorial revisions in the migrated `PostRevision` model; a draft restore never changes publication state.
-- Automated tag suggestions remain uncurated until governance fulfillment and are not attached to public content until curated.
+- Automated tag suggestions remain uncurated until staff approve them in `tags` and are not attached to public content until curated.
 - `ads` owns ad and affiliate data; consumers must use the app's service/API contracts.
 - `consent` owns cookie/tracker consent and exposes only `has_consent(request, category)`; `ads` and the `site_settings` analytics loader ask it. `gamification` and `bounty` react to `firmware.approved` and wallet events on the event bus and reach the wallet only through `apps.wallet.api`. `distribution` listens to `firmware.approved` and the blog publish signal and sends everything through the SEO SafeFetcher.
 - `storage` records provider, location and integrity for typed firmware through ContentType; it reuses the firmware external-host allow-list and never serves files. `seo` owns the sitemap registry and routes (`/sitemap.xml`, `/robots.txt`) and the SEO settings flags; `pages`, `shop` and `marketplace` are feature-flagged through `core.AppRegistry`.

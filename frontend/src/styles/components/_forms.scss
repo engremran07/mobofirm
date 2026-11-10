@@ -1,0 +1,209 @@
+@use "../abstracts" as *;
+
+// Form controls: radius, depth and focus glow on top of Bootstrap's .form-control.
+.form-control,
+.form-select {
+  --bs-border-radius: var(--mf-radius-md);
+  min-height: 2.75rem;
+  border-radius: var(--mf-radius-md);
+  box-shadow: var(--mf-elev-1);
+  transition:
+    border-color var(--mf-duration-fast) linear,
+    box-shadow var(--mf-duration-base) var(--mf-ease-out),
+    background-color var(--mf-duration-fast) linear;
+
+  &:hover:not(:disabled):not(:focus) {
+    border-color: color-mix(in srgb, var(--mf-text-muted) 45%, var(--mf-border));
+  }
+
+  &:focus {
+    box-shadow: 0 0 0 0.25rem color-mix(in srgb, var(--mf-accent) 24%, transparent);
+  }
+
+  &:disabled,
+  &[readonly] {
+    background-color: var(--mf-surface-soft);
+    opacity: 0.8;
+  }
+}
+
+textarea.form-control {
+  min-height: 6rem;
+}
+
+.form-label {
+  margin-bottom: 0.35rem;
+  color: var(--mf-text);
+  font-size: var(--mf-text-sm);
+  font-weight: 640;
+}
+
+.form-text {
+  color: var(--mf-text-muted);
+  font-size: var(--mf-text-xs);
+}
+
+// Floating labels: Bootstrap's pattern, re-skinned with tokens.
+.form-floating {
+  > .form-control,
+  > .form-select {
+    min-height: 3.4rem;
+    padding-top: 1.55rem;
+    padding-bottom: 0.4rem;
+  }
+
+  > label {
+    color: var(--mf-text-muted);
+    font-size: var(--mf-text-sm);
+    font-weight: 500;
+  }
+
+  > .form-control:focus ~ label,
+  > .form-control:not(:placeholder-shown) ~ label,
+  > .form-select ~ label {
+    color: var(--mf-accent);
+    transform: scale(0.8) translateY(-0.6rem) translateX(0.15rem);
+  }
+
+  > .form-control:focus ~ label::after,
+  > .form-control:not(:placeholder-shown) ~ label::after,
+  > .form-select ~ label::after {
+    background: transparent;
+  }
+}
+
+// Validation: inline, never colour-only (icon + message + aria wiring in form_field.html).
+.form-control.is-invalid,
+.form-select.is-invalid {
+  border-color: var(--mf-danger);
+
+  &:focus {
+    box-shadow: 0 0 0 0.25rem color-mix(in srgb, var(--mf-danger) 24%, transparent);
+  }
+}
+
+.form-control.is-valid,
+.form-select.is-valid {
+  border-color: var(--mf-success);
+
+  &:focus {
+    box-shadow: 0 0 0 0.25rem color-mix(in srgb, var(--mf-success) 24%, transparent);
+  }
+}
+
+.field-error,
+.is-invalid ~ .invalid-feedback,
+.invalid-feedback.d-block {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+  margin-top: 0.35rem;
+  color: var(--mf-danger);
+  font-size: var(--mf-text-xs);
+  font-weight: 560;
+}
+
+.field-error::before {
+  content: "!";
+  display: inline-grid;
+  flex: 0 0 1.1rem;
+  height: 1.1rem;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--mf-danger);
+  color: var(--mf-danger-ink);
+  font-size: 0.7rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+// The shared container is always rendered (role="alert") and hidden while empty.
+.field-error[hidden] {
+  display: none;
+}
+
+// Form layout: a responsive two-column grid that stacks on phones.
+.form-layout {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 17rem), 1fr));
+  gap: var(--mf-space-4) var(--mf-space-5);
+}
+
+.form-layout__full {
+  grid-column: 1 / -1;
+}
+
+.form-section {
+  padding: var(--mf-space-5);
+  border: 1px solid var(--mf-border);
+  border-radius: var(--mf-radius-lg);
+  background: var(--mf-surface);
+  box-shadow: var(--mf-elev-1);
+
+  > legend,
+  .form-section__title {
+    float: none;
+    width: auto;
+    margin-bottom: var(--mf-space-4);
+    padding: 0;
+    font-size: var(--mf-text-lg);
+    font-weight: 720;
+  }
+}
+
+.form-actions {
+  position: sticky;
+  z-index: 5;
+  bottom: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--mf-space-3);
+  margin-top: var(--mf-space-5);
+  padding: var(--mf-space-3) 0;
+  border-top: 1px solid var(--mf-border);
+  background: var(--mf-glass-bg-strong);
+  -webkit-backdrop-filter: blur(var(--mf-glass-blur));
+  backdrop-filter: blur(var(--mf-glass-blur));
+}
+
+// Toggles (checkbox / switch).
+.form-switch .form-check-input {
+  width: 2.6em;
+  height: 1.4em;
+  border-color: var(--mf-border);
+  background-color: var(--mf-surface-soft);
+  box-shadow: inset 0 1px 2px rgb(var(--mf-shadow-rgb) / 15%);
+
+  @include motion {
+    transition:
+      background-position var(--mf-duration-base) var(--mf-ease-spring),
+      background-color var(--mf-duration-fast) linear;
+  }
+}
+
+.form-check-input {
+  border-color: color-mix(in srgb, var(--mf-text-muted) 60%, var(--mf-border));
+  background-color: var(--mf-surface);
+}
+
+.form-check-input:checked {
+  box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--mf-accent) 18%, transparent);
+}
+
+.input-group-text {
+  border-color: var(--mf-border);
+  background: var(--mf-surface-soft);
+  color: var(--mf-text-muted);
+}
+
+// Character counter / helper row shown under a field.
+.field-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--mf-space-3);
+  margin-top: 0.3rem;
+  color: var(--mf-text-muted);
+  font-size: var(--mf-text-xs);
+}

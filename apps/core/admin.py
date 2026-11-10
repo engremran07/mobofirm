@@ -24,10 +24,33 @@ from rest_framework.authtoken.admin import TokenAdmin as BaseTokenAdmin
 from rest_framework.authtoken.models import TokenProxy
 
 from apps.core.admin_base import ModelAdmin, SingletonModelAdmin
-from apps.core.models import AppRegistry
+from apps.core.models import AppRegistry, SearchSettings
 
 for _model in (Group, Site, EmailAddress, SocialAccount, SocialToken, TokenProxy):
     admin.site.unregister(_model)
+
+
+@admin.register(SearchSettings)
+class SearchSettingsAdmin(SingletonModelAdmin):
+    """How many popular entries are listed, over which window, cached how long."""
+
+    fieldsets = (
+        (
+            _("Popular blocks"),
+            {
+                "fields": (
+                    "popular_enabled",
+                    "popular_window_days",
+                    "popular_limit",
+                    "popular_cache_minutes",
+                ),
+                "description": _(
+                    "Popular models, firmware and articles are ranked from real "
+                    "downloads and page views inside the window."
+                ),
+            },
+        ),
+    )
 
 
 @admin.register(AppRegistry)

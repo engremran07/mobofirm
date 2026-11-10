@@ -92,6 +92,7 @@ class Command(BaseCommand):
 
         with eager_background_tasks():
             call_command("bootstrap_site", stdout=self.stdout)
+            self._seed_editor_profiles()
             self._seed_pages()
             self._seed_packages()
             call_command("seed_people", stdout=self.stdout, **confirm)
@@ -127,6 +128,13 @@ class Command(BaseCommand):
                 + "). Seeding targets a freshly migrated database; pass "
                 "--allow-existing to add the seed data alongside it."
             )
+
+    def _seed_editor_profiles(self) -> None:
+        if "seed_editor_profiles" not in get_commands():
+            self.stdout.write("== Editor profiles: not available; skipped.")
+            return
+        self.stdout.write("== Editor profiles (missing rows only)")
+        call_command("seed_editor_profiles", stdout=self.stdout)
 
     def _seed_pages(self) -> None:
         if "seed_pages" not in get_commands():

@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Find your method before requesting | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block meta_description %}Search the published methods and guides for your model before asking for a new one.{% endblock %}
+{% block content %}
+{% url 'blog:request_list' as list_url %}
+<div class="site-container py-5 guide-page">
+  {% include "components/breadcrumbs.html" with current="Request a method or guide" parent_label="Requests" parent_url=list_url %}
+  <div class="row justify-content-center">
+    <div class="col-12 col-lg-9 col-xl-8">
+      {% include "components/page_header.html" with eyebrow="Guide requests" title="Request a method or guide" lead="Step 1 of 2: search first. Enter your model code and/or variant code and we list every related article. Your answer may already be published." %}
+      <ol class="stepper-ui guide-stepper" aria-label="Request steps">
+        <li class="is-current" aria-current="step"><span>Search</span></li>
+        <li><span>Describe</span></li>
+        <li><span>Staff review</span></li>
+      </ol>
+      {% if not requests_enabled %}
+        <p class="alert alert-info" role="status">Guide requests are switched off right now.</p>
+      {% endif %}
+      <form method="get" action="{% url 'blog:request_create' %}" class="guide-search surface-card" role="search" novalidate data-guide-search-form
+            hx-get="{% url 'blog:request_search' %}" hx-trigger="input delay:300ms, change, submit" hx-target="#guide-search-results" hx-swap="innerHTML" hx-sync="this:replace" hx-indicator="#guide-search-loading">
+        {% include "components/form_errors.html" with form=form %}
+        <div class="guide-search__primary">
+          {% include "components/form_field.html" with field=form.model_code %}
+          {% include "components/form_field.html" with field=form.variant_code %}
+        </div>
+        <div class="guide-search__more">
+          {% include "components/form_field.html" with field=form.brand %}
+          {% include "components/form_field.html" with field=form.chipset %}
+          {% include "components/form_field.html" with field=form.keywords %}
+        </div>
+        <div class="guide-search__actions">
+          <button class="btn btn-primary" type="submit"><i data-lucide="search" class="icon" aria-hidden="true"></i> Search articles</button>
+          {% include "components/spinner.html" with id="guide-search-loading" label="Looking for related articles" %}
+        </div>
+      </form>
+      <div id="guide-search-results" class="skeleton-host" aria-live="polite">
+        {% include "blog/requests/_search_results.html" %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

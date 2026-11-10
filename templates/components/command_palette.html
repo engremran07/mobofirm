@@ -1,0 +1,36 @@
+{# Command palette (Ctrl/Cmd+K). Contract: rendered once from base.html; modules/ui.js opens it from [data-command-palette-open] and the keyboard shortcut. Search is the shared combobox (components/combobox.html, input_id palette-search) fed by the central search engine; this partial only adds quick links and preference actions. Links honour the same authorisation as the header. #}
+<dialog id="command-palette" class="cmdk" aria-label="Command menu" data-command-palette>
+  <form class="cmdk__search" role="search" method="get" action="{% url 'search:results' %}">
+    {% include "components/combobox.html" with input_id="palette-search" mode="navigate" label="Search devices, brands, chipsets, tools, firmware, articles and pages" placeholder="Search, or jump to a page" icon=True limit=8 %}
+  </form>
+  <div class="cmdk__body">
+    <p class="cmdk__group" id="cmdk-go">Go to</p>
+    <ul class="cmdk__list" aria-labelledby="cmdk-go">
+      <li><a class="cmdk__item" href="{% url 'firmwares:browse' %}"><i data-lucide="download" aria-hidden="true"></i>Firmware catalogue</a></li>
+      <li><a class="cmdk__item" href="{% url 'firmwares:brand_list' %}"><i data-lucide="building-2" aria-hidden="true"></i>Brands</a></li>
+      <li><a class="cmdk__item" href="{% url 'firmwares:chipset_list' %}"><i data-lucide="cpu" aria-hidden="true"></i>Chipsets</a></li>
+      <li><a class="cmdk__item" href="{% url 'firmwares:flashing_tools' %}"><i data-lucide="wrench" aria-hidden="true"></i>Flashing tools</a></li>
+      <li><a class="cmdk__item" href="{% url 'firmwares:flashing_guides' %}"><i data-lucide="book-open" aria-hidden="true"></i>Flashing guides</a></li>
+      <li><a class="cmdk__item" href="{% url 'blog:post_list' %}"><i data-lucide="newspaper" aria-hidden="true"></i>Blog</a></li>
+      <li><a class="cmdk__item" href="{% url 'firmwares:requests_hub' %}"><i data-lucide="circle-help" aria-hidden="true"></i>Request something missing</a></li>
+      {% if user.is_authenticated %}
+        <li><a class="cmdk__item" href="{% url 'library:my_files' %}"><i data-lucide="folder" aria-hidden="true"></i>My files</a></li>
+        <li><a class="cmdk__item" href="{% url 'users:dashboard' %}"><i data-lucide="user-round" aria-hidden="true"></i>Account</a></li>
+      {% else %}
+        <li><a class="cmdk__item" href="{% url 'users:account_login' %}"><i data-lucide="user-round" aria-hidden="true"></i>Sign in</a></li>
+      {% endif %}
+      {% if user.is_staff %}<li><a class="cmdk__item" href="{% url 'admin:index' %}"><i data-lucide="shield-check" aria-hidden="true"></i>Admin</a></li>{% endif %}
+    </ul>
+    <p class="cmdk__group" id="cmdk-actions">Preferences</p>
+    <ul class="cmdk__list" aria-labelledby="cmdk-actions">
+      <li><button type="button" class="cmdk__item" data-theme-toggle data-cmdk-close><i data-lucide="moon" aria-hidden="true"></i>Toggle light or dark theme</button></li>
+      <li><button type="button" class="cmdk__item" data-contrast-toggle data-cmdk-close><i data-lucide="contrast" aria-hidden="true"></i>Toggle high contrast</button></li>
+      <li><button type="button" class="cmdk__item" data-copy-url data-cmdk-close><i data-lucide="link" aria-hidden="true"></i>Copy link to this page</button></li>
+    </ul>
+  </div>
+  <div class="cmdk__foot" aria-hidden="true">
+    <span><kbd>↑</kbd> <kbd>↓</kbd> move</span>
+    <span><kbd>Enter</kbd> open</span>
+    <span><kbd>Esc</kbd> close</span>
+  </div>
+</dialog>

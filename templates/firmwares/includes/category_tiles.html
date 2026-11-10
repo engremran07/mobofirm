@@ -1,0 +1,9 @@
+{# Contract: categories ((key, label, count) triples), filter_param ("brand" or "chipset"), filter_value (slug). Firmware categories as links into the filtered catalogue. #}
+<div class="card-grid card-grid--tiles">
+  {% for key, label, count in categories %}
+    <a class="card-ui card-ui--tile" href="{% url 'firmwares:browse' %}?{{ filter_param }}={{ filter_value|urlencode }}&amp;type={{ key }}">
+      <span class="logo-tile logo-tile--sm" aria-hidden="true"><i data-lucide="file-archive"></i></span>
+      <span class="cat-tile__body"><span class="card-ui__title">{{ label }}</span><span class="card-ui__text">{{ count }} file{{ count|pluralize }}</span></span>
+    </a>
+  {% endfor %}
+</div>

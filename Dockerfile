@@ -50,8 +50,11 @@ COPY --chown=app:app manage.py pyproject.toml ./
 COPY --chown=app:app app ./app
 COPY --chown=app:app apps ./apps
 COPY --chown=app:app templates ./templates
-COPY --chown=app:app static ./static
 COPY --chown=app:app deploy ./deploy
+# The repository keeps no hand-written root `static/` source: STATICFILES_DIRS points
+# at it, and its only content is the generated Vite output (static/build, git-ignored
+# and .dockerignore'd), which is the next instruction. tests/backend/core/
+# test_container_build_contract.py fails if a COPY source stops existing in git.
 COPY --from=frontend --chown=app:app /build/static/build ./static/build
 # Windows checkouts may carry CRLF line endings, which break shell shebangs.
 RUN sed -i 's/\r$//' deploy/entrypoint.sh \

@@ -15,7 +15,13 @@ from django.core.exceptions import PermissionDenied
 
 from .access import is_seller
 from .catalog_requests import has_verified_email
-from .models import AccessTier, FirmwarePackageFormat, PendingFirmware, Variant
+from .models import (
+    AccessTier,
+    FirmwarePackageFormat,
+    Model,
+    PendingFirmware,
+    Variant,
+)
 from .services import (
     FirmwareUploadError,
     attempt_extraction,
@@ -24,14 +30,16 @@ from .services import (
     run_ai_analysis,
     submit_external_firmware,
 )
+from .variant_rules import variant_is_required
 
 
 @dataclass(frozen=True)
 class UploadSubmission:
     """Validated input of the upload page."""
 
-    variant: Variant
+    model: Model
     build_number: str
+    variant: Variant | None = None
     android_version: str = ""
     package_format: str = FirmwarePackageFormat.UNKNOWN
     notes: str = ""
@@ -55,7 +63,7 @@ def can_offer_paid(user: Any) -> bool:
 
 
 def submit_user_upload(user: Any, submission: UploadSubmission) -> PendingFirmware:
-    """Create the pending submission for ``submission.variant`` and analyse it."""
+    """Create the pending submission for the model (and variant) and analyse it."""
     if not (
         getattr(user, "is_authenticated", False)
         and user.is_active
@@ -64,7 +72,13 @@ def submit_user_upload(user: Any, submission: UploadSubmission) -> PendingFirmwa
         raise PermissionDenied("Sign in with a verified email to upload firmware.")
     check_submission_rate(user)
     variant = submission.variant
-    model = variant.model
+    model = submission.model
+    if variant is not None and variant.model_id != model.pk:
+        raise FirmwareUploadError("The variant does not belong to the model.")
+    if variant is None and variant_is_required(model):
+        raise FirmwareUploadError(
+            "This model has variants: choose the one that matches your device."
+        )
     release_info = {
         "build_number": submission.build_number,
         "android_version": submission.android_version,

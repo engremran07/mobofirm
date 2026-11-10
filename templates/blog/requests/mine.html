@@ -2,27 +2,31 @@
 {% block title %}My guide requests | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block content %}
 {% url 'blog:request_list' as list_url %}
-<div class="site-container py-5">
+<div class="site-container py-5 guide-page">
   {% include "components/breadcrumbs.html" with current="My requests" parent_label="Requests" parent_url=list_url %}
   {% include "components/page_header.html" with eyebrow="Guide requests" title="My requests and solutions" %}
   <h2 class="h5">Requests I made</h2>
   {% if requests %}
-    <ul class="list-unstyled d-grid gap-2 mb-4">
+    <ul class="guide-list mb-4">
       {% for item in requests %}
-        <li class="surface-card p-3 d-flex flex-wrap justify-content-between gap-2">
-          <a href="{{ item.get_absolute_url }}">{{ item.title }}</a>
-          <span class="badge text-bg-secondary">{{ item.get_status_display }}</span>
+        <li class="guide-card">
+          <div class="guide-card__top">
+            <a class="guide-card__title stretched-link" href="{{ item.get_absolute_url }}">{{ item.title }}</a>
+            {% include "components/badge.html" with label=item.get_status_display %}
+          </div>
         </li>
       {% endfor %}
     </ul>
   {% else %}<p class="muted">You have not requested anything yet. <a href="{% url 'blog:request_create' %}">Request a method or guide</a>.</p>{% endif %}
   <h2 class="h5">Solutions I submitted</h2>
   {% if submissions %}
-    <ul class="list-unstyled d-grid gap-2">
+    <ul class="guide-list">
       {% for post in submissions %}
-        <li class="surface-card p-3 d-flex flex-wrap justify-content-between gap-2">
-          <span>{{ post.title }} <span class="muted small">for <a href="{{ post.guide_request.get_absolute_url }}">{{ post.guide_request.title }}</a></span></span>
-          <span><span class="badge text-bg-warning">{{ post.get_access_display }}</span> <span class="badge text-bg-secondary">{{ post.get_status_display }}</span></span>
+        <li class="guide-card">
+          <div class="guide-card__top">
+            <span>{{ post.title }} <span class="muted small">for <a class="position-relative" href="{{ post.guide_request.get_absolute_url }}">{{ post.guide_request.title }}</a></span></span>
+            <span class="d-inline-flex gap-1">{% include "blog/partials/access_badge.html" with post=post %}{% include "components/badge.html" with label=post.get_status_display %}</span>
+          </div>
         </li>
       {% endfor %}
     </ul>

@@ -11,7 +11,14 @@ Each app declares what it pays in `apps/<app>/reward_events.py` (autodiscovered 
 ```python
 from apps.wallet.api import RewardEvent, register_reward_event
 
-register_reward_event(RewardEvent(key="firmware.approved", label="Firmware approved", app="firmwares", default_credits=25))
+register_reward_event(
+    RewardEvent(
+        key="firmware.approved",
+        label="Firmware approved",
+        app="firmwares",
+        default_credits=25,
+    )
+)
 ```
 
 Amounts live only in the admin-editable `RewardRule` (Credits economy > Reward rules); the declared defaults create the row once and never overwrite staff edits.

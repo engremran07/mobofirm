@@ -458,7 +458,7 @@ class TestViews:
     ):
         text = client.get(reverse("shop:pricing")).content.decode()
 
-        assert "or 500 credits" in text
+        assert 'class="plan-card__credits">&middot; 500 credits</span>' in text
         assert "Price in credits" in text
 
     def test_file_purchase_flow(self, client, user, wallet, make_firmware):

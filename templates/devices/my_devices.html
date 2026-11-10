@@ -8,7 +8,7 @@
   <p class="section-eyebrow">Account security</p>
   <h1 class="h2">Registered browsers</h1>
   <p class="muted">
-    Mobofirm uses a random first-party browser-profile key for registration. The operating system and browser labels below are informational; they do not prove a physical machine's identity.
+    Mobofirm registers your <strong>computer</strong> (its operating system) when your browser supports it, so switching browser needs no new registration and reinstalling the operating system voids the registration. Where that is unavailable, it falls back to remembering each browser with a random first-party cookie. The labels below are informational.
   </p>
 
   <div class="row g-3 my-3" aria-label="Device registration summary">
@@ -27,8 +27,9 @@
   </div>
 
   <p class="small muted">
-    Clearing browser data, reinstalling a browser, or using another browser profile may create a new registration. A browser cookie cannot reliably detect an operating-system reinstall or identify hardware. You cannot remove an approved browser yourself; when your allowance is full you can free slots by asking staff, paying credits or watching a rewarded ad.
+    A registered computer counts as one device however many browsers you use on it. A browser-only registration is lost when you clear browser data or switch browser. A website cannot detect hardware: reinstalling the operating system removes the computer credential, so the computer is treated as unregistered. Apple and Google passkeys may sync to your other devices. You cannot remove an approved device yourself; when your allowance is full you can free slots by asking staff, paying credits or watching a rewarded ad.
   </p>
+  {% load device_tags %}{% if not request.session.device_registration_prompt %}{% device_os_identity %}{% endif %}
   {% if can_approve_current %}
     <form method="post" action="{% url 'devices:acknowledge_new_device' %}" class="surface-card p-3 my-3 d-flex flex-wrap align-items-center gap-3">
       {% csrf_token %}
@@ -48,12 +49,12 @@
             <h2 class="h5 mb-1">
               {{ device.display_name|default:"Browser profile" }}
               {% if current_device and device.pk == current_device.pk %}
-                <span class="badge text-bg-primary">This browser</span>
+                <span class="badge text-bg-primary">{% if device.os_credential_id_hash %}This computer{% else %}This browser{% endif %}</span>
               {% endif %}
             </h2>
             <p class="small muted mb-2">
               {{ device.os_family|default:"Unknown operating system" }}
-              · {{ device.browser_family|default:"Unknown browser" }}
+              · {% if device.os_credential_id_hash %}Registered computer (all browsers){% else %}{{ device.browser_family|default:"Unknown browser" }} (this browser only){% endif %}
             </p>
           </div>
           <p class="mb-0">
@@ -61,7 +62,7 @@
               <span class="badge text-bg-secondary">Revoked</span>
             {% elif device.is_blocked %}
               <span class="badge text-bg-danger">Blocked</span>
-            {% elif not device.browser_key_hash %}
+            {% elif not device.browser_key_hash and not device.os_credential_id_hash %}
               <span class="badge text-bg-secondary">Legacy record</span>
             {% elif device.is_trusted %}
               <span class="badge text-bg-success">Approved</span>
@@ -70,7 +71,7 @@
             {% endif %}
           </p>
         </div>
-        {% if not device.browser_key_hash %}
+        {% if not device.browser_key_hash and not device.os_credential_id_hash %}
           <p class="small muted mb-2">
             This historical record is not an active browser identity. Sign in from the browser to register its new profile key.
           </p>

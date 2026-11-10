@@ -1,0 +1,5 @@
+{% extends "components/dialog.html" %}
+{# Contract: dialog_id, dialog_title, dialog_message, cancel_label. App-owned notice for a social provider the site admin has not configured; it has no form and submits nothing. #}
+{% block dialog_body %}
+  <p class="muted mb-0">You can still sign in with your email address and password. If you manage this site, add the provider's keys under Social applications in the admin.</p>
+{% endblock %}

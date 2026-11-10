@@ -13,14 +13,17 @@ from django.views.decorators.http import (
     require_http_methods,
     require_POST,
 )
+from django.views.decorators.vary import vary_on_headers
 
 from apps.core.app_service import AppService
 from apps.core.decorators import require_app_enabled
+from apps.core.search import list_search_context, search_queryset
 from apps.users.decorators import email_verification_required
 from apps.users.request_user import current_user
 
 from . import registry, services
 from .forms import LedgerFilterForm, PayoutForm, TopUpForm
+from .ledger_search import LEDGER_ANNOTATIONS, LEDGER_FIELDS
 from .models import (
     CreditPrice,
     LedgerEntry,
@@ -65,18 +68,31 @@ def dashboard(request: HttpRequest) -> HttpResponse:
 @login_required
 @require_app_enabled("wallet")
 @require_GET
+@vary_on_headers("HX-Request")
 def ledger(request: HttpRequest) -> HttpResponse:
+    """Credit history; ``q`` searches notes, references and reasons (shared engine)."""
     wallet = services.get_wallet(current_user(request))
     form = LedgerFilterForm(request.GET or None)
     entries = LedgerEntry.objects.filter(wallet=wallet)
+    query = ""
     if form.is_valid():
         if form.cleaned_data["direction"]:
             entries = entries.filter(direction=form.cleaned_data["direction"])
         if form.cleaned_data["reason"]:
             entries = entries.filter(reason=form.cleaned_data["reason"])
-    page = Paginator(entries, LEDGER_PAGE_SIZE).get_page(request.GET.get("page"))
+        query = form.cleaned_data["q"]
+    result = search_queryset(
+        entries, query, LEDGER_FIELDS, annotations=LEDGER_ANNOTATIONS
+    )
+    page = Paginator(result.queryset, LEDGER_PAGE_SIZE).get_page(
+        request.GET.get("page")
+    )
     context = _base_context(request, "ledger")
-    context.update(form=form, page_obj=page)
+    context.update(
+        form=form,
+        page_obj=page,
+        **list_search_context(result, page.paginator.count, kinds=()),
+    )
     template = (
         "wallet/_ledger_results.html"
         if request.headers.get("HX-Request")

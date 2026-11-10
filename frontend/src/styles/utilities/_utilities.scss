@@ -1,0 +1,91 @@
+@use "../abstracts" as *;
+
+// Small, single-purpose helpers. Prefer components; use these for one-off layout.
+.stack {
+  display: grid;
+  gap: var(--stack-gap, var(--mf-space-4));
+}
+
+.cluster {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--cluster-gap, var(--mf-space-3));
+}
+
+.section-gap {
+  margin-block: var(--mf-section-gap);
+}
+
+.text-balance {
+  text-wrap: balance;
+}
+
+.text-pretty {
+  text-wrap: pretty;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.break-anywhere {
+  overflow-wrap: anywhere;
+}
+
+.glass {
+  @include glass;
+}
+
+.glass-strong {
+  @include glass(2);
+}
+
+.elev-1 {
+  box-shadow: var(--mf-elev-1);
+}
+
+.elev-2 {
+  box-shadow: var(--mf-elev-2);
+}
+
+.elev-3 {
+  box-shadow: var(--mf-elev-3);
+}
+
+.elev-4 {
+  box-shadow: var(--mf-elev-4);
+}
+
+.hide-scrollbar {
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.u-visually-hidden {
+  @include visually-hidden;
+}
+
+@media print {
+  .site-header,
+  .site-footer,
+  .toast-region,
+  .global-progress,
+  .filter-bar {
+    display: none !important;
+  }
+
+  body {
+    background: #fff;
+    color: #000;
+  }
+}

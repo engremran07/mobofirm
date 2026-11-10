@@ -8,7 +8,7 @@ This is an initial trust-boundary inventory, not a security certification. Revis
 - Device identity and policy records.
 - Firmware binaries, metadata, download tokens, and signed-file URLs.
 - Ad/affiliate credentials, consent state, and event records.
-- User-generated posts, comments, tags, and governance audit history.
+- User-generated posts, comments, tags, and the moderation history recorded by their owning apps.
 - Database credentials, Django secret key, and external provider credentials.
 
 ## Trust boundaries and threats
@@ -18,7 +18,7 @@ This is an initial trust-boundary inventory, not a security certification. Revis
 | Anonymous client → Django | CSRF, account enumeration, injection, abusive traffic, forged consent/device payload | Server-side validation, Django protections, scoped rate limits, permission tests |
 | Authenticated user → owned resources | IDOR, privilege escalation, cross-account profile/device access | Object-level ownership, least privilege, cross-owner regression tests |
 | Upload/download → local firmware storage | Path traversal, unauthorized download, token replay, hotlinking, file replacement | Canonical path/authorization checks, expiring tokens/signatures, file-type/size policy, audit tests |
-| Content submitter → governance | Self-approval, duplicate actions, invalid state transitions, audit tampering | Separate permissions, locked transitions, idempotency keys, append-only events |
+| Content submitter → app-owned moderation (`firmwares`, `blog`, `comments`, `tags`) | Self-approval, duplicate actions, invalid state transitions, audit tampering | Model-permission gating, locked transitions, idempotency keys, reviewer/time/reason recorded |
 | Application → provider/broker/database | Credential leakage, SSRF, compromised integration, retry storms | Secret management, allowlisted endpoints, bounded retries, timeouts, redacted logs |
 | Browser ↔ Django and external resources | CSP bypass, unsafe inline execution/styles, overbroad CORS, mixed content, ad tracking without consent | Strict CSP, same-origin default, HTTPS-only resources, no inline scripts, one fixed hash for DRF syntax CSS, consent-gated ad rendering, browser/header regression tests |
 | Operator → retention/admin workflows | Excessive data deletion or privilege misuse | Explicit scope, dry-run, positive retention window, reviewed access, test coverage |

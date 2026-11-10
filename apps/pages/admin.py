@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from django.contrib import messages
@@ -28,6 +29,7 @@ from apps.core.admin_base import (
     htmx_redirect,
     return_url,
 )
+from apps.core.editor.admin import RichTextAdminMixin
 
 from .models import Page
 
@@ -48,7 +50,12 @@ VISIBILITY_BADGES = {
 
 
 @register(Page)
-class PageAdmin(ModelAdmin):
+class PageAdmin(RichTextAdminMixin, ModelAdmin):
+    # The editor only applies to HTML pages; Markdown pages keep the plain textarea.
+    rich_text_fields: ClassVar[Mapping[str, str]] = {"content": "page"}
+    rich_text_when: ClassVar[Mapping[str, tuple[str, str]]] = {
+        "content": ("content_format", Page.ContentFormat.HTML)
+    }
     list_display = (
         "title",
         "slug",

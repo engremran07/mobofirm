@@ -1,67 +1,77 @@
 {% extends "base.html" %}
 {% load ad_tags %}
 {% block content %}
-<div class="site-container py-4 py-lg-5">
+<div class="site-container py-4 py-lg-5 journal-page">
   {% include "components/breadcrumbs.html" with current="Journal" %}
   <header class="journal-masthead">
-    <p class="section-eyebrow mb-2">Field notes and guides</p>
-    <h1 class="journal-title">The Mobofirm journal</h1>
-    <p class="journal-lead">Firmware guides, device research and release notes, kept current from the catalogue.</p>
-    <p class="mb-3"><a class="btn btn-outline-secondary btn-sm" href="{% url 'blog:request_list' %}">Request a method or guide</a>{% if user.is_authenticated %} <a class="btn btn-outline-secondary btn-sm" href="{% url 'blog:purchased' %}">My purchased articles</a>{% endif %}</p>
-    <form id="journal-filters" class="journal-filters" method="get" action="{% url 'blog:post_list' %}" role="search" aria-label="Search and filter articles">
-      {% if filters.tag %}<input type="hidden" name="tag" value="{{ filters.tag }}">{% endif %}
-      {% if filters.author %}<input type="hidden" name="author" value="{{ filters.author }}">{% endif %}
-      <div class="journal-filters__row">
-        <div class="input-group journal-search">
-          <label class="visually-hidden" for="journal-query">Search articles</label>
-          <span class="input-group-text" aria-hidden="true"><i data-lucide="search" class="icon"></i></span>
-          <input id="journal-query" class="form-control" type="search" name="q" value="{{ filters.q }}"
-                 placeholder="Search guides, devices and chipsets" autocomplete="off" enterkeyhint="search"
-                 hx-get="{% url 'blog:post_list' %}" hx-trigger="input changed delay:350ms, search"
-                 hx-include="closest form" hx-target="#journal-results" hx-push-url="true" hx-indicator="#journal-loading">
-          <button class="btn btn-primary" type="submit">Search</button>
-        </div>
-        <div class="journal-sort">
-          <label class="visually-hidden" for="journal-sort">Sort articles</label>
-          <select id="journal-sort" class="form-select" name="sort"
-                  hx-get="{% url 'blog:post_list' %}" hx-trigger="change" hx-include="closest form"
-                  hx-target="#journal-results" hx-push-url="true" hx-indicator="#journal-loading">
-            <option value=""{% if not filters.sort %} selected{% endif %}>{% if filters.q %}Best match{% else %}Newest{% endif %}</option>
-            {% for value, label in sort_options %}{% if value != "recent" %}<option value="{{ value }}"{% if filters.sort == value %} selected{% endif %}>{{ label }}</option>{% endif %}{% endfor %}
-          </select>
-        </div>
+    <div class="journal-masthead__copy">
+      <p class="section-eyebrow mb-2"><i data-lucide="newspaper" class="icon" aria-hidden="true"></i> Field notes and guides</p>
+      <h1 class="journal-title">The Mobofirm journal</h1>
+      <p class="journal-lead">Firmware guides, device research and release notes, kept current from the catalogue.</p>
+      <p class="journal-masthead__actions">
+        <a class="btn btn-primary btn-sm" href="{% url 'blog:request_list' %}"><i data-lucide="circle-help" class="icon" aria-hidden="true"></i> Request a method or guide</a>
+        {% if user.is_authenticated %}<a class="btn btn-soft btn-sm" href="{% url 'blog:purchased' %}"><i data-lucide="star" class="icon" aria-hidden="true"></i> My purchased articles</a>{% endif %}
+      </p>
+    </div>
+    <ul class="journal-masthead__legend" aria-label="Article access">
+      <li>{% include "components/badge.html" with variant="free" label="Free" icon="circle-check" %}<span>Open to everyone</span></li>
+      <li>{% include "components/badge.html" with variant="featured" label="Featured" icon="sparkles" %}<span>Members, packages or one credit unlock</span></li>
+      <li>{% include "components/badge.html" with variant="paid" label="Paid" icon="lock" %}<span>Unlock once with credits</span></li>
+    </ul>
+  </header>
+  <form id="journal-filters" class="journal-filters filter-bar" method="get" action="{% url 'blog:post_list' %}" role="search" aria-label="Search and filter articles">
+    {% if filters.tag %}<input type="hidden" name="tag" value="{{ filters.tag }}">{% endif %}
+    {% if filters.author %}<input type="hidden" name="author" value="{{ filters.author }}">{% endif %}
+    <div class="journal-filters__row">
+      <div class="input-group journal-search">
+        <label class="visually-hidden" for="journal-query">Search articles</label>
+        <span class="input-group-text" aria-hidden="true"><i data-lucide="search" class="icon"></i></span>
+        <input id="journal-query" class="form-control" type="search" name="q" value="{{ filters.q }}"
+               placeholder="Search guides, devices and chipsets" autocomplete="off" enterkeyhint="search"
+               hx-get="{% url 'blog:post_list' %}" hx-trigger="input changed delay:250ms, search"
+               hx-include="closest form" hx-target="#journal-results" hx-push-url="true" hx-sync="closest form:replace" hx-indicator="#journal-loading">
+        <button class="btn btn-primary" type="submit">Search</button>
       </div>
-      <fieldset class="chip-bar">
-        <legend class="visually-hidden">Category</legend>
+      <div class="journal-sort">
+        <label class="visually-hidden" for="journal-sort">Sort articles</label>
+        <select id="journal-sort" class="form-select" name="sort"
+                hx-get="{% url 'blog:post_list' %}" hx-trigger="change" hx-include="closest form"
+                hx-target="#journal-results" hx-push-url="true" hx-indicator="#journal-loading">
+          <option value=""{% if not filters.sort %} selected{% endif %}>{% if filters.q %}Best match{% else %}Newest{% endif %}</option>
+          {% for value, label in sort_options %}{% if value != "recent" %}<option value="{{ value }}"{% if filters.sort == value %} selected{% endif %}>{{ label }}</option>{% endif %}{% endfor %}
+        </select>
+      </div>
+      {% include "components/spinner.html" with id="journal-loading" label="Updating articles" %}
+    </div>
+    <fieldset class="chip-bar">
+      <legend class="visually-hidden">Category</legend>
+      <span class="chip">
+        <input class="chip__input" type="radio" name="category" id="chip-all" value=""{% if not filters.category %} checked{% endif %}
+               hx-get="{% url 'blog:post_list' %}" hx-trigger="change" hx-include="closest form"
+               hx-target="#journal-results" hx-push-url="true" hx-indicator="#journal-loading">
+        <label class="chip__label" for="chip-all">All</label>
+      </span>
+      {% for category in chips %}
         <span class="chip">
-          <input class="chip__input" type="radio" name="category" id="chip-all" value=""{% if not filters.category %} checked{% endif %}
+          <input class="chip__input" type="radio" name="category" id="chip-{{ category.slug }}" value="{{ category.slug }}"{% if filters.category == category.slug %} checked{% endif %}
                  hx-get="{% url 'blog:post_list' %}" hx-trigger="change" hx-include="closest form"
                  hx-target="#journal-results" hx-push-url="true" hx-indicator="#journal-loading">
-          <label class="chip__label" for="chip-all">All</label>
+          <label class="chip__label" for="chip-{{ category.slug }}">{{ category.name }} <span class="chip__count">{{ category.post_count }}</span></label>
         </span>
-        {% for category in chips %}
-          <span class="chip">
-            <input class="chip__input" type="radio" name="category" id="chip-{{ category.slug }}" value="{{ category.slug }}"{% if filters.category == category.slug %} checked{% endif %}
-                   hx-get="{% url 'blog:post_list' %}" hx-trigger="change" hx-include="closest form"
-                   hx-target="#journal-results" hx-push-url="true" hx-indicator="#journal-loading">
-            <label class="chip__label" for="chip-{{ category.slug }}">{{ category.name }} <span class="chip__count">{{ category.post_count }}</span></label>
-          </span>
-        {% endfor %}
-        {% if active_category and active_category not in chips %}
-          <span class="chip">
-            <input class="chip__input" type="radio" name="category" id="chip-active" value="{{ active_category.slug }}" checked
-                   hx-get="{% url 'blog:post_list' %}" hx-trigger="change" hx-include="closest form"
-                   hx-target="#journal-results" hx-push-url="true" hx-indicator="#journal-loading">
-            <label class="chip__label" for="chip-active">{{ active_category.name }}</label>
-          </span>
-        {% endif %}
-      </fieldset>
-    </form>
-    {% include "components/spinner.html" with id="journal-loading" label="Updating articles" %}
-  </header>
+      {% endfor %}
+      {% if active_category and active_category not in chips %}
+        <span class="chip">
+          <input class="chip__input" type="radio" name="category" id="chip-active" value="{{ active_category.slug }}" checked
+                 hx-get="{% url 'blog:post_list' %}" hx-trigger="change" hx-include="closest form"
+                 hx-target="#journal-results" hx-push-url="true" hx-indicator="#journal-loading">
+          <label class="chip__label" for="chip-active">{{ active_category.name }}</label>
+        </span>
+      {% endif %}
+    </fieldset>
+  </form>
   <div class="journal-layout">
     <div class="journal-main">
-      <div id="journal-results">{% include "blog/partials/results.html" %}</div>
+      <div id="journal-results" class="skeleton-host">{% include "blog/partials/results.html" %}</div>
       {% ad_zone "between_items" %}    </div>
     {% include "blog/partials/sidebar.html" %}
   </div>

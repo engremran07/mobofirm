@@ -1,0 +1,39 @@
+{# Device model cards for brand and chipset pages. Swapped into #model-results by HTMX. Context: models (page), brand or chipset, show_brand, search_* (list_search_context). #}
+{% include "components/search_feedback.html" with noun="device" %}
+{% if models %}
+  <div class="card-grid">
+  {% for model in models %}
+    <article class="card-ui card-ui--device">
+      <div class="card-ui__body">
+        {% if show_brand %}
+          <span class="card-ui__eyebrow">{{ model.brand.name }}</span>
+          <h3 class="card-ui__title"><a class="card-ui__link" href="{% url 'firmwares:model_detail' brand_slug=model.brand.slug model_slug=model.slug %}">{{ model.display_name }}</a></h3>
+        {% else %}
+          <span class="card-ui__eyebrow">{{ brand.name }}</span>
+          <h3 class="card-ui__title"><a class="card-ui__link" href="{% url 'firmwares:model_detail' brand_slug=brand.slug model_slug=model.slug %}">{{ model.display_name }}</a></h3>
+        {% endif %}
+        <p class="card-ui__text">{% if model.model_code %}<span class="model-code">{{ model.model_code }}</span>{% endif %}{% if model.codename %}{% if model.model_code %} · {% endif %}{{ model.codename }}{% endif %}</p>
+      </div>
+      <div class="card-ui__footer">
+        <span class="cat-count"><strong>{{ model.firmware_count }}</strong> firmware record{{ model.firmware_count|pluralize }}</span>
+        {% if not show_brand and model.chipset_ref %}<a class="badge-ui" href="{% url 'firmwares:chipset_detail' slug=model.chipset_ref.slug %}"><i data-lucide="cpu" aria-hidden="true"></i>{{ model.chipset_ref.display_name }}</a>{% elif not show_brand %}<span class="small muted">{{ model.status|title }}</span>{% endif %}
+      </div>
+    </article>
+  {% endfor %}
+  </div>
+  {% include "components/pagination.html" with page_obj=models label="Device pages" hx_target="#model-results" %}
+{% elif brand %}
+  <div class="empty-ui empty-state" role="status">
+    <span class="empty-ui__icon"><i data-lucide="smartphone" aria-hidden="true"></i></span>
+    <p class="empty-ui__title">{% if search_query %}No models of {{ brand.name }} match this search.{% else %}No active device models are listed for this brand.{% endif %}</p>
+  </div>
+  {% include "components/request_cta.html" with kind="model" query=search_query brand=brand heading="Is a "|add:brand.name|add:" model missing?" %}
+{% else %}
+  <div class="empty-ui empty-state" role="status">
+    <span class="empty-ui__icon"><i data-lucide="smartphone" aria-hidden="true"></i></span>
+    <p class="empty-ui__title">{% if search_query %}No devices using this chipset match this search.{% else %}No active device models use this chipset yet.{% endif %}</p>
+  </div>
+{% endif %}
+{% if brand and models and search_total < 3 %}
+  {% include "components/request_cta.html" with kind="model" query=search_query brand=brand heading="Is a "|add:brand.name|add:" model missing?" %}
+{% endif %}

@@ -1,3 +1,4 @@
+{% if search_query %}<div class="col-12">{% include "components/search_feedback.html" with noun="listing" %}</div>{% endif %}
 {% for listing in listings %}
   <div class="col-12 col-sm-6 col-lg-4">
     <article class="surface-card eco-listing" aria-labelledby="listing-{{ listing.pk }}">

@@ -8,7 +8,7 @@ from datetime import datetime
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
-from django.db.models import F, Q
+from django.db.models import F
 from django.http import Http404, HttpRequest, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -82,11 +82,8 @@ def api_similar_posts(request: HttpRequest) -> JsonResponse:
     query = request.GET.get("q", "").strip()[:200]
     if not query:
         return JsonResponse({"items": []})
-    posts = (
-        selectors.live_posts()
-        .filter(Q(title__icontains=query) | Q(summary__icontains=query))
-        .order_by("-published_at")[:8]
-    )
+    result = selectors.search_posts(selectors.live_posts(), query)
+    posts = result.queryset.order_by("-published_at")[:8]
     return JsonResponse({"items": _public_items(posts)})
 
 

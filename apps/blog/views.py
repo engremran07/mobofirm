@@ -28,16 +28,15 @@ from apps.blog.access import (
 from apps.blog.firmware_panel import firmware_inventory, firmware_summary
 from apps.blog.models import Category, Post, PostTranslation
 from apps.blog.paywall import resolve_gate, teaser_text
-from apps.blog.presentation import share_links
 from apps.blog.rendering import RenderedArticle, render_article
 from apps.comments.selectors import comment_tree
 from apps.core.app_service import AppService
+from apps.core.search import list_search_context
+from apps.core.view_counter import should_count
+from apps.site_settings.services import absolute_url
 from apps.tags.selectors import tag_cloud
 
 logger = logging.getLogger(__name__)
-
-SESSION_VIEWED_KEY = "blog_viewed_posts"
-MAX_REMEMBERED_VIEWS = 200
 
 
 def _require_blog(request: HttpRequest) -> None:
@@ -99,13 +98,19 @@ def _listing_context(request: HttpRequest, base) -> dict:
 def post_list(request: HttpRequest) -> HttpResponse:
     _require_blog(request)
     filters = selectors.ListingFilters.from_request(request.GET)
-    posts = selectors.filtered_posts(filters)
+    posts, search_result = selectors.listing(filters)
     lead_post = None if filters.is_filtered else selectors.lead_story()
     if lead_post is not None:
         posts = posts.exclude(pk=lead_post.pk)
     on_first_page = (request.GET.get("page") or "1") == "1"
     lead = lead_post if on_first_page else None
     context = _listing_context(request, posts)
+    context |= list_search_context(
+        search_result,
+        context["total"],
+        user=request.user,
+        kinds=("brand", "model", "chipset", "tag", "blog_category"),
+    )
     active_category = None
     if filters.category:
         active_category = Category.objects.filter(slug=filters.category).first()
@@ -150,12 +155,10 @@ def purchased(request: HttpRequest) -> HttpResponse:
 
 
 def _count_view(request: HttpRequest, post: Post) -> None:
-    """Count one view per browser session; the counter is an atomic database update."""
-    seen = list(request.session.get(SESSION_VIEWED_KEY, []))
-    if post.pk in seen:
-        return
-    Post.objects.filter(pk=post.pk).update(views_count=F("views_count") + 1)
-    request.session[SESSION_VIEWED_KEY] = [*seen, post.pk][-MAX_REMEMBERED_VIEWS:]
+    """Count a human view once per session per day (atomic ``F()`` update)."""
+    if should_count(request, "post", post.pk):
+        Post.objects.filter(pk=post.pk).update(views_count=F("views_count") + 1)
+        post.views_count += 1
 
 
 @require_GET
@@ -198,9 +201,8 @@ def post_detail(request: HttpRequest, slug: str) -> HttpResponse:
         "article": article,
         "tags": tags,
         "cover": post.cover_image_url,
-        "share_links": share_links(
-            request.build_absolute_uri(post.get_absolute_url()), post.title
-        ),
+        "share_url": post.canonical_url
+        or absolute_url(post.get_absolute_url(), request),
         "related": selectors.build_cards(selectors.related_posts(post, 3)),
         "older": selectors.build_card(older) if older else None,
         "newer": selectors.build_card(newer) if newer else None,

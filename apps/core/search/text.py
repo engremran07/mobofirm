@@ -7,6 +7,8 @@ import unicodedata
 from collections.abc import Iterable
 from typing import Final
 
+from .synonyms import expand
+
 MAX_QUERY_LENGTH: Final[int] = 100
 MAX_TOKENS: Final[int] = 6
 
@@ -18,6 +20,8 @@ SCORE_EXACT: Final[float] = 100.0
 SCORE_PREFIX: Final[float] = 80.0
 SCORE_WORD_PREFIX: Final[float] = 60.0
 SCORE_CONTAINS: Final[float] = 40.0
+# A synonym match ranks just below the literal word.
+SYNONYM_PENALTY: Final[float] = 5.0
 
 
 def fold(value: str) -> str:
@@ -45,6 +49,16 @@ def _field_bonus(position: int) -> float:
     return max(0.0, 9.0 - position * 3.0)
 
 
+def _word_score(word: str, haystack: str, bonus: float) -> float:
+    if haystack.startswith(word):
+        return SCORE_PREFIX - 10 + bonus
+    if f" {word}" in haystack:
+        return SCORE_WORD_PREFIX + bonus
+    if word in haystack:
+        return SCORE_CONTAINS + bonus
+    return 0.0
+
+
 def score_text(query: str, tokens: Iterable[str], *fields: str) -> float:
     """Relevance of ``fields`` for a query; 0 when some token matches no field.
 
@@ -64,15 +78,14 @@ def score_text(query: str, tokens: Iterable[str], *fields: str) -> float:
     total = 0.0
     for word in words:
         word_best = 0.0
-        for position, haystack in enumerate(folded_fields):
-            bonus = _field_bonus(position)
-            if haystack.startswith(word):
-                word_best = max(word_best, SCORE_PREFIX - 10 + bonus)
-            elif f" {word}" in haystack:
-                word_best = max(word_best, SCORE_WORD_PREFIX + bonus)
-            elif word in haystack:
-                word_best = max(word_best, SCORE_CONTAINS + bonus)
-        if word_best == 0.0:
+        for variant in (word, *expand(word)):
+            penalty = 0.0 if variant == word else SYNONYM_PENALTY
+            for position, haystack in enumerate(folded_fields):
+                word_best = max(
+                    word_best,
+                    _word_score(variant, haystack, _field_bonus(position)) - penalty,
+                )
+        if word_best <= 0.0:
             return 0.0
         total += word_best
     return max(phrase, total / len(words))

@@ -28,8 +28,15 @@ function initialFocus(dialog) {
       ".app-dialog__body :is(input:not([type=hidden]), textarea, select)",
     ),
   ].find((element) => element.getClientRects().length > 0);
+  // After a server-side validation error the first invalid field gets focus.
+  const invalid = dialog.querySelector(
+    '.app-dialog__body :is([aria-invalid="true"], .is-invalid)',
+  );
   const target =
-    dialog.querySelector("[autofocus]") ?? field ?? dialog.querySelector("[data-dialog-initial-focus]");
+    dialog.querySelector("[autofocus]") ??
+    invalid ??
+    field ??
+    dialog.querySelector("[data-dialog-initial-focus]");
   if (target instanceof HTMLElement) target.focus();
 }
 
@@ -308,6 +315,37 @@ function markDirty(event) {
   if (form) dirtyForms.add(form);
 }
 
+// Plain (non-HTMX) form posts from a dialog show the loading state and cannot be sent
+// twice. HTMX forms get .htmx-request from HTMX itself.
+function onDialogFormSubmit(event) {
+  const form = event.target;
+  if (
+    event.defaultPrevented ||
+    !(form instanceof HTMLFormElement) ||
+    form.method === "dialog" ||
+    !form.closest("dialog[data-app-dialog]") ||
+    form.matches(HX_REQUEST)
+  ) {
+    return;
+  }
+  if (form.hasAttribute("data-submitting")) {
+    event.preventDefault();
+    return;
+  }
+  form.setAttribute("data-submitting", "");
+  form.setAttribute("aria-busy", "true");
+  // A response that does not navigate (a download, a network failure) must not leave
+  // the dialog stuck in its loading state.
+  window.setTimeout(clearSubmitting, 20000);
+}
+
+function clearSubmitting() {
+  for (const form of document.querySelectorAll("form[data-submitting]")) {
+    form.removeAttribute("data-submitting");
+    form.removeAttribute("aria-busy");
+  }
+}
+
 function onDialogClose(event) {
   const origin =
     event.target instanceof Element ? event.target.closest("dialog[data-app-dialog]") : null;
@@ -320,6 +358,69 @@ function onDialogClose(event) {
     }
     dialog.close("done");
   }
+}
+
+// Native modals let Tab escape to the browser UI; keep it cycling inside the dialog.
+function trapTab(event, dialog) {
+  if (event.key !== "Tab") return;
+  const focusable = [...dialog.querySelectorAll(FOCUSABLE)].filter(
+    (element) => element.getClientRects().length > 0,
+  );
+  if (focusable.length === 0) {
+    event.preventDefault();
+    return;
+  }
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  const active = document.activeElement;
+  if (event.shiftKey && (active === first || active === dialog)) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && active === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
+// Hand-written dialogs that carry data-app-dialog but not the Alpine component still get
+// the shared behaviour: [data-dialog-close], focus trap, focus restore and backdrop close.
+const PLAIN_DIALOG = "dialog[data-app-dialog]:not([x-data])";
+
+function plainDialogOf(node) {
+  return node instanceof Element ? node.closest(PLAIN_DIALOG) : null;
+}
+
+function initializePlainDialogs() {
+  document.addEventListener("click", (event) => {
+    const target = event.target instanceof Element ? event.target : null;
+    const closer = target?.closest("[data-dialog-close]");
+    const owner = closer?.closest("dialog");
+    if (owner instanceof HTMLDialogElement) owner.close("cancel");
+    const dialog = event.target instanceof HTMLDialogElement ? event.target : null;
+    if (dialog?.matches(PLAIN_DIALOG) && dialog.dataset.dialogBackdrop !== "static") {
+      const rect = dialog.getBoundingClientRect();
+      const outside =
+        event.clientX < rect.left ||
+        event.clientX > rect.right ||
+        event.clientY < rect.top ||
+        event.clientY > rect.bottom;
+      if (outside) dialog.close("cancel");
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    const dialog = plainDialogOf(event.target);
+    if (dialog) trapTab(event, dialog);
+  });
+  // `close` does not bubble, so listen in the capture phase.
+  document.addEventListener(
+    "close",
+    (event) => {
+      if (event.target instanceof HTMLDialogElement && event.target.matches(PLAIN_DIALOG)) {
+        restoreFocus(event.target);
+      }
+    },
+    true,
+  );
 }
 
 export function registerDialogs(Alpine) {
@@ -338,27 +439,8 @@ export function registerDialogs(Alpine) {
     onInput(event) {
       if (event.target.name === "confirmation") this.typed = event.target.value;
     },
-    // Native modals let Tab escape to the browser UI; keep it cycling inside the dialog.
     trapFocus(event) {
-      if (event.key !== "Tab") return;
-      const dialog = this.$root;
-      const focusable = [...dialog.querySelectorAll(FOCUSABLE)].filter(
-        (element) => element.getClientRects().length > 0,
-      );
-      if (focusable.length === 0) {
-        event.preventDefault();
-        return;
-      }
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      const active = document.activeElement;
-      if (event.shiftKey && (active === first || active === dialog)) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && active === last) {
-        event.preventDefault();
-        first.focus();
-      }
+      trapTab(event, this.$root);
     },
     // Own the validation message instead of the browser's native tooltip.
     validate(event) {
@@ -406,8 +488,14 @@ export function registerDialogs(Alpine) {
 
 // Single registration point for the document-level behaviour.
 export function initializeAppDialogs() {
+  initializePlainDialogs();
   document.addEventListener("click", onClick);
   document.addEventListener("submit", onSubmit, true);
+  document.addEventListener("submit", onDialogFormSubmit);
+  // Back/forward cache restores the page with a stale loading state.
+  window.addEventListener("pageshow", (event) => {
+    if (event.persisted) clearSubmitting();
+  });
   document.addEventListener("input", markDirty);
   document.addEventListener("change", markDirty);
   document.addEventListener("reset", (event) => {
@@ -449,4 +537,40 @@ export function initializeDeviceRegistrationDialog() {
   dialog.addEventListener("close", () => {
     document.getElementById("main-content")?.focus({ preventScroll: true });
   });
+  makeDialogDraggable(dialog, dialog.querySelector("[data-dialog-drag-handle]"));
+}
+
+// Drag a centred modal by its header. The offset is applied through CSS custom
+// properties (`translate`) and clamped so the header can never leave the viewport.
+function makeDialogDraggable(dialog, handle) {
+  if (!(handle instanceof HTMLElement)) return;
+  let start = null;
+  const offset = { x: 0, y: 0 };
+  const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+  handle.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0 || event.target.closest("a, button, input, select, textarea")) return;
+    const box = dialog.getBoundingClientRect();
+    start = { pointerX: event.clientX, pointerY: event.clientY, box, x: offset.x, y: offset.y };
+    handle.setPointerCapture(event.pointerId);
+    handle.classList.add("is-dragging");
+  });
+  handle.addEventListener("pointermove", (event) => {
+    if (!start) return;
+    const { box } = start;
+    const margin = 8;
+    const dx = clamp(event.clientX - start.pointerX, margin - box.left, window.innerWidth - margin - box.right);
+    const dy = clamp(event.clientY - start.pointerY, margin - box.top, window.innerHeight - margin - box.top - 48);
+    offset.x = start.x + dx;
+    offset.y = start.y + dy;
+    dialog.style.setProperty("--dialog-drag-x", `${offset.x}px`);
+    dialog.style.setProperty("--dialog-drag-y", `${offset.y}px`);
+  });
+  const stop = (event) => {
+    if (!start) return;
+    start = null;
+    handle.classList.remove("is-dragging");
+    if (handle.hasPointerCapture(event.pointerId)) handle.releasePointerCapture(event.pointerId);
+  };
+  handle.addEventListener("pointerup", stop);
+  handle.addEventListener("pointercancel", stop);
 }
