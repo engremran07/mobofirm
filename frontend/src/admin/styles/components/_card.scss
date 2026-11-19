@@ -1,0 +1,79 @@
+// c-card: layered surface.
+//   <section class="c-card"><header class="c-card__header"><h2 class="c-card__title">Title</h2>
+//   <div class="c-card__actions">...</div></header><div class="c-card__body">...</div>
+//   <footer class="c-card__footer">...</footer></section>
+// Modifiers: --flush (body without padding; tables/lists), --interactive (whole card is a link/hover lift),
+// --tint (accent wash), --danger (danger edge), .is-collapsed (body hidden).
+@use "../../../shared/components/shared";
+
+@layer components {
+  .c-card {
+    position: relative;
+    min-inline-size: 0;
+    color: var(--mf-text);
+    border: 1px solid;
+    @include shared.card-surface;
+  }
+
+  .c-card__header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--mf-space-2) var(--mf-space-3);
+    padding: var(--mf-space-4) var(--mf-space-5);
+    border-block-end: 1px solid var(--mf-border-soft);
+  }
+
+  .c-card__title {
+    margin: 0;
+    font-size: var(--mf-fs-lg);
+  }
+
+  .c-card__subtitle {
+    margin: 0;
+    color: var(--mf-text-muted);
+    font-size: var(--mf-fs-sm);
+  }
+
+  .c-card__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--mf-space-2);
+  }
+
+  .c-card__body { padding: var(--mf-space-5); }
+
+  .c-card__footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--mf-space-2) var(--mf-space-3);
+    padding: var(--mf-space-3) var(--mf-space-5);
+    background: color-mix(in srgb, var(--mf-surface-soft) 55%, transparent);
+    border-block-start: 1px solid var(--mf-border-soft);
+    border-end-start-radius: inherit;
+    border-end-end-radius: inherit;
+  }
+
+  .c-card--flush > .c-card__body { padding: 0; }
+  .c-card--flush > .c-card__body > :last-child { border-end-start-radius: inherit; border-end-end-radius: inherit; }
+  .c-card--tint,
+  .c-card--accent { background: var(--mf-accent-soft); border-color: color-mix(in srgb, var(--mf-accent) 28%, var(--mf-border)); }
+  .c-card--danger { border-color: color-mix(in srgb, var(--mf-danger) 45%, var(--mf-border)); }
+
+  .c-card--interactive {
+    transition: box-shadow var(--mf-duration-base) var(--mf-ease-out), transform var(--mf-duration-base) var(--mf-ease-out), border-color var(--mf-duration-base) var(--mf-ease-out);
+
+    &:hover,
+    &:focus-within {
+      border-color: color-mix(in srgb, var(--mf-accent) 40%, var(--mf-border));
+      box-shadow: var(--mf-elev-2);
+      transform: translateY(-2px);
+    }
+  }
+
+  .c-card.is-collapsed > :not(.c-card__header) { display: none; }
+}

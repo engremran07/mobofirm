@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from django.contrib.sitemaps import Sitemap
 from django.urls import reverse
-from django.utils import timezone
 
 from apps.site_settings.services import get_site_settings
 
@@ -23,7 +22,12 @@ class PublishedBlogPostsSitemap(Sitemap):
         return Post.objects.live().filter(noindex=False).order_by("-publish_at")
 
     def lastmod(self, obj: Post):
-        return obj.updated_at or obj.publish_at or timezone.now()
+        """The real update time; never "now" (a missing time is simply omitted)."""
+        return obj.updated_at or obj.publish_at
+
+    def news(self, item: Post):
+        """Title and publication time for the optional Google News sitemap."""
+        return (item.title, item.publish_at) if item.publish_at else None
 
     def location(self, item: Post):
         return reverse("blog:post_detail", kwargs={"slug": item.slug})

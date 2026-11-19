@@ -285,9 +285,11 @@ class UserAreaBreadcrumbTests(TestCase):
             "users:notification_settings",
             "users:notifications",
             "devices:my_devices",
-            "library:my_files",
-            "library:my_uploads",
-            "library:my_quota",
+            "contributions:hub",
+            "contributions:firmware",
+            "contributions:blog",
+            "contributions:downloads",
+            "contributions:quota",
         )
         for name in names:
             with self.subTest(page=name):

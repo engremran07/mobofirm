@@ -191,7 +191,7 @@ ARTICLES: tuple[ArticleSeed, ...] = (
         tags=("Firmware categories", "Firmware basics", "Mobofirm"),
         seo_title="Firmware categories explained",
         seo_description=(
-            "Understand Official, Engineering, Readback, Modified, Other and "
+            "Understand Official, Service / Engineering, Readback, Modified, Other and "
             "Unclassified firmware categories and how package format differs."
         ),
         body="""
@@ -199,7 +199,7 @@ ARTICLES: tuple[ArticleSeed, ...] = (
 <h2>The categories</h2>
 <ul>
 <li><strong>Official.</strong> Published by the device manufacturer or an authorised channel. This is the right choice when you only want the stock software for your phone.</li>
-<li><strong>Engineering.</strong> Builds used inside the manufacturer or its repair network, often with extra debug features. They may be unfinished and are not meant for everyday use.</li>
+<li><strong>Service / Engineering.</strong> Builds used inside the manufacturer or its repair network, often with extra debug features. They may be unfinished and are not meant for everyday use.</li>
 <li><strong>Readback.</strong> An image read from a working device. It can be a useful recovery source, but it may contain data tied to the original device.</li>
 <li><strong>Modified.</strong> Official software that someone has altered, for example region conversions or pre-rooted images. The modification is the risk, so read the notes carefully.</li>
 <li><strong>Other</strong> and <strong>Unclassified.</strong> Files that do not fit the groups above, or whose origin could not be established by a reviewer.</li>

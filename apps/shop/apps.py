@@ -7,9 +7,10 @@ class ShopConfig(AppConfig):
     default_auto_field = "django.db.models.BigAutoField"
     name = "apps.shop"
     label = "shop"
-    verbose_name = "Shop"
+    verbose_name = "Pricing"
 
     def ready(self) -> None:
+        from .file_references import connect_firmware_receivers
         from .receivers import assign_free_package
 
         post_save.connect(
@@ -17,3 +18,4 @@ class ShopConfig(AppConfig):
             sender=settings.AUTH_USER_MODEL,
             dispatch_uid="shop_assign_free_package_v1",
         )
+        connect_firmware_receivers()

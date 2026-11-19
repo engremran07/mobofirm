@@ -34,6 +34,7 @@
           <dt>File</dt><dd class="build-code">{{ firmware.original_file_name }}</dd>
           <dt>Firmware classification</dt><dd>{{ firmware_type_display }}</dd>
           <dt>Package format</dt><dd>{{ firmware.get_package_format_display }}</dd>
+          {% if format_tool %}<dt>Flashing tool for this format</dt><dd><a href="{% url 'firmwares:flashing_tool_detail' slug=format_tool.slug %}">{{ format_tool.name }}</a></dd>{% endif %}
           <dt>Model</dt><dd>{% if firmware.model and firmware.model.brand %}<a href="{% url 'firmwares:model_detail' brand_slug=firmware.model.brand.slug model_slug=firmware.model.slug %}">{{ firmware.model.display_name }}</a>{% else %}Not specified{% endif %}</dd>
           <dt>Variant / region</dt><dd>{{ firmware.variant.name|default:"Not specified" }}{% if firmware.variant.region %} · {{ firmware.variant.region }}{% endif %}{% if firmware.variant.model_code %} · {{ firmware.variant.model_code }}{% endif %}</dd>
           <dt>Chipset</dt><dd>{% if firmware.model.chipset_ref %}<a href="{% url 'firmwares:chipset_detail' slug=firmware.model.chipset_ref.slug %}">{{ firmware.model.chipset_ref.display_name }}</a>{% else %}{{ firmware.chipset|default:"Not specified" }}{% endif %}</dd>

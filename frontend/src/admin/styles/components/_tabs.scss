@@ -1,0 +1,92 @@
+// c-tabs - two forms sharing one look:
+//  1) navigation tabs:  <nav class="c-tabs" aria-label=".."><a class="c-tabs__item" aria-current="page" href>Label<span class="c-tabs__badge">3</span></a>...</nav>
+//  2) in-page tabs (fieldset tabs, JS-enhanced, all panels visible without JS):
+//     <div class="c-tabs" data-console-tabs><div class="c-tabs__list" role="tablist"><button class="c-tabs__tab" role="tab" aria-selected="true"
+//     aria-controls="p1" data-has-errors>Label</button></div><div class="c-tabs__panel" role="tabpanel" id="p1">..</div></div>
+// A tab whose panel has errors carries data-has-errors (shows a danger dot).
+@layer components {
+  // min/max keep an in-page tab row (which scrolls inside itself) from widening its
+  // fieldset or grid track past the viewport on narrow screens.
+  .c-tabs {
+    min-inline-size: 0;
+    max-inline-size: 100%;
+  }
+
+  nav.c-tabs,
+  .c-tabs__list {
+    display: flex;
+    gap: var(--mf-space-1);
+    margin-block-end: var(--mf-space-4);
+    overflow-x: auto;
+    border-block-end: 1px solid var(--mf-border);
+    scrollbar-width: none;
+
+    &::-webkit-scrollbar { display: none; }
+  }
+
+  .c-tabs__item,
+  .c-tabs__tab {
+    position: relative;
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: var(--mf-space-2);
+    min-block-size: var(--mf-control-h);
+    padding: 0 var(--mf-space-3);
+    color: var(--mf-text-muted);
+    font: inherit;
+    font-size: var(--mf-fs-sm);
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+    background: transparent;
+    border: 0;
+    border-radius: var(--mf-radius-sm) var(--mf-radius-sm) 0 0;
+    cursor: pointer;
+    transition: color var(--mf-duration-fast) var(--mf-ease-out), background-color var(--mf-duration-fast) var(--mf-ease-out);
+
+    // Indicator sits on the container's bottom border
+    &::after {
+      content: "";
+      position: absolute;
+      inset-inline: var(--mf-space-2);
+      inset-block-end: -1px;
+      block-size: 2px;
+      background: var(--mf-accent);
+      border-radius: 2px 2px 0 0;
+      transform: scaleX(0);
+      transition: transform var(--mf-duration-base) var(--mf-ease-out);
+    }
+
+    &:hover { color: var(--mf-text); background: var(--mf-hover); }
+
+    &[aria-current="page"],
+    &[aria-selected="true"] {
+      color: var(--mf-text);
+      &::after { transform: scaleX(1); }
+    }
+
+    &[data-has-errors]::before {
+      content: "";
+      order: 2;
+      inline-size: 0.5rem;
+      block-size: 0.5rem;
+      background: var(--mf-danger);
+      border-radius: 50%;
+    }
+  }
+
+  .c-tabs__badge {
+    min-inline-size: 1.25rem;
+    padding: 0 0.4rem;
+    color: var(--mf-text-muted);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    line-height: 1.25rem;
+    text-align: center;
+    background: var(--mf-surface-soft);
+    border-radius: var(--mf-radius-pill);
+  }
+
+  .c-tabs__panel { padding-block: var(--mf-space-2); }
+}

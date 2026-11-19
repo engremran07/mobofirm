@@ -1,21 +1,28 @@
 {% extends "admin/staff_page.html" %}
-{% block mf_actions %}
-  <a class="mf-ui-btn" href="{% url 'tags:manage' %}">Tag manager</a>
-  <a class="mf-ui-btn" href="{% url 'tags:keyword_review' %}">Keyword suggestions</a>
+{% load i18n staff_ui %}
+{% block page_actions %}
+  {% url 'tags:manage' as manage_url %}{% url 'tags:keyword_review' as keywords_url %}
+  {% staff_button _("Tag manager") href=manage_url %}
+  {% staff_button _("Keyword suggestions") href=keywords_url %}
 {% endblock %}
-{% block mf_body %}
-<div class="mf-ui-stack">
-  {% for pair in pairs %}
-    <article class="mf-ui-card" aria-labelledby="pair-{{ forloop.counter }}">
-      <h2 class="mf-ui-card__title" id="pair-{{ forloop.counter }}">{{ pair.a }} ↔ {{ pair.b }}</h2>
-      <p class="mf-ui-section__lead">Similarity {{ pair.score }}</p>
-      <div class="mf-ui-row">
-        <a class="mf-ui-btn mf-ui-btn--small" href="{% url 'tags:merge' %}?source={{ pair.b_slug|urlencode }}&amp;target={{ pair.a_slug|urlencode }}">Keep “{{ pair.a }}”</a>
-        <a class="mf-ui-btn mf-ui-btn--small" href="{% url 'tags:merge' %}?source={{ pair.a_slug|urlencode }}&amp;target={{ pair.b_slug|urlencode }}">Keep “{{ pair.b }}”</a>
-      </div>
-    </article>
-  {% empty %}
-    <p class="mf-ui-empty">No similar tags need review.</p>
-  {% endfor %}
-</div>
+{% block page_body %}
+{% url 'tags:merge' as merge_url %}
+{% for pair in pairs %}
+  {% with pair_key=forloop.counter|stringformat:"s" %}
+  {% blocktranslate with first=pair.a second=pair.b asvar pair_title %}{{ first }} ↔ {{ second }}{% endblocktranslate %}
+  {% blocktranslate with score=pair.score asvar pair_score %}Similarity {{ score }}{% endblocktranslate %}
+  {% staff_card title=pair_title subtitle=pair_score ident="pair-"|add:pair_key %}
+    {% staff_row %}
+      {% blocktranslate with name=pair.a asvar keep_first %}Keep “{{ name }}”{% endblocktranslate %}
+      {% blocktranslate with name=pair.b asvar keep_second %}Keep “{{ name }}”{% endblocktranslate %}
+      {% with first_slug=pair.a_slug|urlencode second_slug=pair.b_slug|urlencode %}
+        {% staff_button keep_first href=merge_url|add:"?source="|add:second_slug|add:"&target="|add:first_slug size="sm" %}
+        {% staff_button keep_second href=merge_url|add:"?source="|add:first_slug|add:"&target="|add:second_slug size="sm" %}
+      {% endwith %}
+    {% endstaff_row %}
+  {% endstaff_card %}
+  {% endwith %}
+{% empty %}
+  {% staff_empty %}{% translate "No similar tags need review." %}{% endstaff_empty %}
+{% endfor %}
 {% endblock %}

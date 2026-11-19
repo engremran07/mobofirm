@@ -1,0 +1,238 @@
+// Buttons re-skin Bootstrap's .btn through its own custom properties, so
+// hover/active/disabled/focus states keep working and a Bootstrap 6 bump only
+// has to keep the --bs-btn-* contract.
+@layer components {
+  .btn {
+    --bs-btn-padding-x: var(--mf-space-4);
+    --bs-btn-padding-y: 0;
+    --bs-btn-font-size: var(--mf-fs-sm);
+    --bs-btn-font-weight: 600;
+    --bs-btn-line-height: 1.2;
+    --bs-btn-border-width: 1px;
+    --bs-btn-border-radius: var(--mf-radius-md);
+    --bs-btn-focus-box-shadow: none;
+    --bs-btn-disabled-opacity: 0.5;
+
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--mf-space-2);
+    min-block-size: var(--mf-control-h);
+    color: var(--bs-btn-color);
+    letter-spacing: 0.005em;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: color var(--mf-duration-fast) var(--mf-ease-out), background-color var(--mf-duration-fast) var(--mf-ease-out), border-color var(--mf-duration-fast) var(--mf-ease-out), box-shadow var(--mf-duration-fast) var(--mf-ease-out), transform var(--mf-duration-fast) var(--mf-ease-out);
+
+    &:hover { color: var(--bs-btn-hover-color); }
+    &:active:not(:disabled, .disabled) { transform: translateY(1px); }
+    .c-icon { margin-inline: -0.125rem; }
+  }
+
+  .btn-sm {
+    --bs-btn-padding-x: var(--mf-space-3);
+    --bs-btn-font-size: var(--mf-fs-xs);
+    --bs-btn-border-radius: var(--mf-radius-sm);
+
+    min-block-size: var(--mf-control-h-sm);
+  }
+
+  .btn-lg { --bs-btn-padding-x: var(--mf-space-5); min-block-size: 3rem; }
+
+  .btn-icon {
+    --bs-btn-padding-x: 0;
+
+    inline-size: var(--mf-control-h);
+    padding: 0;
+    &.btn-sm { inline-size: var(--mf-control-h-sm); }
+  }
+
+  .btn-primary {
+    --bs-btn-color: var(--mf-accent-ink);
+    --bs-btn-bg: var(--mf-accent-strong);
+    --bs-btn-border-color: var(--mf-accent-strong);
+    --bs-btn-hover-color: var(--mf-accent-ink);
+    --bs-btn-hover-bg: color-mix(in srgb, var(--mf-accent-strong), var(--mf-text) 16%);
+    --bs-btn-hover-border-color: color-mix(in srgb, var(--mf-accent-strong), var(--mf-text) 16%);
+    --bs-btn-active-color: var(--mf-accent-ink);
+    --bs-btn-active-bg: color-mix(in srgb, var(--mf-accent-strong), var(--mf-text) 24%);
+    --bs-btn-active-border-color: color-mix(in srgb, var(--mf-accent-strong), var(--mf-text) 24%);
+    --bs-btn-disabled-color: var(--mf-accent-ink);
+    --bs-btn-disabled-bg: var(--mf-accent-strong);
+    --bs-btn-disabled-border-color: var(--mf-accent-strong);
+
+    box-shadow: var(--mf-elev-1);
+  }
+
+  .btn-secondary {
+    --bs-btn-color: var(--mf-text);
+    --bs-btn-bg: var(--mf-surface-raised);
+    --bs-btn-border-color: var(--mf-border-strong);
+    --bs-btn-hover-color: var(--mf-text);
+    --bs-btn-hover-bg: var(--mf-surface-soft);
+    --bs-btn-hover-border-color: var(--mf-border-strong);
+    --bs-btn-active-color: var(--mf-text);
+    --bs-btn-active-bg: var(--mf-surface-soft);
+    --bs-btn-active-border-color: var(--mf-border-strong);
+    --bs-btn-disabled-color: var(--mf-text);
+    --bs-btn-disabled-bg: var(--mf-surface-raised);
+    --bs-btn-disabled-border-color: var(--mf-border-strong);
+
+    box-shadow: var(--mf-elev-1);
+  }
+
+  .btn-ghost {
+    --bs-btn-color: var(--mf-text-muted);
+    --bs-btn-bg: transparent;
+    --bs-btn-border-color: transparent;
+    --bs-btn-hover-color: var(--mf-text);
+    --bs-btn-hover-bg: var(--mf-hover);
+    --bs-btn-hover-border-color: transparent;
+    --bs-btn-active-color: var(--mf-text);
+    --bs-btn-active-bg: var(--mf-surface-soft);
+    --bs-btn-active-border-color: transparent;
+    --bs-btn-disabled-color: var(--mf-text-muted);
+    --bs-btn-disabled-bg: transparent;
+    --bs-btn-disabled-border-color: transparent;
+  }
+
+  .btn-danger,
+  .btn-success,
+  .btn-warning {
+    --bs-btn-hover-color: var(--btn-ink);
+    --bs-btn-active-color: var(--btn-ink);
+    --bs-btn-disabled-color: var(--btn-ink);
+    --bs-btn-color: var(--btn-ink);
+    --bs-btn-bg: var(--btn-tone);
+    --bs-btn-border-color: var(--btn-tone);
+    --bs-btn-hover-bg: color-mix(in srgb, var(--btn-tone), var(--mf-text) 14%);
+    --bs-btn-hover-border-color: color-mix(in srgb, var(--btn-tone), var(--mf-text) 14%);
+    --bs-btn-active-bg: color-mix(in srgb, var(--btn-tone), var(--mf-text) 22%);
+    --bs-btn-active-border-color: color-mix(in srgb, var(--btn-tone), var(--mf-text) 22%);
+    --bs-btn-disabled-bg: var(--btn-tone);
+    --bs-btn-disabled-border-color: var(--btn-tone);
+
+    --btn-ink: var(--mf-accent-ink);
+
+    box-shadow: var(--mf-elev-1);
+  }
+
+  .btn-danger { --btn-tone: var(--mf-danger); --btn-ink: var(--mf-danger-ink); }
+  .btn-success { --btn-tone: var(--mf-success); }
+  .btn-warning { --btn-tone: var(--mf-warning); }
+
+  .btn-outline-secondary,
+  .btn-outline-danger,
+  .btn-outline-primary {
+    --bs-btn-bg: transparent;
+    --bs-btn-hover-bg: var(--mf-hover);
+    --bs-btn-active-bg: var(--mf-surface-soft);
+    --bs-btn-disabled-bg: transparent;
+  }
+
+  .btn-outline-secondary {
+    --bs-btn-color: var(--mf-text);
+    --bs-btn-border-color: var(--mf-border-strong);
+    --bs-btn-hover-color: var(--mf-text);
+    --bs-btn-hover-border-color: var(--mf-border-strong);
+    --bs-btn-active-color: var(--mf-text);
+    --bs-btn-active-border-color: var(--mf-border-strong);
+    --bs-btn-disabled-color: var(--mf-text);
+    --bs-btn-disabled-border-color: var(--mf-border-strong);
+  }
+
+  .btn-outline-danger {
+    --bs-btn-color: var(--mf-danger);
+    --bs-btn-border-color: var(--mf-danger);
+    --bs-btn-hover-color: var(--mf-danger);
+    --bs-btn-hover-border-color: var(--mf-danger);
+    --bs-btn-active-color: var(--mf-danger);
+    --bs-btn-active-border-color: var(--mf-danger);
+    --bs-btn-disabled-color: var(--mf-danger);
+    --bs-btn-disabled-border-color: var(--mf-danger);
+  }
+
+  .btn-outline-primary {
+    --bs-btn-color: var(--mf-accent-strong);
+    --bs-btn-border-color: var(--mf-accent-strong);
+    --bs-btn-hover-color: var(--mf-accent-strong);
+    --bs-btn-hover-border-color: var(--mf-accent-strong);
+    --bs-btn-active-color: var(--mf-accent-strong);
+    --bs-btn-active-border-color: var(--mf-accent-strong);
+    --bs-btn-disabled-color: var(--mf-accent-strong);
+    --bs-btn-disabled-border-color: var(--mf-accent-strong);
+  }
+
+  .btn-link {
+    --bs-btn-color: var(--mf-accent);
+    --bs-btn-hover-color: var(--mf-accent-strong);
+    --bs-btn-active-color: var(--mf-accent-strong);
+    --bs-btn-disabled-color: var(--mf-text-muted);
+    --bs-btn-padding-x: var(--mf-space-1);
+
+    min-block-size: 0;
+    text-decoration: underline;
+    text-underline-offset: 0.18em;
+  }
+
+  // Segmented group (density toggle, view switch). Active = soft accent.
+  .btn-group > .btn {
+    &.active,
+    &[aria-pressed="true"] {
+      --bs-btn-color: var(--mf-accent-strong);
+      --bs-btn-bg: var(--mf-accent-soft);
+      --bs-btn-border-color: var(--mf-accent-strong);
+      --bs-btn-hover-color: var(--mf-accent-strong);
+      --bs-btn-hover-bg: var(--mf-accent-soft);
+      --bs-btn-hover-border-color: var(--mf-accent-strong);
+      --bs-btn-active-color: var(--mf-accent-strong);
+      --bs-btn-active-bg: var(--mf-accent-soft);
+
+      z-index: 1;
+    }
+  }
+
+  // Busy state: HTMX marks the requesting element with .htmx-request
+  .btn.htmx-request,
+  .btn[aria-busy="true"] {
+    pointer-events: none;
+
+    &::after {
+      content: "";
+      inline-size: 1em;
+      block-size: 1em;
+      border: 2px solid currentcolor;
+      border-inline-end-color: transparent;
+      border-radius: 50%;
+      animation: c-spin 0.7s linear infinite;
+    }
+  }
+
+  // Close button drawn in CSS (no data: URI): <button class="btn-close" aria-label="Close">
+  .btn-close {
+    position: relative;
+    display: inline-grid;
+    place-items: center;
+    inline-size: var(--mf-control-h-sm);
+    block-size: var(--mf-control-h-sm);
+    padding: 0;
+    color: var(--mf-text-muted);
+    background: transparent;
+    border: 0;
+    border-radius: var(--mf-radius-sm);
+    opacity: 1;
+    transition: color var(--mf-duration-fast) var(--mf-ease-out), background-color var(--mf-duration-fast) var(--mf-ease-out);
+
+    &::before {
+      content: "\00d7";
+      font-size: 1.5rem;
+      line-height: 1;
+    }
+
+    &:hover { color: var(--mf-text); background: var(--mf-hover); opacity: 1; }
+  }
+
+  @keyframes c-spin {
+    to { transform: rotate(360deg); }
+  }
+}

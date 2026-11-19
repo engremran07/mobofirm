@@ -194,7 +194,9 @@ def text_length(html: str) -> int:
     return len(text_content(html))
 
 
-_BLOCK_END = re.compile(r"</(?:p|div|li|h[1-6]|blockquote|tr|pre)>|<br\s*/?>", re.I)
+_BLOCK_END = re.compile(
+    r"</(?:p|div|li|h[1-6]|blockquote|tr|pre)>|<br\s*/?>", re.IGNORECASE
+)
 
 
 def plain_text(html: str | None) -> str:

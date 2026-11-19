@@ -1,0 +1,11 @@
+{% load i18n console_ui %}{% comment %}
+  Shell of a lazily loaded dashboard card (the fragment that replaces the placeholder of admin/index.html).
+  Child templates fill: widget_body (required), widget_actions (optional header buttons).
+  Context: widget (apps.core.admin_dashboard.Widget). It refreshes itself every widget.refresh seconds (paused while the tab is hidden, js/components/widgets.js), on the page-wide "console-refresh" event and through its own button; a failed request shows the error block with a retry button.
+{% endcomment %}<section class="c-card c-widget c-widget--{{ widget.size }}" id="widget-{{ widget.slug }}" aria-labelledby="widget-{{ widget.slug }}-title" aria-busy="false" data-console-widget="{{ widget.slug }}"{% if widget.refresh %} data-console-refresh="{{ widget.refresh }}"{% endif %} hx-get="{% url 'admin:console_dashboard_widget' widget.slug %}" hx-trigger="console-refresh from:body, console-widget-refresh" hx-target="this" hx-swap="outerHTML" hx-sync="this:replace" hx-indicator="#widget-{{ widget.slug }}">
+<header class="c-card__header c-widget__head">
+<h2 class="c-card__title" id="widget-{{ widget.slug }}-title">{% console_icon widget.icon "c-icon--sm" %} {{ widget.title }}</h2>
+<div class="c-card__actions">{% block widget_actions %}{% endblock %}<button type="button" class="c-icon-btn" hx-get="{% url 'admin:console_dashboard_widget' widget.slug %}" hx-target="#widget-{{ widget.slug }}" hx-swap="outerHTML" aria-label="{% blocktranslate with title=widget.title %}Refresh {{ title }}{% endblocktranslate %}">{% console_icon "refresh-cw" "c-icon--sm" %}</button></div>
+</header>
+<div class="c-card__body">{% url 'admin:console_dashboard_widget' widget.slug as widget_url %}{% include "console/dashboard/_widget_error.html" with url=widget_url %}{% block widget_body %}{% endblock %}</div>
+</section>

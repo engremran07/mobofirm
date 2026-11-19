@@ -28,12 +28,6 @@
   letter-spacing: var(--mf-tracking-tight);
 }
 
-.cat-section__sub {
-  margin: 0.15rem 0 0;
-  color: var(--mf-text-muted);
-  font-size: var(--mf-text-sm);
-}
-
 // ---- Page header ----
 .cat-head {
   display: grid;
@@ -134,7 +128,7 @@
     height: 100%;
     padding: 0.4rem;
     object-fit: contain;
-    background: #fff;
+    background: var(--mf-white);
   }
 
   [data-lucide],
@@ -421,7 +415,7 @@
 }
 
 :root[data-bs-theme="light"] .tier-badge--paid {
-  --badge-color: #8a4a00;
+  --badge-color: var(--mf-amber-ink);
 }
 
 .model-card__counts {

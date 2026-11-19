@@ -1,0 +1,4 @@
+{% comment %}
+  Slug/prefill rules of the form ({% prepopulated_fields_js %}): a data block, never executable script.
+  Consumed by the form-behaviour layer through [data-console-prepopulated] (JSON: [{"id", "name", "dependency_ids", "dependency_list", "maxLength", "allowUnicode"}]).
+{% endcomment %}{% if prepopulated_fields %}<div hidden data-console-prepopulated="{{ prepopulated_fields_json }}"></div>{% endif %}

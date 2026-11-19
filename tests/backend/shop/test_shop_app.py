@@ -167,9 +167,9 @@ class TestOrderFlow:
         result = expire_packages()
 
         overdue.refresh_from_db()
-        assert result == {"packages": 1}
+        assert result == {"packages": 1, "unlock_tickets": 0}
         assert overdue.status == UserPackage.Status.EXPIRED
-        assert expire_packages() == {"packages": 0}
+        assert expire_packages() == {"packages": 0, "unlock_tickets": 0}
 
 
 class TestPackageAdministrationServices:
@@ -221,12 +221,39 @@ class TestPublicViews:
         ):
             assert client.get(reverse(name, kwargs=kwargs)).status_code == 200
 
-    def test_the_shop_root_redirects_to_the_pricing_page(self, client):
-        response = client.get("/shop/")
+    def test_pricing_is_the_canonical_plans_page(self, client, pro, default_tier):
+        assert reverse("shop:pricing") == "/pricing/"
+        assert reverse("shop:index") == "/pricing/"
+        assert reverse("shop:package_detail", kwargs={"slug": "pro"}) == (
+            "/pricing/packages/pro/"
+        )
+        page = client.get("/pricing/").content.decode()
+        assert "Pricing" in page and 'aria-label="Pricing sections"' in page
+        assert ">Shop<" not in page
 
-        assert response.status_code == 302
-        assert response["Location"] == "/shop/pricing/"
-        assert reverse("shop:pricing") == "/shop/pricing/"
+    @pytest.mark.parametrize(
+        ("old", "new"),
+        [
+            ("/shop/", "/pricing/"),
+            ("/shop/pricing/", "/pricing/"),
+            ("/shop/pricing/?ref=a", "/pricing/?ref=a"),
+            ("/shop/packages/pro/", "/pricing/packages/pro/"),
+            ("/shop/orders/", "/pricing/orders/"),
+            ("/shop/orders/7/?x=1&y=2", "/pricing/orders/7/?x=1&y=2"),
+            ("/shop/my-package/", "/pricing/my-package/"),
+        ],
+    )
+    def test_every_old_shop_address_redirects_permanently(self, client, old, new):
+        response = client.get(old)
+
+        assert response.status_code == 301
+        assert response["Location"] == new
+
+    def test_old_shop_writes_are_redirected_without_losing_the_method(self, client):
+        response = client.post("/shop/packages/pro/order/", {"x": "1"})
+
+        assert response.status_code == 308
+        assert response["Location"] == "/pricing/packages/pro/order/"
 
     def test_inactive_and_hidden_packages_are_not_public(self, client, pro):
         PackageTier.objects.filter(pk=pro.pk).update(is_active=False)

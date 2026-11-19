@@ -1,0 +1,5 @@
+{% extends "console/error_page.html" %}{% load i18n %}
+{% block page_title %}{% translate "No access" %}{% endblock %}
+{% block code %}403{% endblock %}
+{% block error_title %}{% translate "You don't have access to this" %}{% endblock %}
+{% block message %}{% translate "Your account is signed in, but it isn't allowed to open this page. If you think it should be, ask an administrator to add the role you need. Nothing was changed." %}{% endblock %}

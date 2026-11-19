@@ -12,7 +12,7 @@ import logging
 
 from django.apps import apps as django_apps
 from django.db.models.signals import post_delete, post_migrate, post_save
-from django.dispatch import receiver
+from django.dispatch import Signal, receiver
 
 from apps.core.admin_dashboard import invalidate_metrics
 
@@ -90,8 +90,6 @@ for _queue_model in REVIEW_QUEUE_MODELS:
 # ============================================================================
 # These signals enable loose coupling between apps without circular dependencies.
 # Apps emit signals instead of calling each other's code directly.
-
-from django.dispatch import Signal
 
 # Blog signals
 blog_post_published = Signal()  # args: post, user

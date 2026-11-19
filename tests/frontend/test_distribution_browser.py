@@ -1,13 +1,14 @@
 """Browser checks for the distribution admin: dashboard, channel forms, calendar,
 approvals, analytics.
 
-They run inside the Unfold admin shell with its CSP: no console/CSP errors, no
+They run inside the staff console shell with its CSP: no console/CSP errors, no
 horizontal overflow at 360/768/1365 px, light and dark themes, and the real
 interactions (run queue, test connection, approve, cancel) work without native dialogs.
 """
 
 from __future__ import annotations
 
+import re
 from datetime import timedelta
 
 import pytest
@@ -143,7 +144,7 @@ def test_distribution_pages_render_cleanly_in_light_and_dark(live_server):
         for scheme in ("light", "dark"):
             context = session_context(browser, live_server, cookie)
             context.add_init_script(
-                f"window.localStorage.setItem('adminTheme', '\"{scheme}\"')"
+                f"window.localStorage.setItem('mobofirm-theme', '{scheme}')"
             )
             page = context.new_page()
             watch(page, failures)
@@ -152,18 +153,18 @@ def test_distribution_pages_render_cleanly_in_light_and_dark(live_server):
             for path in paths:
                 page.goto(f"{live_server.url}{path}")
                 ready(page)
-                if page.locator("nav a[href]").count() < 3:
+                if page.locator("aside[data-console-sidebar] a[href]").count() < 3:
                     failures.append(f"{path}: admin sidebar is missing ({scheme})")
                 if page.locator(".site-header, .site-container").count():
                     failures.append(f"{path}: public shell markup rendered")
                 dark = page.evaluate(
-                    "() => document.documentElement.classList.contains('dark')"
+                    "() => document.documentElement.dataset.bsTheme === 'dark'"
                 )
                 if dark != (scheme == "dark"):
                     failures.append(f"{path}: expected {scheme} theme")
             page.goto(f"{live_server.url}{pages(rows)[0]}")
             ready(page)
-            sidebar = page.locator("nav")
+            sidebar = page.locator("aside[data-console-sidebar]")
             for label in ("Content calendar", "Approval queue", "Link analytics"):
                 if not sidebar.get_by_role("link", name=label).count():
                     failures.append(f"sidebar link missing: {label} ({scheme})")
@@ -185,7 +186,7 @@ def test_dashboard_actions_and_channel_form(live_server):
         dismiss_dialogs(page, native)
         page.goto(f"{live_server.url}{reverse('admin:distribution_channel_dashboard')}")
         ready(page)
-        expect(page.locator("h1.mf-ui-title")).to_have_text("Distribution")
+        expect(page.locator(".console-staff-header h1")).to_have_text("Distribution")
         expect(page.get_by_text("Circuit breaker")).to_be_visible()
         expect(page.get_by_text("3 / 10")).to_be_visible()
 
@@ -197,7 +198,9 @@ def test_dashboard_actions_and_channel_form(live_server):
         expect(page.get_by_text("connection failed")).to_be_visible()
 
         page.goto(f"{live_server.url}{reverse('admin:distribution_channel_platforms')}")
-        page.get_by_role("link", name="Add YouTube (Shorts upload)").click()
+        page.get_by_role(
+            "link", name=re.compile(r"(Connect|Add another) YouTube")
+        ).first.click()
         page.wait_for_url("**kind=youtube")
         for label in ("OAuth client id", "OAuth client secret", "Refresh token"):
             expect(page.get_by_label(label).first).to_be_visible()

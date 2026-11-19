@@ -1,6 +1,11 @@
+from decimal import Decimal
+
+# Largest price a paid file may carry (the column is ``DecimalField(10, 2)``).
+MAX_PRICE = Decimal("99999999.99")
+
 MAIN_CATEGORIES = (
     ("official", "Official Firmware"),
-    ("engineering", "Engineering Firmware"),
+    ("engineering", "Service / Engineering Firmware"),
     ("readback", "Readback Firmware"),
     ("modified", "Modified Firmware"),
     ("other", "Other Firmware"),

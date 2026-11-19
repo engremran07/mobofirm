@@ -58,11 +58,13 @@ def _after_publish(post_id: int) -> None:
     blog_post_published.send(sender=Post, post=post, user=post.author)
 
     from apps.blog import guide_requests, rewards
+    from apps.blog.services import contributions
 
     for step in (
         guide_requests.on_post_published,
         rewards.grant_publication_rewards,
         rewards.announce_publication,
+        contributions.notify_author_published,
     ):
         try:
             step(post)

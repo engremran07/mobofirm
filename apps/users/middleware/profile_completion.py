@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+from django.http import HttpResponse, JsonResponse
 from django.shortcuts import redirect
 from django.urls import Resolver404, resolve, reverse
 
@@ -17,9 +18,14 @@ class EnforceProfileCompletionMiddleware:
     Sends social-signup users to onboarding until their profile is complete.
 
     Active only when the site setting ``require_profile_completion`` (default:
-    ``REQUIRE_PROFILE_COMPLETION``) is true. Auth, admin, static,
-    health, API and AJAX/HTMX requests are never intercepted, and the onboarding
-    page itself is exempt so there is no redirect loop.
+    ``REQUIRE_PROFILE_COMPLETION``) is true. Auth, admin, static, health and the
+    onboarding page itself are never intercepted, so there is no redirect loop.
+
+    The gate cannot be skipped by a header. Browser pages are redirected; an HTMX
+    request gets an ``HX-Redirect`` to onboarding; an AJAX or JSON client gets a
+    ``403`` JSON answer naming the onboarding page. Token-authenticated API calls
+    never reach this check (they carry no session user) and are refused at token
+    issuance instead (``ApiLoginView``).
     """
 
     PROFILE_URL_NAME = "users:tell_us_about_you"
@@ -28,6 +34,14 @@ class EnforceProfileCompletionMiddleware:
         PROFILE_URL_NAME,
         "users:locale_hint",
         "users:password_rules",
+        "users:account_login",
+        "users:account_logout",
+        "users:account_signup",
+        "users:api_current_user",
+        "users:api_logout",
+        "users:mfa_setup",
+        "users:mfa_verify",
+        "users:mfa_backup_codes",
         "account_login",
         "account_logout",
         "account_signup",
@@ -41,7 +55,6 @@ class EnforceProfileCompletionMiddleware:
         "/admin",
         "/static",
         "/media",
-        "/api",
         "/health",
         "/site",
         "/consent",
@@ -77,12 +90,22 @@ class EnforceProfileCompletionMiddleware:
         if match.view_name in self.SAFE_URL_NAMES:
             return self.get_response(request)
 
-        if request.headers.get("X-Requested-With") == "XMLHttpRequest":
-            return self.get_response(request)
         if request.headers.get("HX-Request") == "true":
-            return self.get_response(request)
-        if request.content_type == "application/json":
-            return self.get_response(request)
+            response = HttpResponse(status=204)
+            response["HX-Redirect"] = profile_completion_url("")
+            return response
+        if (
+            request.headers.get("X-Requested-With") == "XMLHttpRequest"
+            or request.content_type == "application/json"
+        ):
+            return JsonResponse(
+                {
+                    "detail": "Complete your profile before continuing.",
+                    "profile_completion_required": True,
+                    "onboarding_url": profile_completion_url(""),
+                },
+                status=403,
+            )
 
         # Return the user to the page they asked for once onboarding is done.
         next_url = (

@@ -10,12 +10,13 @@ from django.urls import reverse
 from apps.core.app_service import app_enabled
 
 from .. import (
-    credits as credit_purchase,
-)
-from .. import (
+    ad_unlock,
     entitlements,
     promotion_gateway,
     wallet_gateway,
+)
+from .. import (
+    credits as credit_purchase,
 )
 from ..models import Order, OrderItem, format_money
 
@@ -86,7 +87,10 @@ def shop_firmware_allowance(context: dict[str, Any], firmware: Any) -> dict[str,
         "has_package": tier == "featured" and entitled.can_access_featured,
         "pricing_url": reverse("shop:pricing"),
         "account_url": reverse("shop:my_package"),
-        "files_url": reverse("library:my_files"),
+        "files_url": reverse("contributions:hub"),
+        "unlock": ad_unlock.panel_context(
+            user, firmware, back_url=context["request"].path
+        ),
     }
 
 

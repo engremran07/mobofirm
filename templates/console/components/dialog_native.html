@@ -1,0 +1,9 @@
+{% comment %}
+  dialog_native - a modal dialog or offcanvas on the native <dialog> element (focus trap, inert background and Escape come from the browser).
+  Context: id (required), title (required), side ("" = centred dialog, "end" = offcanvas from the end edge), danger, content (body slot), actions (footer slot).
+  Open with any element carrying data-ui-dialog-open="<id>"; close with data-ui-dialog-close. Focus returns to the opener; data-open is set while shown.
+{% endcomment %}{% load i18n %}<dialog class="c-dialog-native{% if side %} c-dialog-native--{{ side }}{% endif %}{% if danger %} c-dialog-native--danger{% endif %}" id="{{ id }}" data-ui-dialog{% if side %}="offcanvas"{% endif %} aria-labelledby="{{ id }}-title">
+<header class="c-dialog-native__head"><h2 class="c-dialog-native__title" id="{{ id }}-title">{{ title }}</h2><button type="button" class="btn-close" data-ui-dialog-close aria-label="{% translate 'Close' %}"></button></header>
+<div class="c-dialog-native__body">{{ content }}</div>
+{% if actions %}<footer class="c-dialog-native__foot">{{ actions }}</footer>{% endif %}
+</dialog>

@@ -15,19 +15,11 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import format_html
 from django.utils.translation import gettext_lazy as _
-from unfold.contrib.filters.admin import (
-    BooleanRadioFilter,
-    ChoicesDropdownFilter,
-    DropdownFilter,
-    RangeDateTimeFilter,
-    RelatedDropdownFilter,
-)
-from unfold.enums import ActionVariant
-from unfold.widgets import UnfoldAdminSplitDateTimeWidget
 
 from apps.core.admin_base import (
     BADGE_APPROVAL,
     BADGE_JOB,
+    ActionVariant,
     ConfirmForm,
     ModelAdmin,
     NoAddModelAdmin,
@@ -41,6 +33,14 @@ from apps.core.admin_base import (
     htmx_redirect,
     return_url,
 )
+from apps.core.admin_filters import (
+    BooleanRadioFilter,
+    ChoicesDropdownFilter,
+    DropdownFilter,
+    RangeDateTimeFilter,
+    RelatedDropdownFilter,
+)
+from apps.core.admin_forms import ConsoleSplitDateTimeWidget
 from apps.core.editor.admin import RichTextAdminMixin
 from apps.core.editor.sanitizer import render_rich_text
 
@@ -58,7 +58,7 @@ from .models import (
     PostTranslation,
     TagTranslation,
 )
-from .services import workflow
+from .services import contributions, workflow
 from .services.history import PostHistoryService
 
 BADGE_POST_STATUS: dict[str, str] = {
@@ -69,7 +69,11 @@ BADGE_POST_STATUS: dict[str, str] = {
     PostStatus.ARCHIVED: "danger",
 }
 BADGE_SOURCE: dict[str, str] = {"automated": "info", "manual": "success"}
-BADGE_FRESHNESS: dict[str, str] = {"stale": "warning", "fresh": "success", "idle": "info"}
+BADGE_FRESHNESS: dict[str, str] = {
+    "stale": "warning",
+    "fresh": "success",
+    "idle": "info",
+}
 
 
 class ScheduleForm(ConfirmForm):
@@ -77,8 +81,20 @@ class ScheduleForm(ConfirmForm):
 
     publish_at = forms.SplitDateTimeField(
         label=_("Publish at"),
-        widget=UnfoldAdminSplitDateTimeWidget,
+        widget=ConsoleSplitDateTimeWidget,
         help_text=_("The post is published automatically at this time."),
+    )
+
+
+class LowerAccessForm(ReasonForm):
+    """Dialog: lower a post's access type and tell the author why."""
+
+    access = forms.ChoiceField(
+        label=_("New access type"),
+        choices=[
+            (PostAccess.FREE, _("Free")),
+            (PostAccess.FEATURED, _("Featured")),
+        ],
     )
 
 
@@ -117,7 +133,9 @@ class FreshnessFilter(DropdownFilter):
             ("fresh", str(_("Not stale"))),
         ]
 
-    def queryset(self, request: HttpRequest, queryset: QuerySet[Post]) -> QuerySet[Post]:
+    def queryset(
+        self, request: HttpRequest, queryset: QuerySet[Post]
+    ) -> QuerySet[Post]:
         value = self.value()
         if value == "stale":
             return freshness.stale_posts(queryset)
@@ -131,6 +149,7 @@ class CategoryAdmin(ModelAdmin):
     list_display = ("name", "parent", "slug")
     search_fields = ("name", "slug")
     list_filter = (("parent", RelatedDropdownFilter),)
+    list_select_related = ("parent",)
     prepopulated_fields: ClassVar[dict[str, tuple[str, ...]]] = {"slug": ("name",)}
 
 
@@ -156,6 +175,7 @@ class PostAdmin(RichTextAdminMixin, ModelAdmin):
     list_filter = (
         FreshnessFilter,
         ("status", ChoicesDropdownFilter),
+        ("is_community_contribution", BooleanRadioFilter),
         ("access", ChoicesDropdownFilter),
         ("category", RelatedDropdownFilter),
         ("firmware_brand", RelatedDropdownFilter),
@@ -185,6 +205,8 @@ class PostAdmin(RichTextAdminMixin, ModelAdmin):
     readonly_fields = (
         "status",
         "is_published",
+        "is_community_contribution",
+        "review_note",
         "published_at",
         "published_by",
         "price_approved_by",
@@ -234,6 +256,8 @@ class PostAdmin(RichTextAdminMixin, ModelAdmin):
                 "fields": (
                     "status",
                     "is_published",
+                    "is_community_contribution",
+                    "review_note",
                     "publish_at",
                     "published_at",
                     "version",
@@ -286,8 +310,15 @@ class PostAdmin(RichTextAdminMixin, ModelAdmin):
         "publish_selected",
         "archive_selected",
     )
-    actions_row = ("request_review", "publish", "archive")
-    actions_detail = ("request_review", "publish", "schedule", "archive")
+    actions_row = ("request_review", "publish", "reject", "archive")
+    actions_detail = (
+        "request_review",
+        "publish",
+        "reject",
+        "lower_access",
+        "schedule",
+        "archive",
+    )
     list_select_related = ("author", "category", "firmware_brand", "firmware_model")
 
     @display(description=_("Status"), ordering="status", label=BADGE_POST_STATUS)
@@ -459,6 +490,57 @@ class PostAdmin(RichTextAdminMixin, ModelAdmin):
         )
 
     @action(
+        description=_("Reject"),
+        icon="cancel",
+        variant=ActionVariant.DANGER,
+        permissions=["change"],
+        dialog=confirm_dialog(
+            _("Send this post back?"),
+            _("The post returns to its author's drafts and they read your reason."),
+            ReasonForm,
+            submit=_("Reject"),
+        ),
+    )
+    def reject(
+        self, request: HttpRequest, form: ReasonForm, object_id: str
+    ) -> HttpResponse:
+        """Send a post under review back to its author with a reason."""
+        reason = str(form.cleaned_data.get("reason", ""))
+        return self._decide(
+            request,
+            object_id,
+            lambda post: contributions.reject(request.user, post, reason),
+            str(_("Sent back to the author.")),
+        )
+
+    @action(
+        description=_("Lower access type"),
+        icon="lock_open",
+        permissions=["change"],
+        dialog=confirm_dialog(
+            _("Lower the access type?"),
+            _(
+                "Use this when the author's Featured or Paid choice is not "
+                "appropriate. The author is told the reason."
+            ),
+            LowerAccessForm,
+            submit=_("Lower access"),
+        ),
+    )
+    def lower_access(
+        self, request: HttpRequest, form: LowerAccessForm, object_id: str
+    ) -> HttpResponse:
+        """Downgrade Paid/Featured to a lower tier with a reason for the author."""
+        access = str(form.cleaned_data["access"])
+        reason = str(form.cleaned_data.get("reason", ""))
+        return self._decide(
+            request,
+            object_id,
+            lambda post: contributions.lower_access(request.user, post, access, reason),
+            str(_("Access type lowered.")),
+        )
+
+    @action(
         description=_("Schedule"),
         icon="schedule",
         permissions=["change"],
@@ -506,7 +588,10 @@ class BlogSettingsAdmin(SingletonModelAdmin):
     list_display = ("enable_blog", "enable_blog_comments", "allow_user_blog_posts")
     fieldsets = (
         (None, {"fields": ("enable_blog", "enable_blog_comments")}),
-        (_("User posting"), {"fields": ("allow_user_blog_posts",)}),
+        (
+            _("User posting"),
+            {"fields": ("allow_user_blog_posts", "contributions_per_day")},
+        ),
         (_("Featured and paid articles"), {"fields": ("teaser_words",)}),
         (_("Content freshness"), {"fields": ("stale_after_days",)}),
         (
@@ -780,13 +865,17 @@ class AutoTopicAdmin(ModelAdmin):
     )
     search_fields = ("topic", "post__title")
     raw_id_fields = ("post", "created_by")
+    list_select_related = ("post", "created_by")
     actions = ("requeue_selected",)
 
     @display(description=_("Status"), ordering="status", label=BADGE_JOB)
     def status_badge(self, obj: AutoTopic) -> tuple[str, str]:
         return obj.status, obj.get_status_display()
 
-    @action(description=_("Put selected failed topics back in the queue"))
+    @action(
+        description=_("Put selected failed topics back in the queue"),
+        permissions=["change"],
+    )
     def requeue_selected(
         self, request: HttpRequest, queryset: QuerySet[AutoTopic]
     ) -> None:
@@ -807,6 +896,7 @@ class PostTranslationAdmin(RichTextAdminMixin, ModelAdmin):
     list_filter = ("language",)
     search_fields = ("title", "summary", "post__title")
     raw_id_fields = ("post",)
+    list_select_related = ("post",)
 
 
 @admin.register(CategoryTranslation)
@@ -815,6 +905,7 @@ class CategoryTranslationAdmin(ModelAdmin):
     list_filter = ("language",)
     search_fields = ("name", "category__name")
     raw_id_fields = ("category",)
+    list_select_related = ("category",)
 
 
 @admin.register(TagTranslation)
@@ -823,3 +914,4 @@ class TagTranslationAdmin(ModelAdmin):
     list_filter = ("language",)
     search_fields = ("name", "tag__name")
     raw_id_fields = ("tag",)
+    list_select_related = ("tag",)

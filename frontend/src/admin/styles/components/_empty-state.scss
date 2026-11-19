@@ -1,0 +1,52 @@
+// c-empty: empty / error state for every data region.
+//   <div class="c-empty [c-empty--compact|c-empty--error]" role="status">
+//     <span class="c-empty__icon"><svg class="c-icon c-icon--lg">..</svg></span>
+//     <h3 class="c-empty__title">Nothing here yet</h3>
+//     <p class="c-empty__text">Friendly, plain-language next step.</p>
+//     <div class="c-empty__actions"><a class="btn btn-primary">...</a></div></div>
+@layer components {
+  .c-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--mf-space-2);
+    padding: var(--mf-space-7) var(--mf-space-5);
+    color: var(--mf-text-muted);
+    text-align: center;
+  }
+
+  .c-empty__icon {
+    display: grid;
+    place-items: center;
+    inline-size: 3.5rem;
+    block-size: 3.5rem;
+    margin-block-end: var(--mf-space-2);
+    color: var(--mf-accent-strong);
+    background: var(--mf-accent-soft);
+    border-radius: 50%;
+  }
+
+  .c-empty__title {
+    margin: 0;
+    color: var(--mf-text);
+    font-size: var(--mf-fs-lg);
+  }
+
+  .c-empty__text {
+    max-inline-size: 38ch;
+    margin: 0;
+    font-size: var(--mf-fs-sm);
+  }
+
+  .c-empty__actions {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--mf-space-2);
+    margin-block-start: var(--mf-space-3);
+  }
+
+  .c-empty--compact { padding-block: var(--mf-space-5); }
+  .c-empty--compact .c-empty__icon { inline-size: 2.5rem; block-size: 2.5rem; }
+  .c-empty--error .c-empty__icon { color: var(--mf-danger); background: var(--mf-danger-soft); }
+}

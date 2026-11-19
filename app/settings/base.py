@@ -4,13 +4,12 @@ from typing import Any
 
 from dotenv import load_dotenv
 
-from . import unfold as unfold_config
+from apps.core.runtime_config import env_int
+
 from .security import ADMIN_CSP, BASE_CSP
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 load_dotenv(BASE_DIR / ".env")
-
-UNFOLD = unfold_config.UNFOLD
 
 SECRET_KEY = os.getenv("DJANGO_SECRET_KEY", "")
 if not SECRET_KEY:
@@ -26,12 +25,7 @@ ALLOWED_HOSTS = [
 ]
 
 INSTALLED_APPS = [
-    # Unfold must precede the admin app so its templates win. BasicAppConfig keeps
-    # Unfold from swapping admin.site; MobofirmAdminConfig installs the project site.
-    "unfold.apps.BasicAppConfig",
-    "unfold.contrib.filters",
-    "unfold.contrib.forms",
-    "unfold.contrib.inlines",
+    # MobofirmAdminConfig installs the project admin site as ``admin.site``.
     "apps.core.admin_config.MobofirmAdminConfig",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -68,7 +62,14 @@ INSTALLED_APPS = [
     "apps.distribution.apps.DistributionConfig",
     "apps.promotions.apps.PromotionsConfig",
     "apps.site_settings.apps.SiteSettingsConfig",
+    # Last: supplies Django's stock widget/form templates to the TemplatesSetting
+    # renderer below, so console widgets can live in ``templates/console/widgets``.
+    "django.forms",
 ]
+
+# Form and widget templates are looked up like any other template (project
+# ``templates/`` first), which the staff console's widgets rely on.
+FORM_RENDERER = "django.forms.renderers.TemplatesSetting"
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -198,8 +199,6 @@ ALLOW_USER_BLOG_POSTS = os.getenv("ALLOW_USER_BLOG_POSTS", "false").lower() in {
     "true",
     "yes",
 }
-PRIMARY_COLOR = os.getenv("PRIMARY_COLOR", "#0d6efd")
-SECONDARY_COLOR = os.getenv("SECONDARY_COLOR", "#6c757d")
 SITE_LOGO_URL = os.getenv("SITE_LOGO_URL", "")
 SITE_DARK_LOGO_URL = os.getenv("SITE_DARK_LOGO_URL", "")
 SITE_FAVICON_URL = os.getenv("SITE_FAVICON_URL", "")
@@ -225,6 +224,10 @@ ALLAUTH_TRUSTED_PROXY_COUNT = TRUSTED_PROXY_COUNT
 COUNTRY_HEADER = os.getenv("COUNTRY_HEADER", "")
 MFA_ENCRYPTION_KEY = os.getenv("MFA_ENCRYPTION_KEY", "")
 SOCIAL_CREDENTIAL_ENCRYPTION_KEY = os.getenv("SOCIAL_CREDENTIAL_ENCRYPTION_KEY", "")
+# Fernet key for credentials stored by the ads and firmware apps (ad-network API
+# keys, firmware archive passwords). Empty means "unset": encryption then raises
+# ImproperlyConfigured instead of storing anything, and production refuses to boot.
+FERNET_KEY = os.getenv("FERNET_KEY", "")
 FORCE_HTTPS = os.getenv("FORCE_HTTPS", "false").lower() in {"1", "true", "yes"}
 MFA_TOTP_ISSUER = os.getenv("MFA_TOTP_ISSUER", "Account Portal")
 GMAIL_ENABLED = os.getenv("GMAIL_ENABLED", "false").lower() in {"1", "true", "yes"}
@@ -380,6 +383,12 @@ FIRMWARE_BLOG_AUTOGENERATION_ASYNC = os.getenv(
 CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://127.0.0.1:6379/0")
 QUEUE_BACKEND = os.getenv("QUEUE_BACKEND", "sync")
 CELERY_TASK_IGNORE_RESULT = True
+# Backstop for every task (F-011): a stuck task releases its worker slot after the
+# hard limit. Tasks declare tighter limits of their own (``soft_time_limit`` /
+# ``time_limit`` on the decorator); the soft limit raises SoftTimeLimitExceeded first
+# so a task can stop cleanly. Validated by ``apps.core.checks``.
+CELERY_TASK_SOFT_TIME_LIMIT = env_int("CELERY_TASK_SOFT_TIME_LIMIT", 1500, minimum=1)
+CELERY_TASK_TIME_LIMIT = env_int("CELERY_TASK_TIME_LIMIT", 1800, minimum=1)
 CELERY_BEAT_SCHEDULE = {
     "blog-publish-due-scheduled-posts": {
         "task": "apps.blog.tasks.publish_due_scheduled_posts",

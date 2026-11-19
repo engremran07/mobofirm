@@ -1,18 +1,16 @@
 @use "../abstracts" as *;
+@use "../../shared/components/shared";
 
 // Surfaces. `.surface-card` is the legacy card used across every page; it is upgraded
 // in place. `.card-ui` is the new composable card family (see docs/05-frontend/design-system.md).
 .surface-card {
   --_radius: var(--mf-radius-lg);
-  border-color: var(--mf-border);
-  border-radius: var(--_radius);
-  background: var(--mf-surface);
-  box-shadow: var(--mf-elev-1);
+  @include shared.card-surface(var(--_radius));
 }
 
 :root[data-bs-theme="dark"] .surface-card,
 :root[data-bs-theme="dark"] .card-ui {
-  background: linear-gradient(180deg, color-mix(in srgb, #fff 3%, var(--mf-surface)), var(--mf-surface));
+  background: linear-gradient(180deg, var(--mf-card-tint), var(--mf-surface));
 }
 
 a.surface-card,
@@ -288,49 +286,6 @@ a.card-ui,
   color: var(--mf-text);
   font-size: var(--mf-text-lg);
   font-weight: 700;
-}
-
-// ---- Avatar / rank ----
-.avatar-ui {
-  display: inline-grid;
-  width: var(--avatar-size, 2.5rem);
-  height: var(--avatar-size, 2.5rem);
-  flex-shrink: 0;
-  place-items: center;
-  overflow: hidden;
-  border-radius: 50%;
-  background: var(--mf-gradient-accent);
-  box-shadow: 0 0 0 2px var(--mf-surface), 0 0 0 3px var(--mf-border);
-  color: var(--mf-accent-ink);
-  font-size: calc(var(--avatar-size, 2.5rem) * 0.4);
-  font-weight: 750;
-  text-transform: uppercase;
-
-  img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-}
-
-.avatar-ui--sm {
-  --avatar-size: 1.75rem;
-}
-
-.avatar-ui--lg {
-  --avatar-size: 4rem;
-}
-
-.rank-ui {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  padding: 0.15rem 0.6rem;
-  border-radius: var(--mf-radius-pill);
-  background: color-mix(in srgb, var(--mf-accent-warm) 16%, transparent);
-  color: var(--mf-warning);
-  font-size: var(--mf-text-xs);
-  font-weight: 750;
 }
 
 // ---- Section header ----

@@ -1,0 +1,82 @@
+// Loading states. Skeletons: <div class="c-skeleton c-skeleton--text|title|tile|row|circle|block" aria-hidden="true"></div>
+// grouped in <div class="c-skeleton-group" role="status" aria-label="Loading">. HTMX: .htmx-request is put on the
+// requesting element (or hx-indicator target) - indicators fade in, <body>-level .c-loadbar animates, targets dim.
+//   <div class="c-loadbar htmx-indicator" id="console-loadbar" role="progressbar" aria-hidden="true"></div>
+//   <span class="htmx-indicator c-spinner" aria-hidden="true"></span>      Lazy widgets: .c-widget[aria-busy="true"].
+@use "../../../shared/components/shared";
+
+@layer components {
+  .c-skeleton {
+    display: block;
+    min-block-size: 1rem;
+    @include shared.shimmer;
+    border-radius: var(--mf-radius-sm);
+    animation: c-shimmer 1.4s linear infinite;
+  }
+
+  .c-skeleton--text { block-size: 0.875rem; margin-block: 0.4rem; }
+  .c-skeleton--text:last-child { inline-size: 62%; }
+  .c-skeleton--title { block-size: 1.5rem; inline-size: 40%; margin-block-end: var(--mf-space-3); }
+  .c-skeleton--tile { block-size: 6rem; border-radius: var(--mf-radius-lg); }
+  .c-skeleton--row { block-size: 2.75rem; margin-block: var(--mf-space-2); border-radius: var(--mf-radius-md); }
+  .c-skeleton--circle { inline-size: 2.5rem; block-size: 2.5rem; border-radius: 50%; }
+  .c-skeleton--block { block-size: 12rem; border-radius: var(--mf-radius-lg); }
+  .c-skeleton-group { display: grid; gap: var(--mf-space-1); }
+
+  @keyframes c-shimmer {
+    to { background-position: 0 0; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .c-skeleton { background: var(--mf-skeleton-base); animation: none; }
+  }
+
+  // HTMX indicators
+  .htmx-indicator { opacity: 0; transition: opacity var(--mf-duration-fast) var(--mf-ease-out); }
+  .htmx-request .htmx-indicator,
+  .htmx-request.htmx-indicator { opacity: 1; }
+
+  .c-loadbar {
+    position: fixed;
+    inset-block-start: 0;
+    inset-inline: 0;
+    z-index: 2100;
+    block-size: 3px;
+    overflow: hidden;
+    pointer-events: none;
+
+    &::before {
+      content: "";
+      position: absolute;
+      inset-block: 0;
+      inline-size: 40%;
+      background: var(--mf-accent);
+      border-radius: 3px;
+      animation: c-loadbar 1.1s var(--mf-ease-out) infinite;
+    }
+  }
+
+  @keyframes c-loadbar {
+    from { inset-inline-start: -40%; }
+    to { inset-inline-start: 100%; }
+  }
+
+  .c-spinner {
+    display: inline-block;
+    inline-size: 1em;
+    block-size: 1em;
+    border: 2px solid currentcolor;
+    border-inline-end-color: transparent;
+    border-radius: 50%;
+    animation: c-spin 0.7s linear infinite;
+  }
+
+  // Busy regions dim and ignore input until the swap lands
+  [aria-busy="true"].c-widget,
+  .htmx-request.c-dim { opacity: 0.6; pointer-events: none; }
+
+  // Cross-document / swap view transitions stay short and optional
+  @media (prefers-reduced-motion: no-preference) {
+    ::view-transition-group(root) { animation-duration: var(--mf-duration-base); }
+  }
+}

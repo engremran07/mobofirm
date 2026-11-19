@@ -16,6 +16,7 @@ from django.conf import settings
 from django.contrib import messages
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
+from django.db import transaction
 from django.db.models import CharField, Count, F, Q, QuerySet, Value
 from django.http import (
     FileResponse,
@@ -28,6 +29,7 @@ from django.http import (
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.http import content_disposition_header
 from django.views.decorators.http import require_GET, require_POST
 from django.views.decorators.vary import vary_on_headers
 
@@ -59,6 +61,13 @@ from .catalog import (
     public_counts,
     total_public_firmware,
 )
+from .download_identity import (
+    attach_identity_cookie,
+    owns_token,
+    resolve_identity,
+    subject_of,
+)
+from .download_leases import MeteredFile, fail_session, redeem_link
 from .download_service import (
     TokenError,
     _get_download_config,
@@ -78,7 +87,6 @@ from .download_service import (
 from .models import (
     Brand,
     Chipset,
-    DownloadSession,
     DownloadToken,
     FirmwarePackageFormat,
     FlashingTool,
@@ -94,6 +102,7 @@ from .search_providers import (
     MODEL_FIELDS,
 )
 from .services import storage_root
+from .shortener import share_url_for
 from .sources import validate_external_url
 from .tracking_models import FirmwareDownloadAttempt, FirmwareView
 
@@ -203,10 +212,15 @@ def _share_context(
     )
     device = firmware.model.display_name if firmware.model else ""
     build = firmware.build_number or firmware.original_file_name
-    title = " ".join(part for part in (device, f"{type_display} firmware", build) if part)
+    title = " ".join(
+        part for part in (device, f"{type_display} firmware", build) if part
+    )
     blurb = f"{type_display} firmware" + (f" for {device}" if device else "")
+    detail_url = absolute_url(path, request)
     return {
-        "share_url": absolute_url(path, request),
+        # An external download is shared through its short link when staff enabled one
+        # (first-party /d/<code>/ and/or a provider); otherwise the detail page.
+        "share_url": share_url_for(firmware, detail_url, request=request),
         "share_title": title,
         "share_text": blurb,
     }
@@ -708,6 +722,14 @@ def model_detail(
 # ============================================================
 
 
+def _format_tool(firmware):
+    """The seeded flashing tool that matches the firmware's package format, if any."""
+    spec = firmware.package_format_tool
+    if spec is None:
+        return None
+    return FlashingTool.objects.filter(slug=spec.slug, is_active=True).first()
+
+
 @require_GET
 def firmware_detail(
     request: HttpRequest, firmware_type: str, firmware_id: str
@@ -757,6 +779,7 @@ def firmware_detail(
         "related_blog_posts": related_blog_posts,
         "file_size_display": catalog.format_file_size(firmware.file_size),
         "external_host": _external_host(firmware),
+        "format_tool": _format_tool(firmware),
         "access": check_download_access(request.user, firmware),
         "changelog": (firmware.metadata or {}).get("changelog", ""),
         "login_url": f"{reverse('users:account_login')}?next={quote(request.path)}",
@@ -836,7 +859,18 @@ def firmware_download(
             firmware_id=firmware_id,
         )
 
-    token = create_download_token(firmware, request)
+    token_identity = resolve_identity(request)
+    try:
+        token = create_download_token(firmware, request, token_identity)
+    except TokenError:
+        messages.error(
+            request, "Too many download requests from your network. Try again later."
+        )
+        return redirect(
+            "firmwares:firmware_detail",
+            firmware_type=firmware_type,
+            firmware_id=firmware_id,
+        )
     remaining = countdown_remaining(token)
     ad_required = token.ad_gate_required and not token.ad_gate_completed
     ad_remaining = seconds_until(token, config["ad_gate_seconds"]) if ad_required else 0
@@ -867,7 +901,9 @@ def firmware_download(
             FIRMWARE_TYPE_DISPLAY.get(firmware_type, firmware_type),
         ),
     }
-    return render(request, "firmwares/download.html", context)
+    response = render(request, "firmwares/download.html", context)
+    attach_identity_cookie(response, request, token_identity)
+    return response
 
 
 @require_POST
@@ -910,7 +946,9 @@ def firmware_download_start(
         )
 
     try:
-        token = consume_download_token(token_str, firmware, request)
+        token = consume_download_token(
+            token_str, firmware, request, resolve_identity(request)
+        )
     except TokenError as error:
         if error.code == "countdown":
             messages.error(
@@ -919,8 +957,14 @@ def firmware_download_start(
             )
         elif error.code == "adgate":
             messages.error(request, "Please complete the ad gate first.")
+        elif error.code == "concurrent":
+            messages.error(request, error.message)
         elif error.code == "invalid":
-            messages.error(request, "Invalid download token for this firmware.")
+            messages.error(
+                request,
+                "Invalid download token for this firmware. "
+                "Cookies must be enabled to download without an account.",
+            )
         else:
             messages.error(request, "Download link has expired. Please try again.")
         return _download_redirect(firmware_type, firmware_id)
@@ -968,38 +1012,64 @@ def firmware_ad_gate_complete(
     token = validate_download_token(token_str)
     if not token:
         return fail("Token expired")
+    if not owns_token(resolve_identity(request), token):
+        return fail("Invalid token")
 
-    ad_type = request.POST.get("ad_type", "video")
-    if ad_type not in ("video", "banner", "interstitial"):
-        ad_type = "video"
-    if not complete_ad_gate(token, ad_type=ad_type):
+    if not complete_ad_gate(token):
         return fail("The ad gate has not run for long enough yet.")
     if wants_json:
         return JsonResponse({"ok": True})
     return _download_redirect(firmware_type, firmware_id)
 
 
+def _serve_response(
+    path: Path, filename: str, session_id: int, size_bytes: int
+) -> HttpResponseBase:
+    """The file response: nginx streams it in production, Django meters it in DEBUG."""
+    if not getattr(settings, "DEBUG", True):
+        prefix = getattr(settings, "FIRMWARE_X_ACCEL_PREFIX", "/protected-firmware/")
+        relative = path.relative_to(storage_root().resolve())
+        response: HttpResponseBase = HttpResponse()
+        response["X-Accel-Redirect"] = f"{prefix}{relative.as_posix()}"
+        response["Content-Type"] = "application/octet-stream"
+        response["Content-Disposition"] = content_disposition_header(True, filename)
+    else:
+        response = FileResponse(
+            MeteredFile(path, session_id, size_bytes),
+            as_attachment=True,
+            filename=filename,
+        )
+    response["Cache-Control"] = "private, no-store"
+    response["Referrer-Policy"] = "no-referrer"
+    return response
+
+
 @require_GET
 def serve_local_file(request: HttpRequest, firmware_id: str) -> HttpResponseBase:
-    """Serve a stored firmware file through a short-lived signed link.
+    """Serve a stored firmware file through a short-lived, bound, bounded signed link.
 
-    The link is bound to the token and firmware, expires after
-    ``FIRMWARE_DOWNLOAD_LINK_TTL_SECONDS`` and is only valid for a token that the
-    download page already consumed (countdown and ad gate passed).
+    The link is bound to the token, the firmware and the principal the token was
+    issued to (the signed-in user or the signed browser cookie), expires after a few
+    minutes and opens at most ``REDEMPTION_BUDGET`` times (resume and ranged
+    requests); a replay by anyone else, after the budget or after the transfer
+    ended is a 404. Only the first opening charges the file to the user.
     """
     token_str = request.GET.get("token", "")
+    token = DownloadToken.objects.filter(
+        token=token_str, status=DownloadToken.Status.USED
+    ).first()
+    if token is None or token.object_id != firmware_id:
+        raise Http404
     if not verify_link(
         token_str,
         str(firmware_id),
         request.GET.get("exp", ""),
         request.GET.get("sig", ""),
+        subject=subject_of(token),
     ):
         raise Http404
-
-    token = DownloadToken.objects.filter(
-        token=token_str, status=DownloadToken.Status.USED
-    ).first()
-    if token is None or token.object_id != firmware_id:
+    if not owns_token(resolve_identity(request), token):
+        logger.warning("Signed download link opened by another principal: %s", token.pk)
         raise Http404
     firmware = token.firmware
     if firmware is None or not (firmware.is_active and firmware.is_verified):
@@ -1010,35 +1080,32 @@ def serve_local_file(request: HttpRequest, firmware_id: str) -> HttpResponseBase
         logger.error("Stored firmware file missing or outside storage: %s", firmware_id)
         raise Http404
 
-    decision = check_download_access(token.user, firmware)
+    # Admission already applied the concurrent-transfer cap to this very download.
+    decision = check_download_access(token.user, firmware, enforce_concurrency=False)
     if not decision.allowed:
         raise PermissionDenied(decision.reason)
-    finalize_served_download(token.user, firmware)
 
     session = token.sessions.order_by("-started_at").first()
-    if session is not None:
-        session.status = DownloadSession.Status.COMPLETED
-        session.bytes_delivered = path.stat().st_size
-        session.completed_at = timezone.now()
-        session.save(update_fields=["status", "bytes_delivered", "completed_at"])
+    if session is None:
+        raise Http404
+    size_bytes = path.stat().st_size
+    try:
+        with transaction.atomic():
+            redemption = redeem_link(session, size_bytes)
+            if redemption is None:
+                raise Http404
+            if redemption.first:
+                finalize_served_download(token.user, firmware)
+    except PermissionDenied as error:
+        fail_session(session, str(error))
+        raise
     FirmwareDownloadAttempt.objects.filter(
-        content_type=token.content_type,
-        object_id=token.object_id,
-        user=token.user,
-        status="ready",
-    ).update(status="downloading", bytes_transferred=path.stat().st_size)
+        session_id=session.pk, status="ready"
+    ).update(status="downloading")
 
-    filename = firmware.original_file_name or path.name
-    if not getattr(settings, "DEBUG", True):
-        prefix = getattr(settings, "FIRMWARE_X_ACCEL_PREFIX", "/protected-firmware/")
-        relative = path.relative_to(storage_root().resolve())
-        response = HttpResponse()
-        response["X-Accel-Redirect"] = f"{prefix}{relative.as_posix()}"
-        response["Content-Type"] = "application/octet-stream"
-        response["Content-Disposition"] = f'attachment; filename="{filename}"'
-        return response
-
-    return FileResponse(open(path, "rb"), as_attachment=True, filename=filename)
+    return _serve_response(
+        path, firmware.original_file_name or path.name, session.pk, size_bytes
+    )
 
 
 # ============================================================

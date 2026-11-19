@@ -1,0 +1,14 @@
+{% extends "console/dashboard/_widget.html" %}{% load i18n console_ui %}{# Storage, background jobs and crawler findings. Context: checks (Kpi list). #}
+{% block widget_body %}
+{% if checks %}
+<ul class="c-queue">
+{% for kpi in checks %}<li class="c-queue__item{% if kpi.value and kpi.variant != 'success' %} c-queue__item--{{ kpi.variant }}{% endif %}">
+<span class="c-queue__icon">{% console_icon kpi.icon "c-icon--sm" %}</span>
+<div class="c-queue__body"><a class="c-queue__title" href="{{ kpi.url }}">{{ kpi.label }}</a><p class="c-queue__hint">{{ kpi.hint }}</p></div>
+{% if kpi.value is None %}{% ui "badge" label=_("Unavailable") variant="neutral" small=True %}{% elif kpi.value %}<span class="c-queue__count">{{ kpi.value }}</span>{% else %}{% ui "badge" label=_("All good") variant="success" icon="check" small=True %}{% endif %}
+</li>
+{% endfor %}</ul>
+{% else %}
+{% ui "empty_state" title=_("No checks available") message=_("The health checks you may see will appear here.") icon="heart-pulse" tone="compact" %}
+{% endif %}
+{% endblock %}

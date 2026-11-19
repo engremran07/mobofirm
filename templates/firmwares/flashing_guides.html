@@ -26,6 +26,7 @@
     </div>
     <div class="cat-filters__field"><label class="form-label" for="guide-type">Guide type</label><select id="guide-type" class="form-select" name="type"><option value="">All types</option>{% for value, label in guide_types %}<option value="{{ value }}"{% if selected_type == value %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
     <div class="cat-filters__field"><label class="form-label" for="guide-brand">Brand</label><select id="guide-brand" class="form-select" name="brand"><option value="">All brands</option>{% for brand in brands %}<option value="{{ brand.slug }}"{% if selected_brand == brand.slug %} selected{% endif %}>{{ brand.name }}</option>{% endfor %}</select></div>
+    {% if category_options %}<div class="cat-filters__field"><label class="form-label" for="guide-category">Category</label><select id="guide-category" class="form-select" name="category"><option value="">All categories</option>{% for category in category_options %}<option value="{{ category.slug }}"{% if selected_category == category.slug %} selected{% endif %}>{{ category.name }}</option>{% endfor %}</select></div>{% endif %}
     <div class="cat-filters__actions"><button class="btn btn-primary" type="submit">Filter</button></div>
     <span id="guide-indicator" class="htmx-indicator cat-filters__status align-items-center gap-2 muted" role="status"><span class="spinner-border spinner-border-sm" aria-hidden="true"></span><span>Searching</span></span>
   </form>

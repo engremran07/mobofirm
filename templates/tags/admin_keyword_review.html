@@ -1,18 +1,19 @@
 {% extends "admin/staff_page.html" %}
-{% block mf_actions %}
-  <a class="mf-ui-btn" href="{% url 'tags:manage' %}">Tag manager</a>
-  <a class="mf-ui-btn" href="{% url 'tags:duplicates_review' %}">Similar tags</a>
+{% load i18n staff_ui %}
+{% block page_actions %}
+  {% url 'tags:manage' as manage_url %}{% url 'tags:duplicates_review' as duplicates_url %}
+  {% staff_button _("Tag manager") href=manage_url %}
+  {% staff_button _("Similar tags") href=duplicates_url %}
 {% endblock %}
-{% block mf_body %}
-<div class="mf-ui-stack">
-  {% for suggestion in suggestions %}
-    <article class="mf-ui-card" aria-labelledby="keyword-{{ suggestion.pk }}">
-      <h2 class="mf-ui-card__title" id="keyword-{{ suggestion.pk }}">{{ suggestion.keyword }}</h2>
-      <p class="mf-ui-section__lead">{{ suggestion.provider }} · Score {{ suggestion.score }}</p>
-      <form method="post" action="{% url 'tags:apply_keyword' %}">{% csrf_token %}<input type="hidden" name="id" value="{{ suggestion.pk }}"><button class="mf-ui-btn mf-ui-btn--primary" type="submit">Create tag from suggestion</button></form>
-    </article>
-  {% empty %}
-    <p class="mf-ui-empty">No keyword suggestions are waiting.</p>
-  {% endfor %}
-</div>
+{% block page_body %}
+{% for suggestion in suggestions %}
+  {% with suggestion_key=suggestion.pk|stringformat:"s" %}
+  {% blocktranslate with provider=suggestion.provider score=suggestion.score asvar suggestion_meta %}{{ provider }} · Score {{ score }}{% endblocktranslate %}
+  {% staff_card title=suggestion.keyword subtitle=suggestion_meta ident="keyword-"|add:suggestion_key %}
+    <form method="post" action="{% url 'tags:apply_keyword' %}">{% csrf_token %}<input type="hidden" name="id" value="{{ suggestion.pk }}">{% staff_button _("Create tag from suggestion") tone="primary" %}</form>
+  {% endstaff_card %}
+  {% endwith %}
+{% empty %}
+  {% staff_empty %}{% translate "No keyword suggestions are waiting." %}{% endstaff_empty %}
+{% endfor %}
 {% endblock %}

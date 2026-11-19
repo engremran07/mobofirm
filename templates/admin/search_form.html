@@ -1,0 +1,12 @@
+{% comment %}
+  The changelist search box ({% search_form cl %}). A GET form: it works without JavaScript and, with HTMX, refreshes the results region
+  after a short pause in typing (htmx 4: `input changed delay`). #c-cl-params carries every other active parameter (filters, sort, popup flags).
+{% endcomment %}{% load i18n admin_urls console_ui %}{% if cl.search_fields %}{% url cl.opts|admin_urlname:'changelist' as list_url %}
+<form id="c-cl-search" class="c-cl-search" method="get" action="{{ list_url }}" role="search" aria-label="{% blocktranslate with name=cl.opts.verbose_name_plural %}Search {{ name }}{% endblocktranslate %}" {% include "console/crud/_hx_list.html" with url=list_url %} hx-trigger="submit, input changed delay:300ms">
+{% console_icon "search" "c-icon--sm c-cl-search__icon" %}
+<input type="search" name="{{ search_var }}" id="c-cl-q" class="form-control" value="{{ cl.query }}" autocomplete="off" spellcheck="false" placeholder="{% blocktranslate with name=cl.opts.verbose_name_plural %}Search {{ name }}…{% endblocktranslate %}" aria-label="{% blocktranslate with name=cl.opts.verbose_name_plural %}Search {{ name }}{% endblocktranslate %}"{% if cl.search_help_text %} aria-describedby="c-cl-q-help"{% endif %}>
+<button type="button" class="c-cl-search__clear" data-console-search-clear aria-label="{% translate 'Clear search' %}">{% console_icon "x" "c-icon--xs" %}</button>
+<div id="c-cl-params" hidden>{% for name, value in cl.params.items %}{% if name != search_var %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endif %}{% endfor %}</div>
+{% if cl.search_help_text %}<p class="form-text" id="c-cl-q-help">{{ cl.search_help_text }}</p>{% endif %}
+</form>
+{% endif %}

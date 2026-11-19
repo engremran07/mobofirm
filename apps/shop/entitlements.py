@@ -440,8 +440,10 @@ def _allowance_text(tier: PackageTier) -> str:
 
 def _override_for(package: UserPackage) -> PackageQuotaOverride | None:
     return (
-        package.quota_overrides.exclude(expires_at__lt=timezone.now())
-        .order_by("-created_at")
+        package.quota_overrides.filter(
+            Q(expires_at__isnull=True) | Q(expires_at__gt=timezone.now())
+        )
+        .order_by("-created_at", "-pk")
         .first()
     )
 
@@ -553,12 +555,14 @@ def _apply_user_override(
 
 
 def _resolve(user: Any) -> Entitlements:
-    base = _free_package()
     package = _live_package(user) if _authenticated(user) else None
-    label = "Free tier"
     if package is not None:
         base = package.package
         label = f"{base.name} package"
+    else:
+        # The default (free) package is only read when nothing else applies.
+        base = _free_package()
+        label = "Free tier"
     limits = _limits(base)
     window_start, resets_at = _window_bounds(base.window, package, timezone.now())
     current = Entitlements(
@@ -673,14 +677,30 @@ def grant(
 # --- Usage, rooms and meters ---------------------------------------------------
 
 
-def _usage(user: Any, start: datetime, types: Any) -> tuple[int, int]:
-    """(files, megabytes) consumed since ``start`` for the given item types."""
+def _usage(
+    user: Any, start: datetime, types: Any, *, recent_from: datetime | None = None
+) -> tuple[tuple[int, int], tuple[int, int]]:
+    """((files, MB) since ``start``, (files, MB) since ``recent_from``) in ONE query.
+
+    ``recent_from`` is the later boundary (today inside a month or package window);
+    it defaults to ``start`` so both pairs are equal.
+    """
     if not _authenticated(user) or not types:
-        return 0, 0
+        return (0, 0), (0, 0)
+    recent = recent_from or start
+    later = Q(consumed_at__gte=recent)
     totals = QuotaConsumption.objects.filter(
         user=user, consumed_at__gte=start, reason__in=types
-    ).aggregate(files=Count("pk"), megabytes=Sum("size_mb"))
-    return totals["files"], totals["megabytes"] or 0
+    ).aggregate(
+        files=Count("pk"),
+        megabytes=Sum("size_mb"),
+        recent_files=Count("pk", filter=later),
+        recent_megabytes=Sum("size_mb", filter=later),
+    )
+    return (
+        (totals["files"], totals["megabytes"] or 0),
+        (totals["recent_files"], totals["recent_megabytes"] or 0),
+    )
 
 
 def _room(limit: int, extra: int, used_window: int, used_today: int) -> int | None:
@@ -707,8 +727,9 @@ def _main_usage(user: Any, entitled: Entitlements) -> _MainUsage:
     limits = entitled.limits
     now = timezone.now()
     day_start = max(_day_bounds(now)[0], entitled.window_start)
-    files, megabytes = _usage(user, entitled.window_start, limits.metered)
-    today_files, today_mb = _usage(user, day_start, limits.metered)
+    (files, megabytes), (today_files, today_mb) = _usage(
+        user, entitled.window_start, limits.metered, recent_from=day_start
+    )
     return _MainUsage(
         files_used=files,
         mb_used=megabytes,
@@ -782,8 +803,9 @@ def quota_windows(user: Any) -> list[QuotaSnapshot]:
         )
     day_start, day_end = _day_bounds(now)
     month_start, month_end = _month_bounds(now)
-    day_files, day_mb = _usage(user, day_start, FAIR_USAGE_TYPES)
-    month_files, month_mb = _usage(user, month_start, FAIR_USAGE_TYPES)
+    (month_files, month_mb), (day_files, day_mb) = _usage(
+        user, month_start, FAIR_USAGE_TYPES, recent_from=day_start
+    )
     fair = (
         ("files", "today", day_end, limits.fair_daily_files, day_files),
         ("size", "today", day_end, limits.fair_daily_mb, day_mb),
@@ -863,8 +885,9 @@ def _check_limits(
             return QuotaDecision(False, f"Size allowance used up {label}.")
     day_start, _ = _day_bounds(now)
     month_start, _ = _month_bounds(now)
-    day_files, day_mb = _usage(user, day_start, FAIR_USAGE_TYPES)
-    month_files, month_mb = _usage(user, month_start, FAIR_USAGE_TYPES)
+    (month_files, month_mb), (day_files, day_mb) = _usage(
+        user, month_start, FAIR_USAGE_TYPES, recent_from=day_start
+    )
     caps = (
         (limits.fair_daily_files, day_files, 1, "Fair-usage file limit reached today."),
         (
@@ -918,6 +941,17 @@ def _already_consumed(user: Any, content_type: ContentType, object_id: Any) -> b
     return _is_current(user, _consumption(user, content_type, object_id))
 
 
+def has_ad_unlock(user: Any, firmware: Any) -> bool:
+    """Whether the user holds an unused ad unlock for this free or featured file.
+
+    The one answer for the download gate and the shortener: a file unlocked by watching
+    rewarded ads is allowed once and consumes no allowance (see ``ad_unlock``).
+    """
+    from . import ad_unlock
+
+    return ad_unlock.has_live_unlock(user, firmware)
+
+
 def check_quota(user: Any, firmware: Any) -> QuotaDecision:
     """Read-only: may this file be served without exceeding the allowance?
 
@@ -935,6 +969,7 @@ def check_quota(user: Any, firmware: Any) -> QuotaDecision:
             item_type == QuotaConsumption.Reason.FEATURED
             and has_purchased(user, firmware)
         )
+        or has_ad_unlock(user, firmware)
     ):
         return QuotaDecision(True)
     entitled = effective_entitlements(user)
@@ -969,6 +1004,12 @@ def consume_quota(user: Any, firmware: Any, *, reason: str) -> None:
     entitled = effective_entitlements(user)
     if reason == QuotaConsumption.Reason.PAID and not has_purchased(user, firmware):
         raise NotEntitled("This file has not been purchased.")
+    if reason in FAIR_USAGE_TYPES and has_ad_unlock(user, firmware):
+        # Unlocked by watching rewarded ads: spend the ticket, count nothing.
+        from . import ad_unlock
+
+        if ad_unlock.redeem(user, firmware):
+            return
     if reason == QuotaConsumption.Reason.FEATURED and has_purchased(user, firmware):
         # Bought on its own: recorded as served, never counted in the allowance.
         reason = QuotaConsumption.Reason.PURCHASED
@@ -1015,6 +1056,9 @@ def _type_key(model_class: Any) -> str | None:
     from apps.firmwares.catalog import TYPE_KEY_BY_CLASS
 
     return TYPE_KEY_BY_CLASS.get(model_class)
+
+
+file_type_key = _type_key
 
 
 def file_links(content_type_id: int, object_id: Any) -> tuple[str, str] | None:
@@ -1064,6 +1108,28 @@ class PurchasedFile:
     download_url: str
 
 
+def _existing_files(items: list[OrderItem]) -> set[tuple[int | None, Any]]:
+    """(content type id, object id) of the order lines whose file still exists.
+
+    A purchase is a financial record and outlives the file; the library only lists
+    files that can still be opened, so a deleted file simply stops being listed.
+    """
+    wanted: dict[int, set[Any]] = {}
+    for item in items:
+        if item.content_type_id is not None:
+            wanted.setdefault(item.content_type_id, set()).add(item.object_id)
+    present: set[tuple[int | None, Any]] = set()
+    for content_type_id, object_ids in wanted.items():
+        model_class = ContentType.objects.get_for_id(content_type_id).model_class()
+        if model_class is None:
+            continue
+        found = model_class._default_manager.filter(pk__in=object_ids).values_list(
+            "pk", flat=True
+        )
+        present.update((content_type_id, pk) for pk in found)
+    return present
+
+
 def purchased_unserved(user: Any) -> list[PurchasedFile]:
     """Paid, not refunded files that have never been served to the user."""
     if not _authenticated(user):
@@ -1078,11 +1144,17 @@ def purchased_unserved(user: Any) -> list[PurchasedFile]:
         order__status=Order.Status.PAID,
         content_type__isnull=False,
     ).select_related("order")
+    candidates = [
+        item
+        for item in items.order_by("-order__paid_at", "-pk")
+        if (item.content_type_id, item.object_id) not in served
+    ]
+    present = _existing_files(candidates)
     seen: set[tuple[int | None, Any]] = set()
     files: list[PurchasedFile] = []
-    for item in items.order_by("-order__paid_at", "-pk"):
+    for item in candidates:
         key = (item.content_type_id, item.object_id)
-        if item.content_type_id is None or key in served or key in seen:
+        if key in seen or key not in present:
             continue
         seen.add(key)
         links = file_links(item.content_type_id, item.object_id)

@@ -1,0 +1,14 @@
+{% comment %}
+  page_header - the title block of a page or a major section.
+  Context: title (required), subtitle, eyebrow (small label above the title), heading_level (1-3; default 1), icon (Lucide).
+  Slots: "meta" (badges under the subtitle), "actions" (buttons at the end), "tabs" (a tabs component under the header).
+{% endcomment %}{% load console_ui %}<header class="c-page-header">
+<div class="c-page-header__main">
+{% if eyebrow %}<p class="c-page-header__eyebrow">{{ eyebrow }}</p>{% endif %}
+<h{{ heading_level|default:1 }} class="c-page-header__title">{% if icon %}{% console_icon icon "c-icon--lg" %} {% endif %}{{ title }}</h{{ heading_level|default:1 }}>
+{% if subtitle %}<p class="c-page-header__subtitle">{{ subtitle }}</p>{% endif %}
+{% if slots.meta %}<div class="c-page-header__meta">{{ slots.meta }}</div>{% endif %}
+</div>
+{% if slots.actions %}<div class="c-page-header__actions">{{ slots.actions }}</div>{% endif %}
+{% if slots.tabs %}<div class="c-page-header__tabs">{{ slots.tabs }}</div>{% endif %}
+</header>

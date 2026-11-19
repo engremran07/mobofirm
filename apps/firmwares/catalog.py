@@ -34,7 +34,7 @@ PUBLIC_FIRMWARE_TYPES: tuple[tuple[str, type[BaseFirmware]], ...] = (
 
 FIRMWARE_TYPE_DISPLAY = {
     "official": "Official",
-    "engineering": "Engineering",
+    "engineering": "Service / Engineering",
     "readback": "Readback",
     "modified": "Modified",
     "other": "Other",

@@ -26,7 +26,7 @@ class SingleSourceTests(SimpleTestCase):
                 relative = template.relative_to(ROOT)
                 if relative in allowed or any(
                     part in relative.as_posix()
-                    for part in ("templates/admin", "templates/unfold")
+                    for part in ("templates/admin", "templates/console")
                 ):
                     continue
                 if HEAD_TAGS.search(template.read_text(encoding="utf-8")):

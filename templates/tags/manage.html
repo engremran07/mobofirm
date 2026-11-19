@@ -1,57 +1,59 @@
 {% extends "admin/staff_page.html" %}
-{% block mf_actions %}
-  <a class="mf-ui-btn" href="{% url 'tags:duplicates_review' %}">Similar tags</a>
-  <a class="mf-ui-btn" href="{% url 'tags:keyword_review' %}">Keyword suggestions</a>
+{% load i18n staff_ui %}
+{% block page_actions %}
+  {% url 'tags:duplicates_review' as duplicates_url %}{% url 'tags:keyword_review' as keywords_url %}
+  {% staff_button _("Similar tags") href=duplicates_url %}
+  {% staff_button _("Keyword suggestions") href=keywords_url %}
 {% endblock %}
-{% block mf_body %}
-<div class="mf-ui-grid">
-  <div class="mf-ui-card mf-ui-stat"><span class="mf-ui-stat__label">Tags</span><span class="mf-ui-stat__value">{{ totals.total }}</span></div>
-  <div class="mf-ui-card mf-ui-stat"><span class="mf-ui-stat__label">Curated</span><span class="mf-ui-stat__value">{{ totals.curated }}</span></div>
-  <div class="mf-ui-card mf-ui-stat"><span class="mf-ui-stat__label">Waiting for review</span><span class="mf-ui-stat__value">{{ totals.pending }}</span></div>
-</div>
-<section class="mf-ui-section" aria-labelledby="suggestions-title">
-  <h2 class="mf-ui-section__title" id="suggestions-title">Suggested tags</h2>
+{% block page_body %}
+{% staff_grid %}
+  {% staff_stat label=_("Tags") value=totals.total %}
+  {% staff_stat label=_("Curated") value=totals.curated %}
+  {% staff_stat label=_("Waiting for review") value=totals.pending %}
+{% endstaff_grid %}
+
+{% staff_section title=_("Suggested tags") ident="suggestions-title" %}
   {% if suggestions %}
-    <div class="mf-ui-table-wrap" role="region" aria-label="Suggested tags" tabindex="0">
-      <table class="mf-ui-table">
-        <thead><tr><th scope="col">Tag</th><th scope="col">Suggested</th><th scope="col"><span class="mf-ui-sr">Decision</span></th></tr></thead>
-        <tbody>
-          {% for tag in suggestions %}
-            <tr>
-              <th scope="row">{{ tag.name }}</th>
-              <td><time datetime="{{ tag.created_at|date:'c' }}">{{ tag.created_at|date:"M j, Y" }}</time></td>
-              <td class="is-actions">
-                <form method="post" action="{% url 'tags:review' %}" class="mf-ui-row">
-                  {% csrf_token %}
-                  <input type="hidden" name="tag_id" value="{{ tag.pk }}">
-                  <button class="mf-ui-btn mf-ui-btn--primary mf-ui-btn--small" name="decision" value="approve" type="submit">Approve<span class="mf-ui-sr"> {{ tag.name }}</span></button>
-                  <a class="mf-ui-btn mf-ui-btn--small" href="{% url 'tags:reject_dialog' tag_id=tag.pk %}" hx-get="{% url 'tags:reject_dialog' tag_id=tag.pk %}" hx-target="#dialog-slot" hx-swap="innerHTML">Reject<span class="mf-ui-sr"> {{ tag.name }}</span></a>
-                </form>
-              </td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+    {% staff_table label=_("Suggested tags") %}
+      <thead><tr><th scope="col">{% translate "Tag" %}</th><th scope="col">{% translate "Suggested" %}</th><th scope="col"><span class="visually-hidden">{% translate "Decision" %}</span></th></tr></thead>
+      <tbody>
+        {% for tag in suggestions %}
+          <tr>
+            <th scope="row">{{ tag.name }}</th>
+            <td><time datetime="{{ tag.created_at|date:'c' }}">{{ tag.created_at|date:"M j, Y" }}</time></td>
+            <td>
+              <form method="post" action="{% url 'tags:review' %}" class="d-flex flex-wrap gap-2">
+                {% csrf_token %}
+                <input type="hidden" name="tag_id" value="{{ tag.pk }}">
+                {% blocktranslate with name=tag.name asvar approve_label %}Approve {{ name }}{% endblocktranslate %}
+                {% blocktranslate with name=tag.name asvar reject_label %}Reject {{ name }}{% endblocktranslate %}
+                {% url 'tags:reject_dialog' tag_id=tag.pk as reject_url %}
+                {% staff_button approve_label name="decision" value="approve" tone="primary" size="sm" %}
+                {% staff_button reject_label dialog_url=reject_url size="sm" %}
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    {% endstaff_table %}
   {% else %}
-    <p class="mf-ui-empty">No suggestions waiting. New keywords from article text appear here until enough articles use them.</p>
+    {% staff_empty title=_("No suggestions waiting") %}{% translate "New keywords from article text appear here until enough articles use them." %}{% endstaff_empty %}
   {% endif %}
-</section>
-<section class="mf-ui-section" aria-labelledby="merge-title">
-  <h2 class="mf-ui-section__title" id="merge-title">Merge tags</h2>
-  <p class="mf-ui-section__lead">Articles move from the source tag to the destination tag. You will confirm before anything changes.</p>
-  <form method="get" action="{% url 'tags:merge' %}" class="mf-ui-merge" hx-get="{% url 'tags:merge_dialog' %}" hx-target="#dialog-slot" hx-swap="innerHTML">
-    <div class="mf-ui-field"><label for="merge-source">Source tag slug</label><input type="text" id="merge-source" name="source" required list="tag-slugs"></div>
-    <div class="mf-ui-field"><label for="merge-target">Destination tag slug</label><input type="text" id="merge-target" name="target" required list="tag-slugs"></div>
-    <button class="mf-ui-btn mf-ui-btn--primary" type="submit">Review merge</button>
+{% endstaff_section %}
+
+{% staff_section title=_("Merge tags") ident="merge-title" intro=_("Articles move from the source tag to the destination tag. You will confirm before anything changes.") %}
+  {% url 'tags:merge' as merge_url %}{% url 'tags:merge_dialog' as merge_dialog_url %}
+  <form method="get" action="{{ merge_url }}" id="merge-form" class="row g-3 align-items-end">
+    <div class="col-12 col-md">{% staff_input ident="merge-source" name="source" label=_("Source tag slug") required=True list_id="tag-slugs" %}</div>
+    <div class="col-12 col-md">{% staff_input ident="merge-target" name="target" label=_("Destination tag slug") required=True list_id="tag-slugs" %}</div>
+    <div class="col-12 col-md-auto">{% staff_button _("Review merge") dialog_url=merge_dialog_url include="#merge-form" tone="primary" %}</div>
   </form>
   <datalist id="tag-slugs">{% for tag in top_tags %}<option value="{{ tag.slug }}">{{ tag.name }}</option>{% endfor %}</datalist>
-</section>
-<section class="mf-ui-section" aria-labelledby="top-title">
-  <h2 class="mf-ui-section__title" id="top-title">Most used</h2>
-  <ul class="mf-ui-pills">
-    {% for tag in top_tags %}<li><a class="mf-ui-pill" href="{% url 'tags:detail' slug=tag.slug %}">{{ tag.name }} <span class="mf-ui-pill__count">{{ tag.live_count }}</span></a></li>{% empty %}<li class="mf-ui-section__lead">No active tags.</li>{% endfor %}
-  </ul>
-</section>
-{% include "admin/staff_dialog_slot.html" %}
+{% endstaff_section %}
+
+{% staff_section title=_("Most used") ident="top-title" %}
+  {% staff_row %}
+    {% for tag in top_tags %}{% url 'tags:detail' slug=tag.slug as tag_url %}{% staff_chip tag.name tag.live_count tag_url %}{% empty %}<span class="text-body-secondary">{% translate "No active tags." %}</span>{% endfor %}
+  {% endstaff_row %}
+{% endstaff_section %}
 {% endblock %}

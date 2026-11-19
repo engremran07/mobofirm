@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}{{ category.name }} flashing tools and guides | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block meta_description %}{{ category.description|default:category.name|truncatechars:155 }}{% endblock %}
+{% block content %}
+{% url 'firmwares:flashing_tools' as tools_url %}
+<div class="site-container cat-page" data-tool-category="{{ category.slug }}">
+  {% include "components/breadcrumbs.html" with current=category.name parent_label="Tools and guides" parent_url=tools_url %}
+  <header class="hero-panel cat-head">
+    <div class="cat-head__main">
+      <p class="hero-eyebrow"><i class="icon" data-lucide="{{ category.icon|default:'wrench' }}" aria-hidden="true"></i> {{ category.get_kind_display }}</p>
+      <h1 class="cat-head__title">{{ category.name }}</h1>
+      <p class="cat-head__text">{{ category.description }} {{ tool_total }} tool{{ tool_total|pluralize }} and {{ guide_total }} guide{{ guide_total|pluralize }}.</p>
+    </div>
+    {% if parent %}<div class="cat-head__actions"><a class="btn btn-soft" href="{{ parent.get_absolute_url }}">{{ parent.name }}</a></div>{% endif %}
+  </header>
+  {% if children %}
+    <section class="cat-section" aria-labelledby="category-children-title">
+      <div class="cat-section__head"><h2 id="category-children-title" class="cat-section__title">Families</h2></div>
+      <ul class="list-unstyled d-flex flex-wrap gap-2">
+        {% for child, child_tools, child_guides in children %}<li><a class="chip-ui" href="{{ child.get_absolute_url }}">{{ child.name }} <span class="muted">({{ child_tools }} tool{{ child_tools|pluralize }}, {{ child_guides }} guide{{ child_guides|pluralize }})</span></a></li>{% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+  {% if tools %}
+    <section class="cat-section" aria-labelledby="category-tools-title">
+      <div class="cat-section__head"><h2 id="category-tools-title" class="cat-section__title">Tools</h2></div>
+      <div class="card-grid">{% for tool in tools %}{% include "firmwares/includes/tool_card.html" with tool=tool %}{% endfor %}</div>
+    </section>
+  {% endif %}
+  {% if guides %}
+    <section class="cat-section" aria-labelledby="category-guides-title">
+      <div class="cat-section__head"><h2 id="category-guides-title" class="cat-section__title">Guides</h2>{% if guide_total > 12 %}<a href="{{ guides_url }}">All {{ guide_total }} guides</a>{% endif %}</div>
+      <div class="card-grid">{% for guide in guides %}{% include "firmwares/includes/guide_card.html" with guide=guide %}{% endfor %}</div>
+    </section>
+  {% endif %}
+</div>
+{% endblock %}

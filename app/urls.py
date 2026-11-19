@@ -1,7 +1,7 @@
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
-from django.urls import include, path
+from django.urls import include, path, re_path
 from django.views.generic import RedirectView
 
 from apps.firmwares.public_views import library_hub
@@ -36,6 +36,8 @@ urlpatterns = [
     path("users/", include("apps.users.urls")),
     path("devices/", include("apps.devices.urls")),
     path("firmwares/", include("apps.firmwares.urls")),
+    # First-party short links for external firmware downloads (/d/<code>/).
+    path("d/", include("apps.firmwares.urls_short")),
     path("tags/", include("apps.tags.urls")),
     path("ads/", include("apps.ads.urls")),
     path("blog/", include("apps.blog.urls")),
@@ -44,16 +46,20 @@ urlpatterns = [
     path("seo/", include("apps.seo.urls")),
     path("pages/", include("apps.pages.urls")),
     path("storage/", include("apps.storage.urls")),
-    path("shop/", include("apps.shop.urls")),
+    # Pricing (the shop app) lives under /pricing/; every old /shop/... address redirects.
+    path("pricing/", include("apps.shop.urls")),
+    re_path(r"^shop/", views.legacy_shop_redirect),
     path("marketplace/", include("apps.marketplace.urls")),
     path("wallet/", include("apps.wallet.urls")),
     path("referral/", include("apps.referral.urls")),
     path("offers/", include("apps.promotions.urls")),
     path("files/", include("apps.users.urls_library")),
+    path("contributions/", include("apps.users.urls_contributions")),
     path("consent/", include("apps.consent.urls")),
     path("", include("apps.gamification.urls")),
     path("bounty/", include("apps.bounty.urls")),
     path("go/", include("apps.distribution.urls")),
+    path("feeds/", include("apps.distribution.urls_feeds")),
     path("site/", include("apps.site_settings.urls")),
     # Last: its catch-all verification-file pattern must never shadow another route.
     path("", include("apps.site_settings.urls_root")),

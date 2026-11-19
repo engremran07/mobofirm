@@ -1,5 +1,5 @@
 {# Contract: shop_tab (packages, account, orders). Sub-navigation shared by every shop page. #}
-<nav class="subnav-ui" aria-label="Shop sections">
+<nav class="subnav-ui" aria-label="Pricing sections">
   <a href="{% url 'shop:pricing' %}"{% if shop_tab == 'packages' %} aria-current="page"{% endif %}>Packages</a>
   {% if user.is_authenticated %}
     <a href="{% url 'shop:my_package' %}"{% if shop_tab == 'account' %} aria-current="page"{% endif %}>My package</a>

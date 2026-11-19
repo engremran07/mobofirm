@@ -1,15 +1,16 @@
 {% extends "base.html" %}
-{% block title %}My uploads | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block title %}Firmware contributions | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block content %}
-{% url 'library:my_files' as my_files_url %}
+{% url 'contributions:hub' as hub_url %}
 <div class="site-container py-4 py-lg-5">
-  {% include "components/breadcrumbs.html" with current="My uploads" parent_label="My files" parent_url=my_files_url %}
-  {% include "components/page_header.html" with eyebrow="My files" title="My uploads" lead="Firmware you submitted, the device each one is linked to, and where review and pricing stand." %}
+  {% include "components/breadcrumbs.html" with current="Firmware contributions" parent_label="My contributions" parent_url=hub_url %}
+  {% include "components/page_header.html" with eyebrow="My contributions" title="Firmware contributions" lead="Firmware you contributed, the device each one is linked to, and where review and pricing stand." %}
   {% include "users/library/_tabs.html" %}
+  {% if firmwares_available %}<p><a class="btn btn-primary" href="{% url 'firmwares:contribute' %}"><i class="icon" data-lucide="upload" aria-hidden="true"></i> Contribute a firmware</a></p>{% endif %}
 
-  <form id="uploads-filters" class="row g-2 mb-4" method="get" action="{% url 'library:my_uploads' %}"
-        hx-get="{% url 'library:my_uploads' %}" hx-trigger="change, submit" hx-target="#uploads-results"
-        hx-include="this" hx-swap="innerHTML" hx-push-url="true" aria-label="Filter your uploads">
+  <form id="uploads-filters" class="row g-2 mb-4" method="get" action="{% url 'contributions:firmware' %}"
+        hx-get="{% url 'contributions:firmware' %}" hx-trigger="change, submit" hx-target="#uploads-results"
+        hx-include="this" hx-swap="innerHTML" hx-push-url="true" aria-label="Filter your firmware contributions">
     <div class="col-8 col-md-4">
       <label class="form-label" for="uploads-status">Status</label>
       <select id="uploads-status" class="form-select" name="status">

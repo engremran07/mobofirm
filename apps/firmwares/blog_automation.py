@@ -28,6 +28,7 @@ from django.utils.text import slugify
 
 from . import catalog
 from .models import AutomatedBlogLink, Brand, Chipset, FlashingTool, Model
+from .package_formats import APPLE_BRAND_SLUGS, vendor_for_device, vendor_summary
 from .tool_matcher import get_chipset_family, get_primary_flash_tool_name
 
 logger = logging.getLogger(__name__)
@@ -77,6 +78,72 @@ GUIDE_STEPS: dict[str, tuple[str, str, list[str]]] = {
             "Boot the device into Download mode and connect it by USB.",
             "Wait for Odin to show Added!! and press Start.",
             "Wait for the PASS! message before disconnecting.",
+        ],
+    ),
+    "Rockchip": (
+        "RKDevTool",
+        "Maskrom or Loader mode",
+        [
+            "Install the Rockchip USB driver (DriverAssistant) on your PC.",
+            "Open RKDevTool and load the update.img from the firmware package.",
+            "Put the device in Loader or Maskrom mode and connect it by USB.",
+            "Start the upgrade and wait until the tool reports success.",
+        ],
+    ),
+    "Allwinner": (
+        "PhoenixSuit",
+        "FEL mode",
+        [
+            "Install the Allwinner USB driver on your PC.",
+            "Open PhoenixSuit (LiveSuit on Linux) and load the .img firmware file.",
+            "Connect the device by USB in FEL mode as described for the board.",
+            "Confirm the upgrade and wait until it finishes before disconnecting.",
+        ],
+    ),
+    "Kirin": (
+        "HiSuite",
+        "eRecovery or HiSuite update",
+        [
+            "Install Huawei HiSuite on your PC, or open eRecovery on the phone.",
+            "Use the UPDATE.APP package that matches the exact model and region.",
+            "Keep the phone connected and charged while the update installs.",
+        ],
+    ),
+    "Google Tensor": (
+        "Android Flash Tool or Fastboot",
+        "Fastboot mode",
+        [
+            "Unlock the bootloader (this erases the device).",
+            "Download the factory image that matches your Pixel model.",
+            "Flash it with the Android Flash Tool, or run flash-all with Fastboot.",
+            "Let the device reboot; the first start can take several minutes.",
+        ],
+    ),
+    "Apple": (
+        "Finder or the Apple Devices app",
+        "recovery mode or DFU mode",
+        [
+            (
+                "Update Finder (Mac) or install the Apple Devices app (Windows 10 and 11); "
+                "iTunes is only needed on older Windows."
+            ),
+            (
+                "Back up the device, then connect it by USB and put it in recovery mode, "
+                "or DFU mode if recovery mode does not work."
+            ),
+            (
+                "Choose Restore (erases the device) or Update (keeps data) when "
+                "prompted, or load an IPSW file with Option-click (Mac) or "
+                "Shift-click (Windows)."
+            ),
+            (
+                "Only IPSW files that Apple still signs can be installed; older "
+                "versions are refused by Apple's servers."
+            ),
+            (
+                "Apple Configurator 2 on a Mac can revive or restore a device that "
+                "does not start."
+            ),
         ],
     ),
 }
@@ -250,22 +317,35 @@ def _tools_section(brand: Brand | None, chipsets: list[Chipset]) -> SafeString:
     )
 
 
-def _guide_section(device: str, chipset_text: str, brand_name: str) -> SafeString:
+def guide_section(device: str, chipset_text: str, brand_name: str) -> SafeString:
     family = get_chipset_family(chipset_text)
+    if brand_name.lower() in APPLE_BRAND_SLUGS:
+        family = "Apple"
     tool, mode, steps = GUIDE_STEPS.get(family, GENERIC_STEPS)
     if family == "" and brand_name.lower() == "samsung":
         tool, mode, steps = GUIDE_STEPS["Samsung Exynos"]
     primary = get_primary_flash_tool_name(brand_name, chipset_text) or tool
     steps_html = format_html_join("", "<li>{}</li>", ((step,) for step in steps))
+    vendor = vendor_for_device(chipset_text=chipset_text)
+    if brand_name.lower() in APPLE_BRAND_SLUGS:
+        vendor = "Apple"
+    elif brand_name.lower() == "samsung":
+        vendor = "Samsung"
+    format_note = mark_safe("")
+    summary = vendor_summary(vendor)
+    if summary:
+        format_note = format_html("<p><strong>Package format:</strong> {}</p>", summary)
     return format_html(
         "<h3>How to flash firmware on {}</h3>"
         "<p>The usual tool for this device is <strong>{}</strong> in {}.</p>"
+        "{}"
         "<ol>{}</ol>"
         "<p>Prerequisites: a battery above 50%, the original USB cable, installed "
         "USB drivers and a full backup of your data.</p>",
         device,
         primary,
         mode,
+        format_note,
         steps_html,
     )
 
@@ -392,7 +472,7 @@ class FirmwareBlogService:
             chipset_html,
             _firmware_sections(firmwares, cap=MODEL_FILE_CAP),
             _tools_section(brand, chipsets),
-            _guide_section(device, chipset_text, brand.name),
+            guide_section(device, chipset_text, brand.name),
             SAFETY_NOTE,
         )
         title = f"{device} Firmware Download — All Variants"
@@ -536,7 +616,7 @@ class FirmwareBlogService:
                 browse_query=f"&chipset={chipset.slug}",
             ),
             _tools_section(None, [chipset]),
-            _guide_section(chipset.display_name, chipset.display_name, ""),
+            guide_section(chipset.display_name, chipset.display_name, ""),
         )
         title = f"{chipset.display_name} firmware downloads and flashing tools"
         summary = (

@@ -1,0 +1,45 @@
+{% extends "admin/staff_page.html" %}
+{% load i18n staff_ui %}
+{% comment %}
+  Step 2 of an import (staff console): the dry-run preview. Nothing has been written.
+  Context: plan (rows to show), truncated, counts, total, filename, can_apply,
+  confirm_url, upload_url, cancel_url, opts.
+{% endcomment %}
+{% block page_body %}
+<div class="d-flex flex-column gap-4" data-import-preview>
+  {% staff_card title=filename ident="import-preview-title" subtitle=_("Dry run: nothing has been written yet.") %}
+    {% staff_row %}
+      {% staff_badge counts.create|stringformat:"d"|add:" to create" "success" %}
+      {% staff_badge counts.update|stringformat:"d"|add:" to update" "info" %}
+      {% staff_badge counts.skip|stringformat:"d"|add:" unchanged" "neutral" %}
+      {% staff_badge counts.error|stringformat:"d"|add:" with errors" "danger" %}
+    {% endstaff_row %}
+    {% if counts.error %}{% staff_notice tone="danger" %}{% translate "Fix the rows with errors and upload the file again. A file with errors is never applied, so nothing is half imported." %}{% endstaff_notice %}
+    {% elif not can_apply %}{% staff_notice tone="info" %}{% translate "Every row is already up to date: there is nothing to import." %}{% endstaff_notice %}{% endif %}
+    <form method="post" action="{{ confirm_url }}">
+      {% csrf_token %}
+      {% staff_row %}
+        {% if can_apply %}{% staff_button _("Confirm and import") tone="primary" %}{% endif %}
+        {% staff_button _("Upload another file") href=upload_url %}
+        {% staff_button _("Cancel") href=cancel_url %}
+      {% endstaff_row %}
+    </form>
+  {% endstaff_card %}
+  {% staff_section title=_("Rows") ident="import-preview-rows" %}
+    {% staff_table label=_("Rows of the file") caption=_("Rows of the file with the planned action") %}
+      <thead><tr><th scope="col">{% translate "Row" %}</th><th scope="col">{% translate "Action" %}</th><th scope="col">{% translate "Record" %}</th><th scope="col">{% translate "Problems" %}</th></tr></thead>
+      <tbody>
+        {% for row in plan %}
+          <tr data-row-action="{{ row.action }}">
+            <td>{{ row.number }}</td>
+            <td>{% if row.action == "create" %}{% staff_badge _("Create") "success" %}{% elif row.action == "update" %}{% staff_badge _("Update") "info" %}{% elif row.action == "skip" %}{% staff_badge _("Unchanged") "neutral" %}{% else %}{% staff_badge _("Error") "danger" %}{% endif %}</td>
+            <td>{{ row.label|default:"—" }}</td>
+            <td>{% for error in row.errors %}<div>{{ error }}</div>{% empty %}—{% endfor %}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    {% endstaff_table %}
+    {% if truncated %}{% staff_notice tone="info" %}{% blocktranslate %}{{ truncated }} more rows are not listed; errors are always listed first.{% endblocktranslate %}{% endstaff_notice %}{% endif %}
+  {% endstaff_section %}
+</div>
+{% endblock %}

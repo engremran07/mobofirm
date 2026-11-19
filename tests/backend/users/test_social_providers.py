@@ -19,6 +19,7 @@ from django.contrib.messages import get_messages
 from django.contrib.sites.models import Site
 from django.test import RequestFactory, override_settings
 from django.urls import reverse
+from django.utils.html import strip_tags
 
 from apps.users.adapters import CustomSocialAccountAdapter
 from apps.users.admin import EnhancedSocialAppAdmin
@@ -225,7 +226,10 @@ class TestAdminConfiguration:
     def test_status_reflects_real_versus_placeholder_keys(self):
         admin_model = EnhancedSocialAppAdmin(SocialApp, admin.site)
 
-        assert admin_model.status_display(_google_app()) == "Configured"
-        assert admin_model.status_display(_google_app(client_id="your-id")) == (
-            "Placeholder"
+        # The status column renders as a badge; compare the visible label.
+        assert strip_tags(admin_model.status_display(_google_app())).strip() == (
+            "Configured"
         )
+        assert strip_tags(
+            admin_model.status_display(_google_app(client_id="your-id"))
+        ).strip() == ("Placeholder")

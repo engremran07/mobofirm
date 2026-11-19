@@ -1,0 +1,5 @@
+{# HTMX response of upload_variant_field: the variant field plus, out of band, the package-format select for the chosen model. Contract: see upload_variant.html. #}
+{% include "firmwares/fragments/upload_variant.html" %}
+<div class="col-12" id="upload-format-region" hx-swap-oob="true">
+  {% include "firmwares/fragments/upload_format.html" %}
+</div>

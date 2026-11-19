@@ -29,7 +29,7 @@ from apps.core.editor.sanitizer import sanitize_stored_html, text_length
 from . import conf
 from .access import is_seller
 from .catalog_requests import fulfil_matching_requests
-from .constants import MAIN_CATEGORIES
+from .constants import MAIN_CATEGORIES, MAX_PRICE
 from .crypto import decrypt_password, encrypt_password
 from .events import announce_approval
 from .models import (
@@ -49,6 +49,7 @@ from .models import (
     Variant,
 )
 from .notifications import notify_users
+from .package_formats import device_format_error
 from .sources import validate_external_url
 
 logger = logging.getLogger(__name__)
@@ -74,6 +75,8 @@ DEFAULT_ALLOWED_EXTENSIONS = (
     ".lz4",
     ".scatter",
     ".md5",
+    ".ipsw",
+    ".app",
 )
 ALLOWED_CONTENT_TYPES = {
     "",
@@ -116,7 +119,6 @@ class SubmissionRateLimited(FirmwareUploadError):
     """Raised when a user submitted too many files in the last hour."""
 
 
-MAX_PRICE = Decimal("99999999.99")
 RELEASE_INFO_LIMITS = {"build_number": 128, "android_version": 32, "changelog": 5000}
 
 
@@ -141,9 +143,9 @@ def resolve_submission_tier(
 ) -> tuple[str, Decimal | None]:
     """Validate the tier and proposed price an uploader may ask for.
 
-    Everyone's files are free. Only approved marketplace sellers may offer paid
-    (with a proposed price) or featured files, and nobody sets the approved price
-    at submission time.
+    Everyone's files are free or featured. Only approved marketplace sellers may offer
+    paid files (with a proposed price), and nobody sets the approved price at
+    submission time.
     """
     tier = access_tier or AccessTier.FREE
     if tier not in AccessTier.values:
@@ -153,14 +155,14 @@ def resolve_submission_tier(
         if has_price:
             raise FirmwareUploadError("Free files cannot have a price.")
         return AccessTier.FREE, None
-    if not is_seller(uploader):
-        raise FirmwareUploadError(
-            "Only approved marketplace sellers can offer paid or featured files."
-        )
     if tier == AccessTier.FEATURED:
         if has_price:
             raise FirmwareUploadError("Featured files do not take a price.")
         return AccessTier.FEATURED, None
+    if not is_seller(uploader):
+        raise FirmwareUploadError(
+            "Only approved marketplace sellers can offer paid files."
+        )
     try:
         price = Decimal(str(proposed_price)).quantize(Decimal("0.01"))
     except (InvalidOperation, ValueError) as error:
@@ -234,6 +236,15 @@ def _is_within(path: Path, root: Path) -> bool:
     return path.resolve().is_relative_to(root.resolve())
 
 
+def _require_device_format(package_format: str, brand, model, variant) -> None:
+    """Reject a package format that does not fit the device's chipset vendor."""
+    message = device_format_error(
+        package_format, variant=variant, model=model, brand=brand
+    )
+    if message:
+        raise ValueError(message)
+
+
 def handle_upload(
     *,
     uploader,
@@ -252,6 +263,9 @@ def handle_upload(
     """Stage an uploaded file, hash it, and create its pending record."""
     if package_format not in FirmwarePackageFormat.values:
         raise ValueError("Unsupported firmware package format.")
+    _require_device_format(
+        package_format, uploaded_brand, uploaded_model, uploaded_variant
+    )
     tier, price = resolve_submission_tier(uploader, access_tier, proposed_price)
     metadata = submission_metadata(extra_info, release_info)
 
@@ -331,6 +345,9 @@ def submit_external_firmware(
     """
     if package_format not in FirmwarePackageFormat.values:
         raise ValueError("Unsupported firmware package format.")
+    _require_device_format(
+        package_format, uploaded_brand, uploaded_model, uploaded_variant
+    )
     tier, price = resolve_submission_tier(uploader, access_tier, proposed_price)
     metadata = submission_metadata(extra_info, release_info)
     safe_name = _safe_filename(original_file_name)
@@ -488,6 +505,27 @@ def _validate_hierarchy(brand, model, variant):
     return brand, model, variant
 
 
+TIER_RANK: dict[str, int] = {
+    AccessTier.FREE: 0,
+    AccessTier.FEATURED: 1,
+    AccessTier.PAID: 2,
+}
+
+
+def _approval_message(
+    pending: PendingFirmware, requested: str, final: str, reason: str
+) -> str:
+    """The approval notice; it names the access type and the reviewer's reason when
+    the reviewer lowered what the contributor asked for."""
+    message = f'Your firmware upload "{pending.original_file_name}" has been approved.'
+    if TIER_RANK.get(final, 0) < TIER_RANK.get(requested, 0):
+        message += (
+            f" The access type was changed from {AccessTier(requested).label} to "
+            f"{AccessTier(final).label}: {reason}"
+        )
+    return message
+
+
 def _notify(pf: PendingFirmware, *, title: str, message: str, priority: str) -> None:
     if pf.uploader_id is None:
         return
@@ -533,14 +571,15 @@ def _review_tier(
         return AccessTier.FREE, None
     if pending.uploader_id is not None and pending.uploader_id == reviewer.pk:
         raise PermissionDenied("You cannot approve your own paid or featured file.")
-    if not is_seller(pending.uploader):
-        raise ValidationError(
-            "Only files from approved marketplace sellers can be paid or featured."
-        )
     if tier == AccessTier.FEATURED:
         if has_price:
             raise ValidationError("Featured files do not take a price.")
         return AccessTier.FEATURED, None
+    if not is_seller(pending.uploader):
+        raise ValidationError(
+            "Only files from approved marketplace sellers can be paid. "
+            "Choose Free or Featured for this contributor."
+        )
     if not has_price:
         raise ValidationError("An approved price is required for paid files.")
     try:
@@ -603,11 +642,28 @@ def approve_pending_firmware(
         final_tier, final_price = _review_tier(
             locked, admin_user, access_tier, approved_price
         )
+        requested_tier = locked.access_tier
+        downgraded = TIER_RANK.get(final_tier, 0) < TIER_RANK.get(requested_tier, 0)
+        if downgraded and not clean_notes:
+            raise ValidationError(
+                "Give the contributor a reason for lowering the access type "
+                f"from {AccessTier(requested_tier).label} to "
+                f"{AccessTier(final_tier).label}."
+            )
         target_brand, target_model, target_variant = _validate_hierarchy(
             brand or locked.uploaded_brand,
             model or locked.uploaded_model,
             variant or locked.uploaded_variant,
         )
+        format_message = device_format_error(
+            package_format or locked.package_format,
+            variant=target_variant,
+            model=target_model,
+            brand=target_brand,
+            chipset_text=chipset if chipset is not None else locked.chipset,
+        )
+        if format_message:
+            raise ValidationError(format_message)
         now = timezone.now()
         price_reviewed = final_tier != AccessTier.FREE
         base_kwargs: dict[str, Any] = {
@@ -719,7 +775,9 @@ def approve_pending_firmware(
             lambda: _notify(
                 locked,
                 title="Firmware Approved",
-                message=f'Your firmware upload "{locked.original_file_name}" has been approved.',
+                message=_approval_message(
+                    locked, requested_tier, final_tier, clean_notes
+                ),
                 priority="info",
             )
         )

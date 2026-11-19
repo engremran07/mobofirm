@@ -294,7 +294,9 @@ class Adapter:
     legacy_secret_field: ClassVar[str] = ""
     endpoints: ClassVar[tuple[str, ...]] = ()
     supports_check: ClassVar[bool] = True
-
+    # Assisted platforms have no posting API: the pipeline prepares the post and hands it to
+    # staff ("ready to post by hand"); nothing is ever sent, nothing is reported as sent.
+    assisted: ClassVar[bool] = False
     # ------------------------------------------------------------- config ----
 
     @classmethod

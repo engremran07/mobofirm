@@ -1,4 +1,4 @@
-"""Firmware storage location administration (Unfold)."""
+"""Firmware storage location administration."""
 
 from __future__ import annotations
 
@@ -9,12 +9,6 @@ from django.db.models import QuerySet
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import redirect
 from django.utils.translation import gettext_lazy as _
-from unfold.contrib.filters.admin import (
-    ChoicesDropdownFilter,
-    RangeDateTimeFilter,
-    RelatedDropdownFilter,
-)
-from unfold.forms import BaseDialogForm
 
 from apps.core.admin_base import (
     ModelAdmin,
@@ -26,6 +20,12 @@ from apps.core.admin_base import (
     htmx_redirect,
     return_url,
 )
+from apps.core.admin_filters import (
+    ChoicesDropdownFilter,
+    RangeDateTimeFilter,
+    RelatedDropdownFilter,
+)
+from apps.core.admin_forms import BaseDialogForm
 
 from .models import FirmwareStorageLocation
 from .services import sync_all_firmware, verify_location

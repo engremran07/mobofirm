@@ -84,6 +84,11 @@ def submit_user_upload(user: Any, submission: UploadSubmission) -> PendingFirmwa
         "android_version": submission.android_version,
         "changelog": submission.changelog,
     }
+    tier = submission.access_tier
+    price = submission.proposed_price
+    if tier == AccessTier.PAID and not can_offer_paid(user):
+        # Authoritative server-side rule: only approved sellers may offer Paid files.
+        tier, price = AccessTier.FREE, None
     common: dict[str, Any] = {
         "uploader": user,
         "uploaded_brand": model.brand,
@@ -91,8 +96,8 @@ def submit_user_upload(user: Any, submission: UploadSubmission) -> PendingFirmwa
         "uploaded_variant": variant,
         "package_format": submission.package_format,
         "extra_info": submission.notes or None,
-        "access_tier": submission.access_tier,
-        "proposed_price": submission.proposed_price,
+        "access_tier": tier,
+        "proposed_price": price,
         "release_info": release_info,
     }
     if submission.file is not None:

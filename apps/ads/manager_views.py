@@ -1,4 +1,4 @@
-"""Staff placement manager, discovery queue and test profile (Unfold admin shell).
+"""Staff placement manager, discovery queue and test profile (staff console shell).
 
 Every screen renders through ``render_admin_page``; every state change is a POST with CSRF
 that redirects back (PRG). Confirmations are app-owned dialogs (``apps.ads.dialogs``).
@@ -43,7 +43,7 @@ PAGE_SIZE = 40
 
 
 def admin_shell(view):
-    """Serve ``view`` under the Unfold shell's CSP (its Alpine compiles expressions).
+    """Serve ``view`` under the strict staff-console CSP.
 
     Mirrors ``apps.core.middleware.admin_csp`` so these pages work without every new
     staff view having to be registered in that central allowlist.

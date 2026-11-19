@@ -1,4 +1,4 @@
-"""SEO Control Center administration (Unfold).
+"""SEO Control Center administration.
 
 Manual edits of redirects, metadata and settings are recorded in the change ledger
 so they can be rolled back. Ledger decisions (approve/reject/rollback), issue
@@ -17,11 +17,6 @@ from django.contrib.admin.utils import unquote
 from django.db import models
 from django.http import Http404, HttpRequest, HttpResponse
 from django.utils.translation import gettext_lazy as _
-from unfold.contrib.filters.admin import (
-    ChoicesDropdownFilter,
-    RangeDateTimeFilter,
-)
-from unfold.forms import BaseDialogForm
 
 from apps.core.admin_base import (
     BADGE_JOB,
@@ -36,6 +31,8 @@ from apps.core.admin_base import (
     htmx_redirect,
     return_url,
 )
+from apps.core.admin_filters import ChoicesDropdownFilter, RangeDateTimeFilter
+from apps.core.admin_forms import BaseDialogForm
 
 from . import ledger
 from .crawler import CrawlUnavailable, run_crawl
@@ -246,6 +243,31 @@ class SEOSettingsAdmin(LedgerRecordingAdmin, SingletonModelAdmin):
                     "allow_ai_training_bots",
                     "crawl_max_pages",
                     "crawl_delay_ms",
+                    "robots_crawl_delay",
+                ),
+                "classes": ["tab"],
+            },
+        ),
+        (
+            _("Sitemaps"),
+            {
+                "fields": (
+                    "sitemap_page_size",
+                    "sitemap_images_enabled",
+                    "sitemap_news_enabled",
+                ),
+                "classes": ["tab"],
+            },
+        ),
+        (
+            _("Well-known files"),
+            {
+                "fields": (
+                    "security_contact",
+                    "security_policy_url",
+                    "security_expires",
+                    "humans_txt_enabled",
+                    "humans_txt",
                 ),
                 "classes": ["tab"],
             },
@@ -413,7 +435,6 @@ class IssueAdmin(SeoReadOnlyAdmin):
         "status_badge",
         "group",
         "object_title",
-        "fixable",
         "url",
         "updated_at",
     )
@@ -422,7 +443,6 @@ class IssueAdmin(SeoReadOnlyAdmin):
         ("status", ChoicesDropdownFilter),
         ("group", ChoicesDropdownFilter),
         ("code", ChoicesDropdownFilter),
-        "fixable",
         ("updated_at", RangeDateTimeFilter),
     )
     search_fields = ("url", "message", "object_title")

@@ -1,0 +1,9 @@
+{% comment %}
+  alert - an inline message or form error summary.
+  Context: message (or use as a block: content), title, variant (success|warning|danger|info; default info), icon (overrides the default),
+  dismissible (adds a close button; needs the "dismiss" hook from the behaviour layer), live (polite|assertive|off; default: assertive for danger/warning, polite otherwise).
+{% endcomment %}{% load i18n console_ui %}{% with tone=variant|console_variant:"info" %}<div class="c-alert c-alert--{{ tone }}" role="{% if live == 'off' %}presentation{% elif tone == 'danger' or tone == 'warning' or live == 'assertive' %}alert{% else %}status{% endif %}">
+{% if tone == "success" %}{% console_icon icon|default:"circle-check" "c-alert__icon" %}{% elif tone == "danger" %}{% console_icon icon|default:"circle-x" "c-alert__icon" %}{% elif tone == "warning" %}{% console_icon icon|default:"triangle-alert" "c-alert__icon" %}{% else %}{% console_icon icon|default:"info" "c-alert__icon" %}{% endif %}
+<div class="c-alert__body">{% if title %}<strong class="c-alert__title">{{ title }}</strong>{% endif %}{{ message }}{{ content }}</div>
+{% if dismissible %}<button type="button" class="btn-close c-alert__close" data-console-dismiss aria-label="{% translate 'Dismiss' %}"></button>{% endif %}
+</div>{% endwith %}

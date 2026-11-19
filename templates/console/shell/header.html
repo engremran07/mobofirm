@@ -1,0 +1,15 @@
+{% load i18n console_ui %}{% comment %}
+  Header of the console shell (included by console/layout.html): sidebar toggle, search/command-palette trigger,
+  environment, theme switch and the account menu. Hooks: [data-console-sidebar-toggle], #console-palette (Bootstrap modal data API).
+  The search trigger is a real link to the full search page, so it also works without JavaScript.
+{% endcomment %}<header class="app-header" role="banner">
+<div class="c-header__start">
+<button type="button" class="c-icon-btn" data-console-sidebar-toggle aria-controls="console-sidebar" aria-expanded="true" aria-label="{% translate 'Show or hide the navigation' %}">{% console_icon "menu" %}</button>
+{% url 'admin:console_search' as search_url %}<a class="c-header__search text-decoration-none" href="{{ search_url }}" data-ui-dialog-open="console-palette" aria-haspopup="dialog" aria-keyshortcuts="Control+K Meta+K" data-console-shortcut="g s" data-console-shortcut-label="{% translate 'Search and jump to' %}" aria-label="{% translate 'Search and jump to' %}">{% console_icon "search" "c-icon--sm" %}<span>{% translate "Search or jump to…" %}</span><kbd class="c-kbd d-none d-md-inline" aria-hidden="true">Ctrl K</kbd></a>
+</div>
+<div class="c-header__end">
+{% if shell.console_brand.environment.label %}<span class="c-env c-env--{{ shell.console_brand.environment.variant|console_variant:'info' }} d-none d-md-inline-flex">{{ shell.console_brand.environment.label }}</span>{% endif %}
+{% ui "theme_toggle" css_class="d-none d-md-inline-flex" %}
+{% url 'users:account_logout' as logout_url %}{% ui "user_menu" user=request.user links=shell.console_account_links site_url=shell.console_brand.site_url logout_url=logout_url %}
+</div>
+</header>

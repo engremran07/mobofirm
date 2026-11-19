@@ -1,0 +1,196 @@
+// Filter bar: one compact control per list_filter, above the results (every changelist).
+//   <div id="c-cl-filters" class="c-fbar" data-ui-sheet [data-open]>
+//     <div class="c-fbar__head"><h2 class="c-fbar__title"/><button class="btn-close" data-ui-sheet-toggle/></div>
+//     <div class="c-fbar__controls">
+//       <div class="c-fctl" data-ui-popover [data-active] [data-open] [data-align="end"]>
+//         <button class="c-fctl__btn" data-ui-trigger><span class="c-fctl__title"/><span class="c-fctl__value"/><svg class="c-fctl__caret"/></button>
+//         <div class="c-fpanel [c-fpanel--form]" data-ui-panel hidden>
+//           <ul class="c-fpanel__list" role="listbox"><li role="presentation"><a role="option" [data-selected] [data-active] [data-disabled]/></li></ul>
+//           | <form> ... <div class="c-fpanel__actions"/></form></div></div>
+//       <a class="c-fctl__link">Show counts</a></div></div>
+// State is read from data attributes written by js/ui/popover.js (Headless UI convention); no colour is set by script.
+// >= 768px: a wrapping row of popover buttons. < 768px: the row is hidden behind the "Filters (n)" toggle and opens as a bottom sheet.
+@layer components {
+  .c-fbar {
+    margin-block-end: var(--mf-space-3);
+  }
+
+  .c-fbar__head { display: none; }
+
+  .c-fbar__controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--mf-space-2);
+  }
+
+  .c-fctl { position: relative; }
+
+  .c-fctl__btn,
+  .c-select__btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--mf-space-2);
+    min-block-size: var(--mf-control-h-sm);
+    padding: 0 var(--mf-space-3);
+    color: var(--mf-text);
+    font: inherit;
+    font-size: var(--mf-fs-sm);
+    background: var(--mf-surface-raised);
+    border: 1px solid var(--mf-border-strong);
+    border-radius: var(--mf-radius-md);
+    cursor: pointer;
+    transition: background-color var(--mf-duration-fast) var(--mf-ease-out), border-color var(--mf-duration-fast) var(--mf-ease-out);
+
+    &:hover { background: var(--mf-surface-soft); }
+  }
+
+  .c-fctl__title { display: inline-block; color: var(--mf-text-muted); font-weight: 600; }
+  .c-fctl__title::first-letter { text-transform: uppercase; }
+  .c-fctl__value { max-inline-size: 12rem; overflow: hidden; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+  .c-fctl__caret { color: var(--mf-text-muted); transition: transform var(--mf-duration-fast) var(--mf-ease-out); }
+  .c-fctl[data-open] .c-fctl__caret { transform: rotate(180deg); }
+
+  .c-fctl[data-active] .c-fctl__btn {
+    color: var(--mf-accent-strong);
+    background: var(--mf-accent-soft);
+    border-color: var(--mf-accent);
+  }
+
+  .c-fctl[data-active] .c-fctl__title { color: inherit; }
+  .c-fctl[data-open] .c-fctl__btn { border-color: var(--mf-accent); }
+
+  .c-fctl__link {
+    padding-inline: var(--mf-space-2);
+    color: var(--mf-text-muted);
+    font-size: var(--mf-fs-sm);
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+
+    &:hover { color: var(--mf-text); }
+  }
+
+  .c-fpanel {
+    position: absolute;
+    inset-block-start: calc(100% + 0.375rem);
+    inset-inline-start: 0;
+    z-index: 30;
+    min-inline-size: 13rem;
+    max-inline-size: min(22rem, calc(100vw - 1.5rem));
+    max-block-size: min(22rem, 60dvh);
+    padding: var(--mf-space-1);
+    overflow-y: auto;
+    color: var(--mf-text);
+    background: var(--mf-surface-raised);
+    border: 1px solid var(--mf-border);
+    border-radius: var(--mf-radius-md);
+    box-shadow: var(--mf-elev-3);
+    animation: c-rise var(--mf-duration-fast) var(--mf-ease-out) both;
+  }
+
+  .c-fpanel[hidden] { display: none; }
+  .c-fctl[data-align="end"] .c-fpanel { inset-inline: auto 0; }
+  .c-fpanel--form { padding: var(--mf-space-3); min-inline-size: 16rem; }
+  .c-fpanel--form form { display: grid; gap: var(--mf-space-3); }
+  .c-fpanel__actions { display: flex; gap: var(--mf-space-2); }
+
+  .c-fpanel__list { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+
+  .c-fpanel__list [role="option"] {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--mf-space-3);
+    padding: 0.4375rem var(--mf-space-3);
+    color: var(--mf-text);
+    font-size: var(--mf-fs-sm);
+    text-decoration: none;
+    border-radius: var(--mf-radius-sm);
+    outline: none;
+
+    &[data-active],
+    &:hover { background: var(--mf-hover); }
+
+    &:focus-visible { box-shadow: inset 0 0 0 2px var(--mf-focus); }
+
+    &[data-selected] {
+      color: var(--mf-accent-strong);
+      font-weight: 650;
+      background: var(--mf-accent-soft);
+    }
+
+    &[data-selected]::after { content: "\2713"; }
+    &[data-disabled] { color: var(--mf-text-muted); pointer-events: none; }
+  }
+
+  .c-fctl__btn:focus-visible,
+  .c-select__btn:focus-visible { box-shadow: var(--mf-focus-ring); outline: none; }
+
+  // Staff pages (seo, ads, storage, ...): their GET filter forms share the bar chrome and compact controls.
+  .c-fbar--form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--mf-space-2) var(--mf-space-3);
+    align-items: flex-end;
+    padding: var(--mf-space-3) var(--mf-space-4);
+    background: var(--mf-surface);
+    border: 1px solid var(--mf-border);
+    border-radius: var(--mf-radius-md);
+
+    .console-staff-field { display: grid; gap: 2px; min-inline-size: 0; }
+    .form-label { margin: 0; color: var(--mf-text-muted); font-size: var(--mf-fs-xs); font-weight: 600; }
+
+    .form-control,
+    .form-select {
+      inline-size: auto;
+      min-inline-size: 9rem;
+      min-block-size: var(--mf-control-h-sm);
+      font-size: var(--mf-fs-sm);
+    }
+
+    .form-check { display: flex; align-items: center; gap: var(--mf-space-2); min-block-size: var(--mf-control-h-sm); margin: 0; }
+  }
+
+  // Active-filter chips sit on the same row grammar, right under the controls.
+  .c-cl-chips:empty { display: none; }
+
+  // Narrow screens: one "Filters (n)" button opens the whole bar as a bottom sheet.
+  .c-fbar-toggle { display: none; }
+
+  @media (max-width: 767.98px) {
+    .c-fbar-toggle { display: inline-flex; }
+
+    .c-fbar[data-ui-sheet] {
+      position: fixed;
+      inset-inline: 0;
+      inset-block-end: 0;
+      z-index: 1045;
+      max-block-size: 80dvh;
+      margin: 0;
+      padding: var(--mf-space-4);
+      overflow-y: auto;
+      background: var(--mf-surface);
+      border: 1px solid var(--mf-border);
+      border-radius: var(--mf-radius-lg) var(--mf-radius-lg) 0 0;
+      box-shadow: var(--mf-elev-4);
+      visibility: hidden;
+      transform: translateY(100%);
+      transition: transform var(--mf-duration-base) var(--mf-ease-out), visibility 0s linear var(--mf-duration-base);
+    }
+
+    .c-fbar[data-open] {
+      visibility: visible;
+      transform: none;
+      transition-delay: 0s;
+    }
+
+    .c-fbar__head { display: flex; align-items: center; justify-content: space-between; margin-block-end: var(--mf-space-3); }
+    .c-fbar__title { margin: 0; font-size: var(--mf-fs-base); }
+    .c-fbar__controls { display: grid; grid-template-columns: minmax(0, 1fr); }
+    .c-fctl__btn { inline-size: 100%; justify-content: space-between; }
+    .c-fctl__title { margin-inline-end: auto; }
+
+    // Panels flow inline inside the sheet instead of floating.
+    .c-fpanel { position: static; max-inline-size: none; margin-block-start: var(--mf-space-1); box-shadow: none; }
+  }
+}

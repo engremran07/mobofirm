@@ -31,6 +31,12 @@ from apps.ads.zones import (
 )
 
 ZONE_TAG = re.compile(r"""\{%\s*ad_zone\s+["'](?P<zone>[a-z_]+)["']""")
+# Automatic slots: the tag itself declares the zone it fills.
+AUTO_TAGS: dict[str, str] = {
+    "ad_article_body": "in_article",
+    "ad_tile": "between_items",
+}
+AUTO_TAG = re.compile(r"\{%\s*(?P<tag>ad_article_body|ad_tile)\b")
 EXTENDS_TAG = re.compile(r"""\{%\s*extends\s+["'](?P<name>[^"']+)["']""")
 INCLUDE_TAG = re.compile(r"""\{%\s*include\s+["'](?P<name>[^"']+)["']""")
 MAX_DEPTH = 6
@@ -71,6 +77,7 @@ def _declared(
     cache[name] = frozenset()  # breaks include cycles
     source = _read(name)
     found = {m.group("zone") for m in ZONE_TAG.finditer(source)}
+    found |= {AUTO_TAGS[m.group("tag")] for m in AUTO_TAG.finditer(source)}
     for pattern in (EXTENDS_TAG, INCLUDE_TAG):
         for match in pattern.finditer(source):
             found |= _declared(match.group("name"), cache, depth + 1)

@@ -40,10 +40,11 @@ class SpendSink:
     app: str
     default_credits: int = 0
     derived: bool = False
-    """True when the owning app derives the price (dollars × rate), so staff do not edit it."""
+    """True when the owner derives the price (dollars × rate); staff do not edit it."""
     user_price: Callable[[Any], int | None] | None = field(default=None, compare=False)
-    """Optional ``(user) -> credits`` for sinks whose price differs per account (a package
-    override); ``None`` means "the sink price applies". Shown on the Ways to spend page."""
+    """Optional ``(user) -> credits`` for sinks whose price differs per account (a
+    package override); ``None`` means "the sink price applies". Shown on the Ways to
+    spend page."""
 
 
 # (user, event_key, credits, context) -> adjusted credits
@@ -67,6 +68,7 @@ def register_reward_event(event: RewardEvent) -> RewardEvent:
 
 
 def register_spend_sink(sink: SpendSink) -> SpendSink:
+    """Register (or idempotently re-register) a spend sink; conflicting reuse fails."""
     existing = _spend_sinks.get(sink.key)
     if existing is not None and existing != sink:
         raise ValueError(f"Spend sink {sink.key!r} is already registered.")
@@ -88,17 +90,33 @@ def register_price_modifier(modifier: PriceModifier) -> PriceModifier:
     return modifier
 
 
+def unregister_reward_modifier(modifier: RewardModifier) -> None:
+    """End a reward campaign hook (a no-op when it was never registered)."""
+    if modifier in _reward_modifiers:
+        _reward_modifiers.remove(modifier)
+
+
+def unregister_price_modifier(modifier: PriceModifier) -> None:
+    """End a price campaign hook (a no-op when it was never registered)."""
+    if modifier in _price_modifiers:
+        _price_modifiers.remove(modifier)
+
+
 def reward_events() -> Mapping[str, RewardEvent]:
+    """A copy of every registered reward event, by key."""
     return dict(_reward_events)
 
 
 def spend_sinks() -> Mapping[str, SpendSink]:
+    """A copy of every registered spend sink, by key."""
     return dict(_spend_sinks)
 
 
 def reward_modifiers() -> tuple[RewardModifier, ...]:
+    """The registered reward campaign hooks, in registration order."""
     return tuple(_reward_modifiers)
 
 
 def price_modifiers() -> tuple[PriceModifier, ...]:
+    """The registered price campaign hooks, in registration order."""
     return tuple(_price_modifiers)

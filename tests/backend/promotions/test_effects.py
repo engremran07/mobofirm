@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from decimal import Decimal
 from typing import Any
 
@@ -282,7 +283,7 @@ def test_the_pricing_page_shows_the_promotional_price_and_offer(
 
     assert "$5/mo" in html and "Launch price" in html
     assert f"/offers/{discount.slug}/" in html
-    assert "<s " in html
+    assert re.search(r"<s[ >]", html), "the regular price is struck through"
 
 
 def test_the_pricing_page_is_unchanged_without_a_promotion(

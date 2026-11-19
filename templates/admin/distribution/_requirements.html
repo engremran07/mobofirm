@@ -1,0 +1,15 @@
+{% load i18n console_ui %}
+<div class="modal-dialog modal-lg modal-dialog-scrollable" data-console-dialog-content>
+  <div class="modal-content">
+    <div class="modal-header">
+      <span class="c-dialog__icon">{% console_icon card.icon %}</span>
+      <h2 class="modal-title">{{ adapter.label }}</h2>
+      <button type="button" class="btn-close" data-console-dialog-close aria-label="{% translate 'Close' %}"></button>
+    </div>
+    <div class="modal-body">{% include "admin/distribution/_requirements_body.html" %}</div>
+    <div class="modal-footer">
+      <button type="button" class="btn btn-ghost" data-console-dialog-close>{% translate "Close" %}</button>
+      <a class="btn btn-primary" href="{{ connect_url }}">{% translate "Connect" %}</a>
+    </div>
+  </div>
+</div>

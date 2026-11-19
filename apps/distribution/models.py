@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, ClassVar
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
@@ -41,6 +42,7 @@ from apps.distribution.constants import (
     KIND_TIKTOK,
     KIND_WEBHOOK,
     KIND_WHATSAPP,
+    KIND_WHATSAPP_CHANNEL,
     KIND_X,
     KIND_YOUTUBE,
     TEMPLATE_FIELDS,
@@ -120,6 +122,57 @@ class DistributionSettings(SingletonModel):
         ),
     )
     last_housekeeping_at = models.DateTimeField(null=True, blank=True, editable=False)
+    feeds_enabled = models.BooleanField(
+        default=True,
+        help_text=_("Serve the public RSS, Atom and JSON feeds under /feeds/."),
+    )
+    feeds_dynamic_enabled = models.BooleanField(
+        default=True,
+        help_text=_("Also serve per-brand, per-chipset and per-tag feeds."),
+    )
+    feed_item_limit = models.PositiveSmallIntegerField(
+        default=30,
+        help_text=_("Newest items per feed (1 to 100)."),
+        validators=[MinValueValidator(1), MaxValueValidator(100)],
+    )
+    websub_hub_url = models.URLField(
+        blank=True,
+        help_text=_(
+            "WebSub hub (https). Empty = no pings and no rel=hub in the feeds."
+        ),
+    )
+    news_checklist = models.JSONField(
+        default=dict,
+        blank=True,
+        editable=False,
+        help_text=_("Manual Google News setup steps the staff marked as done."),
+    )
+    video_auto_enlist = models.BooleanField(
+        default=True,
+        help_text=_(
+            "Create a draft motion video for every published post and verified "
+            "firmware. Drafts are never rendered or posted on their own."
+        ),
+    )
+    video_auto_render = models.BooleanField(
+        default=False,
+        help_text=_(
+            "Also render new drafts in the background (still needs approval "
+            "before anything is posted)."
+        ),
+    )
+    video_daily_cap = models.PositiveSmallIntegerField(
+        default=10,
+        help_text=_(
+            "Most drafts created automatically per day, so a bulk import or a "
+            "seed never floods the queue. 0 turns automatic drafts off."
+        ),
+    )
+    video_render_timeout = models.PositiveSmallIntegerField(
+        default=300,
+        validators=[MinValueValidator(30), MaxValueValidator(1800)],
+        help_text=_("Hard limit in seconds for one render; the renderer is killed."),
+    )
 
     class Meta:
         verbose_name = _("distribution settings")
@@ -127,6 +180,88 @@ class DistributionSettings(SingletonModel):
 
     def __str__(self) -> str:
         return "Distribution settings"
+
+
+class FeedConfig(models.Model):
+    """One public feed: the on/off switch and what the last fetch/build saw."""
+
+    key = models.CharField(max_length=120, unique=True)
+    enabled = models.BooleanField(default=True)
+    last_fetched_at = models.DateTimeField(null=True, blank=True)
+    last_built_at = models.DateTimeField(null=True, blank=True)
+    last_size = models.PositiveIntegerField(default=0)
+    last_item_count = models.PositiveIntegerField(default=0)
+    fetch_count = models.PositiveIntegerField(default=0)
+    not_modified_count = models.PositiveIntegerField(default=0)
+    last_validation = models.CharField(max_length=300, blank=True)
+    last_validated_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ["key"]
+
+    def __str__(self) -> str:
+        return self.key
+
+
+class FeedStat(models.Model):
+    """Fetches of one feed in one hour. Counts only: no address, agent or cookie."""
+
+    feed_key = models.CharField(max_length=120)
+    bucket = models.DateTimeField(db_index=True)
+    fetches = models.PositiveIntegerField(default=0)
+    not_modified = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ["-bucket", "feed_key"]
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=["feed_key", "bucket"], name="distribution_feedstat_unique"
+            ),
+        ]
+
+
+class PingOutbox(models.Model):
+    """A push to tell a hub or search engine that a feed or URL changed.
+
+    Written after the content is committed, delivered by the job runner with the same
+    backoff as shares. ``idempotency_key`` is unique per (kind, target, entry), so a
+    replayed publish event never pings twice.
+    """
+
+    class Kind(models.TextChoices):
+        WEBSUB = "websub", "WebSub hub"
+        INDEXNOW = "indexnow", "IndexNow"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Waiting"
+        SENT = "sent", "Sent"
+        FAILED = "failed", "Failed (gave up)"
+        CANCELLED = "cancelled", "Cancelled"
+
+    kind = models.CharField(max_length=10, choices=Kind.choices)
+    url = models.URLField(max_length=500, help_text=_("Feed or page URL announced."))
+    entry_ref = models.CharField(max_length=120, blank=True)
+    idempotency_key = models.CharField(max_length=300, unique=True)
+    status = models.CharField(
+        max_length=10, choices=Status.choices, default=Status.PENDING, db_index=True
+    )
+    attempts = models.PositiveSmallIntegerField(default=0)
+    next_attempt_at = models.DateTimeField(default=timezone.now, db_index=True)
+    last_error = models.CharField(max_length=300, blank=True)
+    response_code = models.CharField(max_length=20, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    sent_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ["-created_at", "-id"]
+        indexes: ClassVar[list[models.Index]] = [
+            models.Index(
+                fields=["status", "next_attempt_at"], name="dist_ping_due_idx"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.kind}: {self.url}"
 
 
 class Campaign(models.Model):
@@ -237,6 +372,7 @@ class Channel(models.Model):
         MASTODON = KIND_MASTODON, "Mastodon"
         BLUESKY = KIND_BLUESKY, "Bluesky"
         WHATSAPP = KIND_WHATSAPP, "WhatsApp (Cloud API)"
+        WHATSAPP_CHANNEL = KIND_WHATSAPP_CHANNEL, "WhatsApp Channel (assisted)"
         SLACK = KIND_SLACK, "Slack webhook"
 
     class Approval(models.TextChoices):
@@ -405,6 +541,7 @@ class ShareJob(models.Model):
         PENDING = "pending", "Awaiting approval"
         QUEUED = "queued", "Queued"
         NEEDS_MEDIA = "needs_media", "Needs media"
+        HANDOFF = "handoff", "Ready to post by hand"
         SENT = "sent", "Sent"
         FAILED = "failed", "Failed (gave up)"
         SKIPPED = "skipped", "Skipped"
@@ -457,6 +594,116 @@ class ShareJob(models.Model):
 
     def __str__(self) -> str:
         return f"{self.channel}: {self.title}"
+
+
+class WhatsAppRecipient(models.Model):
+    """One person on a WhatsApp Cloud API channel's opt-in list.
+
+    Meta requires prior opt-in for business-initiated messages, so the list is explicit:
+    a number is only messaged while it is opted in and not opted out. ``last_inbound_at``
+    (set by the webhook when the person writes to the business number) opens the 24 hour
+    customer-service window in which a free-form message may be sent instead of a template.
+    """
+
+    channel = models.ForeignKey(
+        Channel, on_delete=models.CASCADE, related_name="recipients"
+    )
+    phone = models.CharField(max_length=20, help_text=_("International format."))
+    opted_in_at = models.DateTimeField(default=timezone.now)
+    opt_in_source = models.CharField(max_length=60, blank=True)
+    opted_out_at = models.DateTimeField(null=True, blank=True)
+    opt_out_reason = models.CharField(max_length=60, blank=True)
+    last_inbound_at = models.DateTimeField(null=True, blank=True)
+    last_status = models.CharField(max_length=20, blank=True)
+    last_status_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ["phone"]
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=["channel", "phone"], name="distribution_wa_recipient_unique"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.channel}: {self.phone}"
+
+    @property
+    def active(self) -> bool:
+        return self.opted_out_at is None
+
+
+class VideoJob(models.Model):
+    """One motion video for one piece of content: template, snapshot, file, approval.
+
+    ``idempotency_key`` is unique per (content, template, version, preset, hook) so a
+    replayed publish event or a double click never creates a second draft. Nothing is
+    posted from a video that is not ``approved``.
+    """
+
+    class Status(models.TextChoices):
+        DRAFT = "draft", "Draft"
+        RENDERING = "rendering", "Rendering"
+        READY = "ready", "Ready for review"
+        APPROVED = "approved", "Approved"
+        POSTED = "posted", "Posted"
+        REJECTED = "rejected", "Rejected"
+        FAILED = "failed", "Failed"
+
+    content_kind = models.CharField(max_length=12, db_index=True)
+    object_ref = models.CharField(max_length=120)
+    title = models.CharField(max_length=300)
+    template = models.CharField(max_length=40)
+    template_version = models.PositiveSmallIntegerField(default=1)
+    preset = models.CharField(max_length=8, default="9x16")
+    hook = models.CharField(max_length=1, default="A")
+    params = models.JSONField(default=dict, blank=True)
+    idempotency_key = models.CharField(max_length=240, unique=True)
+    status = models.CharField(
+        max_length=10, choices=Status.choices, default=Status.DRAFT, db_index=True
+    )
+    attempts = models.PositiveSmallIntegerField(default=0)
+    duration_ms = models.PositiveIntegerField(default=0)
+    size_bytes = models.PositiveBigIntegerField(default=0)
+    checksum = models.CharField(max_length=64, blank=True)
+    video_name = models.CharField(max_length=300, blank=True)
+    poster_name = models.CharField(max_length=300, blank=True)
+    media_token = models.CharField(max_length=32, blank=True)
+    render_log = models.TextField(blank=True)
+    error = models.CharField(max_length=300, blank=True)
+    rendering_started_at = models.DateTimeField(null=True, blank=True)
+    rendered_at = models.DateTimeField(null=True, blank=True)
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    decided_at = models.DateTimeField(null=True, blank=True)
+    decision_note = models.CharField(max_length=300, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ["-created_at", "-id"]
+        indexes: ClassVar[list[models.Index]] = [
+            models.Index(fields=["status", "created_at"], name="dist_video_status_idx"),
+            models.Index(
+                fields=["content_kind", "object_ref"], name="dist_video_content_idx"
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.template}: {self.title}"
+
+    @property
+    def has_file(self) -> bool:
+        return bool(self.video_name)
+
+    @property
+    def duration_seconds(self) -> str:
+        return f"{self.duration_ms / 1000:.1f} s" if self.duration_ms else ""
 
 
 class ShareLog(models.Model):

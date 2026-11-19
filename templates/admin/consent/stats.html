@@ -1,45 +1,26 @@
-{% extends "admin/base_site.html" %}
-
-{% load i18n %}
-
-{% block title %}{{ title }} | {{ site_title }}{% endblock %}
-
-{% block content %}
-    <div class="flex flex-col gap-6">
-        {% if not policy %}
-            <p class="text-subtle">{% trans "No consent policy has been published yet." %}</p>
-        {% else %}
-            <section aria-labelledby="consent-stat-policy" class="gap-4 grid grid-cols-1 md:grid-cols-3">
-                <div class="bg-white border border-base-200 p-6 rounded-default shadow-xs dark:bg-base-900 dark:border-base-800">
-                    <h2 id="consent-stat-policy" class="font-semibold text-important text-sm">{% trans "Active policy" %}</h2>
-                    <p class="font-semibold mt-3 text-3xl text-important tabular-nums">v{{ policy.version }}</p>
-                    <p class="mt-1 text-subtle text-xs">{{ policy.title }}</p>
-                </div>
-                <div class="bg-white border border-base-200 p-6 rounded-default shadow-xs dark:bg-base-900 dark:border-base-800">
-                    <h2 class="font-semibold text-important text-sm">{% trans "Visitors who decided" %}</h2>
-                    <p class="font-semibold mt-3 text-3xl text-important tabular-nums">{{ visitors }}</p>
-                    <p class="mt-1 text-subtle text-xs">{% trans "latest choice per anonymous visitor, active version" %}</p>
-                </div>
-                <div class="bg-white border border-base-200 p-6 rounded-default shadow-xs dark:bg-base-900 dark:border-base-800">
-                    <h2 class="font-semibold text-important text-sm">{% trans "Last 30 days" %}</h2>
-                    <p class="mt-3 text-sm text-important">
-                        {% for name, count in last_30_days.items %}{{ name }}: {{ count }}{% if not forloop.last %} &middot; {% endif %}{% empty %}{% trans "No decisions yet." %}{% endfor %}
-                    </p>
-                </div>
-            </section>
-            <section aria-labelledby="consent-stat-cats" class="bg-white border border-base-200 p-6 rounded-default shadow-xs dark:bg-base-900 dark:border-base-800">
-                <h2 id="consent-stat-cats" class="font-semibold mb-3 text-important text-sm">{% trans "Opt-in rate by category" %}</h2>
-                <ul class="flex flex-col gap-2">
-                    {% for row in by_category %}
-                        <li class="flex flex-row gap-3 items-center">
-                            <span class="font-medium text-important">{{ row.name }}</span>
-                            <span class="text-subtle">{{ row.granted }} / {{ visitors }} ({{ row.percent }}%)</span>
-                        </li>
-                    {% empty %}
-                        <li class="text-subtle">{% trans "No optional categories." %}</li>
-                    {% endfor %}
-                </ul>
-            </section>
-        {% endif %}
-    </div>
+{% extends "admin/staff_page.html" %}
+{% load i18n staff_ui %}
+{% block page_body %}
+{% if not policy %}
+  {% staff_empty title=_("No consent policy yet") %}{% translate "No consent policy has been published yet." %}{% endstaff_empty %}
+{% else %}
+  {% staff_grid %}
+    {% with version=policy.version|stringformat:"s" %}{% staff_stat label=_("Active policy") value="v"|add:version hint=policy.title %}{% endwith %}
+    {% staff_stat label=_("Visitors who decided") value=visitors hint=_("latest choice per anonymous visitor, active version") %}
+    {% staff_card title=_("Last 30 days") cell=True %}
+      <p class="mb-0">{% for name, count in last_30_days.items %}{{ name }}: {{ count }}{% if not forloop.last %} &middot; {% endif %}{% empty %}{% translate "No decisions yet." %}{% endfor %}</p>
+    {% endstaff_card %}
+  {% endstaff_grid %}
+  {% staff_section title=_("Opt-in rate by category") ident="consent-stat-cats" %}
+    {% staff_card %}
+      {% staff_list %}
+        {% for row in by_category %}
+          {% staff_item %}<span class="fw-medium">{{ row.name }}</span><span class="text-body-secondary">{{ row.granted }} / {{ visitors }} ({{ row.percent }}%)</span>{% endstaff_item %}
+        {% empty %}
+          {% staff_item %}<span class="text-body-secondary">{% translate "No optional categories." %}</span>{% endstaff_item %}
+        {% endfor %}
+      {% endstaff_list %}
+    {% endstaff_card %}
+  {% endstaff_section %}
+{% endif %}
 {% endblock %}

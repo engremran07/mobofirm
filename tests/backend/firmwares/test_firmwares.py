@@ -82,8 +82,8 @@ class DownloadServiceTests(TestCase):
                 created_at=timezone.now() - timedelta(seconds=30)
             )
             token.refresh_from_db()
-            self.assertTrue(complete_ad_gate(token, ad_type="video"))
-            self.assertTrue(complete_ad_gate(token, ad_type="video"))
+            self.assertTrue(complete_ad_gate(token))
+            self.assertTrue(complete_ad_gate(token))
 
         token.refresh_from_db()
 
@@ -107,7 +107,7 @@ class DownloadServiceTests(TestCase):
         ):
             token = create_download_token(self.firmware, self._request())
 
-            self.assertFalse(complete_ad_gate(token, ad_type="video"))
+            self.assertFalse(complete_ad_gate(token))
 
         token.refresh_from_db()
 

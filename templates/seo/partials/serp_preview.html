@@ -1,0 +1,9 @@
+{% load i18n staff_ui %}
+<div id="seo-serp-preview" class="d-flex flex-column gap-1" aria-live="polite">
+  <p class="small text-body-secondary mb-1">{% translate "Search result preview" %}</p>
+  <p class="mb-0 small text-body-secondary text-break">{{ serp.url }}</p>
+  <p class="h5 mb-0 text-break">{{ serp.title|default:"(no title)" }}</p>
+  <p class="mb-0 text-break">{{ serp.description|default:"(no description)" }}</p>
+  {% if serp.title_too_long %}<p class="small mb-0">{% staff_badge _("Title is cut off in results") "warning" %}</p>{% endif %}
+  {% if serp.description_too_long %}<p class="small mb-0">{% staff_badge _("Description is cut off in results") "warning" %}</p>{% endif %}
+</div>

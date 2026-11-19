@@ -1,3 +1,5 @@
+"""Authenticator enrolment, the sign-in challenge, recovery codes and turning MFA off."""
+
 from __future__ import annotations
 
 from datetime import timedelta
@@ -16,9 +18,13 @@ from apps.core.utils.ip import get_client_ip
 from apps.users.mfa import TOTPService, provisioning_uri, totp_issuer
 from apps.users.models import MFADevice
 from apps.users.request_user import current_user
+from apps.users.services.device_gate import (
+    device_registration_prompt,
+    evaluate_device_policy,
+)
 from apps.users.services.mfa import (
     has_active_totp,
-    mfa_required_globally,
+    mfa_required_for_user,
     verify_mfa_code,
 )
 from apps.users.services.mfa_qr import render_qr_svg
@@ -47,11 +53,12 @@ def _attempt_key(request: HttpRequest, user_id: int) -> str:
 def _render_verify(
     request: HttpRequest,
     *,
+    user: Any,
     is_pre_auth: bool,
     is_verified: bool = False,
     status: int = 200,
 ) -> HttpResponse:
-    require_mfa = mfa_required_globally()
+    require_mfa = mfa_required_for_user(user)
     return render(
         request,
         "users/mfa_verify.html",
@@ -78,6 +85,7 @@ def _setup_context(request: HttpRequest, secret: str) -> dict[str, Any]:
 @login_required(login_url="users:account_login")
 @require_http_methods(["GET", "POST"])
 def mfa_setup(request: HttpRequest) -> HttpResponse:
+    """Enrol an authenticator app: QR code, then a code proves it works."""
     if has_active_totp(request.user):
         return redirect("users:mfa_verify")
 
@@ -156,6 +164,7 @@ def mfa_setup(request: HttpRequest) -> HttpResponse:
 @login_required(login_url="users:account_login")
 @require_GET
 def mfa_backup_codes(request: HttpRequest) -> HttpResponse:
+    """Show the freshly generated recovery codes once (then they are gone)."""
     codes = request.session.pop(_BACKUP_CODES_ONCE, None)
     if codes is None:
         messages.info(request, "Recovery codes are shown only once.")
@@ -163,96 +172,135 @@ def mfa_backup_codes(request: HttpRequest) -> HttpResponse:
     return render(request, "users/mfa_backup_codes.html", {"backup_codes": codes})
 
 
+def _resolve_subject(
+    request: HttpRequest,
+) -> tuple[Any, bool, HttpResponse | None]:
+    """Who is being verified: the parked password login, or the signed-in user.
+
+    Returns ``(user, is_pre_auth, None)``, or ``(None, False, response)`` when the
+    request must be turned away (expired or unusable pending login, or nobody).
+    """
+    pending_user_id = request.session.get(_PENDING_USER)
+    if pending_user_id is None:
+        if request.user.is_authenticated:
+            return request.user, False, None
+        return None, False, redirect("users:account_login")
+
+    pending_expiry = request.session.get(_PENDING_EXPIRES)
+    if (
+        not isinstance(pending_expiry, (int, float))
+        or timezone.now().timestamp() > pending_expiry
+    ):
+        _clear_pending_login(request)
+        messages.error(
+            request, "Your sign-in verification expired. Please sign in again."
+        )
+        return None, True, redirect("users:account_login")
+    user = get_user_model().objects.filter(pk=pending_user_id).first()
+    if user is None or not user.is_active:
+        _clear_pending_login(request)
+        messages.error(
+            request, "This account could not be verified. Please sign in again."
+        )
+        return None, True, redirect("users:account_login")
+    return user, True, None
+
+
+def _complete_pending_login(request: HttpRequest, user: Any) -> HttpResponse | None:
+    """Sign the verified user in; a refusal (``HttpResponse``) leaves no session.
+
+    The device policy is judged again with the verified second factor: the device,
+    the allowance or the policy may have changed since the password was checked.
+    """
+    decision = evaluate_device_policy(request, user, mfa_verified=True)
+    if not decision.allowed:
+        _clear_pending_login(request)
+        messages.error(request, decision.message)
+        return redirect("users:account_login")
+    device_prompt = device_registration_prompt(decision.context) or request.session.get(
+        _PENDING_DEVICE_PROMPT
+    )
+    _clear_pending_login(request)
+    login(
+        request,
+        user,
+        backend="allauth.account.auth_backends.AuthenticationBackend",
+    )
+    # The password step counted failures for this client; a full sign-in clears
+    # them, as it does for accounts without a second factor.
+    reset_rate_limit(f"login:{get_client_ip(request) or 'unknown'}")
+    if isinstance(device_prompt, dict):
+        request.session["device_registration_prompt"] = device_prompt
+    return None
+
+
 @require_http_methods(["GET", "POST"])
 def mfa_verify(request: HttpRequest) -> HttpResponse:
-    pending_user_id = request.session.get(_PENDING_USER)
-    pending_expiry = request.session.get(_PENDING_EXPIRES)
-    is_pre_auth = pending_user_id is not None
-
-    if pending_user_id is not None:
-        if (
-            not isinstance(pending_expiry, (int, float))
-            or timezone.now().timestamp() > pending_expiry
-        ):
-            _clear_pending_login(request)
-            messages.error(
-                request, "Your sign-in verification expired. Please sign in again."
-            )
-            return redirect("users:account_login")
-        user = get_user_model().objects.filter(pk=pending_user_id).first()
-        if user is None or not user.is_active:
-            _clear_pending_login(request)
-            messages.error(
-                request, "This account could not be verified. Please sign in again."
-            )
-            return redirect("users:account_login")
-    elif request.user.is_authenticated:
-        user = request.user
-    else:
-        return redirect("users:account_login")
+    """Second-factor challenge for a parked login, or a re-check for a signed-in user."""
+    user, is_pre_auth, early = _resolve_subject(request)
+    if early is not None:
+        return early
 
     if not has_active_totp(user):
         if is_pre_auth:
             _clear_pending_login(request)
             messages.error(
                 request,
-                "No authenticator is configured. Sign in from a trusted device to set one up.",
+                "No authenticator is configured. Sign in from a trusted device to "
+                "set one up.",
             )
             return redirect("users:account_login")
-        if mfa_required_globally():
+        if mfa_required_for_user(user):
             return redirect("users:mfa_setup")
         messages.info(request, "No authenticator is configured for this account.")
         return redirect("users:dashboard")
 
-    already_verified = not is_pre_auth and request.session.get(
-        _MFA_VERIFIED_USER
-    ) == str(user.pk)
     if request.method == "POST":
-        if not allow_action(
-            _attempt_key(request, user.pk),
-            max_attempts=_ATTEMPT_LIMIT,
-            window_seconds=_ATTEMPT_WINDOW_SECONDS,
-            fail_open=False,
-        ):
-            messages.error(request, "Too many verification attempts. Try again later.")
-            return redirect("users:mfa_verify")
-
-        if not verify_mfa_code(user, request.POST.get("code", "")):
-            messages.error(request, "That authenticator or recovery code is not valid.")
-            return redirect("users:mfa_verify")
-
-        reset_rate_limit(_attempt_key(request, user.pk))
-        next_url = ""
-        if is_pre_auth:
-            next_url = str(request.session.get(_PENDING_NEXT) or "")
-            device_prompt = request.session.get(_PENDING_DEVICE_PROMPT)
-            _clear_pending_login(request)
-            login(
-                request,
-                user,
-                backend="allauth.account.auth_backends.AuthenticationBackend",
-            )
-            # The password step counted failures for this client; a full sign-in
-            # clears them, as it does for accounts without a second factor.
-            reset_rate_limit(f"login:{get_client_ip(request) or 'unknown'}")
-            if isinstance(device_prompt, dict):
-                request.session["device_registration_prompt"] = device_prompt
-
-        request.session[_MFA_VERIFIED_USER] = str(user.pk)
-        messages.success(request, "Two-factor verification succeeded.")
-        return redirect(next_url or "users:dashboard")
+        return _handle_code_submission(request, user, is_pre_auth=is_pre_auth)
 
     return _render_verify(
         request,
+        user=user,
         is_pre_auth=is_pre_auth,
-        is_verified=already_verified,
+        is_verified=not is_pre_auth
+        and request.session.get(_MFA_VERIFIED_USER) == str(user.pk),
     )
+
+
+def _handle_code_submission(
+    request: HttpRequest, user: Any, *, is_pre_auth: bool
+) -> HttpResponse:
+    if not allow_action(
+        _attempt_key(request, user.pk),
+        max_attempts=_ATTEMPT_LIMIT,
+        window_seconds=_ATTEMPT_WINDOW_SECONDS,
+        fail_open=False,
+    ):
+        messages.error(request, "Too many verification attempts. Try again later.")
+        return redirect("users:mfa_verify")
+
+    if not verify_mfa_code(user, request.POST.get("code", "")):
+        messages.error(request, "That authenticator or recovery code is not valid.")
+        return redirect("users:mfa_verify")
+
+    reset_rate_limit(_attempt_key(request, user.pk))
+    next_url = ""
+    if is_pre_auth:
+        next_url = str(request.session.get(_PENDING_NEXT) or "")
+        refused = _complete_pending_login(request, user)
+        if refused is not None:
+            return refused
+
+    request.session[_MFA_VERIFIED_USER] = str(user.pk)
+    messages.success(request, "Two-factor verification succeeded.")
+    return redirect(next_url or "users:dashboard")
 
 
 @login_required(login_url="users:account_login")
 @require_POST
 def mfa_disable(request: HttpRequest) -> HttpResponse:
-    if mfa_required_globally():
+    """Turn two-factor authentication off (never for accounts that must have it)."""
+    if mfa_required_for_user(request.user):
         return HttpResponse(
             "Two-factor authentication is required by your administrator.",
             status=403,

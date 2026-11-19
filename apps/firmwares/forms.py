@@ -17,6 +17,14 @@ from .models import (
     Model,
     Variant,
 )
+from .package_formats import (
+    APPLE_BRAND_SLUGS,
+    default_format,
+    format_choices,
+    format_error,
+    vendor_for_device,
+    vendor_summary,
+)
 from .services import RELEASE_INFO_LIMITS, max_upload_bytes
 from .submissions import UploadSubmission, file_name_from_url
 from .tracking_models import FIRMWARE_REQUEST_TYPES, FIRMWARE_REQUEST_URGENCIES
@@ -228,7 +236,7 @@ class FirmwareRequestForm(forms.Form):
         choices=FIRMWARE_REQUEST_TYPES,
         initial="official",
         help_text="Official is the stock build from the manufacturer; the others "
-        "are engineering, readback and modified builds.",
+        "are service / engineering, readback and modified builds.",
     )
     urgency = forms.TypedChoiceField(
         label="Urgency",
@@ -339,23 +347,33 @@ class UploadForm(forms.Form):
         help_text="What changed in this build. Shown on the firmware page.",
     )
 
-    def __init__(self, *args: Any, seller: bool = False, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        *args: Any,
+        seller: bool = False,
+        model: Model | None = None,
+        **kwargs: Any,
+    ) -> None:
         super().__init__(*args, **kwargs)
         self.seller = seller
-        # Everyone sees the access control. Only approved sellers can leave Free:
-        # for the others Featured and Paid are shown but disabled, and a forged
-        # value is ignored in ``clean_access_tier``.
-        locked = () if seller else (AccessTier.FEATURED, AccessTier.PAID)
+        self._limit_package_formats(
+            model or self._selected("model", Model),
+            self._selected("variant", Variant),
+        )
+        # Everyone sees the access control. Free and Featured are open to every
+        # contributor; Paid needs an approved marketplace seller. For the others Paid
+        # is shown but disabled, and a forged value is ignored in ``clean_access_tier``.
+        locked = () if seller else (AccessTier.PAID,)
         self.fields["access_tier"] = forms.ChoiceField(
             label="Access",
-            required=seller,
+            required=False,
             choices=AccessTier.choices,
             initial=AccessTier.FREE,
             widget=TierSelect(disabled_values=locked),
             help_text=(
-                "Paid and featured files are priced and confirmed by reviewers."
+                "Featured and paid files are priced and confirmed by reviewers."
                 if seller
-                else "Uploads are free. Featured and Paid are available to approved sellers."
+                else "Choose Free or Featured. Paid is available to approved sellers. Reviewers confirm the access type."
             ),
         )
         if seller:
@@ -378,10 +396,48 @@ class UploadForm(forms.Form):
             # Django derives min="0" from min_value; a paid amount must be above zero.
             self.fields["proposed_price"].widget.attrs["min"] = "0.01"
 
+    def _selected(self, name: str, model_class: type[Model | Variant]) -> Any:
+        """The catalogue row currently picked in the form (bound data or initial)."""
+        value = self.data.get(name) if self.is_bound else self.initial.get(name)
+        if isinstance(value, model_class):
+            return value
+        raw = str(value or "")
+        if not raw.isdigit():
+            return None
+        if model_class is Model:
+            return (
+                Model.objects.select_related("brand", "chipset_ref")
+                .filter(pk=int(raw))
+                .first()
+            )
+        return Variant.objects.filter(pk=int(raw)).first()
+
+    def _limit_package_formats(self, model: Model | None, variant: Any) -> None:
+        """Offer only the package formats of the chosen device's chipset vendor.
+
+        The select is only narrowed for display; validity is enforced in
+        ``_validate_device`` with a message naming the vendor.
+        """
+        field = self.fields["package_format"]
+        if model is None:
+            return
+        brand_slug = model.brand.slug
+        vendor = vendor_for_device(variant=variant, model=model)
+        field.widget.choices = format_choices(vendor, brand_slug)
+        summary = vendor_summary(vendor) or (
+            vendor_summary("Apple") if brand_slug in APPLE_BRAND_SLUGS else ""
+        )
+        if summary:
+            field.help_text = f"Formats for this device: {summary}"
+        if not self.is_bound:
+            field.initial = default_format(vendor, brand_slug)
+
     def clean_access_tier(self) -> str:
-        """Only approved sellers may choose Featured or Paid; everyone else gets Free."""
-        tier = self.cleaned_data.get("access_tier")
-        return tier if self.seller and tier else AccessTier.FREE
+        """Free and Featured are open to all; only approved sellers may choose Paid."""
+        tier = self.cleaned_data.get("access_tier") or AccessTier.FREE
+        if tier == AccessTier.PAID and not self.seller:
+            return AccessTier.FREE
+        return tier
 
     def clean(self) -> dict[str, Any]:
         """Validate the device (variant rules), the file source and the tier."""
@@ -430,6 +486,17 @@ class UploadForm(forms.Form):
                 "This model has variants: choose the one that matches your "
                 "device, or request it if it is missing.",
             )
+        if model and (message := self._format_error(model, variant, cleaned)):
+            self.add_error("package_format", message)
+
+    @staticmethod
+    def _format_error(model: Model, variant: Any, cleaned: dict[str, Any]) -> str:
+        """Message when the package format does not fit the device's chipset."""
+        return format_error(
+            cleaned.get("package_format") or "",
+            vendor_for_device(variant=variant, model=model),
+            model.brand.slug,
+        )
 
     def _validate_file(self, file: Any) -> None:
         if file is None:

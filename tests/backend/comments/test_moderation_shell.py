@@ -1,4 +1,4 @@
-"""The comment moderation queue renders inside the Unfold admin shell."""
+"""The comment moderation queue renders inside the staff console shell."""
 
 from __future__ import annotations
 
@@ -45,7 +45,7 @@ class ModerationQueueShellTests(TestCase):
         self.assertTemplateNotUsed(response, "base.html")
         self.assertContains(response, "Comment moderation")
         self.assertContains(response, "Check my channel")
-        self.assertContains(response, 'id="dialog-slot"')
+        self.assertContains(response, 'id="console-dialog"')
         for action in ("reject", "spam"):
             dialog = reverse(
                 "comments:moderation_dialog",
@@ -53,11 +53,8 @@ class ModerationQueueShellTests(TestCase):
             )
             self.assertContains(response, f'hx-get="{dialog}"')
         html = response.content.decode()
-        for marker in ("site-container", "site-header", "bootstrap"):
+        for marker in ("site-container", "site-header", "build/site."):
             self.assertNotIn(marker, html)
-        self.assertNotRegex(
-            html, r'class="(?:[^"]*\s)?(?:btn|card|d-flex)(?:\s[^"]*)?"'
-        )
 
     def test_viewers_without_change_permission_get_no_decision_controls(self):
         viewer = get_user_model().objects.create_user(

@@ -59,12 +59,11 @@ def test_adding_without_a_platform_opens_the_picker(admin_client):
         admin_client.get(reverse("admin:distribution_channel_platforms")),
     ):
         body = page.content.decode()
-        assert page.status_code == 200 and "mf-ui" in body
+        assert page.status_code == 200 and "console-staff-page" in body
         for adapter in channels.adapters().values():
             assert adapter.label in body
-        assert "Needs video" in body and "Needs image" in body
-        assert "reddit.com/prefs/apps" in body  # how-to-get-credentials hint
-        assert "?kind=reddit" in body
+        assert "Messaging &amp; communities" in body and "Fediverse &amp; open" in body
+        assert "?kind=reddit" in body and "?kind=whatsapp_channel" in body
 
 
 @pytest.mark.parametrize("kind", sorted(channels.adapters()))
@@ -239,7 +238,7 @@ def test_dashboard_shows_health_queue_clicks_and_actions(
     ClickEvent.objects.create(link=link, bucket=timezone.now())
     page = admin_client.get(reverse("admin:distribution_channel_dashboard"))
     body = page.content.decode()
-    assert page.status_code == 200 and 'class="mf-ui"' in body
+    assert page.status_code == 200 and "console-staff-page" in body
     assert "Hooks" in body and "Telegram" in body and "Run queue now" in body
     assert "Test connection" in body and "Send test post" in body and "Preview" in body
     assert "Circuit breaker" in body and "5 / 10" in body
@@ -247,9 +246,6 @@ def test_dashboard_shows_health_queue_clicks_and_actions(
         "Queue depth" in body and "Link clicks" in body and "Top shared content" in body
     )
     assert "HTTP 404" in body
-    assert (
-        "card shadow" not in body and "btn-primary" not in body
-    )  # no Bootstrap classes
     assert page.context["clicks_7d"] == 1
 
 

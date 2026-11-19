@@ -1,0 +1,8 @@
+{% load i18n %}
+{% if page.paginator.num_pages > 1 %}
+<nav class="console-staff-pager d-flex flex-wrap align-items-center gap-3" aria-label="{{ label }}">
+  {% if page.has_previous %}<a class="btn btn-sm btn-outline-secondary" rel="prev" href="?{{ base_query }}{% if base_query %}&amp;{% endif %}page={{ page.previous_page_number }}"{% if hx_target %} hx-get="?{{ base_query }}{% if base_query %}&amp;{% endif %}page={{ page.previous_page_number }}" hx-target="{{ hx_target }}" hx-swap="innerHTML" hx-push-url="true"{% endif %}>{% translate "Previous" %}</a>{% endif %}
+  <span class="small text-body-secondary">{% blocktranslate with number=page.number total=page.paginator.num_pages %}Page {{ number }} of {{ total }}{% endblocktranslate %}</span>
+  {% if page.has_next %}<a class="btn btn-sm btn-outline-secondary" rel="next" href="?{{ base_query }}{% if base_query %}&amp;{% endif %}page={{ page.next_page_number }}"{% if hx_target %} hx-get="?{{ base_query }}{% if base_query %}&amp;{% endif %}page={{ page.next_page_number }}" hx-target="{{ hx_target }}" hx-swap="innerHTML" hx-push-url="true"{% endif %}>{% translate "Next" %}</a>{% endif %}
+</nav>
+{% endif %}

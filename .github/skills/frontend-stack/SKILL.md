@@ -4,7 +4,7 @@ description: "Build and verify Django-rendered frontend work involving HTML, HTM
 ---
 # Frontend Stack
 
-Use for frontend changes in this repository. The user-approved stack is Django templates, Bootstrap, HTMX, Alpine's CSP-safe runtime, Lucide, and Vite. Verify `package.json`, the build entries, and the actual templates before changing the stack; do not introduce a second framework or styling system.
+Use for frontend changes in this repository. The user-approved stack is Django templates, Bootstrap, HTMX, Alpine's CSP-safe runtime, Lucide, and Vite. The public site uses htmx 2.0.11 (the `htmx2` alias); the staff console uses AdminLTE 4.10.2, Bootstrap 5.3.8, htmx 4.0.2 and `@alpinejs/csp` 3.17.5 (owner-approved; see `docs/05-frontend/admin-console.md` for conventions, components, and how to add pages, filters and actions). Verify `package.json`, the build entries, and the actual templates before changing the stack; do not introduce a second framework or styling system.
 
 1. Inventory templates/static files and actual package/build manifests. Select only the requested, already configured stack; ask before adding a framework, compiler, or dependency.
 2. Keep Django as the authorization and persistence authority. Escape output, retain CSRF protection, validate server-side, and make HTMX responses and errors explicit. A static gallery is supplementary only; when the user asks for live ad placement or flow testing, exercise the actual renderer and state transitions with safe, isolated demo data.
@@ -12,7 +12,7 @@ Use for frontend changes in this repository. The user-approved stack is Django t
 4. Use existing Sass/CSS or Tailwind conventions and tokens; do not mix styling systems or generate dynamic utility classes the configured build cannot discover.
 5. Use existing Lucide integration and accessible labels. Decorative icons are hidden from assistive technology; icon-only controls get an accessible name. Do not install an icon package just to render a trivial symbol.
 6. Verify keyboard and screen-reader semantics, focus after swaps/dialog changes, responsive layouts, reduced motion, and loading/empty/error states.
-7. Run the Vite build, focused Django tests using the repository `.venv` Python interpreter, and Playwright route/responsive/interaction checks. Frontend browser checks are required; do not silently skip missing browser setup or fabricate screenshots or emulator evidence.
+7. Run the Vite build (`npm run check` builds both bundles and runs the offline check), focused Django tests using the repository `.venv` Python interpreter, and Playwright route/responsive/interaction checks (console changes: `tests/frontend/test_admin_console_*.py`, including the full crawl `test_admin_console_crawl.py`). Frontend browser checks are required; do not silently skip missing browser setup or fabricate screenshots or emulator evidence.
 8. For forms, retain the centralized Django CSRF middleware and template tokens; verify the app-owned CSRF failure page, accessible search/validation states, and POST-Redirect-GET behavior. Do not use browser-native alert/confirm/prompt dialogs.
 9. Do not silently reduce a requested format or provider scope to the currently implemented subset. Separate creative formats, placements, delivery/buying methods, and reward verification; research standards and ask the user to select platforms/providers when scope is open-ended.
 

@@ -1,4 +1,4 @@
-"""Browser checks: My files Active/History tabs and the access type dialogs."""
+"""Browser checks: My contributions Active/History downloads tabs and the access type dialogs."""
 
 from __future__ import annotations
 
@@ -121,7 +121,7 @@ def test_library_tabs_split_active_files_from_read_only_history(live_server) -> 
         dismiss_dialogs(page, natives)
         for width in WIDTHS:
             page.set_viewport_size({"width": width, "height": 900})
-            page.goto(f"{live_server.url}{reverse('library:my_files')}")
+            page.goto(f"{live_server.url}{reverse('contributions:downloads')}")
             ready(page)
             assert listed(page) == ["open-file.zip"]
             assert page.locator("[data-library-tab=active]").get_attribute(

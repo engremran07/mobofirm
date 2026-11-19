@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from django.contrib.auth.models import Permission
 from django.test import Client
@@ -30,12 +32,12 @@ def test_staff_see_the_events_in_the_admin_shell(staff):
 
     assert response.status_code == 200
     assert "admin/staff_page.html" in [t.name for t in response.templates]
-    assert 'class="mf-ui-title"' in body
-    assert b"unfold/css/styles.css" in response.content
+    assert "console-staff-header" in body
+    assert "build/admin/" in body
     assert "Welcome back" in body and "Cap reached" in body
-    assert "mf-ui-badge--danger" in body
+    assert re.search(r'class="[^"]*badge[^"]*danger', body)
     assert 'class="surface-card' not in body
-    assert "messages" not in body.split('class="mf-ui"')[1]
+    assert "messages" not in body.split('class="console-staff-page')[1]
 
 
 @pytest.mark.usefixtures("seed_events")

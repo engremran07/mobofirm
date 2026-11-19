@@ -1,0 +1,140 @@
+// Staff pages: the layout grammar shared by every custom staff screen
+// (page header -> section tabs -> sections (cards) -> footer actions).
+//   <div class="c-staff-page"><header class="c-page-header">..</header>
+//     <nav class="c-tabs">..</nav>
+//     <div class="c-staff-body">
+//       <section class="c-section"><header class="c-section__head"><h2 class="c-section__title"/>[<a class="btn btn-secondary btn-sm"/>]</header>
+//         <p class="c-section__intro"/><div class="c-section__body">..</div></section></div></div>
+//   Grid:    <div class="c-grid [c-grid--wide]"> of .c-stat.c-stat--plain | .c-card.c-card--staff[.c-card--warning|--danger|--success|--info]
+//   Card:    .c-card__lead > .c-card__title + .c-card__subtitle
+//   List:    <ul class="c-list"><li class="c-list__item [c-list__item--split]">   Key/value: <dl class="c-kv c-kv--staff">
+//   Meter:   .c-meter > .c-meter__head(.c-meter__label .c-meter__caption) + meter.c-meter__bar    Chip: .c-chip.c-chip--staff(.c-chip__count)
+// Rendered only by templates/console/staff/*.html (the staff_* template tags); pages never write this markup.
+@layer components {
+  .c-staff-page { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--mf-space-5); min-inline-size: 0; }
+  .c-staff-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--mf-space-5); min-inline-size: 0; }
+  .c-staff-page > .c-page-header { margin-block-end: 0; }
+  .c-staff-page > .c-tabs { margin-block-end: 0; }
+
+  // Section: a card with a heading row. A section that only holds a grid of cards or tiles
+  // drops its own chrome so cards are never nested.
+  .c-section {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--mf-space-3);
+    min-inline-size: 0;
+    padding: var(--mf-space-4) var(--mf-space-5) var(--mf-space-5);
+    background: var(--mf-surface);
+    border: 1px solid var(--mf-border);
+    border-radius: var(--mf-radius-lg);
+    box-shadow: var(--mf-elev-1);
+  }
+
+  .c-section:has(> .c-section__body > .c-grid:only-child) {
+    padding: 0;
+    background: none;
+    border: 0;
+    box-shadow: none;
+  }
+
+  .c-section:has(> .c-section__body > .c-grid:only-child) > .c-section__head,
+  .c-section:has(> .c-section__body > .c-grid:only-child) > .c-section__intro { padding-inline: var(--mf-space-1); }
+
+  .c-section__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--mf-space-2) var(--mf-space-4);
+  }
+
+  .c-section__title {
+    margin: 0;
+    font-family: var(--mf-font-display);
+    font-size: var(--mf-fs-lg);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .c-section__intro { max-inline-size: 60ch; margin: 0; color: var(--mf-text-muted); }
+  .c-section__body { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--mf-space-4); min-inline-size: 0; }
+  .c-section__body > p { margin: 0; max-inline-size: 72ch; }
+  .c-section__body > .btn,
+  .c-section__body > form > .btn { justify-self: start; }
+
+  // Tables inside a section sit flush in the card: no second frame.
+  .c-section .c-table-wrap {
+    background: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .c-section .c-card,
+  .c-section .c-stat {
+    background: var(--mf-surface-raised);
+    box-shadow: none;
+  }
+
+  // Grid of tiles / cards
+  .c-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, 14rem), 1fr));
+    gap: var(--mf-space-4);
+    min-inline-size: 0;
+  }
+
+  .c-grid--wide { grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr)); }
+  .c-grid > * { min-inline-size: 0; }
+
+  // Plain stat tile (no icon): label, number, hint stacked in one column.
+  .c-stat--plain { grid-template-columns: minmax(0, 1fr); }
+  .c-stat--plain > * { grid-column: 1; }
+  .c-stat--plain .c-stat__value { font-size: var(--mf-fs-2xl); }
+  .c-stat__unit { color: var(--mf-text-muted); font-family: var(--mf-font-sans); font-size: var(--mf-fs-sm); font-weight: 500; }
+  .c-stat__meta a { text-decoration: underline; text-underline-offset: 0.2em; }
+
+  // Card (staff variant): lead block + tone edge
+  .c-card--staff { block-size: 100%; }
+  .c-card--staff > .c-card__body { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--mf-space-3); align-content: start; }
+  .c-card__lead { display: grid; gap: var(--mf-space-1); }
+  .c-card--staff .c-card__title { margin: 0; font-size: var(--mf-fs-base); }
+  .c-card__subtitle { margin: 0; color: var(--mf-text-muted); font-size: var(--mf-fs-sm); }
+  .c-card--warning { border-color: color-mix(in srgb, var(--mf-warning) 45%, var(--mf-border)); }
+  .c-card--success { border-color: color-mix(in srgb, var(--mf-success) 45%, var(--mf-border)); }
+  .c-card--info { border-color: color-mix(in srgb, var(--mf-info) 45%, var(--mf-border)); }
+
+  // Lists and key/value
+  .c-list { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+
+  .c-list__item {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--mf-space-1) var(--mf-space-3);
+    padding-block: var(--mf-space-2);
+    border-block-end: 1px solid var(--mf-border-soft);
+
+    &:last-child { border-block-end: 0; }
+  }
+
+  .c-list__item--split { justify-content: space-between; }
+  .c-kv--staff .c-kv__desc { overflow-wrap: anywhere; }
+
+  // Meter
+  .c-meter { display: grid; gap: var(--mf-space-1); }
+  .c-meter__head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--mf-space-2); }
+  .c-meter__label { margin: 0; font-size: var(--mf-fs-sm); font-weight: 600; }
+  .c-meter__caption { color: var(--mf-text-muted); font-size: var(--mf-fs-xs); }
+  .c-meter__bar { inline-size: 100%; block-size: 0.5rem; accent-color: var(--mf-accent); }
+
+  // Chips used as read-only facets
+  .c-chip--staff { text-decoration: none; }
+  .c-chip__count { color: var(--mf-text-muted); font-weight: 400; font-variant-numeric: tabular-nums; }
+
+  // Alerts used as page notices
+  .c-staff-body > .c-alert,
+  .c-section__body > .c-alert { margin: 0; }
+
+  .c-staff-page .c-empty--compact { padding-block: var(--mf-space-5); border: 1px dashed var(--mf-border); border-radius: var(--mf-radius-md); }
+}

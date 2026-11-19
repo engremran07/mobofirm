@@ -1,53 +1,55 @@
 {% extends "admin/staff_page.html" %}
-{% load editor_tags %}
-{% block mf_body %}
-{% if not can_moderate %}<p class="mf-ui-note mf-ui-note--warning" role="status">You can review the queue, but deciding needs the “change comment” permission.</p>{% endif %}
-<section class="mf-ui-section" aria-labelledby="queue-title">
-  <h2 class="mf-ui-section__title" id="queue-title">Waiting for review <span class="mf-ui-badge">{{ pending_comments|length }}</span></h2>
+{% load i18n staff_ui editor_tags %}
+{% block page_body %}
+{% if not can_moderate %}{% staff_notice tone="warning" %}{% translate "You can review the queue, but deciding needs the “change comment” permission." %}{% endstaff_notice %}{% endif %}
+{% blocktranslate count counter=pending_comments|length asvar queue_count %}{{ counter }} waiting{% plural %}{{ counter }} waiting{% endblocktranslate %}
+{% staff_section title=_("Waiting for review") ident="queue-title" intro=queue_count %}
   {% for comment in pending_comments %}
-    <article class="mf-ui-card mf-ui-comment" aria-labelledby="comment-{{ comment.pk }}-title">
-      <header class="mf-ui-comment__head">
-        <a id="comment-{{ comment.pk }}-title" href="{{ comment.post.get_absolute_url }}#comment-{{ comment.pk }}">{{ comment.post.title }}</a>
-        <span class="mf-ui-comment__meta">by {{ comment.user.public_display_name }} · <time datetime="{{ comment.created_at|date:'c' }}">{{ comment.created_at|date:"M j, Y H:i" }}</time> · risk {{ comment.toxicity_score }}</span>
-      </header>
-      <div class="mf-ui-comment__body">{{ comment.body|rich_text }}</div>
+    {% with key=comment.pk|stringformat:"s" %}
+    {% staff_card ident="comment-"|add:key|add:"-title" %}
+      <div>
+        <h3 class="h6 mb-1"><a id="comment-{{ comment.pk }}-title" href="{{ comment.post.get_absolute_url }}#comment-{{ comment.pk }}">{{ comment.post.title }}</a></h3>
+        <p class="small text-body-secondary mb-0">{% translate "by" %} {{ comment.user.public_display_name }} · <time datetime="{{ comment.created_at|date:'c' }}">{{ comment.created_at|date:"M j, Y H:i" }}</time> · {% translate "risk" %} {{ comment.toxicity_score }}</p>
+      </div>
+      <div class="d-flex flex-column gap-2">{{ comment.body|rich_text }}</div>
       {% if comment.moderation_flags.moderation.reasons %}
-        <p class="mf-ui-comment__meta">Flagged for: {{ comment.moderation_flags.moderation.reasons|join:", " }}</p>
+        <p class="small text-body-secondary mb-0">{% translate "Flagged for:" %} {{ comment.moderation_flags.moderation.reasons|join:", " }}</p>
       {% endif %}
-      {% if comment.moderation_flags.reports %}<p class="mf-ui-comment__meta">{{ comment.moderation_flags.reports.count }} reader report{{ comment.moderation_flags.reports.count|pluralize }}</p>{% endif %}
+      {% if comment.moderation_flags.reports %}<p class="small text-body-secondary mb-0">{% blocktranslate count counter=comment.moderation_flags.reports.count %}{{ counter }} reader report{% plural %}{{ counter }} reader reports{% endblocktranslate %}</p>{% endif %}
       {% if can_moderate %}
-        <form method="post" action="{% url 'comments:moderation_action' %}" class="mf-ui-row">
+        <form method="post" action="{% url 'comments:moderation_action' %}">
           {% csrf_token %}
           <input type="hidden" name="comment_id" value="{{ comment.pk }}">
-          <button class="mf-ui-btn mf-ui-btn--primary mf-ui-btn--small" name="action" value="approve" type="submit">Approve</button>
-          <a class="mf-ui-btn mf-ui-btn--small" href="{% url 'comments:moderation_dialog' comment_id=comment.pk action='reject' %}" hx-get="{% url 'comments:moderation_dialog' comment_id=comment.pk action='reject' %}" hx-target="#dialog-slot" hx-swap="innerHTML">Reject</a>
-          <a class="mf-ui-btn mf-ui-btn--small" href="{% url 'comments:moderation_dialog' comment_id=comment.pk action='spam' %}" hx-get="{% url 'comments:moderation_dialog' comment_id=comment.pk action='spam' %}" hx-target="#dialog-slot" hx-swap="innerHTML">Mark as spam</a>
+          {% staff_row %}
+            {% staff_button _("Approve") name="action" value="approve" tone="primary" size="sm" %}
+            {% url 'comments:moderation_dialog' comment_id=comment.pk action='reject' as reject_url %}
+            {% url 'comments:moderation_dialog' comment_id=comment.pk action='spam' as spam_url %}
+            {% staff_button _("Reject") dialog_url=reject_url size="sm" %}
+            {% staff_button _("Mark as spam") dialog_url=spam_url size="sm" %}
+          {% endstaff_row %}
         </form>
       {% endif %}
-    </article>
+    {% endstaff_card %}
+    {% endwith %}
   {% empty %}
-    <p class="mf-ui-empty">The queue is clear. Nothing is waiting for review.</p>
+    {% staff_empty title=_("The queue is clear") %}{% translate "Nothing is waiting for review." %}{% endstaff_empty %}
   {% endfor %}
-</section>
-<section class="mf-ui-section" aria-labelledby="recent-title">
-  <h2 class="mf-ui-section__title" id="recent-title">Recently decided</h2>
-  <div class="mf-ui-table-wrap" role="region" aria-label="Recently decided comments" tabindex="0">
-    <table class="mf-ui-table">
-      <thead><tr><th scope="col">Article</th><th scope="col">Author</th><th scope="col">Status</th><th scope="col">Date</th></tr></thead>
-      <tbody>
-        {% for comment in recent_comments %}
-          <tr>
-            <th scope="row"><a href="{{ comment.post.get_absolute_url }}#comment-{{ comment.pk }}">{{ comment.post.title|truncatechars:60 }}</a></th>
-            <td>{{ comment.user.public_display_name }}</td>
-            <td>{{ comment.get_status_display }}</td>
-            <td><time datetime="{{ comment.created_at|date:'c' }}">{{ comment.created_at|date:"M j, Y" }}</time></td>
-          </tr>
-        {% empty %}
-          <tr><td colspan="4">No decisions yet.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-</section>
-{% include "admin/staff_dialog_slot.html" %}
+{% endstaff_section %}
+{% staff_section title=_("Recently decided") ident="recent-title" %}
+  {% staff_table label=_("Recently decided comments") %}
+    <thead><tr><th scope="col">{% translate "Article" %}</th><th scope="col">{% translate "Author" %}</th><th scope="col">{% translate "Status" %}</th><th scope="col">{% translate "Date" %}</th></tr></thead>
+    <tbody>
+      {% for comment in recent_comments %}
+        <tr>
+          <th scope="row"><a href="{{ comment.post.get_absolute_url }}#comment-{{ comment.pk }}">{{ comment.post.title|truncatechars:60 }}</a></th>
+          <td>{{ comment.user.public_display_name }}</td>
+          <td>{{ comment.get_status_display }}</td>
+          <td><time datetime="{{ comment.created_at|date:'c' }}">{{ comment.created_at|date:"M j, Y" }}</time></td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="4" class="text-body-secondary">{% translate "No decisions yet." %}</td></tr>
+      {% endfor %}
+    </tbody>
+  {% endstaff_table %}
+{% endstaff_section %}
 {% endblock %}

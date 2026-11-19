@@ -5,14 +5,20 @@
 """
 
 import logging
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 
 from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import DatabaseError, transaction
-from django.db.models.signals import post_delete, post_save, pre_save
+from django.db.models.signals import post_delete, post_save, pre_delete, pre_save
 from django.dispatch import receiver
 
 logger = logging.getLogger(__name__)
+
+# Targets collected while a bulk import runs (see ``batched_blog_sync``).
+_batch: ContextVar[dict[str, set] | None] = ContextVar("blog_sync_batch", default=None)
 
 FIRMWARE_SENDERS = (
     "firmwares.OfficialFirmware",
@@ -64,9 +70,19 @@ def _run_blog_sync(model_ids: set, brand_ids: set, chipset_ids: set) -> None:
 
 
 def schedule_blog_sync(*, model_ids=(), brand_ids=(), chipset_ids=()) -> None:
-    """Queue a refresh of the automated posts once the current transaction commits."""
+    """Queue a refresh of the automated posts once the current transaction commits.
+
+    Inside :func:`batched_blog_sync` (bulk imports) the targets are only collected;
+    the block refreshes each target once when it ends.
+    """
     models_, brands, chipsets = set(model_ids), set(brand_ids), set(chipset_ids)
     if not (models_ or brands or chipsets):
+        return
+    collector = _batch.get()
+    if collector is not None:
+        collector["models"] |= models_
+        collector["brands"] |= brands
+        collector["chipsets"] |= chipsets
         return
 
     def dispatch() -> None:
@@ -90,6 +106,27 @@ def schedule_blog_sync(*, model_ids=(), brand_ids=(), chipset_ids=()) -> None:
         _run_blog_sync(models_, brands, chipsets)
 
     transaction.on_commit(dispatch)
+
+
+@contextmanager
+def batched_blog_sync() -> Iterator[None]:
+    """Hold back the automated-post refreshes of a bulk write.
+
+    Every save inside the block only records its brand, model and chipset targets.
+    When the block ends without an error each target is refreshed once (after the
+    surrounding transaction commits); on an error nothing is refreshed.
+    """
+    collector: dict[str, set] = {"models": set(), "brands": set(), "chipsets": set()}
+    token = _batch.set(collector)
+    try:
+        yield
+    finally:
+        _batch.reset(token)
+    schedule_blog_sync(
+        model_ids=collector["models"],
+        brand_ids=collector["brands"],
+        chipset_ids=collector["chipsets"],
+    )
 
 
 def _firmware_targets(firmware, *extra_model_ids) -> tuple[set, set, set]:
@@ -164,10 +201,10 @@ def handle_firmware_saved(instance, created, update_fields=None, **kwargs):
 @receiver(post_delete, sender=FIRMWARE_SENDERS[4])
 @receiver(post_delete, sender=FIRMWARE_SENDERS[5])
 def handle_firmware_deleted(instance, **kwargs):
-    """Drop deleted firmware from its posts and invalidate its download tokens."""
-    from .models import DownloadToken
+    """Drop deleted firmware from its posts and purge every row that referenced it."""
+    from .firmware_cleanup import purge_firmware_references
 
-    DownloadToken.objects.for_firmware(instance).delete()
+    purge_firmware_references(instance)
     model_ids, brand_ids, chipset_ids = _firmware_targets(instance)
     schedule_blog_sync(
         model_ids=model_ids, brand_ids=brand_ids, chipset_ids=chipset_ids
@@ -178,6 +215,34 @@ def handle_firmware_deleted(instance, **kwargs):
 def handle_brand_saved(instance, created, **kwargs):
     if created:
         schedule_blog_sync(brand_ids={instance.pk})
+
+
+@receiver(post_save, sender="firmwares.Brand")
+def sync_brand_tool_category(instance, raw=False, **kwargs):
+    """Every brand owns one tool/guide category; a rename keeps it (slug history)."""
+    if raw:
+        return
+    from .tool_categories import ensure_brand_category
+
+    ensure_brand_category(instance)
+
+
+@receiver(pre_delete, sender="firmwares.Brand")
+def deactivate_brand_tool_category(instance, **kwargs):
+    """A deleted brand's category is deactivated, not deleted."""
+    from .tool_categories import deactivate_brand_category
+
+    deactivate_brand_category(instance)
+
+
+@receiver(post_save, sender="firmwares.Chipset")
+def ensure_chipset_tool_categories(instance, raw=False, **kwargs):
+    """A chipset of a supported vendor guarantees the vendor and family categories."""
+    if raw:
+        return
+    from .tool_categories import ensure_chipset_categories
+
+    ensure_chipset_categories(instance)
 
 
 @receiver(post_save, sender="firmwares.Model")

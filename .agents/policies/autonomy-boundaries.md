@@ -10,7 +10,7 @@
 ## Obtain approval before
 
 - Changing product scope, user-visible policy, data retention periods, authorization semantics, or public API contracts.
-- Adding a dependency, choosing a frontend framework/design system, or building frontend assets unless the current task includes explicit owner approval for that bounded direction. The approved Mobofirm frontend foundation is documented in `docs/05-frontend/design-system.md`.
+- Adding a dependency, choosing a frontend framework/design system, or building frontend assets unless the current task includes explicit owner approval for that bounded direction. The approved Mobofirm frontend foundation is documented in `docs/05-frontend/design-system.md` (public site) and `docs/05-frontend/admin-console.md` (staff console: AdminLTE 4.10.2, Bootstrap 5.3.8, htmx 4.0.2, `@alpinejs/csp` 3.17.5; approved decisions are listed in `approval-matrix.yaml`).
 - Applying migrations to a database other than an isolated test database.
 - Deleting app/model data or migration history, running cleanup against real data, deploying, or changing external provider settings.
 - Creating/publishing a commit, pushing, opening a pull request, or releasing.

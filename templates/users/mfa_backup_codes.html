@@ -10,5 +10,15 @@
 <ul class="recovery-grid" aria-label="One-time recovery codes">
   {% for code in backup_codes %}<li><code>{{ code }}</code></li>{% endfor %}
 </ul>
+<pre id="recovery-codes-text" hidden>{% for code in backup_codes %}{{ code }}
+{% endfor %}</pre>
+<div class="recovery-actions" role="group" aria-label="Save your recovery codes">
+  <button type="button" class="btn btn-outline-secondary" data-copy-target="#recovery-codes-text" data-copy-message="Recovery codes copied.">
+    <i data-lucide="copy" aria-hidden="true"></i> Copy all
+  </button>
+  <button type="button" class="btn btn-outline-secondary" data-download-target="#recovery-codes-text" data-download-filename="mobofirm-recovery-codes.txt" data-download-message="Recovery codes saved.">
+    <i data-lucide="download" aria-hidden="true"></i> Download .txt
+  </button>
+</div>
 <a class="btn btn-primary btn-lg w-100" href="{% url 'users:dashboard' %}">Continue to account</a>
 {% endblock %}

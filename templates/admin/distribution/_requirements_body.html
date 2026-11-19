@@ -1,0 +1,22 @@
+{% load i18n staff_ui %}
+{% comment %}Body of the platform setup guide (dialog and page). Context: card, adapter, info, fields, connect_url.{% endcomment %}
+<div class="d-flex flex-column gap-3">
+  <p class="mb-0">{{ info.summary|default:adapter.how_to }}</p>
+  {% if card.assisted %}{% staff_notice tone="warning" %}<strong>{% translate "Assisted, not automatic." %}</strong> {{ adapter.how_to }}{% endstaff_notice %}
+  {% elif adapter.how_to %}{% staff_notice %}{{ adapter.how_to }}{% endstaff_notice %}{% endif %}
+  <h3 class="h6 mb-0">{% translate "How to get your credentials" %}</h3>
+  <ol class="c-steps">{% for step in info.steps %}<li class="c-steps__item">{{ step }}</li>{% endfor %}</ol>
+  {% if fields %}
+    <h3 class="h6 mb-0">{% translate "What you will enter" %}</h3>
+    <ul class="mb-0">{% for field in fields %}<li><strong>{{ field.label }}</strong>{% if not field.required %} <span class="u-muted">({% translate "optional" %})</span>{% endif %}{% if field.is_secret %} <span class="u-muted">· {% translate "stored encrypted" %}</span>{% endif %}{% if field.help %}<br><span class="u-muted u-text-sm">{{ field.help }}</span>{% endif %}</li>{% endfor %}</ul>
+  {% endif %}
+  {% if info.notes %}
+    <h3 class="h6 mb-0">{% translate "Good to know" %}</h3>
+    <ul class="mb-0">{% for note in info.notes %}<li>{{ note }}</li>{% endfor %}</ul>
+  {% endif %}
+  {% if info.docs %}
+    <h3 class="h6 mb-0">{% translate "Official documentation" %}</h3>
+    <ul class="mb-0">{% for label, url in info.docs %}<li><a href="{{ url }}" target="_blank" rel="noopener noreferrer">{{ label }}</a></li>{% endfor %}</ul>
+    <p class="u-muted u-text-sm mb-0">{% translate "Platforms change their rules; check the linked pages if a step differs." %}</p>
+  {% endif %}
+</div>

@@ -274,17 +274,18 @@ class ServeLocalFileTests(DownloadFlowTestCase):
         session = DownloadSession.objects.get(token__token=token_value)
         self.assertEqual(session.status, DownloadSession.Status.COMPLETED)
         self.assertEqual(session.bytes_delivered, len(CONTENT))
-        self.assertEqual(
-            FirmwareDownloadAttempt.objects.get(object_id=firmware.pk).status,
-            "downloading",
-        )
+        self.assertIsNotNone(session.released_at)
+        attempt = FirmwareDownloadAttempt.objects.get(object_id=firmware.pk)
+        self.assertEqual(attempt.status, "completed")
+        self.assertEqual(attempt.bytes_transferred, len(CONTENT))
 
     def test_every_category_is_downloadable(self):
         for kind in TYPE_MODELS:
             with self.subTest(kind=kind):
                 firmware = self.make_firmware(kind, f"served-{kind}.zip")
-                location, _token = self.consume(firmware, kind, Client())
-                served = Client().get(location)
+                browser = Client()
+                location, _token = self.consume(firmware, kind, browser)
+                served = browser.get(location)
                 self.assertEqual(streamed_body(served), CONTENT)
 
     def test_link_for_an_unconsumed_token_is_refused(self):

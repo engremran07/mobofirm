@@ -209,27 +209,46 @@ def test_a_job_that_needs_media_waits_without_spending_an_attempt(
     )
 
 
-def test_video_platforms_wait_for_ffmpeg_then_upload_the_real_video(
-    make_channel, make_content, net, monkeypatch
+def test_video_platforms_wait_for_an_approved_video_then_upload_it(
+    make_channel, make_content, net
 ):
+    from django.core.files.base import ContentFile
+
+    from apps.distribution import videos
+    from apps.distribution.models import VideoJob
+
     make_channel("youtube", use_composer=True)
-    monkeypatch.setattr(media.shutil, "which", lambda name: None)
     services.enqueue(make_content())
     now = timezone.now()
     fetcher = net.Fetcher()
     services.process_due_jobs(now=now, fetcher=fetcher)
     job = ShareJob.objects.get()
-    assert job.status == "needs_media" and "ffmpeg" in job.last_error
+    assert job.status == "needs_media" and "approved motion video" in job.last_error
     assert fetcher.calls == []
-    fake_ffmpeg(monkeypatch)
+    name = "distribution/videos/test-token/video.mp4"
+    default_storage.save(name, ContentFile(b"MP4-BYTES"))
+    video = VideoJob.objects.create(
+        content_kind="firmware",
+        object_ref="official:abc",
+        title="Acme Phone One Global",
+        template="firmware-release",
+        idempotency_key="gate-test",
+        status=VideoJob.Status.READY,
+        video_name=name,
+    )
+    # A rendered video that nobody approved never unlocks posting.
+    services.process_due_jobs(now=now + timedelta(minutes=31), fetcher=fetcher)
+    assert fetcher.calls == []
+    assert videos.approve(video, None, now=now + timedelta(minutes=32))
     upload = net.Fetcher(net.ok({"access_token": "yt-access"}), net.ok({"id": "vid9"}))
     assert (
-        services.process_due_jobs(now=now + timedelta(minutes=31), fetcher=upload).sent
+        services.process_due_jobs(now=now + timedelta(minutes=33), fetcher=upload).sent
         == 1
     )
     assert b"MP4-BYTES" in upload.calls[1]["body"]
     job.refresh_from_db()
-    assert job.external_id == "vid9"
+    video.refresh_from_db()
+    assert job.external_id == "vid9" and video.status == VideoJob.Status.POSTED
 
 
 def test_a_job_that_waits_too_long_for_media_is_dropped_visibly(
@@ -241,7 +260,7 @@ def test_a_job_that_waits_too_long_for_media_is_dropped_visibly(
     ShareJob.objects.update(created_at=timezone.now() - timedelta(days=8))
     services.process_due_jobs(fetcher=net.Fetcher())
     job = ShareJob.objects.get()
-    assert job.status == ShareJob.Status.SKIPPED and "ffmpeg" in job.last_error
+    assert job.status == ShareJob.Status.SKIPPED and "approved" in job.last_error
     assert ShareLog.objects.filter(job=job, message__startswith="Dropped").exists()
 
 

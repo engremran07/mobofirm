@@ -1,14 +1,19 @@
-"""Operations dashboard data for the Unfold admin index.
+"""Operations dashboard data of the staff console.
 
 Counts are ORM aggregates computed per metric and cached briefly as plain numbers
 (no per-user data, so the cache is shared); permission filtering happens per
-request in :func:`dashboard_callback`. A metric whose app or table cannot be read is
+request when a widget renders. A metric whose app or table cannot be read is
 reported as ``None`` ("unavailable") instead of a misleading zero.
+
+The index page renders only a greeting and quick actions; each panel (``WIDGETS``)
+is a fragment fetched lazily through :func:`dashboard_widget`, which
+:func:`dashboard_urls` mounts on the admin site as ``admin:console_dashboard_widget``.
 """
 
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import timedelta
 from typing import Any
@@ -17,10 +22,13 @@ from django.apps import apps
 from django.core.cache import cache
 from django.db import DatabaseError
 from django.db.models import Count, F, Q, Sum
-from django.http import HttpRequest
-from django.urls import reverse
+from django.http import Http404, HttpRequest, HttpResponse
+from django.shortcuts import render
+from django.urls import NoReverseMatch, URLPattern, path, reverse
 from django.utils import timezone
 from django.utils.translation import gettext as _
+from django.utils.translation import gettext_lazy
+from django.views.decorators.http import require_GET
 
 from apps.core.app_service import AppService
 
@@ -283,7 +291,7 @@ def _catalog_requests_kpi(metrics: dict[str, Any], user: Any | None) -> Kpi:
         _("Catalog requests"),
         _sum(*(metrics[entry[0]] for entry in visible)),
         _("Brand, model, variant, chipset and firmware requests to review"),
-        "playlist_add",
+        "list-plus",
         _changelist(target[1], target[2]),
         "warning",
         target[3],
@@ -300,7 +308,7 @@ def build_kpis(metrics: dict[str, Any], user: Any | None = None) -> list[Kpi]:
             _("Pending firmware reviews"),
             metrics["pending_firmware"],
             _("Uploads waiting for a staff decision"),
-            "inventory_2",
+            "package-open",
             _changelist("firmwares.PendingFirmware", "admin_decision__exact=pending"),
             "warning",
             "firmwares.view_pendingfirmware",
@@ -310,7 +318,7 @@ def build_kpis(metrics: dict[str, Any], user: Any | None = None) -> list[Kpi]:
             _("Pending comments"),
             metrics["pending_comments"],
             _("Comments held for moderation"),
-            "forum",
+            "message-square",
             _changelist("comments.Comment", "status__exact=pending"),
             "warning",
             "comments.view_comment",
@@ -321,7 +329,7 @@ def build_kpis(metrics: dict[str, Any], user: Any | None = None) -> list[Kpi]:
             _("Unapproved tags"),
             metrics["unapproved_tags"],
             _("Suggested tags that are not curated yet"),
-            "sell",
+            "tag",
             _changelist("tags.Tag", "is_curated__exact=0"),
             "warning",
             "tags.view_tag",
@@ -331,7 +339,7 @@ def build_kpis(metrics: dict[str, Any], user: Any | None = None) -> list[Kpi]:
             _("Open SEO issues"),
             metrics["open_seo_issues"],
             _("Crawler findings that still need attention"),
-            "travel_explore",
+            "search-check",
             _changelist("seo.Issue", "status__exact=open"),
             "danger",
             "seo.view_issue",
@@ -341,7 +349,7 @@ def build_kpis(metrics: dict[str, Any], user: Any | None = None) -> list[Kpi]:
             _("SEO proposals to approve"),
             metrics["seo_proposals"],
             _("Automation changes waiting in the change ledger"),
-            "fact_check",
+            "clipboard-check",
             _changelist("seo.ChangeLedger", "status__exact=proposed"),
             "warning",
             "seo.view_changeledger",
@@ -351,7 +359,7 @@ def build_kpis(metrics: dict[str, Any], user: Any | None = None) -> list[Kpi]:
             _("Stale articles"),
             metrics.get("stale_posts"),
             _("Published articles that have not been updated for a while"),
-            "update",
+            "calendar-clock",
             _changelist("blog.Post", "freshness=stale"),
             "warning",
             "blog.view_post",
@@ -363,7 +371,7 @@ def build_kpis(metrics: dict[str, Any], user: Any | None = None) -> list[Kpi]:
             _("Of %(total)s tracked locations") % {"total": total}
             if total is not None
             else _("Storage status is unavailable"),
-            "hard_drive",
+            "hard-drive",
             _changelist("storage.FirmwareStorageLocation"),
             "danger" if storage_problems else "success",
             "storage.view_firmwarestoragelocation",
@@ -377,7 +385,7 @@ def build_kpis(metrics: dict[str, Any], user: Any | None = None) -> list[Kpi]:
                 "pending": metrics["pending_seo_jobs"] or 0,
                 "topics": metrics["queued_topics"] or 0,
             },
-            "schedule",
+            "timer",
             _changelist("seo.SEOJob", "status__exact=failed"),
             "danger",
             "seo.view_seojob",
@@ -387,7 +395,7 @@ def build_kpis(metrics: dict[str, Any], user: Any | None = None) -> list[Kpi]:
             _("Marketplace reviews"),
             _sum(metrics["pending_listings"], metrics["pending_sellers"]),
             _("Listings and seller verifications awaiting review"),
-            "storefront",
+            "store",
             _changelist("marketplace.Listing", "status__exact=pending"),
             "warning",
             "marketplace.view_listing",
@@ -397,7 +405,7 @@ def build_kpis(metrics: dict[str, Any], user: Any | None = None) -> list[Kpi]:
             _("Orders awaiting payment"),
             metrics["pending_orders"],
             _("Offline orders to confirm and provision"),
-            "receipt_long",
+            "receipt",
             _changelist("shop.Order", "status__exact=pending"),
             "warning",
             "shop.view_order",
@@ -411,7 +419,7 @@ def build_kpis(metrics: dict[str, Any], user: Any | None = None) -> list[Kpi]:
                 "claims": metrics.get("promotion_claims") or 0,
                 "views": metrics.get("promotion_views") or 0,
             },
-            "campaign",
+            "megaphone",
             _changelist("promotions.Promotion", "status__exact=active"),
             "info",
             "promotions.view_promotion",
@@ -421,7 +429,7 @@ def build_kpis(metrics: dict[str, Any], user: Any | None = None) -> list[Kpi]:
             _("New accounts (7 days)"),
             metrics["signups_7d"],
             _("Registrations in the last week"),
-            "group_add",
+            "user-plus",
             _changelist("users.CustomUser"),
             "info",
             "users.view_customuser",
@@ -429,32 +437,293 @@ def build_kpis(metrics: dict[str, Any], user: Any | None = None) -> list[Kpi]:
     ]
 
 
-def dashboard_callback(request: HttpRequest, context: dict[str, Any]) -> dict[str, Any]:
-    """Unfold ``DASHBOARD_CALLBACK``: add permission-filtered KPIs and tables."""
-    metrics = get_metrics()
+def visible_kpis(request: HttpRequest, metrics: dict[str, Any]) -> list[Kpi]:
+    """The KPIs whose underlying model the user may view."""
     user = request.user
-    kpis = [kpi for kpi in build_kpis(metrics, user) if user.has_perm(kpi.permission)]
-    context.update(
-        {
-            "kpis": kpis,
-            "recent_signups": (
-                metrics["recent_signups"]
-                if user.has_perm("users.view_customuser")
-                else []
-            ),
-            "recent_orders": (
-                metrics["recent_orders"] if user.has_perm("shop.view_order") else []
-            ),
-            "recent_pending_firmware": (
-                metrics["recent_pending_firmware"]
-                if user.has_perm("firmwares.view_pendingfirmware")
-                else []
-            ),
-            "can_view_signups": user.has_perm("users.view_customuser"),
-            "can_view_orders": user.has_perm("shop.view_order"),
-            "can_view_pending_firmware": user.has_perm(
-                "firmwares.view_pendingfirmware"
-            ),
-        }
+    return [kpi for kpi in build_kpis(metrics, user) if user.has_perm(kpi.permission)]
+
+
+# -- Lazily loaded dashboard panels ------------------------------------------------
+@dataclass(frozen=True, slots=True)
+class Widget:
+    slug: str
+    title: Any  # translatable (lazy) text
+    icon: str
+    template: str
+    build: Callable[[HttpRequest, dict[str, Any]], dict[str, Any]]
+    skeleton: str  # which skeleton shape the placeholder shows while loading
+    permissions: tuple[str, ...] = ()  # any one grants access; empty = every staff user
+    size: str = "full"  # stats (a tile row) | sm | md | lg | full: width in the grid
+    refresh: int = (
+        0  # seconds between automatic refreshes (paused in a hidden tab); 0 = never
     )
-    return context
+
+    def allowed(self, request: HttpRequest) -> bool:
+        user = request.user
+        return not self.permissions or any(user.has_perm(p) for p in self.permissions)
+
+
+@dataclass(frozen=True, slots=True)
+class QuickAction:
+    title: str
+    icon: str
+    url: str
+
+
+def _safe_reverse(name: str, *args: Any) -> str | None:
+    try:
+        return reverse(name, args=args)
+    except NoReverseMatch:
+        return None
+
+
+def _quick_actions(request: HttpRequest) -> list[QuickAction]:
+    """Shortcuts to everyday jobs, limited to what the user may actually do."""
+    user = request.user
+    candidates: tuple[tuple[str, str, str | None, str], ...] = (
+        (
+            _("Write a blog post"),
+            "pencil-line",
+            _safe_reverse("admin:blog_post_add"),
+            "blog.add_post",
+        ),
+        (
+            _("Review firmware uploads"),
+            "package-open",
+            _changelist_or_none(
+                "firmwares.PendingFirmware", "admin_decision__exact=pending"
+            ),
+            "firmwares.view_pendingfirmware",
+        ),
+        (
+            _("Moderate comments"),
+            "message-square",
+            _changelist_or_none("comments.Comment", "status__exact=pending"),
+            "comments.view_comment",
+        ),
+        (
+            _("Add a brand"),
+            "building",
+            _safe_reverse("admin:firmwares_brand_add"),
+            "firmwares.add_brand",
+        ),
+        (
+            _("Find a user"),
+            "user-round",
+            _changelist_or_none("users.CustomUser"),
+            "users.view_customuser",
+        ),
+        (
+            _("Site settings"),
+            "settings",
+            _changelist_or_none("site_settings.SiteSettings"),
+            "site_settings.view_sitesettings",
+        ),
+    )
+    return [
+        QuickAction(title, icon, url)
+        for title, icon, url, permission in candidates
+        if url and user.has_perm(permission)
+    ]
+
+
+def _changelist_or_none(label: str, query: str = "") -> str | None:
+    try:
+        return _changelist(label, query)
+    except (LookupError, NoReverseMatch):
+        return None
+
+
+def _overview(request: HttpRequest, metrics: dict[str, Any]) -> dict[str, Any]:
+    """Headline numbers: what is waiting, what is failing, and how the site is growing."""
+    kpis = visible_kpis(request, metrics)
+    waiting = [k for k in kpis if k.variant == "warning" and k.value]
+    failing = [k for k in kpis if k.variant == "danger" and k.value]
+    by_key = {kpi.key: kpi for kpi in kpis}
+    return {
+        "waiting_total": sum(int(k.value or 0) for k in waiting),
+        "waiting_queues": len(waiting),
+        "failing_total": sum(int(k.value or 0) for k in failing),
+        "failing_checks": len(failing),
+        "signups": by_key.get("signups"),
+        "promotions": by_key.get("promotions"),
+    }
+
+
+_VARIANT_ORDER = {"danger": 0, "warning": 1, "info": 2, "success": 3}
+
+
+def _attention(request: HttpRequest, metrics: dict[str, Any]) -> dict[str, Any]:
+    """Queues that hold work, most urgent first, plus counters that could not be read."""
+    kpis = visible_kpis(request, metrics)
+    actionable = [k for k in kpis if k.variant in {"warning", "danger"} and k.value]
+    actionable.sort(key=lambda k: (_VARIANT_ORDER[k.variant], -int(k.value or 0)))
+    return {
+        "queues": actionable,
+        "total": sum(int(k.value or 0) for k in actionable),
+        "unavailable": [k for k in kpis if k.value is None],
+        "has_queues": bool(kpis),
+    }
+
+
+def _health(request: HttpRequest, metrics: dict[str, Any]) -> dict[str, Any]:
+    """Operational checks: storage, background jobs and crawler findings."""
+    wanted = ("storage", "queue", "open_seo_issues", "stale_posts")
+    by_key = {kpi.key: kpi for kpi in visible_kpis(request, metrics)}
+    return {"checks": [by_key[key] for key in wanted if key in by_key]}
+
+
+def _activity(request: HttpRequest, metrics: dict[str, Any]) -> dict[str, Any]:
+    """Newest sign-ups, orders and firmware uploads merged into one timeline."""
+    user = request.user
+    entries: list[dict[str, Any]] = []
+    if user.has_perm("firmwares.view_pendingfirmware"):
+        for row in metrics["recent_pending_firmware"]:
+            url = _safe_reverse("admin:firmwares_pendingfirmware_change", row["pk"])
+            entries.append(
+                {
+                    "icon": "package-open",
+                    "title": row["label"],
+                    "meta": _("Firmware waiting for review"),
+                    "url": url,
+                    "when": row["when"],
+                }
+            )
+    if user.has_perm("users.view_customuser"):
+        for row in metrics["recent_signups"]:
+            entries.append(
+                {
+                    "icon": "user-plus",
+                    "title": row["label"],
+                    "meta": _("New account"),
+                    "url": _safe_reverse("admin:users_customuser_change", row["pk"]),
+                    "when": row["when"],
+                }
+            )
+    if user.has_perm("shop.view_order"):
+        for row in metrics["recent_orders"]:
+            entries.append(
+                {
+                    "icon": "receipt",
+                    "title": f"{row['label']} · {row['total']}",
+                    "meta": _("Order · %(status)s") % {"status": row["status"]},
+                    "url": _safe_reverse("admin:shop_order_change", row["pk"]),
+                    "when": row["when"],
+                }
+            )
+    entries.sort(key=lambda entry: entry["when"], reverse=True)
+    return {"entries": entries[: RECENT_ROWS * 2]}
+
+
+WIDGETS: tuple[Widget, ...] = (
+    Widget(
+        "overview",
+        gettext_lazy("At a glance"),
+        "gauge",
+        "console/dashboard/overview.html",
+        _overview,
+        "tiles",
+        size="stats",
+        refresh=60,
+    ),
+    Widget(
+        "attention",
+        gettext_lazy("Needs your attention"),
+        "list-checks",
+        "console/dashboard/attention.html",
+        _attention,
+        "list",
+        size="lg",
+        refresh=60,
+    ),
+    Widget(
+        "activity",
+        gettext_lazy("Recent activity"),
+        "activity",
+        "console/dashboard/activity.html",
+        _activity,
+        "list",
+        ("firmwares.view_pendingfirmware", "users.view_customuser", "shop.view_order"),
+        refresh=120,
+    ),
+    Widget(
+        "health",
+        gettext_lazy("System health"),
+        "heart-pulse",
+        "console/dashboard/health.html",
+        _health,
+        "list",
+        size="sm",
+        refresh=60,
+    ),
+)
+WIDGET_BY_SLUG = {widget.slug: widget for widget in WIDGETS}
+
+
+def _greeting(now_hour: int) -> str:
+    if now_hour < 5:
+        return _("Working late")
+    if now_hour < 12:
+        return _("Good morning")
+    if now_hour < 18:
+        return _("Good afternoon")
+    return _("Good evening")
+
+
+def dashboard_page_context(request: HttpRequest) -> dict[str, Any]:
+    """Everything the dashboard index needs without touching the metrics cache."""
+    now = timezone.localtime()
+    user = request.user
+    full_name = user.get_full_name() if user.is_authenticated else ""
+    name = ((full_name or user.get_username()).split() or ["there"])[0]
+    return {
+        "greeting": _greeting(now.hour),
+        "display_name": name,
+        "today": now,
+        "quick_actions": _quick_actions(request),
+        "widgets": [
+            {
+                "slug": widget.slug,
+                "title": widget.title,
+                "icon": widget.icon,
+                "skeleton": widget.skeleton,
+                "size": widget.size,
+                "refresh": widget.refresh,
+                "url": reverse("admin:console_dashboard_widget", args=[widget.slug]),
+            }
+            for widget in WIDGETS
+            if widget.allowed(request)
+        ],
+    }
+
+
+def dashboard_callback(request: HttpRequest, context: dict[str, Any]) -> dict[str, Any]:
+    """Merge the dashboard page data into the admin index context (see ``MobofirmAdminSite``)."""
+    return {**context, **dashboard_page_context(request)}
+
+
+@require_GET
+def dashboard_widget(request: HttpRequest, slug: str) -> HttpResponse:
+    """Render one dashboard panel; a direct visit gets it inside the full shell."""
+    widget = WIDGET_BY_SLUG.get(slug)
+    if widget is None or not widget.allowed(request):
+        raise Http404(slug)
+    context = {
+        "widget": widget,
+        "title": widget.title,
+        **widget.build(request, get_metrics()),
+    }
+    is_fragment = request.headers.get("HX-Request") == "true"
+    template = widget.template if is_fragment else "console/dashboard/widget_page.html"
+    return render(request, template, {**context, "widget_template": widget.template})
+
+
+def dashboard_urls(admin_site: Any) -> list[URLPattern]:
+    """URL patterns to prepend to the admin site's own (see ``MobofirmAdminSite``)."""
+    return [
+        path(
+            "console/widgets/<slug:slug>/",
+            admin_site.admin_view(dashboard_widget),
+            name="console_dashboard_widget",
+        )
+    ]

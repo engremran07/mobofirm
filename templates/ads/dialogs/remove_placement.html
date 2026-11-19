@@ -1,4 +1,5 @@
 {% extends "admin/staff_dialog.html" %}
+{% load i18n %}
 {% block dialog_body %}
-  <p>“{{ placement.name }}” stops serving at once and is hidden from the manager. Its assignments and recorded impressions and clicks are kept.</p>
+  <p class="mb-0">{% blocktranslate with name=placement.name %}“{{ name }}” stops serving at once and is hidden from the manager. Its assignments and recorded impressions and clicks are kept.{% endblocktranslate %}</p>
 {% endblock %}

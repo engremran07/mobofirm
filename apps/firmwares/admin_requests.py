@@ -1,4 +1,4 @@
-"""Staff review of end-user catalogue requests (Unfold admin).
+"""Staff review of end-user catalogue requests.
 
 Brand, model, variant, chipset and firmware requests are filed by signed-in users;
 staff holding the model's ``change`` permission decide them here:
@@ -30,13 +30,6 @@ from django.db.models import Model as DjangoModel
 from django.http import Http404, HttpRequest, HttpResponse
 from django.utils.translation import gettext as gettext_now
 from django.utils.translation import gettext_lazy as _
-from unfold.contrib.filters.admin import (
-    ChoicesDropdownFilter,
-    RangeDateTimeFilter,
-    RelatedDropdownFilter,
-)
-from unfold.forms import BaseDialogForm
-from unfold.widgets import UnfoldAdminTextareaWidget, UnfoldAdminTextInputWidget
 
 from apps.core.admin_base import (
     NoAddModelAdmin,
@@ -47,6 +40,16 @@ from apps.core.admin_base import (
     display,
     htmx_redirect,
     return_url,
+)
+from apps.core.admin_filters import (
+    ChoicesDropdownFilter,
+    RangeDateTimeFilter,
+    RelatedDropdownFilter,
+)
+from apps.core.admin_forms import (
+    BaseDialogForm,
+    ConsoleTextareaWidget,
+    ConsoleTextInputWidget,
 )
 from apps.core.admin_pages import render_admin_page
 from apps.core.editor.admin import RichTextAdminMixin
@@ -99,7 +102,7 @@ def _reason_field(label: str, *, required: bool, example: str) -> forms.CharFiel
         label=label,
         required=required,
         max_length=1000,
-        widget=UnfoldAdminTextareaWidget(attrs={"rows": 3, "placeholder": example}),
+        widget=ConsoleTextareaWidget(attrs={"rows": 3, "placeholder": example}),
     )
 
 
@@ -109,7 +112,7 @@ def _text_field(label: str, example: str, help_text: str, **kwargs: Any) -> Any:
     return forms.CharField(
         label=label,
         help_text=help_text,
-        widget=UnfoldAdminTextInputWidget(attrs={"placeholder": example}),
+        widget=ConsoleTextInputWidget(attrs={"placeholder": example}),
         **kwargs,
     )
 
@@ -127,7 +130,7 @@ class BulkDecisionForm(forms.Form):
 
     reason = forms.CharField(
         max_length=1000,
-        widget=UnfoldAdminTextareaWidget(attrs={"rows": 3}),
+        widget=ConsoleTextareaWidget(attrs={"rows": 3}),
     )
 
     def __init__(self, *args: Any, reject: bool, **kwargs: Any) -> None:
@@ -326,11 +329,11 @@ class RequestReviewAdmin(NoAddModelAdmin):
     actions: Sequence[str] = ("approve_selected", "reject_selected")
     actions_row: Sequence[str] = ("approve_request", "reject_request")
     actions_detail: Sequence[str] = ("approve_request", "reject_request")
-    list_filter: Sequence[Any] = (
+    list_filter: ClassVar[tuple[Any, ...]] = (
         ("status", ChoicesDropdownFilter),
         ("created_at", RangeDateTimeFilter),
     )
-    list_select_related: Sequence[str] = ("requested_by", "reviewed_by")
+    list_select_related: ClassVar[tuple[str, ...]] = ("requested_by", "reviewed_by")
 
     @display(description=_("Status"), ordering="status", label=BADGE_REQUEST_STATUS)
     def status_badge(self, obj: Any) -> str:
@@ -339,7 +342,7 @@ class RequestReviewAdmin(NoAddModelAdmin):
 
     def get_readonly_fields(
         self, request: HttpRequest, obj: DjangoModel | None = None
-    ) -> Sequence[str]:
+    ) -> list[str]:
         """Pending requests keep their data editable; decided ones are frozen.
 
         Rich-text fields that cannot be edited are shown rendered, not as markup.
@@ -371,7 +374,7 @@ class RequestReviewAdmin(NoAddModelAdmin):
             output_field=IntegerField(),
         ).asc()
 
-    def get_ordering(self, request: HttpRequest) -> Sequence[Any]:
+    def get_ordering(self, request: HttpRequest) -> tuple[Any, ...]:
         """Waiting requests first, then newest first."""
         return (self._waiting_first(), "-created_at")
 
@@ -689,7 +692,7 @@ class FirmwareRequestAdmin(RichTextAdminMixin, RequestReviewAdmin):
     list_select_related = ("brand", "model", "reviewed_by")
     approve_request = _approve_action(ApproveFirmwareRequestForm)
 
-    def get_ordering(self, request: HttpRequest) -> Sequence[Any]:
+    def get_ordering(self, request: HttpRequest) -> tuple[Any, ...]:
         """Open requests first, then the most requested."""
         return (self._waiting_first(), "-request_count", "-last_requested_at")
 

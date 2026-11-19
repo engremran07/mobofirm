@@ -1,0 +1,40 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls console_ui console_admin %}
+
+{% block title %}{% if cl.formset and cl.formset.errors %}{% translate "Error:" %} {% endif %}{{ block.super }}{% endblock %}
+
+{% block extrahead %}{{ block.super }}
+{% console_media media %}
+{% endblock %}
+
+{% block bodyclass %}{{ block.super }} app-{{ opts.app_label }} model-{{ opts.model_name }} change-list{% endblock %}
+
+{% block content_title %}{% endblock %}
+{% block object-tools %}{% endblock %}
+
+{% block content %}
+{% console_dialog_request as in_dialog %}
+{% if in_dialog %}
+{% blocktranslate with name=cl.opts.verbose_name asvar choose_title %}Choose {{ name }}{% endblocktranslate %}
+<div class="modal-dialog modal-xl" data-console-dialog-content>
+<div class="modal-content">
+<div class="modal-header">
+<h2 class="modal-title">{{ choose_title }}</h2>
+<button type="button" class="btn-close" data-console-dialog-close aria-label="{% translate 'Close' %}"></button>
+</div>
+<div class="modal-body">
+{% include "console/crud/_changelist.html" %}
+</div>
+</div>
+</div>
+{% else %}
+{% component "page_header" title=cl.opts.verbose_name_plural|capfirst eyebrow=cl.opts.app_config.verbose_name %}
+{% slot "tabs" %}{% console_model_tabs as model_tabs %}{% if model_tabs %}<nav class="c-tabs" aria-label="{% translate 'Views' %}">{% for tab in model_tabs %}<a class="c-tabs__item" href="{{ tab.link }}"{% if tab.active %} aria-current="page"{% endif %}>{{ tab.title }}</a>{% endfor %}</nav>{% endif %}{% endslot %}
+{% slot "actions" %}{% block object-tools-items %}
+{% for action in actions_list %}{% include "console/crud/_action.html" with action=action %}{% endfor %}
+{% if has_add_permission and not actions_list_hide_default %}{% url cl.opts|admin_urlname:'add' as add_url %}{% blocktranslate with name=cl.opts.verbose_name asvar add_label %}Add {{ name }}{% endblocktranslate %}<a class="btn btn-primary" href="{% add_preserved_filters add_url is_popup to_field %}">{% console_icon "plus" %}<span>{{ add_label }}</span></a>{% endif %}
+{% endblock %}{% endslot %}
+{% endcomponent %}
+{% include "console/crud/_changelist.html" %}
+{% endif %}
+{% endblock %}

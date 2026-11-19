@@ -1,0 +1,14 @@
+{% load i18n console_ui %}{% comment %}
+  Results of the header search / command palette, loaded into #console-palette-results over HTMX (apps.core.admin_shell.console_search).
+  Context: query, searched (>= 2 letters), too_short, navigation_hits (title, group, icon, url), record_groups (title, icon, hits[title, url], changelist_url).
+  Everything is a real link. Records are limited server-side to models the user may view.
+{% endcomment %}{% if not searched %}{% console_shell as shell %}{% if too_short %}<p class="c-palette__empty">{% translate "Keep typing: two letters are enough to search records." %}</p>{% endif %}{% ui "palette_list" items=shell.console_palette_items %}
+{% elif navigation_hits or record_groups %}<ul class="c-palette__list">
+{% if navigation_hits %}<li class="c-palette__group" role="presentation">{% translate "Pages" %}</li>
+{% for item in navigation_hits %}<li><a class="c-palette__item text-decoration-none" href="{{ item.url }}">{% console_icon item.icon "c-icon--sm" %}<span>{{ item.title }}</span><span class="ms-auto small u-muted">{{ item.group }}</span></a></li>
+{% endfor %}{% endif %}
+{% for group in record_groups %}<li class="c-palette__group" role="presentation">{{ group.title }}</li>
+{% for hit in group.hits %}<li><a class="c-palette__item text-decoration-none" href="{{ hit.url }}">{% console_icon group.icon "c-icon--sm" %}<span>{{ hit.title }}</span></a></li>
+{% endfor %}<li><a class="c-palette__item text-decoration-none" href="{{ group.changelist_url }}">{% console_icon "arrow-right" "c-icon--sm c-icon--flip" %}<span>{% blocktranslate with name=group.title %}See all matches in {{ name }}{% endblocktranslate %}</span></a></li>
+{% endfor %}</ul>
+{% else %}<p class="c-palette__empty">{% blocktranslate %}Nothing matches &ldquo;{{ query }}&rdquo;. Try a shorter or different word.{% endblocktranslate %}</p>{% endif %}

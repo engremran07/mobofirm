@@ -1,4 +1,4 @@
-"""Admin for accounts, profiles, notifications and security (Unfold)."""
+"""Admin for accounts, profiles, notifications and security."""
 
 from __future__ import annotations
 
@@ -6,40 +6,49 @@ import logging
 from collections.abc import Mapping
 from datetime import timedelta
 from typing import Any, ClassVar
+from urllib.parse import unquote
 
 from allauth.account.models import EmailAddress
 from allauth.socialaccount.adapter import get_adapter
 from allauth.socialaccount.admin import SocialAppAdmin as BaseSocialAppAdmin
 from allauth.socialaccount.models import SocialApp
+from django import forms
 from django.contrib import admin, messages
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.contrib.sites.models import Site
 from django.core.exceptions import ImproperlyConfigured, PermissionDenied
 from django.db import DatabaseError
 from django.db.models import QuerySet
-from django.http import HttpRequest, HttpResponse
+from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import redirect
 from django.template.response import TemplateResponse
 from django.urls import URLPattern, path
 from django.utils import timezone
 from django.utils.html import format_html, format_html_join
 from django.utils.translation import gettext_lazy as _
-from unfold.contrib.filters.admin import (
-    ChoicesDropdownFilter,
-    RangeDateTimeFilter,
-)
-from unfold.forms import AdminPasswordChangeForm
-from unfold.forms import UserChangeForm as UnfoldUserChangeForm
-from unfold.forms import UserCreationForm as UnfoldUserCreationForm
 
 from apps.core.admin_base import (
+    ActionVariant,
+    BaseDialogForm,
     ModelAdmin,
+    ReadOnlyModelAdmin,
+    ReasonForm,
     RelatedLink,
     RelatedOverviewMixin,
     SingletonModelAdmin,
     action,
+    change_url,
+    confirm_dialog,
     display,
+    htmx_redirect,
+    return_url,
 )
+from apps.core.admin_filters import ChoicesDropdownFilter, RangeDateTimeFilter
+from apps.core.admin_forms import (
+    AdminPasswordChangeForm,
+)
+from apps.core.admin_forms import UserChangeForm as ConsoleUserChangeForm
+from apps.core.admin_forms import UserCreationForm as ConsoleUserCreationForm
 from apps.core.editor.admin import RichTextAdminMixin
 
 from .models import (
@@ -52,9 +61,11 @@ from .models import (
     SecurityQuestion,
     UsersSettings,
 )
+from .models_erasure import AccountErasure
 from .notification_stats import notification_dashboard_context
 from .profile_models import ActivityFeed, Following, Profile, Reputation
 from .request_user import current_user
+from .services import erasure
 from .services.social_providers import credentials_complete
 
 logger = logging.getLogger(__name__)
@@ -110,16 +121,33 @@ class ActivityFeedAdmin(ModelAdmin):
 # --------------------------------------------------------------------------
 # Accounts
 # --------------------------------------------------------------------------
-class CustomUserCreationForm(UnfoldUserCreationForm):
+class CustomUserCreationForm(ConsoleUserCreationForm):
     class Meta:
         model = CustomUser
         fields = ("email", "username")
 
 
-class CustomUserChangeForm(UnfoldUserChangeForm):
+class CustomUserChangeForm(ConsoleUserChangeForm):
     class Meta:
         model = CustomUser
         fields = "__all__"
+
+
+class EraseAccountForm(ReasonForm):
+    """Irreversible: the operator states why and types the phrase."""
+
+    PHRASE = "ERASE"
+
+    confirmation = forms.CharField(
+        label=_("Type ERASE to confirm"),
+        widget=forms.TextInput(attrs={"autocomplete": "off", "autocapitalize": "off"}),
+    )
+
+    def clean_confirmation(self) -> str:
+        typed = str(self.cleaned_data.get("confirmation", "")).strip()
+        if typed != self.PHRASE:
+            raise forms.ValidationError(_("Type ERASE exactly to confirm."))
+        return typed
 
 
 @admin.register(CustomUser)
@@ -160,9 +188,17 @@ class CustomUserAdmin(RelatedOverviewMixin, BaseUserAdmin, ModelAdmin):
     )
     search_fields = ("email", "username", "full_name", "phone")
     ordering = ("-date_joined",)
-    readonly_fields = ("date_joined", "last_unlock", "last_login", "related_overview")
+    readonly_fields = (
+        "date_joined",
+        "last_unlock",
+        "last_login",
+        "anonymized_at",
+        "related_overview",
+    )
     filter_horizontal = ("groups", "user_permissions")
     actions = ("mark_email_verified", "clear_email_verification")
+    actions_row = ("anonymize",)
+    actions_detail = ("anonymize",)
 
     fieldsets = (
         (_("Authentication"), {"fields": ("email", "username", "password")}),
@@ -189,6 +225,7 @@ class CustomUserAdmin(RelatedOverviewMixin, BaseUserAdmin, ModelAdmin):
                     "email_verified_at",
                     "last_login",
                     "date_joined",
+                    "anonymized_at",
                 ),
                 "classes": ("tab",),
             },
@@ -279,6 +316,101 @@ class CustomUserAdmin(RelatedOverviewMixin, BaseUserAdmin, ModelAdmin):
             )
         else:
             self.message_user(request, _("No users updated."), messages.INFO)
+
+    def has_anonymize_permission(
+        self, request: HttpRequest, _object_id: str | None = None
+    ) -> bool:
+        return bool(request.user.has_perm(erasure.PERMISSION))
+
+    @action(
+        description=_("Erase account"),
+        icon="person_off",
+        variant=ActionVariant.DANGER,
+        permissions=["anonymize"],
+        url_path="erase-account",
+        dialog=confirm_dialog(
+            _("Erase this account?"),
+            _(
+                "The account is anonymised in place: its sign-in, profile, "
+                "credentials and personal data are removed and other apps anonymise "
+                "what they hold. Ledgers keep reconciling. This cannot be undone; "
+                "it is recorded with your name and reason."
+            ),
+            EraseAccountForm,
+            submit=_("Erase account"),
+        ),
+    )
+    def anonymize(
+        self, request: HttpRequest, form: BaseDialogForm, object_id: str
+    ) -> HttpResponse:
+        user = self.get_object(request, unquote(object_id))
+        if user is None:
+            raise Http404
+        try:
+            result = erasure.anonymize_account(
+                user,
+                actor=current_user(request),
+                reason=str(form.cleaned_data["reason"]),
+            )
+        except erasure.ErasureBlocked as exc:
+            self.message_user(
+                request,
+                _("Resolve this before erasing the account: %(why)s.")
+                % {"why": exc.summary},
+                messages.ERROR,
+            )
+        except erasure.ErasureRefused as exc:
+            self.message_user(
+                request,
+                erasure.REFUSAL_MESSAGES.get(exc.code, "The account was not erased."),
+                messages.ERROR,
+            )
+        else:
+            self.log_change(request, user, f"Account erasure #{result.pk}")
+            if result.status == AccountErasure.Status.COMPLETED:
+                self.message_user(request, _("The account was erased."))
+            elif result.status == AccountErasure.Status.PARTIAL:
+                self.message_user(
+                    request,
+                    _(
+                        "The account was erased. These apps have no anonymiser yet: "
+                        "%(apps)s."
+                    )
+                    % {"apps": ", ".join(result.receipt.get("gaps", []))},
+                    messages.WARNING,
+                )
+            else:
+                self.message_user(
+                    request,
+                    _("The erasure did not finish (%(reason)s); it will be retried.")
+                    % {"reason": result.failure_reason or result.status},
+                    messages.ERROR,
+                )
+        return htmx_redirect(return_url(request, change_url(self, user.pk)))
+
+
+@admin.register(AccountErasure)
+class AccountErasureAdmin(ReadOnlyModelAdmin):
+    """The tombstone trail: who asked, when it ran, what each app reported."""
+
+    list_display = (
+        "pk",
+        "user_pk",
+        "source",
+        "status",
+        "requested_at",
+        "scheduled_for",
+        "executed_at",
+        "attempts",
+    )
+    list_filter = (
+        ("status", ChoicesDropdownFilter),
+        ("source", ChoicesDropdownFilter),
+        ("requested_at", RangeDateTimeFilter),
+    )
+    search_fields = ("user_pk", "failure_reason")
+    ordering = ("-requested_at",)
+    exclude = ("token_hash",)
 
 
 # --------------------------------------------------------------------------
@@ -867,8 +999,10 @@ PROVIDER_GUIDES = {
     "google": (
         "Google",
         "https://console.cloud.google.com/apis/credentials",
-        "Google Cloud Console → APIs & Services → Credentials → "
-        "Create credentials → OAuth client ID → Web application",
+        (
+            "Google Cloud Console → APIs & Services → Credentials → "
+            "Create credentials → OAuth client ID → Web application"
+        ),
     ),
 }
 
@@ -959,7 +1093,7 @@ class EnhancedSocialAppAdmin(BaseSocialAppAdmin, ModelAdmin):
 
     def get_changeform_initial_data(self, request: HttpRequest) -> dict[str, Any]:
         """New apps start attached to the current site (the one SITE_ID names)."""
-        initial = super().get_changeform_initial_data(request)
+        initial: dict[str, Any] = super().get_changeform_initial_data(request)
         try:
             initial.setdefault("sites", [Site.objects.get_current().pk])
         except (Site.DoesNotExist, ImproperlyConfigured, DatabaseError):

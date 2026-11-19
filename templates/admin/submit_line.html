@@ -1,0 +1,28 @@
+{% comment %}
+  The save bar of the change form ({% submit_row %}). Inside the related-object dialog the same buttons form the modal footer.
+  The first submit button is always a save button: browsers press the first one when Enter is hit in a text field, so the optional
+  "run action" control (Django 6.1 change-form actions) comes last.
+{% endcomment %}{% load i18n admin_urls console_ui console_admin %}{% console_dialog_request as in_dialog %}
+<div class="{% if in_dialog %}modal-footer{% else %}c-savebar{% endif %}">
+{% block submit-row %}
+{% if in_dialog %}
+{% if show_close %}<button type="button" class="btn btn-secondary" data-console-dialog-close>{% translate "Close" %}</button>{% else %}<button type="button" class="btn btn-ghost" data-console-dialog-close>{% translate "Cancel" %}</button>{% endif %}
+{% else %}
+<div class="c-savebar__meta u-cluster u-gap-2">
+{% if show_close %}{% url opts|admin_urlname:'changelist' as changelist_url %}<a class="btn btn-ghost btn-sm" href="{% add_preserved_filters changelist_url %}">{% translate "Close" %}</a>{% endif %}
+{% if show_delete_link and original %}{% url opts|admin_urlname:'delete' original.pk|admin_urlquote as delete_url %}<a class="btn btn-ghost btn-sm text-danger" href="{% add_preserved_filters delete_url is_popup to_field %}">{% console_icon "trash-2" %}<span>{% translate "Delete" %}</span></a>{% endif %}
+</div>
+{% endif %}
+<div class="c-savebar__actions">
+{% if in_dialog and show_delete_link and original %}{% url opts|admin_urlname:'delete' original.pk|admin_urlquote as delete_url %}<a class="btn btn-ghost text-danger" href="{% add_preserved_filters delete_url is_popup to_field %}" hx-get="{% add_preserved_filters delete_url is_popup to_field %}" hx-target="#console-dialog" hx-swap="innerHTML">{% console_icon "trash-2" %}<span>{% translate "Delete" %}</span></a>{% endif %}
+{% if show_save %}<button type="submit" name="_save" class="btn btn-primary">{% translate "Save" %}</button>{% endif %}
+{% if show_save_and_continue %}<button type="submit" name="_continue" class="btn btn-secondary">{% if can_change %}{% translate "Save and continue editing" %}{% else %}{% translate "Save and view" %}{% endif %}</button>{% endif %}
+{% if show_save_and_add_another %}<button type="submit" name="_addanother" class="btn btn-secondary">{% translate "Save and add another" %}</button>{% endif %}
+{% if show_save_as_new %}<button type="submit" name="_saveasnew" class="btn btn-secondary">{% translate "Save as new" %}</button>{% endif %}
+{% for item in actions_submit_line %}<button type="submit" name="{{ item.action_name }}" class="btn {{ item.variant|console_button_class }}"{{ item.attrs|console_attrs }}>{% if item.icon %}{% console_icon item.icon %}{% endif %}<span>{{ item.description }}</span></button>{% endfor %}
+{% if action_form and not is_popup and not in_dialog %}
+<span class="u-cluster u-gap-2">{% for field in action_form %}{{ field }}{% endfor %}<button type="submit" class="btn btn-secondary btn-sm" name="index" value="{{ action_index|default:0 }}">{% translate "Run" %}</button></span>
+{% endif %}
+</div>
+{% endblock %}
+</div>

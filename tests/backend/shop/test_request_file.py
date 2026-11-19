@@ -1,4 +1,4 @@
-"""Requesting a paid firmware file from its page: /shop/request-file/<type>/<uuid>/."""
+"""Requesting a paid firmware file from its page: /pricing/request-file/<type>/<uuid>/."""
 
 from __future__ import annotations
 

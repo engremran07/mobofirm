@@ -39,14 +39,6 @@
   overflow-wrap: anywhere;
 }
 
-.glass {
-  @include glass;
-}
-
-.glass-strong {
-  @include glass(2);
-}
-
 .elev-1 {
   box-shadow: var(--mf-elev-1);
 }
@@ -85,7 +77,7 @@
   }
 
   body {
-    background: #fff;
-    color: #000;
+    background: var(--mf-white);
+    color: var(--mf-black);
   }
 }

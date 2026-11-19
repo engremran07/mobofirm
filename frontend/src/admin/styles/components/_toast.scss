@@ -1,0 +1,58 @@
+// c-toast: <div id="console-toasts" class="c-toast-region" role="region" aria-label="Notifications">
+//   <div class="c-toast c-toast--success" role="status"><svg class="c-icon c-toast__icon"/>
+//   <div class="c-toast__body"><strong class="c-toast__title">Saved</strong>message<button class="c-toast__action btn btn-link btn-sm">Undo</button></div>
+//   <button class="btn-close c-toast__close" aria-label="Dismiss"></button></div></div>
+// JS adds .is-leaving before removal (exit animation). Levels: --success --warning --danger --info.
+@layer components {
+  .c-toast-region {
+    position: fixed;
+    inset-block-end: var(--mf-space-4);
+    inset-inline-end: var(--mf-space-4);
+    z-index: 1090;
+    display: flex;
+    flex-direction: column;
+    gap: var(--mf-space-2);
+    inline-size: min(24rem, calc(100vw - 2rem));
+    pointer-events: none;
+  }
+
+  .c-toast {
+    --toast-tone: var(--mf-info);
+
+    display: flex;
+    align-items: flex-start;
+    gap: var(--mf-space-3);
+    padding: var(--mf-space-3) var(--mf-space-4);
+    color: var(--mf-text);
+    font-size: var(--mf-fs-sm);
+    background: var(--mf-surface-raised);
+    border: 1px solid var(--mf-border);
+    border-inline-start: 4px solid var(--toast-tone);
+    border-radius: var(--mf-radius-md);
+    box-shadow: var(--mf-elev-3);
+    pointer-events: auto;
+    animation: c-toast-in var(--mf-duration-base) var(--mf-ease-out) both;
+  }
+
+  .c-toast--success { --toast-tone: var(--mf-success); }
+  .c-toast--warning { --toast-tone: var(--mf-warning); }
+  .c-toast--danger { --toast-tone: var(--mf-danger); }
+
+  .c-toast__icon { margin-block-start: 0.1rem; color: var(--toast-tone); }
+  .c-toast__body { flex: 1; min-inline-size: 0; }
+  .c-toast__title { display: block; font-weight: 700; }
+  .c-toast__close { margin: -0.375rem -0.5rem -0.375rem 0; }
+  .c-toast.is-leaving { animation: c-toast-out var(--mf-duration-fast) var(--mf-ease-out) both; }
+
+  @keyframes c-toast-in {
+    from { opacity: 0; transform: translateY(0.5rem) scale(0.98); }
+  }
+
+  @keyframes c-toast-out {
+    to { opacity: 0; transform: translateY(0.25rem) scale(0.98); }
+  }
+
+  @media (max-width: 575.98px) {
+    .c-toast-region { inset-inline: var(--mf-space-3); inset-block-end: var(--mf-space-3); inline-size: auto; }
+  }
+}

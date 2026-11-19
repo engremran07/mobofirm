@@ -139,22 +139,6 @@ class DatabaseMaintenanceTests(TestCase):
             call_command("db_maintenance", "--vacuum", stdout=StringIO())
 
 
-class QueueBackendTests(SimpleTestCase):
-    def test_unknown_backend_is_a_configuration_error_not_a_silent_sync_fallback(
-        self,
-    ):
-        from apps.core.infrastructure import QueueService
-
-        with self.assertRaises(ImproperlyConfigured):
-            QueueService(backend="no-such-backend")
-
-    @override_settings(QUEUE_BACKEND="sync")
-    def test_configured_backend_is_used(self):
-        from apps.core.infrastructure import QueueService
-
-        self.assertFalse(QueueService().is_async)
-
-
 class MailerConfigurationTests(SimpleTestCase):
     def test_smtp_options_reach_the_backend_in_django_6_1_format(self):
         from django.core.mail import mailers

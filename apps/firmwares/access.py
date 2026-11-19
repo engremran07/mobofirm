@@ -1,8 +1,10 @@
 """Download access tiers: who may be served a file and what has been served.
 
-Contract used by the download gate and by the shop, marketplace and My files apps:
+Contract used by the download gate and by the shop, marketplace and My contributions
+apps:
 
 * :func:`check_download_access` decides whether a user may download a file.
+* :func:`concurrency_refusal` applies the package's concurrent-transfer cap (leases).
 * :func:`record_served_download` / :func:`finalize_served_download` write the single
   record of files served to a user (:class:`ServedDownload`).
 * :func:`is_seller` tells whether a user may offer paid or featured files.
@@ -31,14 +33,15 @@ from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
 
+from .download_leases import held_transfers
 from .models import (
     PRICE_CURRENCY,
     AccessTier,
     BaseFirmware,
     DownloadRule,
-    DownloadSession,
     ServedDownload,
 )
+from .references import content_type_for
 
 Requirement = Literal["login", "purchase", "package"]
 UserLike = AbstractBaseUser | AnonymousUser | None
@@ -46,7 +49,6 @@ UserLike = AbstractBaseUser | AnonymousUser | None
 ENTITLEMENTS_MODULE = "apps.shop.entitlements"
 RULES_MODULE = "apps.shop.download_rules"
 SELLER_MODULE = "apps.marketplace.services"
-RUNNING_DOWNLOAD_WINDOW = timedelta(minutes=30)
 ACTIVE = "active"
 ALLOWANCE_ENDED = "allowance_ended"
 PACKAGE_EXPIRED = "package_expired"
@@ -96,6 +98,19 @@ def has_perk(user: UserLike, perk: str) -> bool:
     return bool(getattr(entitlements.effective_entitlements(user).perks, perk, False))
 
 
+def has_ad_unlock(user: UserLike, firmware: BaseFirmware) -> bool:
+    """Whether the user unlocked this file by watching rewarded ads, unused so far.
+
+    Read through the optional shop contract (``entitlements.has_ad_unlock``); without
+    the shop nobody has one.
+    """
+    if user is None or not user.is_authenticated:
+        return False
+    entitlements = _entitlements()
+    check = getattr(entitlements, "has_ad_unlock", None)
+    return bool(check(user, firmware)) if callable(check) else False
+
+
 def is_seller(user: UserLike) -> bool:
     """Whether ``user`` is an approved marketplace seller (False when unavailable)."""
     if user is None or not user.is_authenticated:
@@ -106,7 +121,7 @@ def is_seller(user: UserLike) -> bool:
 
 
 def _content_type(firmware: BaseFirmware) -> ContentType:
-    return ContentType.objects.get_for_model(firmware, for_concrete_model=False)
+    return content_type_for(firmware)
 
 
 def _served_row(
@@ -195,7 +210,9 @@ def _anonymous_decision(tier: str, price: Decimal | None) -> AccessDecision:
     )
 
 
-def check_download_access(user: UserLike, firmware: BaseFirmware) -> AccessDecision:
+def check_download_access(
+    user: UserLike, firmware: BaseFirmware, *, enforce_concurrency: bool = True
+) -> AccessDecision:
     """Decide whether ``user`` may be served ``firmware`` under its access tier.
 
     Free files are open to everyone (login and daily limits are separate gate
@@ -205,7 +222,14 @@ def check_download_access(user: UserLike, firmware: BaseFirmware) -> AccessDecis
     :func:`served_status` is active: a free file within its re-download allowance, a
     featured file while the package period it was served under is live, a bought
     file for good.
+
+    ``enforce_concurrency=False`` skips the package's concurrent-transfer cap. It is
+    for a download that was already admitted under that cap (its own lease would
+    otherwise count against itself when the signed link is opened). A file hosted on
+    an external site never holds a transfer slot (Mobofirm does not carry its bytes),
+    so the cap does not apply to it either.
     """
+    enforce_concurrency = enforce_concurrency and not firmware.is_external
     tier = firmware.access_tier
     price = firmware.approved_price if tier == AccessTier.PAID else None
     if tier not in AccessTier.values:
@@ -219,18 +243,29 @@ def check_download_access(user: UserLike, firmware: BaseFirmware) -> AccessDecis
         status = served_status(user, row)
         if status.active:
             decision = AccessDecision(True, tier=tier, price=price, already_served=True)
-            return _concurrency_block(user, entitlements, decision) or decision
+            blocked = (
+                _concurrency_block(user, entitlements, decision)
+                if enforce_concurrency
+                else None
+            )
+            return blocked or decision
         if status.code == ALLOWANCE_ENDED and tier == AccessTier.FREE:
             return AccessDecision(False, status.message, tier=tier)
         lapsed = status
-    decision = _first_serve_decision(user, firmware, entitlements)
+    decision = _first_serve_decision(
+        user, firmware, entitlements, enforce_concurrency=enforce_concurrency
+    )
     if lapsed is not None and lapsed.code == PACKAGE_EXPIRED and not decision.allowed:
         return replace(decision, reason=PACKAGE_EXPIRED_MESSAGE, requires="package")
     return decision
 
 
 def _first_serve_decision(
-    user: AbstractBaseUser, firmware: BaseFirmware, entitlements: ModuleType | None
+    user: AbstractBaseUser,
+    firmware: BaseFirmware,
+    entitlements: ModuleType | None,
+    *,
+    enforce_concurrency: bool = True,
 ) -> AccessDecision:
     """Access for a file the user holds no valid served record of."""
     tier = firmware.access_tier
@@ -250,18 +285,30 @@ def _first_serve_decision(
                 price=price,
                 tier=tier,
             )
-    if decision.allowed:
+    if decision.allowed and enforce_concurrency:
         return _concurrency_block(user, entitlements, decision) or decision
     return decision
 
 
-def _running_downloads(user: AbstractBaseUser) -> int:
-    """Download sessions started recently and not yet finished."""
-    return DownloadSession.objects.filter(
-        user_id=user.pk,
-        status=DownloadSession.Status.STARTED,
-        started_at__gte=timezone.now() - RUNNING_DOWNLOAD_WINDOW,
-    ).count()
+def concurrency_refusal(user: UserLike) -> str:
+    """Why ``user`` may not open another transfer right now (empty when they may).
+
+    The cap is the package's ``max_concurrent_downloads`` and counts live transfer
+    leases (:mod:`apps.firmwares.download_leases`), not statuses. Admission calls this
+    under a lock on the user row so parallel requests cannot all pass.
+    """
+    if user is None or not user.is_authenticated:
+        return ""
+    entitlements = _entitlements()
+    if entitlements is None:
+        return ""
+    limit = entitlements.effective_entitlements(user).limits.max_concurrent
+    if limit <= 0 or held_transfers(user.pk) < limit:
+        return ""
+    return (
+        f"Your package allows {limit} download{'' if limit == 1 else 's'} at once. "
+        "Wait for a running download to finish."
+    )
 
 
 def _concurrency_block(
@@ -270,16 +317,10 @@ def _concurrency_block(
     """A refusal when the package's concurrent-download cap is hit, else ``None``."""
     if entitlements is None:
         return None
-    limit = entitlements.effective_entitlements(user).limits.max_concurrent
-    if limit <= 0 or _running_downloads(user) < limit:
+    reason = concurrency_refusal(user)
+    if not reason:
         return None
-    return AccessDecision(
-        False,
-        f"Your package allows {limit} download{'' if limit == 1 else 's'} at once. "
-        "Wait for a running download to finish.",
-        tier=decision.tier,
-        price=decision.price,
-    )
+    return AccessDecision(False, reason, tier=decision.tier, price=decision.price)
 
 
 def _paid_decision(
@@ -312,6 +353,7 @@ def _featured_decision(
     if entitlements is not None and (
         entitlements.effective_entitlements(user).can_access_featured
         or entitlements.has_purchased(user, firmware)
+        or has_ad_unlock(user, firmware)
     ):
         return AccessDecision(True, tier=AccessTier.FEATURED)
     price_for = getattr(entitlements, "price_for", None)

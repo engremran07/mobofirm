@@ -56,7 +56,10 @@ class FirmwareRef(models.Model):
     """Generic reference to one typed firmware row (shared by the models below)."""
 
     content_type = models.ForeignKey(
-        ContentType, on_delete=models.CASCADE, related_name="+"
+        ContentType,
+        on_delete=models.PROTECT,
+        related_name="+",
+        help_text="History must outlive a content-type cleanup, so it is protected",
     )
     object_id = models.UUIDField(db_index=True)
     firmware = GenericForeignKey("content_type", "object_id")

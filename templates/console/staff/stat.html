@@ -1,0 +1,5 @@
+<div class="c-stat c-stat--plain console-staff-stat">
+  <span class="c-stat__label">{{ label }}</span>
+  <span class="c-stat__value">{{ value }}{% if unit %} <small class="c-stat__unit">{{ unit }}</small>{% endif %}</span>
+  {% if hint or hint_url %}<span class="c-stat__meta">{{ hint }}{% if hint_url %} <a href="{{ hint_url }}">{{ hint_label }}</a>{% endif %}</span>{% endif %}
+</div>

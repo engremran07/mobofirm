@@ -16,10 +16,17 @@ domain apps (firmwares, blog, tags, pages)
         page providers · content sources · sitemap filters · graph sources
 apps.seo
    resolver.py      one ResolvedSEO per response (precedence + provenance)
+   editable.py / editing.py / fixplan.py / fixscreen.py / analysis.py
+                    declared editable fields, atomic ledgered saves, finding-to-field
+                    plans, the View-and-fix screen data and in-context page analysis
    providers.py     provider registry (view name → PageSEO)
-   policy.py        private paths, robots directives, canonical query policy
+   policy.py        private paths, robots directives, crawler tokens, canonical query policy
    schema.py        JSON-LD builders (absolute URLs, safe serialisation)
-   sitemap_registry.py / sitemap_views.py / robots.py / indexnow.py
+   sitemap_registry.py / sitemap_build.py / sitemap_views.py / sitemap_report.py
+   robots.py        RFC 9309 generator, parser and URL tester
+   wellknown.py     security.txt, humans.txt, ads.txt / app-ads.txt contract
+   httpcache.py     ETag, Last-Modified, conditional GET, HEAD, Cache-Control
+   indexnow.py
    redirects.py     validation, loop detection, chain flattening
    fetcher.py       SafeFetcher — the only outbound HTTP path
    crawler.py / audit.py / inventory.py   crawl, measured checks, page inventory
@@ -101,20 +108,89 @@ cookies, and sends `Authorization` only to an explicitly allow-listed first host
 - `inventory.build_inventory()` walks the real URL conf and every sitemap section,
   classifies each URL through the resolver and flags conflicts (`noindex_in_sitemap`,
   `canonical_mismatch`, `private_in_sitemap`).
-- One sitemap registry (`/sitemap.xml` index, `/sitemap-<section>.xml`). Sections:
-  static, pages, blog, brands, chipsets, models, firmware, tools, tags. Apps register
-  *filters* so a URL is listed only if the resolver would index it and it is its own
-  canonical. `lastmod` is the real update time or omitted; no priority/changefreq; the
-  scheme and host come from `SITE_URL`. Image and news sitemaps are not enabled (no
-  verified image or news metadata exists). XML is styled by a self-hosted CSS file
-  (`build/seo-sitemap.css`) so the strict CSP stays intact.
-- `robots.txt` is generated from settings: private Disallow list, a Sitemap line, and
-  AI crawler groups (`OAI-SearchBot`/`PerplexityBot`/`Claude-SearchBot` search bots,
-  `ChatGPT-User`/`Claude-User`/`Perplexity-User` user agents, training bots) toggled
-  independently; training bots are blocked by default.
+- One sitemap engine (`sitemap_build.py`, fed by the registry in `sitemap_registry.py`).
+  `/sitemap.xml` is the index; files are path-based and predictably named
+  `/sitemap-<section>[-<partition>]-<n>.xml` (and `.xml.gz`, a plain gzip body with
+  `Content-Type: application/gzip`, no `Content-Encoding`). Sections: static, pages,
+  blog, brands, chipsets, models, firmware, tools, tags; models and firmware are split
+  per brand slug and chipsets per chipset-vendor slug so every file stays small and has
+  its own `lastmod`. The old `/sitemap-<section>.xml[?p=N]` answers a permanent
+  redirect to `/sitemap-<section>-<N>.xml` (partitioned sections redirect to the
+  index). Page size is `SEOSettings.sitemap_page_size` (default 5000), capped at the
+  protocol's 50,000 URLs; a rendered file over 50 MB is refused with a logged 500
+  instead of being truncated.
+- Membership: apps register *filters* so a URL is listed only if the resolver would
+  index it and it is its own canonical. `lastmod` is a W3C Datetime (UTC, seconds) of
+  the real update time, or omitted (never "now", future times dropped); the static
+  entries and anything without a stored timestamp carry none. No priority/changefreq;
+  scheme and host come from `SITE_URL`. The index lists each file with the newest real
+  `lastmod` of its entries.
+- Image extension: `<image:image>` is added only for an image that exists in media or
+  static storage, is served from this site, has an image suffix, is not under a
+  private path and is allowed for `Googlebot-Image` by the generated robots.txt
+  (`SEOSettings.sitemap_images_enabled`). A section class may define `images(item)`;
+  otherwise the conventional attributes `cover_image_url`, `image_url`, `logo_url`,
+  `hero_image`, `og_image` of the item are considered.
+- News sitemap (`/sitemap-news.xml`): off by default (`sitemap_news_enabled`); only
+  posts from sections that define `news(item)` (the blog), already filtered as
+  indexable and canonical, published within the last 48 hours, newest first, at most
+  1000. It is added to the index and as a second `Sitemap:` line in robots.txt.
+- Video sitemap: not generated. No video metadata (title, description, thumbnail,
+  content or player URL) exists in the data model, and inventing it is prohibited.
+- hreflang: `<xhtml:link>` alternates appear only for a section that declares
+  `alternates(item)` with at least two real localized URLs; none does today.
+- HTTP behaviour (`httpcache.py`): GET and HEAD only, `ETag`, `Last-Modified` (the
+  newest real `lastmod`), conditional GET (304), `Cache-Control: public, max-age=300,
+  stale-while-revalidate=3600`, `X-Robots-Tag: noindex` on sitemap responses. XML is
+  styled by a same-origin stylesheet (`static/seo/sitemap.css`, linked with an
+  `xml-stylesheet` PI) that lays the file out as a table: no inline style or script, so
+  the strict CSP stays intact. XSLT is deliberately not used: browsers have deprecated
+  it and Chromium injects a warning banner (inline style, CSP errors) into any
+  XSLT-transformed page.
+- `robots.txt` (`robots.py`, RFC 9309): one group for `*`, `Googlebot`,
+  `Googlebot-Image` and `bingbot` with the private Disallow list, duplicate-URL traps
+  with wildcards (`/*?sort=`, `/*&sort=`, `order`, session ids, `utm_*`, `gclid`,
+  `fbclid`, `msclkid`) and `Allow` for `/static/` and `/media/`, ordered longest
+  pattern first. AI crawler groups come from `policy.py` only and follow the three
+  settings switches: search (`OAI-SearchBot`, `PerplexityBot`, `Claude-SearchBot`),
+  user-triggered (`ChatGPT-User`, `Claude-User`, `Perplexity-User`,
+  `Meta-ExternalFetcher`) and training (`GPTBot`, `ClaudeBot`, `anthropic-ai`,
+  `Google-Extended`, `Applebot-Extended`, `CCBot`, `Bytespider`, `Meta-ExternalAgent`,
+  `Amazonbot`, blocked by default). The tokens follow each vendor's published crawler
+  documentation as last known; re-verify them when a vendor announces a new crawler.
+  `Crawl-delay` is written only for `bingbot` (`robots_crawl_delay`, 0 = none; Google
+  ignores it). `?page=N` is not blocked: robots patterns cannot express a numeric
+  limit, so pagination stays with the resolver (noindex, canonical). The file carries
+  a generation comment, stays far below 500 KiB, is `text/plain; charset=utf-8`, and
+  has an ETag, 304 and HEAD support. One parser (`robots.parse`) implements RFC 9309
+  matching (group selection, longest match, Allow wins ties, `*` and `$`,
+  percent-encoding); the crawler, the staff URL tester and the sitemap image check all
+  use it.
+- Well-known files (`wellknown.py`): `/.well-known/security.txt` (RFC 9116 Contact,
+  Expires, Policy, Canonical from `SEOSettings`; served only while configured and not
+  expired), `/humans.txt` (off by default), `/ads.txt` and `/app-ads.txt` (404 unless an
+  app contributes lines through `register_ads_lines`; `apps/ads/seo_providers.py`
+  contributes the AdSense line only when ads and AdSense are enabled with a valid
+  publisher ID; no app contributes `app-ads.txt`). There is deliberately no `llms.txt`:
+  no search engine documents it as a signal and Google states it needs no special file.
 - IndexNow: key file route `/<key>.txt` (only when enabled and matching), submission
-  through SafeFetcher in Safe autopilot/Full. It notifies participating engines, not
-  Google, and never guarantees indexing.
+  through SafeFetcher in Safe autopilot/Full from the job outbox (committed content
+  change, one job per object and state per hour, duplicates collapse on the job key,
+  retry with backoff, terminal failure after `max_attempts`). It notifies
+  participating engines, not Google, and never guarantees indexing. Google retired the
+  sitemap ping, so nothing pings; submit the sitemap once in Search Console and Bing
+  Webmaster Tools (the staff page says so).
+- Feeds (owned by `apps.distribution`, see `distribution.md`): the public RSS/Atom/JSON
+  feeds under `/feeds/` use the existing seams only. `feeds:index` has a page provider
+  (`apps/distribution/seo_providers.py`); it is not added to the sitemap registry (the
+  registry test pins the section set, so listing the index is left to the SEO owner via
+  `register_sitemap`); the Google News feed is available only while
+  `sitemap_news_enabled` is on and lists exactly the posts `sitemap_build.news_entries`
+  returns (so it never contradicts the news sitemap); WebSub pings go to the configured
+  hub, and an IndexNow ping for a newly public URL is queued through
+  `apps.seo.indexnow.submit` only while IndexNow is enabled here (no second client). The
+  public `<head>` advertises the site-wide feeds with `<link rel="alternate">`
+  (`{% feed_autodiscovery %}` in `templates/base.html`).
 - `Redirect` validation rejects unsafe targets (scheme-relative, backslash, control
   characters), loops and over-long chains on every save; the middleware serves only
   GET/HEAD, only safe stored targets, and only when the view returned 404.
@@ -138,7 +214,11 @@ chipset. A scan is bounded by a time budget (25 s from the screen, 10 minutes in
 background); when it stops early the run is `partial` and the next run resumes at its
 cursor. Issues are upserted by fingerprint, reopened when they reproduce, ignored ones
 stay ignored, and fixed or removed pages are resolved automatically. `PageSnapshot`
-stores the last measured head per URL (the inventory).
+stores the last measured head per URL (the inventory). Coverage: parameterless routes
+with a provider (including the `/feeds/` index, whose provider `apps/distribution`
+registers; it is also listed in the static sitemap section) and every sitemap item
+(posts and flash guides, firmware files, brands, models, chipsets, tools, tags, pages);
+pages without a content object are owned by their route so each finding is fixable.
 
 ## Render crawl and audit
 
@@ -147,8 +227,15 @@ stores the last measured head per URL (the inventory).
 deployment's `ALLOWED_HOSTS` (or `SEO_CRAWL_TRANSPORT = "inprocess"`) pages are served
 in-process through Django's request handler (`apps/seo/inprocess.py`), so it works from
 a dev server and needs no network; any other host goes through SafeFetcher
-(`SEO_CRAWL_TRANSPORT = "http"` forces that). A crawl fetches pages like a visitor, so
-it also bumps view counters, and it records measured inbound/outbound link counts on
+(`SEO_CRAWL_TRANSPORT = "http"` forces that). An in-process request carries a private
+identity (`apps/core/internal_request.py`): a WSGI environ entry that remote clients
+cannot send (servers copy headers only into `HTTP_*` keys) and that must equal a
+per-process secret, so a request header is never trusted. Rendering and authorization
+run as for an anonymous visitor, while `should_count`/`is_bot_request`, ad impressions,
+referral clicks, marketplace views and short-link clicks stay silent, so a crawl leaves
+every counter and analytics table unchanged. The in-process transport never requests
+private, download or token URLs and refuses every method but GET and HEAD. It records
+measured inbound/outbound link counts on
 the inventory. It stores `CrawlRun` / `PageObservation` and upserts `Issue` rows by
 fingerprint (closed when no longer reproduced). Checks: fetch failures, sitemap URL
 errors/redirects, redirect chains and links to redirects, broken internal links,
@@ -164,24 +251,59 @@ issue; there is no SERP or ranking score.
 
 The issues board (`/seo/issues/`) groups open issues by object type (Posts, Firmware,
 Models, Brands, Chipsets, Tools & guides, Pages & tags, Site-wide) with search,
-severity, check and "fix available" filters, HTMX updates and pagination. **Review and
-fix** opens an inline panel (a full page without JavaScript) with the measured value,
-the standard, a proposal composed only from the object's own stored data
-(`proposals.py`), an editable value validated against the standard, **Apply fix**,
-**Re-audit this page** and **Ignore with reason**.
+severity and check filters, HTMX updates and pagination. There is **no fixable /
+non-fixable split**: every open issue on every object type has a fix path, and the
+board shows no such filter or badge (`Issue.fixable` stays a stored internal hint; the
+"has a proposal" state is derived from `Issue.suggestion`).
 
-- Applying writes `seo.Metadata` (the explicit override the resolver already prefers)
-  through a `ChangeLedger` entry (`metadata_fix_add` fills a missing value,
-  `metadata_fix_rewrite` changes an existing one) with before/after values, then
-  re-audits the object so a fixed issue closes. Rolling back from the ledger removes
-  the override and reopens the issue.
+**View and fix** (`/seo/fix/?issue=<id>` or `?url=<path>`; `issues/<id>/` redirects
+there) is one full screen per page that lists *all* open issues of that page or object
+and edits the offending fields inline:
+
+- Owner: the content object behind the URL, or, for a page without one (home,
+  listings, hubs, the feeds index), the route itself (`seo.seosettings` /
+  `route:<path>`). The resolver reads overrides for that reference, so every scanned
+  URL is fixable and no issue is ever "without an object".
+- Context: a live search-result preview (HTMX, server-rendered), the heading outline,
+  every image with its alt state, canonical, robots, Open Graph, Twitter, JSON-LD types
+  and internal-link counts, read from the page rendered in-process
+  (`analysis.py`; the in-process crawler identity keeps counters untouched).
+- Editable fields: all SEO override fields (`fixes.OVERRIDE_SPECS`: meta title and
+  description, canonical, robots directives, noindex, nofollow, social title,
+  description and image) for any page; declared object fields (`editable.py`: slug,
+  summary, description) through the model's own `save()`; alt text for body images that
+  lack it; and body `<h1>` to `<h2>`. A slug is editable only where the SEO content
+  observers watch the model, so the old URL redirect proposal and republish run through
+  the existing job outbox. Findings highlight their fields (`fixplan.py`); every other
+  field sits in a collapsed "All SEO fields" block. Findings that live in the content
+  itself (thin text, schema author/date, missing chipset link) open the owner's console
+  edit form at the field (`#id_<field>`); flash-guide findings link to the guides screen.
+- Each save (`editing.apply_changes`): validate everything first, write in one
+  transaction (each change a `ChangeLedger` entry with before/after: `metadata_fix_*`
+  for overrides, `object_fix` for object fields; the ledger accepts a model only when
+  `editable` declares it), skip values equal to the stored one (a repeated submission
+  writes nothing), re-audit the page, and on commit *republish*: a
+  `content_changed` job (sitemaps are generated live; IndexNow follows the autonomy
+  mode). A rejected form keeps what was typed in the session and redirects back.
+- Buttons: **Save and re-audit**, **Save and next issue**, **Re-audit only**; every
+  POST ends in a redirect (`HX-Redirect` for HTMX), so a reload never resubmits.
+- Permission model: `seo.change_metadata` saves (override and the declared object
+  fields, all ledgered and roll-back-able by an administrator); `seo.change_issue`
+  ignores a finding with a reason. The **Moderators** and **Editors** groups get
+  `view_issue`, `change_issue`, `change_metadata` and `view_changeledger` from
+  `manage.py bootstrap_site` (`GROUP_PERMISSIONS`, safe to re-run); rollback, approvals,
+  scans and settings stay administrator-only. Staff without `change_metadata` can read
+  the screen but cannot save.
+
 - **Apply all safe suggestions** previews and applies only the "add" fixes (missing
   titles and descriptions) in the current filter; rewrites are never part of the bulk.
 - After each scan the autonomy mode decides: `suggest` applies nothing,
   `safe_autopilot` applies the "add" fixes, `full` also the rewrites, `off` disables
-  scans and fixes. Staff pressing Apply is the approval and works in every mode but `off`.
-- Findings that the override layer cannot fix (thin content, missing guide or tool,
-  duplicates) link to the object's admin edit page.
+  scans and fixes. Only title, description and noindex proposals are ever applied
+  unattended. Staff pressing Save is the approval and works in every mode but `off`.
+- Google Discover readiness (blog posts): lead image present and at least 1200 px wide
+  (measured only for site-hosted files), `max-image-preview:large` allowed, Article /
+  BlogPosting / NewsArticle JSON-LD with `datePublished`, `dateModified` and an author.
 
 ## Interlinking
 
@@ -249,10 +371,15 @@ Bing is notified by IndexNow). Secrets come from the environment, not the databa
 
 ## Control Center (staff)
 
-`/seo/dashboard/`, `scan/`, `issues/` (with `issues/<id>/` panels, `issues/bulk/`),
-`links/`, `guides/`, `inventory/`, `inspect/`, `ledger/`, `jobs/`, `settings/`. Every
-screen renders in the Unfold admin shell (`render_admin_page`, `mf-ui` kit,
-`admin-ui-seo.css`). Read views need `is_staff` plus the model view permission; actions
+`/seo/dashboard/`, `scan/`, `issues/` (with `issues/<id>/` redirecting to `fix/`,
+`issues/bulk/`), `fix/` (View and fix, `fix/apply/`, `fix/preview/`),
+`links/`, `guides/`, `inventory/`, `sitemaps/` (sitemap sections with URL count, files,
+latest lastmod, size estimate and validation, the robots.txt preview, a URL tester that
+uses the same parser, the difference from the file before the latest settings change and
+the ledgered history of robots-relevant settings), `inspect/`, `ledger/`, `jobs/`,
+`settings/`. Every
+screen renders in the staff console shell (`render_admin_page`, `admin/staff_page.html`
+and the shared console components). Read views need `is_staff` plus the model view permission; actions
 need `seo.run_crawl` (scan, crawl), `seo.change_metadata` (apply fixes),
 `seo.change_issue` (ignore, restore, re-audit, generate guides),
 `seo.change_linksuggestion`, `seo.approve_changeledger`, `seo.rollback_changeledger`,
@@ -286,8 +413,9 @@ verified; no mass robots/canonical/redirect change without approval.
 
 ## Not built (explicit)
 
-Browser-rendered crawling and Core Web Vitals field storage, image/news sitemaps,
-`hreflang` output (no localized URLs exist), HTMX `head-support` (extension not
-installed; boosted navigation updates `<title>` only), AI content recommendations,
-firmware comparison pages and provenance/verification fields (belong to `firmwares`),
-and external-link checking.
+Browser-rendered crawling and Core Web Vitals field storage, a video sitemap (no video
+metadata exists), localized `hreflang` URLs (no localized URLs exist), `llms.txt`
+(deliberately omitted), `app-ads.txt` lines (no app contributes any), HTMX
+`head-support` (extension not installed; boosted navigation updates `<title>` only), AI
+content recommendations, firmware comparison pages and provenance/verification fields
+(belong to `firmwares`), and external-link checking.

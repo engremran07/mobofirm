@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block title %}Quota | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block title %}Quota · My contributions | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block content %}
-{% url 'library:my_files' as my_files_url %}
+{% url 'contributions:hub' as hub_url %}
 <div class="site-container py-4 py-lg-5">
-  {% include "components/breadcrumbs.html" with current="Quota" parent_label="My files" parent_url=my_files_url %}
-  {% include "components/page_header.html" with eyebrow="My files" title="Download quota" lead="How many new files you can download, how much you have used and when it resets." %}
+  {% include "components/breadcrumbs.html" with current="Quota" parent_label="My contributions" parent_url=hub_url %}
+  {% include "components/page_header.html" with eyebrow="My contributions" title="Download quota" lead="How many new files you can download, how much you have used and when it resets." %}
   {% include "users/library/_tabs.html" %}
 
   <div class="d-grid gap-4">

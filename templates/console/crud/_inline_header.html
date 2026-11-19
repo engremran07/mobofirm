@@ -1,0 +1,4 @@
+{% load i18n %}<header class="c-inline__header">
+<h2 class="c-fieldset__legend mb-0" id="{{ inline_admin_formset.formset.prefix }}-heading">{% if inline.is_single %}{{ inline_admin_formset.opts.verbose_name|capfirst }}{% else %}{{ inline_admin_formset.opts.verbose_name_plural|capfirst }}{% endif %}</h2>
+{% if inline.paginated %}<span class="u-text-sm u-muted">{% blocktranslate with number=inline_admin_formset.formset.page.number total=inline_admin_formset.formset.paginator.num_pages %}Page {{ number }} of {{ total }}{% endblocktranslate %}</span>{% endif %}
+</header>

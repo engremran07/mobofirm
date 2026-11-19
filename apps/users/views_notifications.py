@@ -4,6 +4,7 @@ import logging
 from typing import Any
 
 from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -15,6 +16,8 @@ from .models import Notification
 from .request_user import current_user
 
 logger = logging.getLogger(__name__)
+
+NOTIFICATIONS_PAGE_SIZE = 25
 
 
 def _safe_referer(request: HttpRequest) -> str:
@@ -83,16 +86,18 @@ def _mark_notification_read(notif: Notification) -> bool:
 @login_required
 @require_GET
 def notification_list(request: HttpRequest) -> HttpResponse:
+    """The member's notifications, newest first, one page at a time."""
     scope = (request.GET.get("scope") or "all").lower()
     qs = Notification.objects.filter(recipient=current_user(request)).order_by(
         "-created_at"
     )
     if scope == "unread":
         qs = qs.filter(is_read=False)
+    page = Paginator(qs, NOTIFICATIONS_PAGE_SIZE).get_page(request.GET.get("page"))
     return render(
         request,
         "users/notifications/list.html",
-        {"notifications": qs, "scope": scope},
+        {"notifications": page, "page_obj": page, "scope": scope},
     )
 
 

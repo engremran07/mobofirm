@@ -11,10 +11,12 @@ import uuid
 from datetime import date, datetime
 from typing import Any
 
+from django.apps import apps as django_apps
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.db import IntegrityError, models, transaction
 from django.utils import timezone
 
+from . import editable
 from .managers import default_manager
 from .models import ChangeLedger, Metadata, Redirect, SEOSettings
 
@@ -57,10 +59,11 @@ def diff(
 
 
 def _model(label: str) -> type[models.Model]:
-    try:
+    if label in TARGETS:
         return TARGETS[label]
-    except KeyError:
-        raise LedgerError(f"{label} cannot be changed through the ledger.") from None
+    if label in editable.editable_labels():
+        return django_apps.get_model(label)
+    raise LedgerError(f"{label} cannot be changed through the ledger.")
 
 
 def _matches(instance: models.Model, expected: dict[str, Any]) -> bool:

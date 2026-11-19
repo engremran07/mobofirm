@@ -1,0 +1,29 @@
+{# Contract: offer (ad_unlock.UnlockOffer), firmware, panel_url, start_url, pricing_url, download_url (from ad_unlock.panel_context). Empty context renders nothing. The panel replaces itself (hx-swap outerHTML); while a cooldown runs it re-fetches itself when the wait is over. No Alpine, no native dialogs. #}
+{% if offer %}
+  <section id="ad-unlock-panel" class="surface-card p-3 mt-3" aria-labelledby="ad-unlock-heading" data-unlock-state="{{ offer.state }}"{% if offer.state == "cooldown" %} hx-get="{{ panel_url }}" hx-trigger="load delay:{{ offer.cooldown_seconds }}s" hx-target="this" hx-swap="outerHTML"{% endif %}>
+    <h2 class="h6" id="ad-unlock-heading">Unlock this file by watching ads</h2>
+    {% if offer.state == "ready" %}
+      <p class="small mb-2 status-verified" role="status">{{ offer.message }}</p>
+      {% if download_url %}<a class="btn btn-sm btn-primary" href="{{ download_url }}">Go to the download</a>{% endif %}
+    {% elif offer.state == "available" %}
+      <p class="small mb-2">{% if offer.kind == "featured" %}This is a featured file.{% else %}You have used your allowance.{% endif %} Watch <strong>{{ offer.required }}</strong> short ad{{ offer.required|pluralize }} to unlock this one file{% if offer.daily_left is not None %} ({{ offer.daily_left }} unlock{{ offer.daily_left|pluralize }} left today){% endif %}. It does not use your allowance.</p>
+      <form method="post" action="{{ start_url }}" hx-post="{{ start_url }}" hx-target="#ad-unlock-panel" hx-swap="outerHTML">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-sm btn-primary" data-unlock-start>Watch {{ offer.required }} ad{{ offer.required|pluralize }} to unlock</button>
+      </form>
+    {% elif offer.state == "in_progress" or offer.state == "cooldown" %}
+      <p class="small mb-1" role="status"><span data-unlock-progress-text>{{ offer.progress }} of {{ offer.required }} ad{{ offer.required|pluralize }} watched</span></p>
+      <progress class="w-100 mb-2" max="{{ offer.required }}" value="{{ offer.progress }}" aria-label="Ads watched">{{ offer.progress }} of {{ offer.required }}</progress>
+      {% if offer.state == "cooldown" %}
+        <p class="small muted mb-2" data-unlock-cooldown>Next ad available in about {{ offer.cooldown_seconds }} second{{ offer.cooldown_seconds|pluralize }}. This panel updates by itself.</p>
+      {% elif offer.watch_url %}
+        <a class="btn btn-sm btn-primary" href="{{ offer.watch_url }}" data-unlock-watch>Watch ad {{ offer.progress|add:1 }} of {{ offer.required }}</a>
+      {% endif %}
+    {% else %}
+      <p class="small mb-2" role="status" data-unlock-notice>{{ offer.message|default:"You cannot unlock this file by ads right now." }}</p>
+    {% endif %}
+    {% if offer.state != "ready" %}
+      <p class="small mb-0"><a href="{{ pricing_url }}">Upgrade for a bigger allowance and fewer ads</a></p>
+    {% endif %}
+  </section>
+{% endif %}

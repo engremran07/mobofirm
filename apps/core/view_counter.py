@@ -13,6 +13,8 @@ from datetime import date
 from django.http import HttpRequest
 from django.utils import timezone
 
+from apps.core.internal_request import is_internal_crawl
+
 SESSION_KEY = "content_views"
 MAX_REMEMBERED = 300
 
@@ -27,6 +29,8 @@ BOT_PATTERN = re.compile(
 
 def is_bot_request(request: HttpRequest) -> bool:
     """True for crawlers, previews, ``HEAD`` and prefetch/prerender requests."""
+    if is_internal_crawl(request):
+        return True
     agent = request.headers.get("User-Agent", "")
     purpose = (
         request.headers.get("Sec-Purpose", "") + request.headers.get("Purpose", "")
@@ -51,7 +55,7 @@ def should_count(request: HttpRequest, kind: str, key: object) -> bool:
     Returns ``False`` for bots and for objects this session already viewed today.
     The remembered keys reset every day, so a returning reader counts again.
     """
-    if is_bot_request(request):
+    if is_internal_crawl(request) or is_bot_request(request):
         return False
     session = getattr(request, "session", None)
     if session is None:

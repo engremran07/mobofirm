@@ -66,3 +66,44 @@
     width: 100%;
   }
 }
+
+/* In-article slot ({% ad_article_body %}): between two paragraphs, so it keeps its own
+   vertical rhythm and its reserved size class above holds the space (no layout shift). */
+.ad-zone--inline {
+  clear: both;
+  margin-block: 1.75rem;
+}
+
+/* Sponsored grid tile ({% ad_tile %}). The element carries the sibling tile's own classes
+   (card-ui, card-ui--tile, ...), so its size, padding, radius and elevation come from the
+   same rules and it fills one grid cell like its neighbours. These rules only add a
+   colour accent and the "Sponsored" label; they never change the box. */
+.card-ui--sponsored,
+.tag-card--sponsored {
+  border-inline-start-color: var(--mf-accent-warm);
+}
+
+.ad-tile__label {
+  color: var(--mf-text-muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.ad-tile__raw {
+  min-width: 0;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+.ad-tile__raw img {
+  max-width: 100%;
+  height: auto;
+}
+
+.card-ui--sponsored .logo-tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}

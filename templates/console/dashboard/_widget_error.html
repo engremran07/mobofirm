@@ -1,0 +1,7 @@
+{% load i18n console_ui %}{% comment %}
+  Error state of a dashboard widget (hidden until widgets.js sets data-state="error"; see js/components/widgets.js).
+  Context: widget (slug, title), url (the panel's own URL). Retry re-requests the same panel and replaces the whole region.
+{% endcomment %}<div class="c-widget__error" data-console-widget-error hidden>
+<p class="c-widget__error-text" role="alert">{% blocktranslate with title=widget.title %}We couldn't load &ldquo;{{ title }}&rdquo;. Nothing was changed.{% endblocktranslate %}</p>
+<button type="button" class="btn btn-sm btn-outline-secondary" hx-get="{{ url }}" hx-target="#widget-{{ widget.slug }}" hx-swap="outerHTML" hx-sync="#widget-{{ widget.slug }}:replace">{% console_icon "refresh-cw" "c-icon--sm" %} {% translate "Try again" %}</button>
+</div>

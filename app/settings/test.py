@@ -12,6 +12,11 @@ DEBUG = False
 MFA_ENCRYPTION_KEY = "test-only-mfa-encryption-key"
 # A valid Fernet key (32 bytes, url-safe base64) used only by the test suite.
 SOCIAL_CREDENTIAL_ENCRYPTION_KEY = "dGVzdC1vbmx5LXNvY2lhbC1jcmVkZW50aWFsLWtleSE="
+# Test-only Fernet key for apps.firmwares.crypto (ad credentials, archive passwords).
+FERNET_KEY = "dGVzdC1vbmx5LWZlcm5ldC1rZXktbm90LXByb2QhISE="
+# Staff MFA is mandatory in production; the suite signs staff in with force_login, so
+# it is off here and covered by tests/backend/users/test_staff_mfa_required.py.
+STAFF_MFA_REQUIRED = False
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",

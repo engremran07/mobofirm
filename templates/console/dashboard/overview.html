@@ -1,0 +1,11 @@
+{% load i18n console_ui %}{% comment %}
+  "At a glance": four stat tiles. Context: waiting_total, waiting_queues, failing_total, failing_checks, signups, promotions (a Kpi or None).
+  Replaces the placeholder #widget-overview of the dashboard (it is a tile row, not a card).
+{% endcomment %}<div class="c-dashboard__stats" id="widget-{{ widget.slug }}" aria-busy="false" data-console-widget="{{ widget.slug }}"{% if widget.refresh %} data-console-refresh="{{ widget.refresh }}"{% endif %} hx-get="{% url 'admin:console_dashboard_widget' widget.slug %}" hx-trigger="console-refresh from:body, console-widget-refresh" hx-target="this" hx-swap="outerHTML" hx-sync="this:replace" hx-indicator="#widget-{{ widget.slug }}">{% url 'admin:console_dashboard_widget' widget.slug as widget_url %}{% include "console/dashboard/_widget_error.html" with url=widget_url %}
+{% if waiting_total %}{% blocktranslate asvar waiting_hint count counter=waiting_queues %}Across {{ counter }} queue{% plural %}Across {{ counter }} queues{% endblocktranslate %}{% else %}{% translate "Nothing is waiting for you." as waiting_hint %}{% endif %}
+{% ui "stat_tile" label=_("Waiting for you") value=waiting_total hint=waiting_hint icon="inbox" variant=waiting_total|yesno:"warning,success" url="#widget-attention" %}
+{% if failing_total %}{% blocktranslate asvar failing_hint count counter=failing_checks %}{{ counter }} check needs a fix{% plural %}{{ counter }} checks need a fix{% endblocktranslate %}{% else %}{% translate "Everything is running." as failing_hint %}{% endif %}
+{% ui "stat_tile" label=_("Needs a fix") value=failing_total hint=failing_hint icon="activity" variant=failing_total|yesno:"danger,success" url="#widget-health" %}
+{% if signups %}{% ui "stat_tile" label=signups.label value=signups.value hint=signups.hint icon=signups.icon variant="info" url=signups.url %}{% endif %}
+{% if promotions %}{% ui "stat_tile" label=promotions.label value=promotions.value hint=promotions.hint icon=promotions.icon variant="info" url=promotions.url %}{% endif %}
+</div>

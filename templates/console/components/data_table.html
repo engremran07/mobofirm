@@ -1,0 +1,15 @@
+{% comment %}
+  data_table - a responsive table: the wrapper scrolls horizontally inside its own box (the page never overflows) and is keyboard-focusable.
+  Context: columns (list of {"label", "sorted": "ascending"|"descending"|"", "sort_url", "numeric": True, "hidden_label": True}),
+  label (accessible name of the scroll region, also the hidden <caption>), compact (tighter rows), flow (short table: no inner vertical scroll),
+  count (the number of rows; 0 renders the empty state below instead of an empty table),
+  empty_title / empty_message / empty_icon (the empty state; default "Nothing here yet").
+  content = the <tr> rows (<td>, or <th scope="row"> for the primary cell; add class c-table__num to numeric cells, c-table__actions to the menu cell).
+    {% component "data_table" columns=cols label="Recent orders" count=orders|length %}{% for o in orders %}<tr>...</tr>{% endfor %}{% endcomponent %}
+{% endcomment %}{% load i18n console_ui %}{% if count == 0 %}{% ui "empty_state" title=empty_title|default:_("Nothing here yet") message=empty_message icon=empty_icon|default:"inbox" tone="compact" %}{% else %}<div class="c-table-wrap{% if flow %} c-table-wrap--flow{% endif %}" role="region" tabindex="0"{% if label %} aria-label="{{ label }}"{% endif %}>
+<table class="c-table{% if compact %} c-table--compact{% endif %}">
+{% if label %}<caption class="visually-hidden">{{ label }}</caption>{% endif %}
+<thead><tr>{% for column in columns %}<th scope="col"{% if column.sorted or column.numeric or column.sort_url %} class="{% if column.sort_url %}sortable{% endif %}{% if column.sorted %} sorted {{ column.sorted }}{% endif %}{% if column.numeric %} c-table__num{% endif %}"{% endif %}{% if column.sorted %} aria-sort="{{ column.sorted }}"{% endif %}>{% if column.sort_url %}<a class="c-table__sort" href="{{ column.sort_url }}">{{ column.label }}</a>{% elif column.hidden_label %}<span class="visually-hidden">{{ column.label }}</span>{% else %}{{ column.label }}{% endif %}</th>{% endfor %}</tr></thead>
+<tbody>{{ content }}</tbody>
+</table>
+</div>{% endif %}

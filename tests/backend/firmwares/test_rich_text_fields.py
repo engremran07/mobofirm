@@ -25,7 +25,7 @@ pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("seeded_profiles")]
 
 
 def _changelog(value: str) -> str:
-    return UploadForm.base_fields["changelog"].clean(value)
+    return UploadForm().fields["changelog"].clean(value)
 
 
 def test_the_upload_changelog_is_a_firmware_notes_editor_and_notes_stay_plain() -> None:
@@ -152,4 +152,5 @@ def test_the_flashing_tool_admin_edits_instructions_with_the_editor(
 
     assert page.count("data-mf-editor-config") == 1
     assert "&quot;profile&quot;:&quot;firmware_notes&quot;" in page
-    assert "<p>Step one</p>" in page
+    # The textarea carries the stored HTML escaped; the editor reads it from there.
+    assert "&lt;p&gt;Step one&lt;/p&gt;" in page

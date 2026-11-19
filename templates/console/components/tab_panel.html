@@ -1,0 +1,4 @@
+{% comment %}
+  tab_panel - one panel of the in-page tabs component. Context: id (required; matches the pane id), content (the panel body).
+  Visible without JavaScript; the tabs behaviour hides the inactive ones.
+{% endcomment %}<div class="c-tabs__panel" role="tabpanel" data-console-tabpanel id="{{ id }}" aria-labelledby="{{ id }}-tab" tabindex="-1">{{ content }}</div>

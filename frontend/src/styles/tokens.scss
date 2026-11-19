@@ -1,0 +1,8 @@
+// Public site tokens entry (compiled by Vite to static/build/tokens.css, loaded before
+// site.css). It contains NO values of its own: every token is defined once in
+// frontend/src/shared/tokens/ and emitted here for the public site and, with the same
+// call, by frontend/src/admin/styles/_tokens.scss for the staff console.
+@use "../shared/tokens/emit";
+
+@include emit.theme-tokens($system: false, $surface: public);
+@include emit.scale-tokens($surface: public);

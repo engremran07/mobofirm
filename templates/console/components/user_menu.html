@@ -1,0 +1,19 @@
+{% comment %}
+  user_menu - the account menu in the header: who is signed in, personal links, theme, contrast, sign out.
+  Context: user (required), links (list of {"title", "icon", "link"}), site_url (public site), logout_url (POST target; required),
+  site_label (default "View public site").
+  Sign out is a CSRF-protected POST form, never a GET link. Opens as a menu on the shared popover primitive.
+{% endcomment %}{% load i18n console_ui %}{% with name=user.get_full_name|default:user.get_username %}<div class="dropdown" data-ui-popover>
+<button type="button" class="c-icon-btn" data-ui-trigger aria-haspopup="menu" aria-expanded="false" aria-label="{% blocktranslate %}Account menu for {{ name }}{% endblocktranslate %}"><span class="c-avatar" aria-hidden="true">{{ user|console_initials }}</span></button>
+<ul class="dropdown-menu dropdown-menu-end" data-ui-panel data-ui-fixed role="menu" hidden>
+<li><span class="dropdown-item-text"><strong class="d-block">{{ name }}</strong>{% if user.email %}<span class="d-block small">{{ user.email }}</span>{% endif %}</span></li>
+<li><hr class="dropdown-divider"></li>
+{% for link in links %}<li><a class="dropdown-item" href="{{ link.link }}">{% console_icon link.icon "c-icon--sm c-menu__icon" %}<span>{{ link.title }}</span></a></li>{% endfor %}
+{% if site_url %}<li><a class="dropdown-item" href="{{ site_url }}">{% console_icon "external-link" "c-icon--sm c-menu__icon" %}<span>{{ site_label|default:_("View public site") }}</span></a></li>{% endif %}
+<li><h6 class="dropdown-header">{% translate "Appearance" %}</h6></li>
+<li class="px-3 pb-1">{% ui "theme_toggle" %}</li>
+<li><button type="button" class="dropdown-item" data-console-contrast-toggle aria-pressed="false">{% console_icon "contrast" "c-icon--sm c-menu__icon" %}<span>{% translate "High contrast" %}</span></button></li>
+<li><hr class="dropdown-divider"></li>
+<li><form method="post" action="{{ logout_url }}">{% csrf_token %}<button type="submit" class="dropdown-item">{% console_icon "log-out" "c-icon--sm c-menu__icon" %}<span>{% translate "Sign out" %}</span></button></form></li>
+</ul>
+</div>{% endwith %}

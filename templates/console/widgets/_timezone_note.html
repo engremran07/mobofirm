@@ -1,0 +1,4 @@
+{% comment %}
+  The element Django's admin date/time widgets point aria-describedby at (id_<name>_timezone_warning_helptext). The stock admin
+  creates it with JavaScript; the console renders it, so the reference is never dangling and screen readers hear the time zone.
+{% endcomment %}{% load i18n tz %}{% get_current_timezone as console_time_zone %}<span class="visually-hidden" id="id_{{ widget.name }}_timezone_warning_helptext">{% blocktranslate with zone=console_time_zone %}Times use the {{ zone }} time zone.{% endblocktranslate %}</span>

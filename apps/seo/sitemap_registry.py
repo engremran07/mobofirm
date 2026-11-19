@@ -30,6 +30,10 @@ DEFAULT_SECTIONS: dict[str, tuple[str, str]] = {
     "models": ("apps.firmwares", "apps.firmwares.sitemaps.FirmwareModelsSitemap"),
     "firmware": ("apps.firmwares", "apps.firmwares.sitemaps.FirmwareFileSitemap"),
     "tools": ("apps.firmwares", "apps.firmwares.sitemaps.FirmwareToolsSitemap"),
+    "tool-categories": (
+        "apps.firmwares",
+        "apps.firmwares.sitemaps.FirmwareToolCategoriesSitemap",
+    ),
     "tags": ("apps.tags", "apps.tags.sitemaps.PublishedTagsSitemap"),
 }
 

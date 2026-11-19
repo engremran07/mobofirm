@@ -1,0 +1,9 @@
+{% comment %}
+  switch - a boolean toggle (role=switch) over a native checkbox, which stays the submitted value.
+  Context: name, id, label, checked, disabled, hint. State attributes mirrored by controls.js: data-checked / data-disabled / data-focus.
+  Keyboard: Space toggles (native checkbox behaviour).
+{% endcomment %}<label class="c-switch"{% if id %} for="{{ id }}"{% endif %}>
+<input type="checkbox" class="c-switch__input" role="switch" data-ui-switch name="{{ name }}"{% if id %} id="{{ id }}"{% endif %}{% if checked %} checked data-checked{% endif %}{% if disabled %} disabled data-disabled{% endif %}>
+<span class="c-switch__track" aria-hidden="true"><span class="c-switch__thumb"></span></span>
+<span class="c-switch__label">{{ label }}</span>
+</label>

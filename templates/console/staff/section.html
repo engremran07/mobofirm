@@ -1,0 +1,8 @@
+<section class="c-section" aria-labelledby="{{ ident }}">
+  <header class="c-section__head">
+    <h2 class="c-section__title" id="{{ ident }}">{{ title }}</h2>
+    {% if action_url %}<a class="btn btn-secondary btn-sm" href="{{ action_url }}">{{ action_label }}</a>{% endif %}
+  </header>
+  {% if intro %}<p class="c-section__intro">{{ intro }}</p>{% endif %}
+  <div class="c-section__body">{{ content }}</div>
+</section>

@@ -1,0 +1,49 @@
+{% extends "admin/base_site.html" %}
+{% comment %}
+  The confirmation dialog of an @action with dialog=... (rendered by apps.core.admin_actions; see its module docstring).
+  Context: dialog, title, description, form (BaseDialogForm), form_submit_text, variant (ActionVariant), action_url, is_htmx.
+  GET shows this form and never changes data; the write happens on the CSRF-protected POST, which re-renders with errors or redirects.
+  Inside the dialog host it is a modal; opened directly (no JavaScript, or a new tab) it is a page with the same form.
+{% endcomment %}
+{% load i18n console_ui console_admin %}
+
+{% block content_title %}{% endblock %}
+{% block object-tools %}{% endblock %}
+
+{% block content %}
+{% console_dialog_request as in_dialog %}
+{% with tone=variant|console_action_variant %}
+{% if in_dialog %}
+<div class="modal-dialog" data-console-dialog-content>
+<form method="post" action="{{ action_url }}" class="modal-content{% if tone == 'danger' %} c-dialog--danger{% endif %}">{% csrf_token %}
+<div class="modal-header">
+<span class="c-dialog__icon">{% if tone == "danger" or tone == "warning" %}{% console_icon "triangle-alert" %}{% else %}{% console_icon "circle-help" %}{% endif %}</span>
+<h2 class="modal-title">{{ title }}</h2>
+<button type="button" class="btn-close" data-console-dialog-close aria-label="{% translate 'Close' %}"></button>
+</div>
+<div class="modal-body">
+{% include "console/crud/_action_form_body.html" %}
+</div>
+<div class="modal-footer">
+<button type="button" class="btn btn-ghost" data-console-dialog-close>{% translate "Cancel" %}</button>
+<button type="submit" class="btn {% if tone == 'default' %}btn-primary{% else %}{{ variant|console_button_class }}{% endif %}">{{ form_submit_text|default:_("Confirm") }}</button>
+</div>
+</form>
+</div>
+{% else %}
+{% component "page_header" title=title subtitle=description %}{% endcomponent %}
+<form method="post" action="{{ action_url }}" class="c-form">{% csrf_token %}
+<fieldset class="c-fieldset{% if tone == 'danger' %} c-card--danger{% endif %}">
+{% include "console/crud/_action_form_body.html" with skip_description=True %}
+</fieldset>
+<div class="c-savebar">
+<div class="c-savebar__meta"></div>
+<div class="c-savebar__actions">
+<button type="submit" class="btn {% if tone == 'default' %}btn-primary{% else %}{{ variant|console_button_class }}{% endif %}">{{ form_submit_text|default:_("Confirm") }}</button>
+<a class="btn btn-secondary" href="{% console_parent_url %}">{% translate "Cancel" %}</a>
+</div>
+</div>
+</form>
+{% endif %}
+{% endwith %}
+{% endblock %}

@@ -117,7 +117,7 @@ def _sha256_of(path: Path) -> tuple[str, int]:
 
 
 def _expected_hash(location: FirmwareStorageLocation) -> str:
-    firmware = location.firmware
+    firmware = location.resolve_firmware()
     return (getattr(firmware, "file_hash", "") or "").strip().lower()
 
 

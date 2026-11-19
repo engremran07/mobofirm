@@ -272,6 +272,17 @@ class Post(models.Model):
             "link issued before."
         ),
     )
+    is_community_contribution = models.BooleanField(
+        default=False,
+        db_index=True,
+        help_text="Submitted for review through the member 'Contribute a blog post' flow.",
+    )
+    review_note = models.CharField(
+        max_length=1000,
+        blank=True,
+        default="",
+        help_text="The reviewer's reason when a contribution was sent back; the author reads it.",
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -318,10 +329,14 @@ class Post(models.Model):
         return self.hero_image if is_same_origin_path(self.hero_image) else ""
 
     @classmethod
-    def from_db(cls, db, field_names, values):
-        instance = super().from_db(db, field_names, values)
-        instance._loaded_slug = instance.__dict__.get("slug")
+    def from_db(cls, db, field_names, values, *, fetch_mode=None):
+        instance = super().from_db(db, field_names, values, fetch_mode=fetch_mode)
+        cls.remember_loaded_slug(instance)
         return instance
+
+    def remember_loaded_slug(self) -> None:
+        """Keep the slug as loaded, so a later save can record the previous one."""
+        self._loaded_slug = self.__dict__.get("slug")
 
     def save(self, *args, **kwargs):
         self.body = sanitize_stored_html(self.body)
@@ -391,7 +406,9 @@ class Post(models.Model):
 class PostSlugHistory(models.Model):
     """A former slug of a post; the public URL redirects permanently to the post."""
 
-    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="slug_history")
+    post = models.ForeignKey(
+        Post, on_delete=models.CASCADE, related_name="slug_history"
+    )
     slug = models.SlugField(max_length=240, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -407,7 +424,9 @@ class PostSlugHistory(models.Model):
 class PostCoAuthor(models.Model):
     """An additional credited author of a post (the owner stays ``Post.author``)."""
 
-    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name="coauthor_links")
+    post = models.ForeignKey(
+        Post, on_delete=models.CASCADE, related_name="coauthor_links"
+    )
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -722,7 +741,13 @@ class BlogSettings(SingletonModel):
 
     enable_blog = models.BooleanField(default=True)
     enable_blog_comments = models.BooleanField(default=True)
-    allow_user_blog_posts = models.BooleanField(default=False)
+    allow_user_blog_posts = models.BooleanField(
+        default=False,
+        help_text=(
+            "Verified members may contribute blog posts. Every contribution is "
+            "reviewed by staff and is never published automatically."
+        ),
+    )
     teaser_words = models.PositiveIntegerField(
         default=80,
         validators=[MinValueValidator(20), MaxValueValidator(300)],
@@ -741,6 +766,11 @@ class BlogSettings(SingletonModel):
         default=5,
         validators=[MinValueValidator(1), MaxValueValidator(50)],
         help_text="Most pending or approved requests one member may have at once.",
+    )
+    contributions_per_day = models.PositiveIntegerField(
+        default=3,
+        validators=[MinValueValidator(1), MaxValueValidator(50)],
+        help_text="Most blog posts one member can contribute in 24 hours.",
     )
     stale_after_days = models.PositiveIntegerField(
         default=180,

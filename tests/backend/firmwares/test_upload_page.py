@@ -10,6 +10,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
+from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client
 from django.urls import reverse
@@ -149,7 +150,7 @@ class TestOptionalVariant:
         bare = Model.objects.create(brand=brand, name="Bare", slug="bare")
 
         page = client_for(make_user("preselect")).get(
-            reverse("firmwares:upload"), {"brand": brand.pk, "model": bare.pk}
+            reverse("firmwares:contribute"), {"brand": brand.pk, "model": bare.pk}
         )
 
         assert "No specific variant" in page.content.decode()
@@ -180,16 +181,18 @@ class TestOptionalVariant:
 
 @pytest.mark.django_db
 class TestUploadPage:
-    url = "/firmwares/upload/"
+    url = "/firmwares/contribute/"
 
     def test_anonymous_visitors_are_sent_to_sign_in(self):
-        response = Client().get(reverse("firmwares:upload"))
+        response = Client().get(reverse("firmwares:contribute"))
 
         assert response.status_code == 302
         assert "/login" in response["Location"]
 
     def test_the_page_offers_the_cascade_and_request_links(self, make_user):
-        response = client_for(make_user("page-user")).get(reverse("firmwares:upload"))
+        response = client_for(make_user("page-user")).get(
+            reverse("firmwares:contribute")
+        )
 
         body = response.content.decode()
         assert response.status_code == 200
@@ -202,7 +205,9 @@ class TestUploadPage:
     def test_non_sellers_see_access_control_locked_to_free_with_a_seller_link(
         self, make_user
     ):
-        response = client_for(make_user("page-user-2")).get(reverse("firmwares:upload"))
+        response = client_for(make_user("page-user-2")).get(
+            reverse("firmwares:contribute")
+        )
 
         body = response.content.decode()
         form = response.context["form"]
@@ -215,12 +220,12 @@ class TestUploadPage:
         assert [(label, "disabled" in attrs) for attrs, label in options] == [
             ("Free", False),
             ("Paid", True),
-            ("Featured", True),
+            ("Featured", False),
         ]
         assert "selected" in options[0][0]
-        assert form.initial["access_tier"] == AccessTier.FREE
+        assert form.fields["access_tier"].initial == AccessTier.FREE
         assert (
-            "Only approved sellers can offer paid or featured files — "
+            "Only approved sellers can offer paid files — "
             f'<a href="{reverse("marketplace:become_seller")}">Become a seller</a>'
         ) in body
 
@@ -233,11 +238,11 @@ class TestUploadPage:
 
         body = (
             client_for(make_user("page-user-3"))
-            .get(reverse("firmwares:upload"))
+            .get(reverse("firmwares:contribute"))
             .content.decode()
         )
 
-        assert "Only approved sellers can offer paid or featured files" in body
+        assert "Only approved sellers can offer paid files" in body
         assert "Become a seller" not in body
 
     def test_sellers_get_the_live_tier_select_and_the_price_field(
@@ -246,7 +251,7 @@ class TestUploadPage:
         seller = make_user("seller-page")
         sellers.add(seller.pk)
 
-        body = client_for(seller).get(reverse("firmwares:upload")).content.decode()
+        body = client_for(seller).get(reverse("firmwares:contribute")).content.decode()
 
         select = re.search(r'<select name="access_tier".*?</select>', body, re.DOTALL)
         assert select is not None and "disabled" not in select.group(0)
@@ -329,7 +334,7 @@ class TestUploadPage:
         seller = make_user("seller")
         sellers.add(seller.pk)
         client = client_for(seller)
-        page = client.get(reverse("firmwares:upload"))
+        page = client.get(reverse("firmwares:contribute"))
 
         response = client.post(
             reverse("firmwares:upload"),
@@ -387,25 +392,107 @@ class TestUploadPage:
             None,
         )
 
-    @pytest.mark.parametrize("forged", ["paid", "featured"])
-    def test_a_forged_tier_from_a_non_seller_is_ignored(
-        self, make_user, catalog, forged
-    ):
-        response = client_for(make_user(f"forger-{forged}")).post(
-            reverse("firmwares:upload"),
-            payload(catalog, access_tier=forged, proposed_price="5.00"),
+    def test_non_sellers_may_choose_a_featured_upload(self, make_user, catalog):
+        response = client_for(make_user("featured-member")).post(
+            reverse("firmwares:contribute"),
+            payload(catalog, access_tier="featured"),
+        )
+
+        assert response.status_code == 302
+        pending = PendingFirmware.objects.get()
+        assert (pending.access_tier, pending.proposed_price) == (
+            AccessTier.FEATURED,
+            None,
+        )
+
+    def test_a_forged_paid_tier_from_a_non_seller_is_ignored(self, make_user, catalog):
+        response = client_for(make_user("forger-paid")).post(
+            reverse("firmwares:contribute"),
+            payload(catalog, access_tier="paid", proposed_price="5.00"),
         )
 
         assert response.status_code == 302
         pending = PendingFirmware.objects.get()
         assert (pending.access_tier, pending.proposed_price) == (AccessTier.FREE, None)
 
-    def test_my_uploads_lists_only_the_users_own_submissions(self, make_user, catalog):
-        owner, other = make_user("owner-uploads"), make_user("other-uploads")
-        client_for(owner).post(reverse("firmwares:upload"), payload(catalog))
+    @pytest.mark.usefixtures("catalog")
+    def test_the_service_refuses_paid_from_a_non_seller_even_if_the_form_is_bypassed(
+        self, make_user
+    ):
+        from apps.firmwares.services import FirmwareUploadError, resolve_submission_tier
 
-        mine = client_for(owner).get(reverse("firmwares:my_uploads"))
-        theirs = client_for(other).get(reverse("firmwares:my_uploads"))
+        user = make_user("service-forger")
+
+        with pytest.raises(FirmwareUploadError):
+            resolve_submission_tier(user, "paid", "5.00")
+        assert resolve_submission_tier(user, "featured", None) == (
+            AccessTier.FEATURED,
+            None,
+        )
+
+    def test_firmware_contributions_list_only_the_users_own_submissions(
+        self, make_user, catalog
+    ):
+        owner, other = make_user("owner-uploads"), make_user("other-uploads")
+        client_for(owner).post(reverse("firmwares:contribute"), payload(catalog))
+
+        mine = client_for(owner).get(reverse("contributions:firmware"))
+        theirs = client_for(other).get(reverse("contributions:firmware"))
 
         assert "build.zip" in mine.content.decode()
         assert "build.zip" not in theirs.content.decode()
+
+    def test_a_reviewer_can_lower_a_featured_choice_with_a_reason_the_member_reads(
+        self, make_user, catalog, django_user_model, django_capture_on_commit_callbacks
+    ):
+        from apps.users.models import Notification
+
+        owner = make_user("featured-owner")
+        client_for(owner).post(
+            reverse("firmwares:contribute"), payload(catalog, access_tier="featured")
+        )
+        pending = PendingFirmware.objects.get()
+        reviewer = django_user_model.objects.create_superuser(
+            username="tier-reviewer", email="tier-reviewer@example.test"
+        )
+
+        with pytest.raises(ValidationError):
+            approve_pending_firmware(
+                pending, reviewer, category="official", access_tier="free"
+            )
+        with django_capture_on_commit_callbacks(execute=True):
+            approve_pending_firmware(
+                pending,
+                reviewer,
+                category="official",
+                access_tier="free",
+                notes="Common build, free for everyone.",
+            )
+
+        assert OfficialFirmware.objects.get().access_tier == AccessTier.FREE
+        notice = Notification.objects.get(
+            recipient=owner, message__contains="changed from"
+        )
+        assert "changed from Featured to Free" in notice.message
+        assert "Common build, free for everyone." in notice.message
+
+    def test_a_reviewer_cannot_make_a_non_sellers_file_paid(
+        self, make_user, catalog, django_user_model
+    ):
+        client_for(make_user("not-a-seller")).post(
+            reverse("firmwares:contribute"), payload(catalog, access_tier="featured")
+        )
+        reviewer = django_user_model.objects.create_superuser(
+            username="paid-reviewer", email="paid-reviewer@example.test"
+        )
+
+        with pytest.raises(ValidationError):
+            approve_pending_firmware(
+                PendingFirmware.objects.get(),
+                reviewer,
+                category="official",
+                access_tier="paid",
+                approved_price="5.00",
+            )
+
+        assert not OfficialFirmware.objects.exists()

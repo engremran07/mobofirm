@@ -1,0 +1,25 @@
+{% extends "admin/staff_page.html" %}
+{% load i18n staff_ui mf_ui %}
+{% comment %}
+  Step 1 of an import (staff console): choose the file. Context: form, resource_doc,
+  max_rows, max_kb, formats, cancel_url, opts.
+{% endcomment %}
+{% block page_body %}
+<form method="post" enctype="multipart/form-data" class="d-flex flex-column gap-4" data-import-upload novalidate>
+  {% csrf_token %}
+  {% staff_card title=_("Choose a file") ident="import-upload-title" %}
+    {% staff_notice tone="info" %}{% blocktranslate %}The file is only checked here: nothing is written until you confirm the preview. Allowed: {{ formats }}, up to {{ max_rows }} rows and {{ max_kb }} KB. Importing the same file again changes nothing.{% endblocktranslate %}{% endstaff_notice %}
+    {% if form.non_field_errors %}{% staff_notice tone="danger" %}{{ form.non_field_errors }}{% endstaff_notice %}{% endif %}
+    <div class="console-staff-field">
+      <label class="form-label" for="{{ form.file.id_for_label }}">{{ form.file.label }} *</label>
+      {{ form.file|mf_widget }}
+      <div class="invalid-feedback" id="{{ form.file.auto_id }}_errors" role="alert"{% if not form.file.errors %} hidden{% endif %}>{{ form.file.errors|join:" " }}</div>
+    </div>
+    {% staff_row %}
+      {% staff_button _("Preview import") tone="primary" %}
+      {% staff_button _("Cancel") href=cancel_url %}
+    {% endstaff_row %}
+  {% endstaff_card %}
+</form>
+{% include "console/import_export/_columns.html" %}
+{% endblock %}

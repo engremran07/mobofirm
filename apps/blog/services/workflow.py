@@ -20,6 +20,8 @@ PUBLISHABLE_STATUSES = {
     PostStatus.IN_REVIEW,
     PostStatus.SCHEDULED,
 }
+MAX_REVIEW_NOTE = 1000
+ACCESS_RANK = {PostAccess.FREE: 0, PostAccess.FEATURED: 1, PostAccess.PAID: 2}
 
 
 class WorkflowAction(enum.Enum):
@@ -75,7 +77,8 @@ def request_review(post: Post, user=None) -> WorkflowResult:
         raise ValidationError("Only draft posts can enter review.")
     if post.status != PostStatus.IN_REVIEW:
         post.status = PostStatus.IN_REVIEW
-        post.save(update_fields=["status", "is_published", "updated_at"])
+        post.review_note = ""
+        post.save(update_fields=["status", "review_note", "is_published", "updated_at"])
         _audit("request_review", post, user)
     return WorkflowResult(ok=True, status=post.status, message="Submitted for review")
 
@@ -132,12 +135,14 @@ def publish(post: Post, user=None) -> WorkflowResult:
     post.publish_at = now
     post.published_at = post.published_at or now
     post.published_by = user
+    post.review_note = ""
     post.save(
         update_fields=[
             "status",
             "publish_at",
             "published_at",
             "published_by",
+            "review_note",
             "is_published",
             "updated_at",
             *price_fields,
@@ -145,6 +150,88 @@ def publish(post: Post, user=None) -> WorkflowResult:
     )
     _audit("publish", post, user)
     return WorkflowResult(ok=True, status=post.status, message="Published")
+
+
+def withdraw(post: Post, user=None) -> WorkflowResult:
+    """The author takes a post back out of review; it returns to their drafts."""
+    if user is None or not getattr(user, "is_authenticated", False):
+        raise PermissionDenied("Authentication is required.")
+    if post.author_id != user.pk:
+        raise PermissionDenied("Only the post author may withdraw a submission.")
+    if post.status == PostStatus.DRAFT:
+        return WorkflowResult(ok=True, status=post.status, message="Already a draft")
+    if post.status != PostStatus.IN_REVIEW:
+        raise ValidationError(
+            "Only a post that is waiting for review can be withdrawn."
+        )
+    post.status = PostStatus.DRAFT
+    post.review_note = ""
+    post.save(update_fields=["status", "review_note", "is_published", "updated_at"])
+    _audit("withdraw", post, user)
+    return WorkflowResult(ok=True, status=post.status, message="Withdrawn")
+
+
+def reject(post: Post, user=None, reason: str = "") -> WorkflowResult:
+    """A moderator sends a post under review back to its author with a reason."""
+    _require_moderator(user)
+    reason = " ".join(reason.split())
+    if not reason:
+        raise ValidationError("Give the author a reason for sending the post back.")
+    if len(reason) > MAX_REVIEW_NOTE:
+        raise ValidationError(f"Keep the reason within {MAX_REVIEW_NOTE} characters.")
+    if post.status != PostStatus.IN_REVIEW:
+        raise ValidationError("Only a post that is waiting for review can be rejected.")
+    post.status = PostStatus.DRAFT
+    post.review_note = reason
+    post.save(update_fields=["status", "review_note", "is_published", "updated_at"])
+    _audit("reject", post, user)
+    return WorkflowResult(
+        ok=True, status=post.status, message="Sent back to the author"
+    )
+
+
+def lower_access(
+    post: Post, user=None, access: str = "", reason: str = ""
+) -> WorkflowResult:
+    """A moderator lowers the access type of a post that is not live yet.
+
+    Only a lower access type is allowed (Paid -> Featured or Free, Featured -> Free)
+    and the author is owed a reason. Any proposed or approved price is cleared.
+    """
+    _require_moderator(user)
+    reason = " ".join(reason.split())
+    if not reason:
+        raise ValidationError("Give the author a reason for changing the access type.")
+    if len(reason) > MAX_REVIEW_NOTE - 80:
+        raise ValidationError("Keep the reason shorter.")
+    if post.status not in PUBLISHABLE_STATUSES:
+        raise ValidationError("Only a post that is not live yet can change access.")
+    if access not in {PostAccess.FREE, PostAccess.FEATURED}:
+        raise ValidationError("Choose Free or Featured as the new access type.")
+    if ACCESS_RANK[access] >= ACCESS_RANK[post.access]:
+        raise ValidationError("The new access type must be lower than the current one.")
+    previous = post.access
+    post.access = access
+    post.price = post.proposed_price = None
+    post.price_approved_by = None
+    post.price_approved_at = None
+    post.review_note = (
+        f"Access lowered from {previous.capitalize()} to "
+        f"{access.capitalize()}: {reason}"
+    )
+    post.save(
+        update_fields=[
+            "access",
+            "price",
+            "proposed_price",
+            "price_approved_by",
+            "price_approved_at",
+            "review_note",
+            "updated_at",
+        ]
+    )
+    _audit("lower_access", post, user, previous=previous, access=access)
+    return WorkflowResult(ok=True, status=post.status, message="Access type lowered")
 
 
 def archive(post: Post, user=None) -> WorkflowResult:

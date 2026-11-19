@@ -1,0 +1,58 @@
+// c-pager: <nav class="c-pager" aria-label="Pagination"><p class="c-pager__summary|c-pager__info">1-50 of 1,230</p>
+//   <ul class="c-pager__list"><li class="c-pager__item"><a class="c-pager__link" href aria-label="Previous page">..</a></li>
+//   <li class="c-pager__item"><a class="c-pager__link" aria-current="page">2</a></li><li class="c-pager__item c-pager__gap">&hellip;</li>
+//   <li class="c-pager__item"><span class="c-pager__link" aria-disabled="true">Next</span></li></ul></nav>
+@layer components {
+  .c-pager {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--mf-space-3);
+    margin-block-start: var(--mf-space-4);
+    color: var(--mf-text-muted);
+    font-size: var(--mf-fs-sm);
+  }
+
+  .c-pager__summary,
+  .c-pager__info { margin: 0; }
+
+  .c-pager__list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--mf-space-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .c-pager__link {
+    display: inline-grid;
+    place-items: center;
+    min-inline-size: var(--mf-control-h-sm);
+    block-size: var(--mf-control-h-sm);
+    padding-inline: var(--mf-space-2);
+    color: var(--mf-text);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    text-decoration: none;
+    border: 1px solid transparent;
+    border-radius: var(--mf-radius-sm);
+    transition: background-color var(--mf-duration-fast) var(--mf-ease-out), border-color var(--mf-duration-fast) var(--mf-ease-out);
+
+    &:hover { color: var(--mf-text); background: var(--mf-hover); }
+
+    &[aria-current="page"] {
+      color: var(--mf-accent-ink);
+      background: var(--mf-accent-strong);
+    }
+
+    &[aria-disabled="true"] { color: var(--mf-text-muted); opacity: 0.55; pointer-events: none; }
+  }
+
+  .c-pager__gap {
+    display: inline-grid;
+    place-items: center;
+    min-inline-size: var(--mf-control-h-sm);
+  }
+}

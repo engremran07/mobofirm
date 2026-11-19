@@ -1,0 +1,109 @@
+// Command palette (Bootstrap modal host #console-palette) + keyboard hints.
+//   <div class="modal" id="console-palette"><div class="modal-dialog"><div class="modal-content c-palette">
+//     <div class="c-palette__search"><svg class="c-icon"/><input class="c-palette__input" role="combobox" aria-controls="..."></div>
+//     <ul class="c-palette__list" role="listbox"><li class="c-palette__group" role="presentation">Group</li>
+//       <li role="option" class="c-palette__item [is-active]" aria-selected="true"><svg class="c-icon c-icon--sm"/>Title<span class="c-kbd">G D</span></li>
+//       <li class="c-palette__empty">No matches - try a shorter word.</li></ul>
+//     <div class="c-palette__foot"><span class="c-kbd">Up</span>..</div></div></div></div>
+//   Keyboard hint: <kbd class="c-kbd">Ctrl K</kbd>
+@layer components {
+  .c-kbd {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.05rem 0.4rem;
+    color: var(--mf-text-muted);
+    font-family: var(--mf-font-sans);
+    font-size: 0.6875rem;
+    font-weight: 650;
+    background: var(--mf-surface-soft);
+    border: 1px solid var(--mf-border);
+    border-block-end-width: 2px;
+    border-radius: 0.3rem;
+  }
+
+  #console-palette .modal-dialog {
+    max-inline-size: 38rem;
+    margin-block-start: min(14vh, 8rem);
+  }
+
+  .c-palette {
+    overflow: hidden;
+    background: var(--mf-surface-raised);
+    border-radius: var(--mf-radius-lg);
+  }
+
+  .c-palette__search {
+    display: flex;
+    align-items: center;
+    gap: var(--mf-space-3);
+    padding: 0 var(--mf-space-4);
+    color: var(--mf-text-muted);
+    border-block-end: 1px solid var(--mf-border);
+  }
+
+  .c-palette__input {
+    flex: 1;
+    min-inline-size: 0;
+    block-size: 3.5rem;
+    color: var(--mf-text);
+    font: inherit;
+    font-size: var(--mf-fs-lg);
+    background: transparent;
+    border: 0;
+    outline: 0;
+
+    &::placeholder { color: var(--mf-text-muted); }
+  }
+
+  .c-palette__list {
+    max-block-size: min(22rem, 55dvh);
+    margin: 0;
+    padding: var(--mf-space-2);
+    overflow-y: auto;
+    list-style: none;
+  }
+
+  .c-palette__group {
+    padding: var(--mf-space-3) var(--mf-space-3) var(--mf-space-1);
+    color: var(--mf-text-muted);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .c-palette__item {
+    display: flex;
+    align-items: center;
+    gap: var(--mf-space-3);
+    padding: 0.625rem var(--mf-space-3);
+    color: var(--mf-text);
+    font-size: var(--mf-fs-sm);
+    border-radius: var(--mf-radius-md);
+    cursor: pointer;
+
+    a { display: contents; color: inherit; text-decoration: none; }
+    .c-icon { color: var(--mf-text-muted); }
+    .c-kbd { margin-inline-start: auto; }
+
+    &:hover,
+    &.is-active,
+    &[aria-selected="true"] {
+      background: var(--mf-accent-soft);
+      .c-icon { color: var(--mf-accent-strong); }
+    }
+  }
+
+  .c-palette__empty { padding: var(--mf-space-6) var(--mf-space-4); color: var(--mf-text-muted); text-align: center; }
+
+  .c-palette__foot {
+    display: flex;
+    align-items: center;
+    gap: var(--mf-space-3);
+    padding: var(--mf-space-2) var(--mf-space-4);
+    color: var(--mf-text-muted);
+    font-size: var(--mf-fs-xs);
+    background: var(--mf-surface-soft);
+    border-block-start: 1px solid var(--mf-border);
+  }
+}

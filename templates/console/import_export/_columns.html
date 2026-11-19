@@ -1,0 +1,17 @@
+{% load i18n staff_ui %}
+{% comment %}Column documentation of a resource. Context: resource_doc (columns, natural_key, notes).{% endcomment %}
+{% staff_section title=_("Columns") ident="import-export-columns" intro=resource_doc.natural_key %}
+  {% staff_table label=_("Columns") caption=_("Columns of the file") %}
+    <thead><tr><th scope="col">{% translate "Column" %}</th><th scope="col">{% translate "Required" %}</th><th scope="col">{% translate "Description" %}</th></tr></thead>
+    <tbody>
+      {% for column in resource_doc.columns %}
+        <tr>
+          <td><code>{{ column.name }}</code>{% if column.key %} {% staff_badge _("key") "info" %}{% endif %}</td>
+          <td>{% if column.required %}{% translate "Yes" %}{% else %}{% translate "No" %}{% endif %}</td>
+          <td>{{ column.doc }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  {% endstaff_table %}
+  {% for note in resource_doc.notes %}{% staff_notice tone="info" %}{{ note }}{% endstaff_notice %}{% endfor %}
+{% endstaff_section %}

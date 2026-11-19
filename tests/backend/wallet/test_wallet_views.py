@@ -142,6 +142,18 @@ def test_unverified_users_cannot_request_topups(make_user: Any) -> None:
     assert not TopUpRequest.objects.exists()
 
 
+def test_unverified_users_cannot_cancel_topups_either(user: Any) -> None:
+    pending = services.request_topup(user, 100)
+    user.email_verified_at = None
+    user.save(update_fields=["email_verified_at"])
+
+    response = signed_in(user).post(reverse("wallet:cancel_topup", args=[pending.pk]))
+
+    assert response.status_code == 302
+    pending.refresh_from_db()
+    assert pending.status == TopUpRequest.Status.PENDING
+
+
 def test_topup_post_needs_the_csrf_token(user: Any) -> None:
     client = Client(enforce_csrf_checks=True)
     client.force_login(user)

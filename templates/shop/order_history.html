@@ -3,7 +3,7 @@
 {% block content %}
 {% url 'shop:pricing' as shop_url %}
 <div class="site-container cm-page py-4 py-lg-5">
-  {% include "components/breadcrumbs.html" with current="My orders" parent_label="Shop" parent_url=shop_url %}
+  {% include "components/breadcrumbs.html" with current="My orders" parent_label="Pricing" parent_url=shop_url %}
   {% include "components/page_header.html" with eyebrow="Account" title="Order history" %}
   {% include "shop/_subnav.html" with shop_tab="orders" %}
   {% if not online_payments_enabled %}<div class="mb-4">{% include "shop/_payment_notice.html" %}</div>{% endif %}

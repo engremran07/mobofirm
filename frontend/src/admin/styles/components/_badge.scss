@@ -1,0 +1,46 @@
+// c-badge: soft status pill. <span class="c-badge c-badge--success">Approved</span>
+// Modifiers: --success --warning --danger --info --accent --neutral (default),
+// --dot (leading status dot), --sm. Colour is never the only signal: pair with text.
+@use "../../../shared/components/shared";
+
+@layer components {
+  .c-badge {
+    --badge-ink: var(--mf-text-muted);
+    --badge-bg: var(--mf-neutral-soft);
+
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.125rem 0.625rem;
+    color: var(--badge-ink);
+    font-size: var(--mf-fs-xs);
+    font-weight: 650;
+    line-height: 1.5;
+    white-space: nowrap;
+    background: var(--badge-bg);
+    border-radius: var(--mf-radius-pill);
+  }
+
+  @include shared.each(".c-badge", --badge-ink, --badge-bg);
+
+  .c-badge--dot::before,
+  .c-badge__dot,
+  .c-status-dot {
+    flex: none;
+    inline-size: 0.4375rem;
+    block-size: 0.4375rem;
+    background: currentcolor;
+    border-radius: 50%;
+  }
+
+  .c-badge--dot::before { content: ""; }
+  .c-badge__dot { display: inline-block; }
+
+  // Standalone status dot: <span class="c-status-dot" style-free; colour via c-status-dot--success|warning|danger>
+  .c-status-dot { display: inline-block; color: var(--mf-text-muted); }
+  .c-status-dot--success { color: var(--mf-success); }
+  .c-status-dot--warning { color: var(--mf-warning); }
+  .c-status-dot--danger { color: var(--mf-danger); }
+
+  .c-badge--sm { padding-inline: 0.5rem; font-size: 0.6875rem; }
+}

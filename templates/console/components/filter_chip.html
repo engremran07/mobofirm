@@ -1,0 +1,8 @@
+{% comment %}
+  filter_chip - a filter or a choice shown as a pill.
+  Context: label (required), value (rendered in bold after "label:"), remove_url (renders it as an active, removable filter with a clear button),
+  url (renders a toggle link instead), active (pressed state for a toggle), add (dashed "add filter" style), attrs (e.g. {"hx-get": url, ...}).
+    {% ui "filter_chip" label="Status" value="Pending" remove_url=chip.remove_url %}
+    {% ui "filter_chip" label="Only mine" url=url active=True %}
+  A removable chip is a <span> holding a real link, so it works without JavaScript.
+{% endcomment %}{% load i18n console_ui %}{% if remove_url %}<span class="c-chip is-active">{{ label }}{% if value %}: <strong>{{ value }}</strong>{% endif %}<a class="c-chip__remove" href="{{ remove_url }}" aria-label="{% blocktranslate %}Remove filter: {{ label }}{% endblocktranslate %}"{{ attrs|console_attrs }}>{% console_icon "x" "c-icon--xs" %}</a></span>{% elif url %}<a class="c-chip{% if add %} c-chip--add{% endif %}" href="{{ url }}"{% if active is not None %} aria-pressed="{% if active %}true{% else %}false{% endif %}"{% endif %}{{ attrs|console_attrs }}>{{ label }}{% if value %}: <strong>{{ value }}</strong>{% endif %}</a>{% else %}<span class="c-chip">{{ label }}{% if value %}: <strong>{{ value }}</strong>{% endif %}</span>{% endif %}

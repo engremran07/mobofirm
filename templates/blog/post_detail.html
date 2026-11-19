@@ -42,7 +42,7 @@
           </details>
         {% endif %}
         {% if not gate.locked %}{% render_ad_slot "in-article-top" %}{% endif %}
-        <div class="article-body{% if gate.locked %} article-body--teaser{% endif %}" data-article-body>{{ article.html }}</div>
+        <div class="article-body{% if gate.locked %} article-body--teaser{% endif %}" data-article-body>{% if gate.locked %}{{ article.html }}{% else %}{% ad_article_body article.html %}{% endif %}</div>
         {% if gate.locked %}{% include "blog/partials/paywall.html" %}{% else %}{% render_ad_slot "in-article-mid" %}
         {% ad_zone "in_content" %}{% endif %}
         {% if show_inventory and not gate.locked %}{% include "blog/partials/firmware_inventory.html" %}{% endif %}

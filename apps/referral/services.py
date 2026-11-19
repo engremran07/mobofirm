@@ -25,6 +25,7 @@ from django.utils.dateparse import parse_datetime
 
 from apps.core.app_service import AppService
 from apps.core.events.bus import event_bus
+from apps.core.internal_request import is_internal_crawl
 from apps.core.utils.ip import get_client_ip
 from apps.wallet import api as wallet_api
 
@@ -72,7 +73,7 @@ def find_code(value: str) -> ReferralCode | None:
 
 def capture_code(request: HttpRequest, value: str) -> bool:
     """Remember a valid code in the session until the visitor signs up."""
-    if not get_settings().enabled:
+    if is_internal_crawl(request) or not get_settings().enabled:
         return False
     code = find_code(value)
     if code is None:

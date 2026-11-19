@@ -1,0 +1,13 @@
+{% extends "admin/base_site.html" %}
+{% load i18n console_admin %}
+
+{% block content_title %}{% endblock %}
+{% block object-tools %}{% endblock %}
+
+{% block content %}
+{% console_dialog_request as in_dialog %}
+<div hidden data-console-popup-response data-popup-response="{{ popup_response_data }}"></div>
+{% if not in_dialog %}
+<p>{% translate "Done. You can close this window or go back to the dashboard." %} <a href="{% url 'admin:index' %}">{% translate "Back to the dashboard" %}</a></p>
+{% endif %}
+{% endblock %}

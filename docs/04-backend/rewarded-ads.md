@@ -27,6 +27,32 @@ fails; `check_eligibility` raises `RewardedAdError` with a stable code.
 | `device_reset` | grants one reset allowance, used by `apps.devices.slots` |
 | `download_bonus` | extra downloads through the entitlement modifier seam |
 | `ad_free` | a timed ad-free period |
+| `download_unlock` | counts one watch toward a shop **ad unlock ticket** (see below); no wallet, no grant row |
+
+### Download unlock (`download_unlock`)
+
+The reward type is generic: `apps.ads` knows nothing about tickets. Owning apps plug a
+`RewardHandler(check, grant)` into `rewarded.register_reward_handler(reward_type, ...)`; the
+shop's is registered by `apps/ads/unlock_bridge.py` at startup (the same seam as the
+entitlement modifier), and a `download_unlock` config reports "File unlocks are not
+available on this site." until it exists.
+
+* `RewardedAdView.reference` stores what a watch counts toward (`unlock:<ticket id>`). The
+  rewarded page takes it from `?ref=` and keeps it in the session per config, so the
+  start call needs no extra client code; `handler.check` runs in `check_eligibility`
+  (refusing a missing, foreign, closed or capped ticket with stable error codes) and
+  `handler.grant(view)` runs inside the completion transaction with the view locked.
+* The shop counts each view at most once (`AdUnlockProgress.view_id` is unique), so a
+  replayed or parallel complete can never advance a ticket twice. Everything else the
+  existing flow guards still applies: verified email, advertising consent, per-user start
+  rate limit, per-config caps, one active view per user, flagged abuse rows.
+* Staff create one enabled config of this type (`seed_packages` creates a disabled one,
+  named "Download unlock"): pick its placement, set the watch time and leave the per-config
+  cooldown and caps at 0, because the **package** decides the cooldown between ads and the
+  daily cap (Package builder → Ads & unlocks).
+
+Rules, states and the ticket lifecycle: `docs/04-backend/entitlements.md` ("Unlock by
+watching ads").
 
 ## The flow
 
@@ -56,7 +82,7 @@ site's own creative rendering, so the CSP is unchanged.
 
 ## Admin
 
-`RewardedAdConfig` and `RewardedAdView` are in the Unfold admin. The ads dashboard
+`RewardedAdConfig` and `RewardedAdView` are in the staff console. The ads dashboard
 shows a clear "not configured" state, abuse flags and completion analytics.
 
 ## Tests

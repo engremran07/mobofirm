@@ -16,11 +16,12 @@ A top-level sidebar group **Distribution**:
 | Campaign presets | Copy and schedule presets (opening styles, emoji, hashtag cap, UTM, referral, A/B, evergreen, media). |
 | Content calendar | Upcoming and just-sent posts grouped by day; reschedule or cancel what is waiting. |
 | Approval queue | Posts from channels that require approval: edit the text, then approve or reject. |
+| Hand-off | Posts for assisted platforms (WhatsApp Channel): copy-ready text, the channel link, **Mark as posted**. |
 | Share queue / Short links / Distribution log / Generated media / Retention settings | Model admins (queue is read-only except retry, cancel, approve). |
 | Link analytics | Clicks per channel, content and opening style, "clicks per post", best-hour heatmap, CSV export. |
 
-All staff pages render in the Unfold shell (`render_admin_page`, `mf-ui` kit,
-`frontend/src/styles/admin-ui-dist.css`). Every change is a CSRF-protected POST with a
+All staff pages render in the staff console shell (`render_admin_page`, `admin/staff_page.html`
+and the shared console components). Every change is a CSRF-protected POST with a
 redirect and a message; no native dialogs and no inline scripts.
 
 ## Platforms (adapter registry)
@@ -49,10 +50,34 @@ limit, link counting, minimum gap and daily ceiling, and implements `publish`, `
 | Pinterest | image | `/v5/pins` from the share card. |
 | TikTok | **video** | Content Posting API, `PULL_FROM_URL` (privacy defaults to private until the app is audited). |
 | YouTube | **video** | Shorts upload (multipart) with OAuth refresh token. Community posts have no API. |
-| WhatsApp | text | Cloud API template message to opted-in recipients (WhatsApp Channels have no posting API). |
+| WhatsApp (Cloud API) | text | Official Cloud API, **to opted-in people only**: an approved template (`{{1}}` title, `{{2}}` link), or free text while that person's 24 hour window is open. See "WhatsApp" below. |
+| WhatsApp Channel (assisted) | none | **Assisted, not automatic.** WhatsApp Channels (newsletters) have no posting API. The job becomes *Ready to post by hand* with copy-ready text and the channel link; it is only counted as sent when staff press **Mark as posted**. |
 
 Multi-step platforms keep their progress in `ShareJob.remote_state` (container ids,
 recipients already sent), so a retry never creates a second container or message.
+
+### The platform menu
+
+`apps/distribution/catalog.py` is the presentation catalogue (pure data, no model): category,
+Lucide icon (no brand logos exist in Lucide), sign-in method, setup difficulty, credential steps
+and official documentation links per platform. A test keeps it in step with the registry.
+**Channels > Add** (`/admin/distribution/channel/platforms/`) is a left/top category menu
+(Social networks, Video, Messaging & communities, Fediverse & open, Developer & automation;
+TikTok sits in two), a search box (`q`, filtered over HTMX into `#dist-picker-results`, works
+as plain GET without JavaScript), a *Connected* section and per-category sections of cards.
+**Setup guide** opens `/admin/distribution/channel/platforms/<kind>/requirements/` in
+`#console-dialog` (a full page without HTMX). The add form is five steps: Platform, Credentials,
+Content rules, Schedule & approval, Test & status; a plain save redirects to the channel page,
+where **Test connection** and **Send test post** (the existing actions) finish the setup.
+
+### WhatsApp
+
+What is and is not possible (Meta's public documentation, linked in the setup guide; platform rules change, so re-check them):
+
+* **Cloud API (supported).** Business-initiated messages need the person's prior opt-in. Outside the 24 hour customer-service window only an approved *template* may be sent; inside it free text is allowed. Marketing templates are throttled per recipient (error `131049`); `131050` means the person stopped marketing messages and is treated as an opt-out. Sending is limited per phone number and by the account's messaging tier.
+* **Opt-in list.** `WhatsAppRecipient` rows (channel, number, opted in/out with source and reason, last inbound time, last delivery status). Numbers listed in the channel's *Opted-in recipients* field are recorded as "staff list" (staff attest consent). An opted-out number is never messaged, even while still listed. A number refused for good is recorded and the other recipients are still served; a retry never messages anyone twice (`remote_state.sent_to` / `failed_to`).
+* **Webhook** `/go/whatsapp/<channel id>/webhook/` (optional): `GET` answers Meta's `hub.challenge` when the verify token matches; `POST` requires a valid `X-Hub-Signature-256` for the stored app secret (otherwise 403; 404 while no app secret is stored). It records delivery status (`sent`, `delivered`, `read`, `failed`), inbound time (opens the 24 hour window), STOP (opt out) and START (opt back in) for numbers that are already known; an unknown number never creates a recipient. It is the only CSRF-exempt view of the app: it carries no session authority and is authenticated by the HMAC signature.
+* **WhatsApp Channels (not supported by any API).** Only the channel admins can post, from the WhatsApp app. The assisted platform prepares the post and never claims it was sent: **Distribution > Hand-off** lists the posts (`ShareJob.Status.HANDOFF`) with the text and channel link, and **Mark as posted** (`services.mark_posted`, idempotent) records the success.
 
 ## Credentials
 
@@ -141,10 +166,69 @@ per-link totals stay), audit log lines (365) and generated media (30); `0` keeps
 `automation.housekeeping` purges and runs the evergreen pass at most once an hour from the
 minutely task (`distribution_jobs --housekeeping` forces it).
 
+## Feeds, Google News and push (syndication)
+
+Feeds are first-class distribution output, owned here (`feeds.py`, `feed_views.py`,
+`syndication.py`, `news.py`; content is read through `django.apps` model lookup, no
+cross-app imports). Staff page: **Distribution > Feeds & Google News**.
+
+**Public feeds** (`/feeds/`, index page with autodiscovery): `latest`, `section/blog`,
+`section/firmware`, on-demand `brand/<slug>`, `chipset/<slug>` and `tag/<slug>`, and
+`google-news`, each as `.rss` (RSS 2.0 with `content:encoded`, `dc:creator`,
+`media:content`, `atom:link rel=self` (and `rel=hub`), `lastBuildDate`, `ttl`, permalink
+`guid`, categories), `.atom` (Atom 1.0) and `.json` (JSON Feed 1.1 with `hubs`). Only live
+posts (`Post.published()`) and `is_verified`, `is_active` firmware are listed; gated posts
+carry a teaser and the page link, firmware only its page link (never a download URL);
+drafts, scheduled and pending items never appear. `lastBuildDate` is the newest item time,
+so output is deterministic: `ETag`, `Last-Modified`, `If-None-Match` / `If-Modified-Since`
+(304), gzip when accepted, `Cache-Control: public, max-age=300`. Fetches are counted per
+feed and hour (`FeedStat`, counts only; the in-process SEO crawler is not counted) and
+`FeedConfig` keeps last fetched/built, size and item count. Per-feed on/off and the global
+switch (`DistributionSettings.feeds_enabled`, `feeds_dynamic_enabled`, `feed_item_limit`)
+make a feed answer 404. Empty or unknown dynamic feeds are 404, so slugs cannot be
+probed into the database. The existing `blog:feed_*` feeds are unchanged.
+
+**Google News** is not automatic. The page shows the facts and does only what is real:
+(a) a status card for the opt-in news sitemap owned by `apps.seo` with copyable URLs and a
+checklist (Publisher Center, Search Console, submit) that staff mark by hand
+(`DistributionSettings.news_checklist`; it is a note, Google confirms nothing); (b) the
+`google-news` feed, full text, only posts the news sitemap lists (last 48 hours), and
+only while the news sitemap is on; (c) a Discover-readiness scan of the newest posts
+(title length, cover image served locally and its width when measurable, date, author,
+canonical, noindex) with links to the post and the SEO issues. Image dimensions of
+remote images and the NewsArticle/`max-image-preview:large` markup are not measured here;
+the page points at the SEO scan.
+
+**Push.** WebSub: with a hub URL (https) in the settings, every newly public item queues a
+`PingOutbox` row per affected feed and format (`websub:<hub>:<feed url>:<entry>` is the
+unique idempotency key). IndexNow: one row per URL through `apps.seo.indexnow.submit`,
+only while SEO has it enabled. Transaction boundary: the publish handlers call
+`syndication.announce` in `transaction.on_commit` (never inside the content
+transaction), which only writes rows; the minutely job (`process_share_jobs`,
+`distribution_jobs`) delivers them with `RETRY_BACKOFF`, `MAX_ATTEMPTS = 5`, terminal
+`failed` afterwards (staff can retry or cancel), and writes a `ShareLog` audit line for
+every decision. Removing the hub makes pending pings fail with a clear reason. Default is
+off: no hub, no pings, no `rel=hub`. Browser Web Push (VAPID) already exists in the Users
+app for account notifications and needs `pywebpush`, which this site does not install, so
+it is shown as *not enabled*; feeds do not send browser push. On Android, reach is: a
+feed-reader app following a feed (automatic after subscribing, faster with WebSub) and the
+Chrome home-screen shortcut (manual, no subscription). Retention: `FeedStat` and finished
+pings follow `log_retention_days`.
+
+Migrations: `0004_whatsapp_assisted_optin`, `0005_feeds_syndication`.
+
+## Motion videos
+
+Videos for TikTok, YouTube Shorts and Reels are rendered locally and approved by staff before
+anything posts. Full decision record, template packs, limits and installation:
+[`distribution-video.md`](distribution-video.md). Staff screen: **Distribution > Videos**.
+Migration `0006_motion_video_jobs` (`VideoJob`, four `DistributionSettings` fields).
+
 ## Tests
 
 `tests/backend/distribution/` (adapters per platform, composer, scheduling, short links,
-approval, automation, media, admin pages and permissions) and
+approval, automation, media, admin pages and permissions, platform picker and WhatsApp,
+feeds and the ping outbox) and
 `tests/frontend/test_distribution_browser.py` (Playwright: pages at 360/768/1365 px,
 light and dark, no console/CSP errors, run queue, test connection, approve, cancel).
 Tests use a fake transport and in-memory storage and never call the network.

@@ -1,0 +1,329 @@
+@use "sass:color";
+@use "sass:map";
+@use "sass:string";
+@use "palette" as p;
+
+// =============================================================================
+// Token emitters - the ONLY producers of `--mf-*` custom properties.
+//
+//   @include emit.theme-tokens;   colour themes (light / dark / system / high contrast)
+//                                 and every token derived from a colour
+//   @include emit.scale-tokens;   typography, spacing, radius, layout, motion, z-index,
+//                                 focus ring: values that do not depend on a theme
+//
+// Both bundles call these exactly once:
+//   public  frontend/src/styles/tokens.scss      (unlayered, static/build/tokens.css)
+//   console frontend/src/admin/styles/_tokens.scss (inside `@layer tokens`)
+// so a token has one definition no matter which surface renders it.
+// =============================================================================
+
+@function triplet($c, $sep: ", ") {
+  @return "#{color.channel($c, "red", $space: rgb)}#{$sep}#{color.channel($c, "green", $space: rgb)}#{$sep}#{color.channel($c, "blue", $space: rgb)}";
+}
+
+// Raw values of one theme: the palette, theme-specific extras and RGB triplets. Only these
+// differ between themes, so only these are repeated per theme.
+@mixin palette($colours, $extra, $surface: console) {
+  @each $name, $value in $colours {
+    @if $surface == console or not (string.index("#{$name}", "sidebar") or $name == "border-strong") {
+      --mf-#{$name}: #{$value};
+    }
+  }
+
+  @each $name, $value in $extra {
+    --mf-#{$name}: #{$value};
+  }
+
+  // Comma triplets power Bootstrap's rgba(var(--bs-*-rgb), alpha) utilities.
+  @each $name in (page, text, text-muted, accent, accent-strong, link-hover, success, warning, danger) {
+    --mf-#{$name}-rgb: #{triplet(map.get($colours, $name), ", ")};
+  }
+}
+
+// Tokens computed from the raw values with var(). They are declared once on every theme
+// scope (root and any nested [data-bs-theme]) so a nested scope recomputes them.
+@mixin derived($surface: console) {
+  // Soft status surfaces: a status colour tinted into the raised surface.
+  @if $surface == console {
+    --mf-accent-soft: color-mix(in srgb, var(--mf-accent) 11%, var(--mf-surface-raised));
+    --mf-success-soft: color-mix(in srgb, var(--mf-success) 12%, var(--mf-surface-raised));
+    --mf-warning-soft: color-mix(in srgb, var(--mf-warning) 13%, var(--mf-surface-raised));
+    --mf-danger-soft: color-mix(in srgb, var(--mf-danger) 11%, var(--mf-surface-raised));
+    --mf-info-soft: color-mix(in srgb, var(--mf-info) 11%, var(--mf-surface-raised));
+    --mf-neutral-soft: var(--mf-surface-soft);
+  }
+  @if $surface == console {
+    --mf-hover: color-mix(in srgb, var(--mf-text) 5%, transparent);
+    --mf-selected: color-mix(in srgb, var(--mf-accent) 10%, var(--mf-surface));
+  }
+  --mf-border-soft: color-mix(in srgb, var(--mf-border) 55%, transparent);
+
+  // Glass (public header, overlays)
+  --mf-glass-bg: color-mix(in srgb, var(--mf-glass-surface) var(--mf-glass-alpha), transparent);
+  --mf-glass-bg-strong: color-mix(in srgb, var(--mf-glass-surface) var(--mf-glass-strong-alpha), transparent);
+
+  // Chrome
+  @if $surface == console {
+    --mf-header-bg: color-mix(in srgb, var(--mf-page) 84%, transparent);
+    --mf-sidebar-text-strong: var(--mf-text);
+    --mf-sidebar-hover-bg: color-mix(in srgb, var(--mf-text) 6%, transparent);
+    --mf-sidebar-active-bg: var(--mf-accent-soft);
+    --mf-sidebar-active-text: var(--mf-accent-strong);
+    --mf-sidebar-border: color-mix(in srgb, var(--mf-text) 9%, transparent);
+  }
+
+  // Elevation (soft, layered; the shadow colour follows the theme).
+  --mf-elev-1: 0 1px 2px rgb(var(--mf-shadow-rgb) / 8%), 0 1px 1px rgb(var(--mf-shadow-rgb) / 5%);
+  --mf-elev-2: 0 2px 6px rgb(var(--mf-shadow-rgb) / 8%), 0 8px 20px rgb(var(--mf-shadow-rgb) / 6%);
+  --mf-elev-3: 0 4px 10px rgb(var(--mf-shadow-rgb) / 9%), 0 18px 38px rgb(var(--mf-shadow-rgb) / 12%);
+  --mf-elev-4: 0 8px 18px rgb(var(--mf-shadow-rgb) / 12%), 0 32px 70px rgb(var(--mf-shadow-rgb) / 20%);
+  --mf-shadow: 0 1.25rem 3.5rem rgb(var(--mf-shadow-rgb) / var(--mf-shadow-alpha));
+  --mf-card-shadow: 0 0.25rem 1rem rgb(var(--mf-shadow-rgb) / var(--mf-card-shadow-alpha));
+  --mf-glow: 0 0 0 1px color-mix(in srgb, var(--mf-accent) 35%, transparent), 0 8px 30px color-mix(in srgb, var(--mf-accent) 28%, transparent);
+  --mf-inset-highlight: inset 0 1px 0 color-mix(in srgb, var(--mf-white) var(--mf-highlight-alpha), transparent);
+  --mf-sheen: color-mix(in srgb, var(--mf-white) 14%, transparent);
+  --mf-card-tint: color-mix(in srgb, var(--mf-white) 3%, var(--mf-surface));
+
+  // Focus ring: one geometry, one colour, every surface.
+  @if $surface == console {
+    --mf-focus-ring: 0 0 0 var(--mf-focus-width) color-mix(in srgb, var(--mf-focus) 35%, transparent);
+  }
+
+  // Gradients follow the accent, so a site-settings accent restyles all of them.
+  --mf-gradient-accent: linear-gradient(135deg, var(--mf-accent) 0%, var(--mf-accent-cool) 100%);
+  --mf-gradient-soft: linear-gradient(145deg, color-mix(in srgb, var(--mf-accent) 14%, var(--mf-surface-raised)), color-mix(in srgb, var(--mf-accent-cool) 10%, var(--mf-surface)));
+  --mf-gradient-mesh:
+    radial-gradient(ellipse 60% 70% at 88% -10%, color-mix(in srgb, var(--mf-accent) 20%, transparent), transparent 60%),
+    radial-gradient(ellipse 45% 45% at 4% 40%, color-mix(in srgb, var(--mf-accent-warm) 13%, transparent), transparent 62%),
+    radial-gradient(ellipse 40% 45% at 55% 35%, color-mix(in srgb, var(--mf-accent-cool) 9%, transparent), transparent 70%);
+
+  // Bridge: Bootstrap 5.3 custom properties -> tokens (one place; a Bootstrap 6 bump re-maps here).
+  --bs-body-bg: var(--mf-page);
+  --bs-body-bg-rgb: var(--mf-page-rgb);
+  --bs-body-color: var(--mf-text);
+  --bs-body-color-rgb: var(--mf-text-rgb);
+  --bs-emphasis-color: var(--mf-text);
+  --bs-emphasis-color-rgb: var(--mf-text-rgb);
+  --bs-heading-color: var(--mf-text);
+  --bs-secondary-color: var(--mf-text-muted);
+  --bs-secondary-color-rgb: var(--mf-text-muted-rgb);
+  --bs-secondary-bg: var(--mf-surface-soft);
+  --bs-tertiary-bg: var(--mf-surface);
+  --bs-border-color: var(--mf-border);
+  --bs-border-color-translucent: var(--mf-border-soft);
+  --bs-primary: var(--mf-accent-strong);
+  --bs-primary-rgb: var(--mf-accent-strong-rgb);
+  --bs-secondary: var(--mf-text-muted);
+  --bs-secondary-rgb: var(--mf-text-muted-rgb);
+  --bs-success: var(--mf-success);
+  --bs-success-rgb: var(--mf-success-rgb);
+  --bs-warning: var(--mf-warning);
+  --bs-warning-rgb: var(--mf-warning-rgb);
+  --bs-danger: var(--mf-danger);
+  --bs-danger-rgb: var(--mf-danger-rgb);
+  --bs-link-color: var(--mf-accent);
+  --bs-link-color-rgb: var(--mf-accent-rgb);
+  --bs-link-hover-color: var(--mf-link-hover);
+  --bs-link-hover-color-rgb: var(--mf-link-hover-rgb);
+  --bs-focus-ring-color: color-mix(in srgb, var(--mf-focus) 35%, transparent);
+  --bs-form-valid-color: var(--mf-success);
+  --bs-form-valid-border-color: var(--mf-success);
+  --bs-form-invalid-color: var(--mf-danger);
+  --bs-form-invalid-border-color: var(--mf-danger);
+  --bs-code-color: var(--mf-accent-warm);
+}
+
+@mixin content-palette($colours) {
+  @each $name, $value in $colours {
+    --mf-#{$name}: #{$value};
+  }
+}
+
+// High contrast re-points colours only; derived tokens follow because they use var().
+@mixin high($colours) {
+  @each $name, $value in $colours {
+    --mf-#{$name}: #{$value};
+  }
+
+  @each $name in (page, text) {
+    --mf-#{$name}-rgb: #{triplet(map.get($colours, $name), ", ")};
+  }
+}
+
+@mixin theme-tokens($system: true, $surface: console) {
+  :root {
+    @each $name, $value in p.$fixed {
+      @if $surface == console or not string.index("#{$name}", "print") {
+        --mf-#{$name}: #{$value};
+      }
+    }
+  }
+
+  :root,
+  [data-bs-theme="light"],
+  [data-bs-theme="dark"] {
+    @include derived($surface);
+  }
+
+  :root,
+  :root[data-bs-theme="light"],
+  [data-bs-theme="light"] {
+    color-scheme: light;
+    @include palette(p.$light, p.$light-extra, $surface);
+    @include content-palette(p.$content-light);
+  }
+
+  :root[data-bs-theme="dark"],
+  [data-bs-theme="dark"] {
+    color-scheme: dark;
+    @include palette(p.$dark, p.$dark-extra, $surface);
+    @include content-palette(p.$content-dark);
+  }
+
+  // System theme: no explicit attribute -> follow the operating system. The public site
+  // resolves "auto" in theme-init.js before first paint, so only the console needs this.
+  @if $system {
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-bs-theme]) {
+        color-scheme: dark;
+        @include palette(p.$dark, p.$dark-extra, $surface);
+        @include content-palette(p.$content-dark);
+      }
+    }
+  }
+
+  :root[data-contrast="high"][data-bs-theme="light"] {
+    @include high(p.$light-high);
+  }
+
+  :root[data-contrast="high"][data-bs-theme="dark"] {
+    @include high(p.$dark-high);
+  }
+}
+
+// Non-colour tokens. `:root:root` outranks Bootstrap's own unlayered `:root` block on
+// the public site; inside the console `tokens` layer it is simply `:root`.
+@mixin scale-tokens($surface: both) {
+  :root:root {
+    // Typography: system stacks only (no network fonts). Display is an editorial
+    // old-style serif where the OS provides one.
+    --mf-font-sans: system-ui, -apple-system, "Segoe UI Variable Text", "Segoe UI", roboto, "Helvetica Neue", "Noto Sans", arial, sans-serif;
+    @if $surface == console {
+    --mf-font-display: "Iowan Old Style", "Palatino Linotype", palatino, "Book Antiqua", charter, "Source Serif 4", georgia, serif;
+    }
+    --mf-font-mono: ui-monospace, "Cascadia Code", "SF Mono", menlo, consolas, "Liberation Mono", monospace;
+
+    @if $surface != console {
+    // Editorial scale (public pages), fluid 360px -> 1440px viewport.
+    --mf-text-2xs: 0.72rem;
+    --mf-text-xs: clamp(0.75rem, 0.73rem + 0.1vw, 0.8rem);
+    --mf-text-sm: clamp(0.84rem, 0.82rem + 0.12vw, 0.92rem);
+    --mf-text-base: clamp(0.97rem, 0.94rem + 0.15vw, 1.05rem);
+    --mf-text-lg: clamp(1.08rem, 1.02rem + 0.3vw, 1.25rem);
+    --mf-text-xl: clamp(1.25rem, 1.12rem + 0.6vw, 1.55rem);
+    --mf-text-2xl: clamp(1.5rem, 1.28rem + 1.05vw, 2.1rem);
+    --mf-text-3xl: clamp(1.85rem, 1.45rem + 1.9vw, 2.9rem);
+    // Page titles top out at 3rem and the home hero at 2.5rem: bigger headings crowd the
+    // search and stats they introduce and wrap into four lines on phones.
+    --mf-text-4xl: clamp(1.9rem, 1.45rem + 2vw, 3rem);
+    --mf-text-5xl: clamp(2.2rem, 1.55rem + 3vw, 3.6rem);
+    --mf-text-hero: clamp(1.65rem, 1.2rem + 1.7vw, 2.5rem);
+    --mf-leading-tight: 1.08;
+    --mf-leading-snug: 1.25;
+    --mf-leading-body: 1.6;
+    --mf-tracking-tight: -0.045em;
+    --mf-tracking-wide: 0.1em;
+    }
+
+    @if $surface != public {
+    // UI scale (staff console: denser, same family). clamp: min @ 360px, max @ 1280px.
+    --mf-fs-xs: clamp(0.75rem, 0.73rem + 0.07vw, 0.8125rem);
+    --mf-fs-sm: clamp(0.8125rem, 0.79rem + 0.1vw, 0.875rem);
+    --mf-fs-base: clamp(0.9375rem, 0.91rem + 0.12vw, 1rem);
+    --mf-fs-lg: clamp(1.0625rem, 1.02rem + 0.18vw, 1.1875rem);
+    --mf-fs-xl: clamp(1.25rem, 1.16rem + 0.4vw, 1.5rem);
+    --mf-fs-2xl: clamp(1.5rem, 1.3rem + 0.9vw, 2rem);
+    --mf-fs-3xl: clamp(1.75rem, 1.4rem + 1.5vw, 2.5rem);
+    --mf-lh-tight: 1.2;
+    --mf-lh-base: 1.55;
+    --mf-control-h: 2.5rem;
+    --mf-control-h-sm: 2rem;
+    --mf-console-width: 80rem;
+    --mf-header-h: 3.75rem;
+    }
+    // 4px-based spacing scale.
+    --mf-space-1: 0.25rem;
+    --mf-space-2: 0.5rem;
+    --mf-space-3: 0.75rem;
+    --mf-space-4: 1rem;
+    --mf-space-5: 1.5rem;
+    --mf-space-6: 2rem;
+    --mf-space-7: 3rem;
+    --mf-space-8: 4.5rem;
+    --mf-space-9: 6rem;
+    --mf-section-gap: clamp(2rem, 1.2rem + 3.5vw, 4.5rem);
+
+    // Radius scale.
+    --mf-radius-xs: 0.375rem;
+    --mf-radius-sm: 0.5rem;
+    --mf-radius-md: 0.85rem;
+    --mf-radius-lg: 1.25rem;
+    --mf-radius-xl: 1.75rem;
+    --mf-radius-pill: 999px;
+
+    // Controls and layout.
+    --mf-content-width: 76rem;
+    --mf-reading-width: 48rem;
+    --mf-header-height: 4.25rem;
+    --mf-glass-blur: 18px;
+
+    // Motion. Durations collapse to ~0 under reduced motion (below).
+    --mf-duration-fast: 120ms;
+    --mf-duration-base: 200ms;
+    --mf-duration-slow: 360ms;
+    --mf-transition: 160ms ease;
+    --mf-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+    --mf-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+    --mf-ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+
+    // Layers.
+    --mf-z-header: 30;
+    --mf-z-mega: 40;
+
+    --mf-z-toast: 1200;
+    --mf-z-progress: 1300;
+
+    // Focus ring geometry (colour is --mf-focus, see theme tokens).
+    --mf-focus-width: 3px;
+    @if $surface == console {
+      --mf-focus-offset: 2px;
+    }
+
+    // Bootstrap bridge for non-colour values.
+    --bs-body-font-family: var(--mf-font-sans);
+    --bs-font-sans-serif: var(--mf-font-sans);
+    --bs-font-monospace: var(--mf-font-mono);
+    --bs-border-radius: var(--mf-radius-sm);
+    --bs-border-radius-sm: var(--mf-radius-xs);
+    --bs-border-radius-lg: var(--mf-radius-md);
+    --bs-border-radius-xl: var(--mf-radius-lg);
+    --bs-border-radius-pill: var(--mf-radius-pill);
+    --bs-box-shadow: var(--mf-elev-1);
+    --bs-box-shadow-sm: var(--mf-elev-1);
+    --bs-box-shadow-lg: var(--mf-elev-3);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    :root:root {
+      --mf-duration-fast: 0.01ms;
+      --mf-duration-base: 0.01ms;
+      --mf-duration-slow: 0.01ms;
+    }
+  }
+
+  :root[data-motion="reduce"]:root {
+    --mf-duration-fast: 0.01ms;
+    --mf-duration-base: 0.01ms;
+    --mf-duration-slow: 0.01ms;
+  }
+}

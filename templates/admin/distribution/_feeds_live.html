@@ -1,0 +1,65 @@
+{% load i18n staff_ui console_ui %}
+{% comment %}
+  The live region of the Feeds page: reloaded over HTMX every 20 seconds (hx-get on the page URL,
+  answered with this fragment because the target is #dist-feeds-live). Context: rows, recent, fetches_24h,
+  not_modified_24h, pings, ping_summary, can_edit, can_change.
+{% endcomment %}
+{% url 'admin:distribution_channel_feeds' as feeds_url %}
+<div id="dist-feeds-live" class="d-flex flex-column gap-4" hx-get="{{ feeds_url }}" hx-trigger="every 20s" hx-target="#dist-feeds-live" hx-swap="outerHTML">
+  {% staff_section title=_("Feeds") ident="feeds-list" intro=_("Each feed is available as RSS 2.0, Atom 1.0 and JSON Feed 1.1. Copy the address into a reader or a Publisher Center form.") %}
+    {% staff_stack %}
+      {% for row in rows %}
+        <article class="c-handoff" aria-labelledby="feed-{{ forloop.counter }}">
+          <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+            <h3 class="h6 mb-0" id="feed-{{ forloop.counter }}">{{ row.title }}</h3>
+            <span class="c-badge c-badge--{% if not row.available %}neutral{% elif row.enabled %}success{% else %}warning{% endif %}">{% if not row.available %}{% translate "Not available" %}{% elif row.enabled %}{% translate "On" %}{% else %}{% translate "Off" %}{% endif %}</span>
+          </div>
+          <p class="u-muted u-text-sm mb-0">{{ row.description }}</p>
+          <ul class="list-unstyled d-flex flex-column gap-1 mb-0">
+            {% for link in row.urls %}
+              <li class="u-cluster"><span class="u-text-xs u-muted">{{ link.label }}</span> <code class="u-break u-text-xs">{{ link.url }}</code>
+                <button type="button" class="btn btn-ghost btn-sm" data-console-copy="{{ link.url }}" aria-label="{% blocktranslate with name=link.label %}Copy the {{ name }} address{% endblocktranslate %}">{% translate "Copy" %}</button></li>
+            {% endfor %}
+          </ul>
+          <dl class="c-platform__facts">
+            <dt>{% translate "Last fetched" %}</dt><dd>{{ row.config.last_fetched_at|date:"Y-m-d H:i"|default:"—" }}</dd>
+            <dt>{% translate "Last built" %}</dt><dd>{{ row.config.last_built_at|date:"Y-m-d H:i"|default:"—" }}</dd>
+            <dt>{% translate "Size · items" %}</dt><dd>{{ row.config.last_size|default:0|filesizeformat }} · {{ row.config.last_item_count|default:0 }}</dd>
+            <dt>{% translate "Fetches" %}</dt><dd>{{ row.config.fetch_count|default:0 }} ({{ row.config.not_modified_count|default:0 }} {% translate "not modified" %})</dd>
+            {% if row.config.last_validation %}<dt>{% translate "Validation" %}</dt><dd>{{ row.config.last_validation }}</dd>{% endif %}
+          </dl>
+          {% staff_row %}
+            <form method="post" action="{% url 'admin:distribution_channel_feeds_validate' %}">{% csrf_token %}<input type="hidden" name="key" value="{{ row.key }}">{% staff_button _("Validate") size="sm" %}</form>
+            {% if can_edit %}<form method="post" action="{% url 'admin:distribution_channel_feeds_toggle' %}">{% csrf_token %}<input type="hidden" name="key" value="{{ row.key }}">{% if row.enabled %}{% staff_button _("Turn off") size="sm" tone="danger" %}{% else %}{% staff_button _("Turn on") size="sm" tone="primary" %}{% endif %}</form>{% endif %}
+          {% endstaff_row %}
+        </article>
+      {% endfor %}
+    {% endstaff_stack %}
+  {% endstaff_section %}
+
+  {% staff_section title=_("Recent fetches (last 24 hours)") ident="feeds-fetches" intro=_("Counts only. No address, device or cookie is stored.") %}
+    {% blocktranslate with total=fetches_24h cached=not_modified_24h %}{{ total }} fetches, {{ cached }} answered “not modified”.{% endblocktranslate %}
+    {% if recent %}
+      {% staff_table label=_("Hourly feed fetches") %}
+        <thead><tr><th scope="col">{% translate "Hour" %}</th><th scope="col">{% translate "Feed" %}</th><th scope="col" class="text-end">{% translate "Fetches" %}</th><th scope="col" class="text-end">{% translate "Not modified" %}</th></tr></thead>
+        <tbody>{% for stat in recent %}<tr><td>{{ stat.bucket|date:"Y-m-d H:00" }}</td><td>{{ stat.feed_key }}</td><td class="text-end">{{ stat.fetches }}</td><td class="text-end">{{ stat.not_modified }}</td></tr>{% endfor %}</tbody>
+      {% endstaff_table %}
+    {% else %}{% staff_empty %}{% translate "No feed has been fetched yet." %}{% endstaff_empty %}{% endif %}
+  {% endstaff_section %}
+
+  {% staff_section title=_("Delivery outbox (WebSub and IndexNow)") ident="feeds-outbox" %}
+    <p class="u-muted u-text-sm mb-0">{% blocktranslate with pending=ping_summary.pending sent=ping_summary.sent failed=ping_summary.failed %}{{ pending }} waiting · {{ sent }} sent · {{ failed }} failed. Each entry is pinged once per target; failures retry with backoff, then stop.{% endblocktranslate %}</p>
+    {% if can_edit %}<form method="post" action="{% url 'admin:distribution_channel_feeds_ping_run' %}">{% csrf_token %}{% staff_button _("Send pings now") size="sm" %}</form>{% endif %}
+    {% if pings %}
+      {% staff_table label=_("Ping outbox") %}
+        <thead><tr><th scope="col">{% translate "Created" %}</th><th scope="col">{% translate "Type" %}</th><th scope="col">{% translate "Address" %}</th><th scope="col">{% translate "State" %}</th><th scope="col" class="text-end">{% translate "Tries" %}</th><th scope="col">{% translate "Actions" %}</th></tr></thead>
+        <tbody>{% for ping in pings %}<tr>
+          <td>{{ ping.created_at|date:"Y-m-d H:i" }}</td><td>{{ ping.get_kind_display }}</td><td class="u-break">{{ ping.url }}</td>
+          <td><span class="c-badge c-badge--{% if ping.status == 'sent' %}success{% elif ping.status == 'failed' %}danger{% elif ping.status == 'pending' %}warning{% else %}neutral{% endif %}">{{ ping.get_status_display }}</span>{% if ping.last_error %}<br><small class="u-muted">{{ ping.last_error }}</small>{% endif %}</td>
+          <td class="text-end">{{ ping.attempts }}</td>
+          <td>{% if can_edit %}{% if ping.status == 'failed' %}<form method="post" action="{% url 'admin:distribution_channel_feeds_ping' ping.pk 'retry' %}">{% csrf_token %}{% staff_button _("Retry") size="sm" %}</form>{% elif ping.status == 'pending' %}<form method="post" action="{% url 'admin:distribution_channel_feeds_ping' ping.pk 'cancel' %}">{% csrf_token %}{% staff_button _("Cancel") size="sm" tone="danger" %}</form>{% endif %}{% endif %}</td>
+        </tr>{% endfor %}</tbody>
+      {% endstaff_table %}
+    {% else %}{% staff_empty %}{% translate "Nothing has been queued. Pings are queued when a post is published or firmware is approved and a hub or IndexNow is on." %}{% endstaff_empty %}{% endif %}
+  {% endstaff_section %}
+</div>

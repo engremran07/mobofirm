@@ -1,0 +1,61 @@
+// Print + forced-colors adjustments (overrides layer: last word, low specificity needed).
+@layer overrides {
+  @media print {
+    :root {
+      --mf-page: var(--mf-white);
+      --mf-surface: var(--mf-white);
+      --mf-surface-raised: var(--mf-white);
+      --mf-text: var(--mf-black);
+      --mf-text-muted: var(--mf-print-muted);
+      --mf-border: var(--mf-print-border);
+    }
+
+    body { color: var(--mf-black); font-size: 11pt; background: var(--mf-white); }
+
+    .app-sidebar,
+    .app-header,
+    .app-footer,
+    .sidebar-overlay,
+    .c-toast-region,
+    .c-loadbar,
+    .c-bulkbar,
+    .c-savebar,
+    .c-cl-toolbar,
+    .c-cl-chips,
+    .c-fbar,
+    .c-pager__list,
+    .c-row-actions,
+    .c-tabs__list,
+    .modal,
+    .btn,
+    .u-hide-print { display: none !important; }
+
+    .c-card,
+    .c-stat,
+    .c-fieldset,
+    .c-cl-results,
+    .c-table-wrap { box-shadow: none; }
+
+    .c-cl-results,
+    .c-table-wrap { max-block-size: none; overflow: visible; }
+
+    .c-table thead { display: table-header-group; }
+    .c-table thead th { position: static; background: var(--mf-print-soft); }
+    .c-table tr,
+    .c-card,
+    .c-timeline__item { break-inside: avoid; }
+
+    .c-tabs__panel[hidden] { display: block !important; }
+    .u-print-links a[href]::after { content: " (" attr(href) ")"; font-size: 0.85em; }
+  }
+
+  @media (forced-colors: active) {
+    .c-badge,
+    .c-chip,
+    .c-alert,
+    .c-toast { border: 1px solid CanvasText; }
+
+    .c-table tbody tr.selected > :first-child,
+    .c-table tbody tr:has(.action-select:checked) > :first-child { box-shadow: inset 3px 0 0 Highlight; }
+  }
+}

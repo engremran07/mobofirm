@@ -1,0 +1,13 @@
+{% comment %}
+  Related-object controls beside a relation field (add / change / delete / view), opened as dialogs by the related-popup behaviour.
+  "add" is a real link (works as a full page without JavaScript); change/delete/view need the selected value, so they are buttons
+  whose data-href-template carries __fk__ for the selection. Context is Django's RelatedFieldWidgetWrapper.
+{% endcomment %}{% load i18n console_ui %}<div class="related-widget-wrapper c-related" data-console-related{% if not model_has_limit_choices_to %} data-model-ref="{{ model_name }}"{% endif %}>
+{{ rendered_widget }}
+{% block links %}{% if not is_hidden %}
+{% if can_change_related %}<button type="button" class="c-related__link btn btn-ghost btn-icon btn-sm" id="change_id_{{ name }}" data-console-related-link="change" data-href-template="{{ change_related_template_url }}?{{ url_params }}" title="{% blocktranslate %}Change selected {{ model }}{% endblocktranslate %}">{% console_icon "pencil" %}<span class="visually-hidden">{% blocktranslate %}Change selected {{ model }}{% endblocktranslate %}</span></button>{% endif %}
+{% if can_add_related %}<a class="c-related__link btn btn-ghost btn-icon btn-sm" id="add_id_{{ name }}" data-console-related-link="add" href="{{ add_related_url }}?{{ url_params }}" title="{% blocktranslate %}Add another {{ model }}{% endblocktranslate %}">{% console_icon "plus" %}<span class="visually-hidden">{% blocktranslate %}Add another {{ model }}{% endblocktranslate %}</span></a>{% endif %}
+{% if can_delete_related %}<button type="button" class="c-related__link btn btn-ghost btn-icon btn-sm" id="delete_id_{{ name }}" data-console-related-link="delete" data-href-template="{{ delete_related_template_url }}?{{ url_params }}" title="{% blocktranslate %}Delete selected {{ model }}{% endblocktranslate %}">{% console_icon "trash-2" %}<span class="visually-hidden">{% blocktranslate %}Delete selected {{ model }}{% endblocktranslate %}</span></button>{% endif %}
+{% if can_view_related %}<button type="button" class="c-related__link btn btn-ghost btn-icon btn-sm" id="view_id_{{ name }}" data-console-related-link="view" data-href-template="{{ change_related_template_url }}?{{ view_related_url_params }}" title="{% blocktranslate %}View selected {{ model }}{% endblocktranslate %}">{% console_icon "eye" %}<span class="visually-hidden">{% blocktranslate %}View selected {{ model }}{% endblocktranslate %}</span></button>{% endif %}
+{% endif %}{% endblock %}
+</div>

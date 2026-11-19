@@ -81,7 +81,7 @@ def make_file_fixture() -> Any:
 
 
 def page(client: Client, tab: str = "") -> str:
-    url = reverse("library:my_files")
+    url = reverse("contributions:downloads")
     response = client.get(url, {"tab": tab} if tab else {})
     assert response.status_code == 200
     return response.content.decode()

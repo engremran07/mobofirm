@@ -7,7 +7,7 @@ description: "Apply and verify CSP, CORS, and mixed-content controls for Mobofir
 Use for frontend, template, CSP, CORS, or transport-security changes.
 
 1. Read `app/settings/security.py`, the active environment settings, and the existing header tests before changing policy.
-2. Keep the CSP default same-origin; do not allow inline scripts/styles, eval, or wildcard sources. Add only exact provider origins required by a verified feature.
+2. Keep the CSP default same-origin; do not allow inline scripts/styles, eval, or wildcard sources. Add only exact provider origins required by a verified feature. The staff console is served under its own stricter `ADMIN_CSP` (same-origin scripts only; no `'unsafe-eval'`; style nonce only; no style attributes); never relax it to fit a widget, and keep staff views outside the `admin`/`seo` namespaces in `ADMIN_SHELL_VIEWS` (`apps/core/middleware/admin_csp.py`). Staff MFA (`STAFF_MFA_REQUIRED`, `apps/users/services/mfa.py`) is mandatory and may be disabled only in `app/settings/test.py`.
 3. Keep CORS disabled for same-origin HTMX. If cross-origin traffic is required, define the owning API, exact origins/methods/headers, credential policy, and tests before enabling it.
 4. Require HTTPS for external resources and links; retain production `upgrade-insecure-requests`. Search templates and generated markup for insecure assets.
 5. Keep advertising resources consent-aware. Missing/denied consent must not render a tracking creative.

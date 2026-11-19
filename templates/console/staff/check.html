@@ -1,0 +1,5 @@
+<div class="form-check">
+  {% if unchecked_value %}<input type="hidden" name="{{ name }}" value="{{ unchecked_value }}"{% if form %} form="{{ form }}"{% endif %}>{% endif %}
+  <input class="form-check-input" type="checkbox" id="{{ ident }}" name="{{ name }}" value="{{ value }}"{% if checked %} checked{% endif %}{% if form %} form="{{ form }}"{% endif %}>
+  <label class="form-check-label{% if hide_label %} visually-hidden{% endif %}" for="{{ ident }}">{{ label }}</label>
+</div>

@@ -1,0 +1,40 @@
+{% load i18n staff_ui console_ui %}
+{% comment %}
+  One platform card of the picker. Context: card (apps.distribution.catalog.Card), add_url.
+  Primary action = Connect (the guided setup); the drawer button opens the credentials guide.
+{% endcomment %}
+<li class="c-platform{% if card.connected %} c-platform--connected{% endif %}{% if card.assisted %} c-platform--assisted{% endif %}" id="platform-{{ card.kind }}-{{ section_key|default:'all' }}">
+  <header class="c-platform__head">
+    <span class="c-platform__icon" aria-hidden="true">{% console_icon card.icon %}</span>
+    <h3 class="c-platform__name">{{ card.adapter.label }}</h3>
+  </header>
+  <ul class="c-platform__tags" aria-label="{% translate 'Labels' %}">
+    {% if card.assisted %}<li><span class="c-badge c-badge--warning">{% translate "Assisted: posted by hand" %}</span></li>{% else %}<li><span class="c-badge c-badge--success">{% translate "Automatic" %}</span></li>{% endif %}
+    {% if card.difficulty_label %}<li><span class="c-badge c-badge--{{ card.difficulty_tone }}">{% blocktranslate with level=card.difficulty_label %}Setup: {{ level }}{% endblocktranslate %}</span></li>{% endif %}
+    {% if card.connected %}<li><span class="c-badge c-badge--info">{% translate "Connected" %}</span></li>{% endif %}
+  </ul>
+  <p class="c-platform__summary">{{ card.info.summary|default:card.adapter.how_to }}</p>
+  <dl class="c-platform__facts">
+    <dt>{% translate "Content" %}</dt>
+    <dd>
+      {% if card.adapter.media == "video" %}{% translate "Video" %}{% elif card.adapter.media == "image" %}{% translate "Image + text" %}{% elif card.adapter.image_optional %}{% translate "Text + optional image" %}{% else %}{% translate "Text + link" %}{% endif %}
+      · {% blocktranslate with limit=card.adapter.message_limit %}{{ limit }} characters{% endblocktranslate %}
+    </dd>
+    <dt>{% translate "Sign-in" %}</dt><dd>{{ card.info.auth|default:"—" }}</dd>
+    <dt>{% translate "You will need" %}</dt>
+    <dd>{% for field in card.adapter.fields %}{% if field.required %}{{ field.label }}{% if not forloop.last %}, {% endif %}{% endif %}{% endfor %}</dd>
+  </dl>
+  {% if card.existing %}
+    <ul class="c-platform__existing" aria-label="{% translate 'Existing channels' %}">
+      {% for existing in card.existing %}<li><a href="{{ existing.url }}">{{ existing.name }}</a> · {{ existing.state }}</li>{% endfor %}
+    </ul>
+  {% endif %}
+  <div class="c-platform__actions">
+    {% blocktranslate with platform=card.adapter.label asvar connect_label %}Connect {{ platform }}{% endblocktranslate %}
+    {% blocktranslate with platform=card.adapter.label asvar again_label %}Add another {{ platform }}{% endblocktranslate %}
+    {% blocktranslate with platform=card.adapter.label asvar guide_aria %}Setup guide for {{ platform }}{% endblocktranslate %}
+    {% url 'admin:distribution_channel_requirements' card.kind as guide_url %}
+    {% if card.connected %}{% staff_button _("Add another") href=add_url|add:"?kind="|add:card.kind aria_label=again_label %}{% else %}{% staff_button _("Connect") href=add_url|add:"?kind="|add:card.kind tone="primary" aria_label=connect_label %}{% endif %}
+    {% staff_button _("Setup guide") dialog_url=guide_url aria_label=guide_aria %}
+  </div>
+</li>

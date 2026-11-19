@@ -1,0 +1,24 @@
+{% extends "admin/base_site.html" %}{% load i18n console_ui %}
+{% comment %}Full search page (header search without JavaScript, or Enter in the palette). Context: query, searched, too_short, navigation_hits, record_groups.{% endcomment %}
+{% block content %}
+{% component "page_header" title=_("Search") subtitle=_("Find the pages and records you can open.") %}{% endcomponent %}
+<form class="c-cl-toolbar mb-4" method="get" role="search" action="{% url 'admin:console_search' %}">
+  <label class="visually-hidden" for="console-search-q">{% translate "Search pages and records" %}</label>
+  <div class="c-cl-search">{% console_icon "search" "c-icon--sm c-cl-search__icon" %}<input class="form-control" id="console-search-q" type="search" name="q" value="{{ query }}" maxlength="100" autocomplete="off" placeholder="{% translate 'Search pages, people, firmware, posts…' %}" autofocus></div>
+  {% ui "button" label=_("Search") type="submit" variant="primary" %}
+</form>
+{% if too_short %}
+  {% ui "alert" variant="info" message=_("Type at least two letters to search records.") %}
+{% elif searched %}
+  {% if navigation_hits or record_groups %}
+  <div class="u-stack">
+    {% if navigation_hits %}{% component "card" title=_("Pages") icon="layout-dashboard" flush=True %}<nav class="c-section-nav p-2" aria-label="{% translate 'Matching pages' %}">{% for item in navigation_hits %}<a href="{{ item.url }}">{{ item.title }} <span class="u-muted">&middot; {{ item.group }}</span></a>{% endfor %}</nav>{% endcomponent %}{% endif %}
+    {% for group in record_groups %}{% component "card" title=group.title icon=group.icon flush=True %}<nav class="c-section-nav p-2" aria-label="{{ group.title }}">{% for hit in group.hits %}<a href="{{ hit.url }}">{{ hit.title }}</a>{% endfor %}<a href="{{ group.changelist_url }}">{% blocktranslate with name=group.title %}See all matches in {{ name }}{% endblocktranslate %}</a></nav>{% endcomponent %}{% endfor %}
+  </div>
+  {% else %}
+  {% ui "empty_state" title=_("Nothing found") message=_("Try a shorter or different word. Search covers pages, people, firmware, posts, tags, comments, orders and listings you may open.") icon="search-x" %}
+  {% endif %}
+{% else %}
+  {% ui "empty_state" title=_("What are you looking for?") message=_("Type a page name such as “comments”, a person, a firmware file or a post title.") icon="search" tone="compact" %}
+{% endif %}
+{% endblock %}

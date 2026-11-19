@@ -216,7 +216,7 @@ def test_request_staff_approval_bounty_solution_and_publication(live_server):
         request_url = asker_page.url
         assert asker_page.get_by_text("Add a bounty").count() == 0
 
-        # 2. Staff approve it in the review queue (Unfold dialog action).
+        # 2. Staff approve it in the review queue (console dialog action).
         pk = int(request_url.rstrip("/").rsplit("/", 1)[1])
         staff_page = session_context(browser, live_server, cookies["staff"]).new_page()
         watch(staff_page, failures)

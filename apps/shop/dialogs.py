@@ -1,4 +1,4 @@
-"""Shop-owned staff dialog forms (Unfold action dialogs).
+"""Shop-owned staff dialog forms (console action dialogs).
 
 Core only provides the generic dialog shell; what each dialog asks lives here.
 """
@@ -7,10 +7,9 @@ from __future__ import annotations
 
 from django import forms
 from django.utils.translation import gettext_lazy as _
-from unfold.forms import BaseDialogForm
-from unfold.widgets import UnfoldAdminTextInputWidget
 
 from apps.core.admin_base import ConfirmForm, ReasonForm
+from apps.core.admin_forms import BaseDialogForm, ConsoleTextInputWidget
 
 __all__ = [
     "ArchivePackageForm",
@@ -29,7 +28,7 @@ class MarkPaidForm(BaseDialogForm):
         required=False,
         max_length=200,
         help_text=_("Receipt or transfer reference, kept on the order."),
-        widget=UnfoldAdminTextInputWidget,
+        widget=ConsoleTextInputWidget,
     )
 
 

@@ -105,8 +105,9 @@ def make_user(username: str, *, staff: bool = False):
     )
 
 
-@pytest.fixture
-def staff_client(db) -> Client:
+@pytest.fixture(name="staff_client")
+def build_staff_client(request: pytest.FixtureRequest) -> Client:
+    request.getfixturevalue("db")
     client = Client()
     client.force_login(make_user("dialog-staff", staff=True))
     return client
@@ -130,7 +131,7 @@ def test_permission_hook_rejects_non_staff_for_get_and_post():
     url = reverse("test_dialog_delete")
     assert client.get(url, **HTMX).status_code == 403
     assert client.post(url, {"reason": "x"}, **HTMX).status_code == 403
-    assert PERFORMED == []
+    assert not PERFORMED
 
 
 @pytest.mark.django_db
@@ -171,7 +172,7 @@ def test_invalid_post_rerenders_the_dialog_with_errors(staff_client):
     assert "invalid-feedback" in body
     assert "data-dialog-auto-open" in body
     assert "HX-Trigger" not in response
-    assert PERFORMED == []
+    assert not PERFORMED
 
 
 @pytest.mark.django_db
@@ -212,7 +213,7 @@ def test_dialog_error_rolls_back_and_shows_inside_the_dialog(staff_client):
     assert response.status_code == 200
     assert "A rule rejected this." in response.content.decode()
     assert not get_user_model().objects.filter(username="created-in-dialog").exists()
-    assert PERFORMED == []
+    assert not PERFORMED
 
 
 @pytest.mark.django_db
@@ -224,7 +225,7 @@ def test_typed_confirmation_is_enforced_server_side(staff_client):
     assert ':disabled="submitBlocked"' in page
     wrong = staff_client.post(url, {"confirmation": "delete"}, **HTMX)
     assert wrong.status_code == 200
-    assert PERFORMED == []
+    assert not PERFORMED
     right = staff_client.post(url, {"confirmation": "DELETE"}, **HTMX)
     assert right.status_code == 204
     assert PERFORMED == ["phrase"]
@@ -240,7 +241,7 @@ def test_next_parameter_is_honoured_only_for_this_host(staff_client):
 
 
 @pytest.mark.django_db
-def test_post_requires_a_csrf_token(db):
+def test_post_requires_a_csrf_token():
     client = Client(enforce_csrf_checks=True)
     client.force_login(make_user("dialog-csrf", staff=True))
     url = reverse("test_dialog_delete")

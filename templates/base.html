@@ -1,4 +1,4 @@
-{% load static i18n seo_tags consent_tags ad_tags %}
+{% load static i18n seo_tags consent_tags ad_tags distribution_tags %}
 <!doctype html>
 <html lang="{% get_current_language as LANGUAGE_CODE %}{{ LANGUAGE_CODE }}" data-bs-theme="light">
 <head>
@@ -7,6 +7,7 @@
   <meta name="color-scheme" content="light dark">
   <meta name="application-version" content="{{ release_version }}">
   {% seo_head %}
+  {% feed_autodiscovery %}
   <script src="{% static 'build/theme-init.js' %}"></script>
   <link rel="stylesheet" href="{% static 'build/tokens.css' %}">
   <link rel="stylesheet" href="{% static 'build/site.css' %}">

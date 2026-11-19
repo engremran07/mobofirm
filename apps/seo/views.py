@@ -6,6 +6,7 @@ endpoints are POST-only, CSRF protected, permission checked and redirect afterwa
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from datetime import timedelta
 from typing import Any
@@ -25,12 +26,24 @@ from django.views.decorators.http import require_GET, require_POST
 
 from apps.core.admin_pages import render_admin_page
 
-from . import board, fixes, interlinking, jobs, ledger, scan
+from . import (
+    analysis,
+    board,
+    editing,
+    fixes,
+    fixscreen,
+    interlinking,
+    jobs,
+    ledger,
+    scan,
+    sitemap_build,
+    sitemap_report,
+)
 from . import guides as guides_service
 from .crawler import CrawlUnavailable, run_crawl
 from .forms import SEOSettingsForm
 from .integrations.status import integration_statuses
-from .inventory import build_inventory, inspect_url
+from .inventory import describe_entry, discover_entries, inspect_url
 from .models import (
     ChangeLedger,
     CrawlRun,
@@ -40,8 +53,14 @@ from .models import (
     SEOJob,
     SEOSettings,
 )
+from .robots import ROBOTS_FIELDS, diff_lines, generate, parse
+from .robots import validate as robots_validate
 from .rules import GROUP_LABELS, GROUPS, rule_for
 from .sitemap_registry import get_sitemaps
+from .siteurls import path_and_query, site_origin
+
+AGENT_TOKEN = re.compile(r"^[A-Za-z0-9._*-]{1,60}$")
+FIX_DRAFT_KEY = "seo_fix_draft"
 
 staff_only: Callable[[Callable[..., HttpResponse]], Callable[..., HttpResponse]] = (
     staff_member_required(login_url="admin:login")
@@ -49,12 +68,16 @@ staff_only: Callable[[Callable[..., HttpResponse]], Callable[..., HttpResponse]]
 
 _PAST = {"accept": "accepted", "reject": "rejected", "reset": "reopened"}
 
+# Routes resolved per inventory request: resolving one path costs several queries.
+ROUTE_PAGE_SIZE = 50
+
 TABS: tuple[tuple[str, str, str], ...] = (
     ("dashboard", "seo:dashboard", "Overview"),
     ("issues", "seo:issues", "Issues board"),
     ("links", "seo:links", "Interlinking"),
     ("guides", "seo:guides", "Flash guides"),
     ("inventory", "seo:inventory", "Page inventory"),
+    ("sitemaps", "seo:sitemaps", "Sitemaps & robots"),
     ("inspect", "seo:inspect", "Page inspector"),
     ("ledger", "seo:ledger", "Change ledger"),
     ("jobs", "seo:jobs", "Jobs"),
@@ -217,7 +240,23 @@ def inventory(request: HttpRequest) -> HttpResponse:
         {"snapshot": row, "open_issues": issue_counts.get(row.path, 0)}
         for row in page.object_list
     ]
-    items = build_inventory()
+    # Discovery is cheap; resolving a path is not (several queries each). Resolve
+    # only the visible slice and take the totals from the stored scan results.
+    discovered = discover_entries()
+    visible = (
+        [entry for entry in discovered if query.lower() in entry[0].lower()]
+        if query
+        else discovered
+    )
+    route_page = Paginator(visible, ROUTE_PAGE_SIZE).get_page(
+        request.GET.get("route_page")
+    )
+    items = [
+        item
+        for item in (describe_entry(path, source) for path, source in route_page)
+        if item is not None
+    ]
+    route_query = {k: v for k, v in request.GET.items() if k != "route_page" and v}
     filters = urlencode(
         {k: v for k, v in (("group", group), ("index", index), ("q", query)) if v}
     )
@@ -236,10 +275,72 @@ def inventory(request: HttpRequest) -> HttpResponse:
             "filters": filters,
             "groups": GROUPS,
             "items": items,
-            "indexable_total": sum(1 for item in items if item.indexable),
-            "conflict_total": sum(1 for item in items if item.conflicts),
+            "route_page": route_page,
+            "route_query": urlencode(route_query),
+            "discovered_total": len(discovered),
+            "indexable_total": PageSnapshot.objects.filter(indexable=True).count(),
+            "conflict_total": Issue.objects.filter(
+                status=Issue.Status.OPEN, code="inventory_conflict"
+            ).count(),
             "scanned_total": PageSnapshot.objects.count(),
             "can_scan": request.user.has_perm("seo.run_crawl"),
+        },
+    )
+
+
+@require_GET
+@staff_only
+def sitemaps(request: HttpRequest) -> HttpResponse:
+    """Sitemap sections, validation, robots.txt preview, URL tester and history."""
+    row = SEOSettings.get_solo()
+    origin = site_origin(request)
+    report = sitemap_report.build_report(
+        row, origin, validate_live=request.GET.get("validate") == "1"
+    )
+    current = generate(row, origin)
+    previous = sitemap_report.previous_robots(row, origin)
+    url = request.GET.get("url", "").strip()[:500]
+    agent = request.GET.get("agent", "Googlebot").strip()
+    if not AGENT_TOKEN.fullmatch(agent):
+        agent = "Googlebot"
+    tested = (
+        sitemap_report.check_url(parse(current), path_and_query(url), agent)
+        if url
+        else None
+    )
+    history = [
+        {
+            "entry": entry,
+            "changes": [
+                (name, entry.before.get(name), entry.after.get(name))
+                for name in sorted(ROBOTS_FIELDS & {*entry.before, *entry.after})
+            ],
+        }
+        for entry in sitemap_report.robots_history()
+    ]
+    return _page(
+        request,
+        "seo/sitemaps.html",
+        title="Sitemaps and robots.txt",
+        tab="sitemaps",
+        subtitle="What search engines are told to fetch, and whether it is valid.",
+        context={
+            "report": report,
+            "settings_row": row,
+            "robots_text": current,
+            "robots_size": len(current.encode()),
+            "robots_problems": robots_validate(current),
+            "diff": diff_lines(previous, current) if previous is not None else [],
+            "has_previous": previous is not None,
+            "tested": tested,
+            "test_url": url,
+            "test_agent": agent,
+            "test_agents": sitemap_report.TEST_AGENTS,
+            "history": history,
+            "origin": origin,
+            "max_urls": sitemap_build.MAX_URLS,
+            "page_size": sitemap_build.page_size(row),
+            "can_change": request.user.has_perm("seo.change_seosettings"),
         },
     )
 
@@ -311,8 +412,10 @@ def _issue_context(request: HttpRequest, issue: Issue) -> dict[str, Any]:
     described = board.describe_issue(issue)
     return {
         **described,
+        "lacks_fix_permission": not request.user.has_perm("seo.change_metadata"),
         "can_fix": request.user.has_perm("seo.change_metadata")
-        and fixes.can_edit(issue),
+        and fixes.can_edit(issue)
+        and issue.seo_field in fixes.FIXABLE_FIELDS,
         "can_manage": request.user.has_perm("seo.change_issue"),
         "next_url": request.GET.get("next") or reverse("seo:issues"),
         "fix_ledger": issue.fix_ledger,
@@ -322,18 +425,164 @@ def _issue_context(request: HttpRequest, issue: Issue) -> dict[str, Any]:
 @require_GET
 @staff_only
 def issue_detail(request: HttpRequest, pk: int) -> HttpResponse:
+    """An issue opens its "View and fix" screen; HTMX still gets the compact panel."""
     issue = get_object_or_404(Issue, pk=pk)
-    context = _issue_context(request, issue)
     if request.headers.get("HX-Request"):
-        return render(request, "seo/partials/fix_panel.html", context)
+        return render(
+            request, "seo/partials/fix_panel.html", _issue_context(request, issue)
+        )
+    return redirect(_fix_url(issue.url, issue.pk))
+
+
+def _fix_url(path: str, issue_pk: int | None = None, back: str = "") -> str:
+    query = {"url": path}
+    if issue_pk:
+        query["issue"] = str(issue_pk)
+    if back:
+        query["next"] = back
+    return f"{reverse('seo:fix')}?{urlencode(query)}"
+
+
+def _clean_path(value: str) -> str:
+    """A site path from user input; anything else is not a fixable page."""
+    path = value.strip()
+    if not path.startswith("/") or path.startswith("//") or len(path) > 500:
+        raise Http404
+    return path
+
+
+def _done(request: HttpRequest, url: str) -> HttpResponse:
+    """Post/Redirect/Get: a redirect, or ``HX-Redirect`` for HTMX, never a body."""
+    if request.headers.get("HX-Request"):
+        response = HttpResponse(status=204)
+        response["HX-Redirect"] = url
+        return response
+    return redirect(url)
+
+
+@require_GET
+@staff_only
+def fix_screen(request: HttpRequest) -> HttpResponse:
+    """All findings of one page or object in context, with inline fixes."""
+    focus: Issue | None = None
+    if request.GET.get("issue", "").isdigit():
+        focus = get_object_or_404(Issue, pk=int(request.GET["issue"]))
+        path = focus.url
+    else:
+        path = _clean_path(request.GET.get("url", ""))
+    stored = request.session.pop(FIX_DRAFT_KEY, None)
+    draft: dict[str, str] = {}
+    errors: dict[str, str] = {}
+    if isinstance(stored, dict) and stored.get("path") == path:
+        draft = {k: str(v) for k, v in dict(stored.get("values", {})).items()}
+        errors = {k: str(v) for k, v in dict(stored.get("errors", {})).items()}
+    screen = fixscreen.build(
+        path, focus_pk=focus.pk if focus else None, draft=draft, errors=errors
+    )
+    if screen is None:
+        raise Http404("This URL is not a page the SEO screens can fix.")
+    back = _next_url_get(request, reverse("seo:issues"))
     return _page(
         request,
-        "seo/issue_detail.html",
-        title=rule_for(issue.code).label,
+        "seo/fix.html",
+        title="View and fix",
         tab="issues",
-        subtitle=issue.object_title or issue.url,
-        context=context,
+        subtitle=screen.title,
+        context={
+            "screen": screen,
+            "next_url": back,
+            "can_fix": request.user.has_perm("seo.change_metadata"),
+            "can_manage": request.user.has_perm("seo.change_issue"),
+            "upcoming": fixscreen.next_issue(screen.path),
+            "ledger_entries": ChangeLedger.objects.filter(
+                target_label__startswith=f"{screen.path}:"
+            )[:8],
+        },
     )
+
+
+def _next_url_get(request: HttpRequest, fallback: str) -> str:
+    target = request.GET.get("next", "")
+    if target and url_has_allowed_host_and_scheme(
+        target, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        return target
+    return fallback
+
+
+@require_POST
+@staff_only
+def fix_apply(request: HttpRequest) -> HttpResponse:
+    """Save the edits of the screen: atomic, ledgered, re-audited and republished."""
+    _require(request, "seo.change_metadata")
+    path = _clean_path(request.POST.get("url", ""))
+    owner = fixscreen.owner_of(path)
+    if owner is None:
+        raise Http404
+    label, pk, _title, _group = owner
+    action = request.POST.get("action", "save")
+    back_to_board = _next_url(request, reverse("seo:issues"))
+    here = _fix_url(path, back=back_to_board)
+    if action == "reaudit":
+        outcome = scan.rescan_paths([path])
+        messages.info(
+            request,
+            f"Re-audited {outcome['scanned']} page(s); "
+            f"{len(fixscreen.issues_of(path, label, pk))} issue(s) remain here.",
+        )
+        return _done(request, here)
+    changes = fixscreen.parse_submission(request.POST, label)
+    if changes.empty:
+        if action == "next":
+            return _done(request, _after_save(request, path, back_to_board))
+        messages.info(request, "Nothing was changed.")
+        return _done(request, here)
+    open_here = fixscreen.issues_of(path, label, pk)
+    try:
+        applied = editing.apply_changes(
+            label, pk, path, changes, request.user, issues=open_here
+        )
+    except fixes.FixError as error:
+        request.session[FIX_DRAFT_KEY] = {
+            "path": path,
+            "values": {
+                key: value
+                for key, value in request.POST.items()
+                if key.startswith(("f_", "alt_"))
+            },
+            "errors": {},
+        }
+        messages.error(request, str(error))
+        return _done(request, here)
+    remaining = len(fixscreen.issues_of(applied.path, label, pk))
+    messages.success(
+        request,
+        f"Saved {len(applied.entries)} change(s) and re-audited the page; "
+        f"{remaining} issue(s) remain. Each change is in the ledger and can be "
+        "rolled back.",
+    )
+    if action == "next":
+        return _done(request, _after_save(request, applied.path, back_to_board))
+    return _done(request, _fix_url(applied.path, back=back_to_board))
+
+
+def _after_save(request: HttpRequest, path: str, back: str) -> str:
+    upcoming = fixscreen.next_issue(path)
+    if upcoming is None:
+        messages.success(request, "No more open issues. Nice work.")
+        return back
+    return _fix_url(upcoming.url, upcoming.pk, back)
+
+
+@require_POST
+@staff_only
+def fix_preview(request: HttpRequest) -> HttpResponse:
+    """HTMX partial: how the typed title and description would look in results."""
+    path = _clean_path(request.POST.get("url", ""))
+    title = request.POST.get("f_meta_title", "")
+    description = request.POST.get("f_meta_description", "")
+    serp = analysis.serp_preview(title, description, f"{site_origin(request)}{path}")
+    return render(request, "seo/partials/serp_preview.html", {"serp": serp})
 
 
 @require_POST

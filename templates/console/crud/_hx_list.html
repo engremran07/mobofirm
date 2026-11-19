@@ -1,0 +1,7 @@
+{% comment %}
+  HTMX attributes of every control that re-renders the changelist results region (htmx 4).
+  Params: url (the GET URL); cl (ChangeList, from the page context).
+  The server answers with the whole page; the client keeps the results region (hx-select), morphs it in place
+  (a focused sort or page link keeps focus) and refreshes the filters, chips, params and status line out of
+  band. Without JavaScript the control is a normal link or form.
+{% endcomment %}hx-get="{{ url }}" hx-target="#c-cl-results" hx-select="#c-cl-results" hx-swap="outerMorph" hx-select-oob="#c-cl-filters:outerMorph,#c-cl-chips:outerMorph,#c-cl-status:outerMorph,#c-cl-params:outerMorph" hx-push-url="{% if cl.is_popup or is_popup %}false{% else %}true{% endif %}" hx-sync="#c-changelist:replace" hx-indicator="#c-cl-box"

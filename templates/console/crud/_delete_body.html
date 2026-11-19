@@ -1,0 +1,22 @@
+{% comment %}
+  What deleting would do: a plain-language sentence, a per-model summary and the cascade tree (what goes with it).
+  Blocking cases (missing permissions, protected related objects) explain why and list the objects involved.
+{% endcomment %}{% load i18n admin_filters console_ui %}
+{% if perms_lacking %}
+{% blocktranslate with name=object_name asvar lacking_message %}Deleting the {{ name }} “{{ object }}” would also delete related objects, but your account doesn't have permission to delete the following types of objects:{% endblocktranslate %}
+{% ui "alert" variant="danger" message=lacking_message %}
+<ul class="c-tree" id="deleted-objects">{{ perms_lacking|truncated_unordered_list:delete_confirmation_max_display }}</ul>
+{% elif protected %}
+{% blocktranslate with name=object_name asvar protected_message %}Deleting the {{ name }} “{{ object }}” would require deleting the following protected related objects:{% endblocktranslate %}
+{% ui "alert" variant="warning" message=protected_message %}
+{% if delete_confirmation_max_display is None or delete_confirmation_max_display > 0 %}<ul class="c-tree" id="deleted-objects">{{ protected|truncated_unordered_list:delete_confirmation_max_display }}</ul>{% endif %}
+{% else %}
+<p>{% blocktranslate with name=object_name %}Are you sure you want to delete the {{ name }} “{{ object }}”? All of the following related items will be deleted:{% endblocktranslate %}</p>
+{% include "admin/includes/object_delete_summary.html" %}
+{% if delete_confirmation_max_display is None or delete_confirmation_max_display > 0 %}
+<section aria-labelledby="delete-objects-title">
+<h2 class="c-fieldset__legend" id="delete-objects-title">{% translate "Objects" %}</h2>
+<ul class="c-tree" id="deleted-objects">{{ deleted_objects|truncated_unordered_list:delete_confirmation_max_display }}</ul>
+</section>
+{% endif %}
+{% endif %}

@@ -1,0 +1,13 @@
+{% load i18n staff_ui %}
+<div class="d-flex flex-column gap-2" data-seo-field="{{ field.name }}">
+  <input type="hidden" name="{{ field.original_name }}" value="{{ field.original }}">
+  {% if field.input == "bool" %}
+    {% staff_select ident=field.ident name=field.post_name label=field.label %}<option value="false"{% if field.value == "false" %} selected{% endif %}>{% translate "No" %}</option><option value="true"{% if field.value == "true" %} selected{% endif %}>{% translate "Yes" %}</option>{% endstaff_select %}
+  {% elif field.input == "textarea" %}
+    {% staff_textarea ident=field.ident name=field.post_name label=field.label value=field.value rows=3 help_text=field.help_text %}
+  {% else %}
+    {% staff_input ident=field.ident name=field.post_name label=field.label value=field.value maxlength=field.max_length help_text=field.help_text %}
+  {% endif %}
+  {% for finding in field.findings %}<p class="small mb-0" role="note">{% staff_badge _("Finding") "warning" %} {{ finding }}</p>{% endfor %}
+  {% if field.error %}<p class="small mb-0" role="alert">{% staff_badge _("Rejected") "danger" %} {{ field.error }}</p>{% endif %}
+</div>

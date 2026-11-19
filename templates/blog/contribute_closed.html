@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Blog contributions are closed | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block content %}
+<div class="site-container py-4 py-lg-5">
+  {% include "components/breadcrumbs.html" with current="Contribute a blog post" %}
+  {% include "components/page_header.html" with eyebrow="Contribute" title="Blog contributions are closed" lead="Members cannot submit blog posts right now. You can still contribute firmware or follow the blog for new articles." %}
+  <p>
+    <a class="btn btn-primary" href="{% url 'firmwares:contribute' %}">Contribute a firmware</a>
+    <a class="btn btn-outline-secondary" href="{% url 'blog:post_list' %}">Read the blog</a>
+  </p>
+</div>
+{% endblock %}

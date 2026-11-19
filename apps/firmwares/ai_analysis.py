@@ -15,6 +15,7 @@ from django.core.exceptions import ValidationError
 
 from apps.core.ai_client import AiClientError
 
+from .chipsets import normalize_chipset
 from .constants import MAIN_CATEGORIES
 
 logger = logging.getLogger(__name__)
@@ -221,11 +222,11 @@ Readable strings found:
 {readable_strings}
 
 Extract and return ONLY a JSON object with these fields:
-- chipset: Detected chipset (e.g., "MediaTek MT6765", "Qualcomm SM6225", or null)
+- chipset: Detected smartphone or tablet SoC only (MediaTek, Qualcomm Snapdragon, Samsung Exynos, Unisoc/Spreadtrum/RDA, Rockchip, Allwinner, HiSilicon Kirin, Google Tensor), e.g., "MediaTek MT6765", "Qualcomm SM6225", or null
 - android_version: Android version (e.g., "Android 13" or null)
 - security_patch: Security patch level in YYYY-MM-DD format (or null)
 - build_date: Build date in YYYY-MM-DD format (or null)
-- firmware_type: Type - one of: official, engineering, modified, unknown
+- firmware_type: Type - one of: official, engineering (service / engineering), modified, unknown
 - partitions: List of detected partition names (e.g., ["boot", "system", "vendor"])
 - confidence: Your confidence score from 0.0 to 1.0
 
@@ -301,8 +302,10 @@ Return ONLY valid JSON, no markdown formatting.
         """Store analysis results on a PendingFirmware as suggestions only."""
         from django.utils import timezone
 
-        if result.get("chipset"):
-            pending_firmware.chipset = str(result["chipset"])[:128]
+        chipset = str(result.get("chipset") or "")
+        # Only smartphone/tablet SoC vendors are accepted as a detected chipset.
+        if chipset and normalize_chipset(chipset) is not None:
+            pending_firmware.chipset = chipset[:128]
         if result.get("partitions"):
             pending_firmware.partitions = list(result["partitions"])
         firmware_type = result.get("firmware_type")

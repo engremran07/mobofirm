@@ -1,4 +1,4 @@
-"""The storage status page renders inside the Unfold admin shell."""
+"""The storage status page renders inside the staff console shell."""
 
 from __future__ import annotations
 
@@ -26,16 +26,14 @@ class StorageStatusShellTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, "admin/staff_page.html")
         self.assertTemplateNotUsed(response, "base.html")
-        self.assertContains(response, 'class="mf-ui-title"')
+        self.assertContains(response, "console-staff-page")
         self.assertContains(response, "Storage status")
         self.assertContains(response, "Storage providers")
         self.assertContains(response, reverse("admin:index"))
         html = response.content.decode()
-        for marker in ("site-container", "site-header", "bootstrap"):
+        # The public site's shell must never leak into the staff console.
+        for marker in ("site-container", "site-header"):
             self.assertNotIn(marker, html)
-        self.assertNotRegex(
-            html, r'class="(?:[^"]*\s)?(?:btn|card|d-flex)(?:\s[^"]*)?"'
-        )
 
     def test_status_page_requires_a_staff_session(self):
         anonymous = Client().get(self.url)

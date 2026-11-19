@@ -25,15 +25,15 @@ class DjangoNotificationService(NotificationService):
         **kwargs,
     ) -> bool:
         """Send a notification to a user; ``notification_type`` is the priority."""
-        Notification = apps.get_model("users", "Notification")
-        CustomUser = apps.get_model("users", "CustomUser")
+        notification_model = apps.get_model("users", "Notification")
+        user_model = apps.get_model("users", "CustomUser")
 
-        user = CustomUser.objects.filter(id=user_id).first()
+        user = user_model.objects.filter(id=user_id).first()
         if not user:
             return False
 
         try:
-            Notification.objects.create(
+            notification_model.objects.create(
                 recipient=user,
                 title=title,
                 message=message,
@@ -53,12 +53,12 @@ class DjangoNotificationService(NotificationService):
         notification_type: str = "info",
     ) -> int:
         """Send notification to multiple users, returns count sent"""
-        Notification = apps.get_model("users", "Notification")
-        CustomUser = apps.get_model("users", "CustomUser")
+        notification_model = apps.get_model("users", "Notification")
+        user_model = apps.get_model("users", "CustomUser")
 
-        users = CustomUser.objects.filter(id__in=user_ids)
+        users = user_model.objects.filter(id__in=user_ids)
         notifications = [
-            Notification(
+            notification_model(
                 recipient=user,
                 title=title,
                 message=message,
@@ -67,7 +67,7 @@ class DjangoNotificationService(NotificationService):
             for user in users
         ]
         try:
-            Notification.objects.bulk_create(notifications)
+            notification_model.objects.bulk_create(notifications)
         except DatabaseError:
             logger.exception("Bulk notification could not be stored")
             return 0

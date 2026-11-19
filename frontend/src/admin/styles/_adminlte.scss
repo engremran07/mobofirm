@@ -1,0 +1,71 @@
+// =============================================================================
+// AdminLTE 4.10.2 seam - selective SCSS, re-skinned.
+//
+// Only the app shell is taken from AdminLTE: wrapper grid, header, sidebar
+// (incl. mini rail, off-canvas, treeview) and footer. Cards, widgets, info/small
+// boxes, timelines, ribbons, direct-chat, callouts and all demo CSS are NOT
+// imported: the console owns them as c-* components. AdminLTE's `--lte-*`
+// sidebar variables are pointed at the `--mf-sidebar-*` tokens so one token
+// source drives light, dark and high-contrast.
+//
+// Shell class contract kept from AdminLTE (JS in frontend/src/admin/js toggles
+// these on <body>): sidebar-expand-lg, sidebar-mini, sidebar-collapse,
+// sidebar-open, sidebar-without-hover, fixed-header; elements app-wrapper,
+// app-header, app-sidebar, sidebar-brand, sidebar-wrapper, sidebar-menu,
+// nav-treeview (+ .menu-open), sidebar-overlay, app-main, app-footer.
+// =============================================================================
+
+$lte-sidebar-width: 16rem;
+$lte-sidebar-mini-width: 4.5rem;
+$lte-transition-speed: var(--mf-duration-base);
+$lte-transition-fn: var(--mf-ease-out);
+$lte-sidebar-hover-bg: var(--mf-sidebar-hover-bg);
+$lte-sidebar-color: var(--mf-sidebar-text);
+$lte-sidebar-hover-color: var(--mf-sidebar-text-strong);
+$lte-sidebar-active-color: var(--mf-sidebar-active-text);
+$lte-sidebar-menu-active-bg: var(--mf-sidebar-active-bg);
+$lte-sidebar-menu-active-color: var(--mf-sidebar-active-text);
+$lte-sidebar-submenu-bg: transparent;
+$lte-sidebar-submenu-color: var(--mf-sidebar-text);
+$lte-sidebar-submenu-hover-color: var(--mf-sidebar-text-strong);
+$lte-sidebar-submenu-hover-bg: var(--mf-sidebar-hover-bg);
+$lte-sidebar-submenu-active-color: var(--mf-sidebar-active-text);
+$lte-sidebar-submenu-active-bg: var(--mf-sidebar-active-bg);
+$lte-sidebar-header-color: var(--mf-sidebar-heading);
+$lte-app-header-bottom-border: 1px solid var(--mf-border);
+$lte-app-footer-bg: transparent;
+$lte-app-footer-color: var(--mf-text-muted);
+$lte-app-footer-border-top: 1px solid var(--mf-border);
+
+@import "admin-lte/src/scss/variables";
+@import "admin-lte/src/scss/mixins/scrollbar";
+@import "admin-lte/src/scss/mixins/search-field";
+
+@layer vendor {
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes fadeOut {
+    from {
+      opacity: 1;
+    }
+
+    to {
+      opacity: 0;
+    }
+  }
+
+  @import "admin-lte/src/scss/root";
+  @import "admin-lte/src/scss/app-wrapper";
+  @import "admin-lte/src/scss/app-header";
+  @import "admin-lte/src/scss/app-sidebar";
+  @import "admin-lte/src/scss/app-main";
+  @import "admin-lte/src/scss/app-footer";
+}

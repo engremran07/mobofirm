@@ -1,0 +1,2 @@
+{% if href %}<a class="c-chip c-chip--staff" href="{{ href }}">{{ label }}{% if count != "" %} <span class="c-chip__count">{{ count }}</span>{% endif %}</a>
+{% else %}<span class="c-chip c-chip--staff">{{ label }}{% if count != "" %} <span class="c-chip__count">{{ count }}</span>{% endif %}</span>{% endif %}

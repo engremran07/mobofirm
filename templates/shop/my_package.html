@@ -3,7 +3,7 @@
 {% block content %}
 {% url 'shop:pricing' as shop_url %}
 <div class="site-container cm-page py-4 py-lg-5">
-  {% include "components/breadcrumbs.html" with current="My package" parent_label="Shop" parent_url=shop_url %}
+  {% include "components/breadcrumbs.html" with current="My package" parent_label="Pricing" parent_url=shop_url %}
   {% include "components/page_header.html" with eyebrow="Account" title="My package" %}
   {% include "shop/_subnav.html" with shop_tab="account" %}
   <div class="cm-stack">

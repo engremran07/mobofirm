@@ -328,7 +328,7 @@ class InterlinkScreenTests(TestCase):
     def test_the_review_list_renders_in_the_admin_shell(self):
         response = self.client.get(reverse("seo:links"))
 
-        self.assertContains(response, "mf-ui-header")
+        self.assertContains(response, "console-staff-page")
         self.assertContains(response, "Interlinking review")
         self.assertContains(response, "Generate proposals")
         self.assertContains(response, "Nova Atlas One")

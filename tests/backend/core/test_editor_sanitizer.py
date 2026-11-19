@@ -204,7 +204,9 @@ def test_default_profiles_resolve_for_every_context() -> None:
     assert unknown.features == default_profile("admin_default").features
 
 
-DATA_URI = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk"
+DATA_URI = (
+    "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk"
+)
 
 
 def test_pasted_data_uri_images_never_reach_stored_html() -> None:

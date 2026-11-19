@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from django.contrib.sitemaps import Sitemap
-from django.urls import reverse
+from django.urls import NoReverseMatch, reverse
 from django.utils.functional import cached_property
 
 from .models import Page
@@ -43,11 +43,18 @@ class StaticViewsSitemap(Sitemap):
         "firmwares:flashing_tools",
         "tags:list",
         "pages:index",
+        "feeds:index",
     )
 
     @cached_property
     def _locations(self) -> list[str]:
-        return [reverse(name) for name in self.route_names]
+        locations: list[str] = []
+        for name in self.route_names:
+            try:
+                locations.append(reverse(name))
+            except NoReverseMatch:
+                continue  # the app behind an optional route is not installed
+        return locations
 
     def items(self) -> list[str]:
         return self._locations

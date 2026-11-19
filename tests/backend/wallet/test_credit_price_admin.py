@@ -15,13 +15,6 @@ from tests.backend.wallet.conftest import TEST_SINK
 pytestmark = pytest.mark.django_db
 
 
-@pytest.fixture
-def admin_client(staff: Any) -> Client:
-    client = Client()
-    client.force_login(staff)
-    return client
-
-
 def test_editing_a_price_in_the_change_form_is_used_by_the_next_charge(
     admin_client: Client, user: Any
 ) -> None:

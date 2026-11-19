@@ -31,7 +31,7 @@ Invalid values are ignored with a warning. Missing `git`, a missing `.git` direc
 | `<meta name="application-version">` | `X.Y.Z` |
 | Admin header | `vX.Y.Z · abc1234`, environment badge, theme switcher |
 | Admin dashboard | Version, build, environment badge strip |
-| Admin sidebar branding | `vX.Y.Z · abc1234` (Unfold `SITE_VERSION`) |
+| Admin sidebar branding | `vX.Y.Z · abc1234` (`site_version` in `apps/core/admin_branding.py`, shown in the console sidebar foot) |
 | `GET /health/live/` | `{"status": "ok", "version": "X.Y.Z"}` |
 | `GET /health/ready/` | `{"status": "ok", "version": "X.Y.Z", "build": {"git_sha": …, "date": …}}`; 503 bodies stay `{"status": "unavailable"}` |
 | `X-App-Version` response header | `X.Y.Z` on every response (`AppVersionHeaderMiddleware`) |

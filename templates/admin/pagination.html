@@ -1,0 +1,21 @@
+{% comment %}
+  Changelist pagination (inclusion template of {% pagination cl %}). Context: cl, pagination_required, page_range, show_all_url.
+  Links are plain GETs; unless rows are editable (a swap would drop unsaved edits) they also refresh the results region over HTMX.
+{% endcomment %}{% load i18n admin_list console_ui console_admin %}
+<nav class="c-pager" aria-label="{% blocktranslate with name=cl.opts.verbose_name_plural %}Pagination {{ name }}{% endblocktranslate %}">
+<p class="c-pager__summary c-pager__info">{{ cl.result_count }} {% if cl.result_count == 1 %}{{ cl.opts.verbose_name }}{% else %}{{ cl.opts.verbose_name_plural }}{% endif %}{% if show_all_url %} · <a href="{{ show_all_url }}"{% if not cl.formset %} {% include "console/crud/_hx_list.html" with url=show_all_url %}{% endif %}>{% translate "Show all" %}</a>{% endif %}</p>
+{% if pagination_required %}
+<ul class="c-pager__list">
+{% if cl.page_num > 1 %}{% console_page_url cl cl.page_num|add:"-1" as previous_url %}
+<li class="c-pager__item"><a class="c-pager__link" rel="prev" href="{{ previous_url }}"{% if not cl.formset %} {% include "console/crud/_hx_list.html" with url=previous_url %}{% endif %} aria-label="{% translate 'Previous page' %}">{% console_icon "chevron-left" "c-icon--sm" %}</a></li>
+{% else %}<li class="c-pager__item"><span class="c-pager__link" aria-disabled="true"><span class="visually-hidden">{% translate "Previous page" %}</span>{% console_icon "chevron-left" "c-icon--sm" %}</span></li>{% endif %}
+{% for i in page_range %}
+{% if i == cl.paginator.ELLIPSIS %}<li class="c-pager__item c-pager__gap" aria-hidden="true">&hellip;</li>
+{% else %}{% console_page_url cl i as page_url %}<li class="c-pager__item"><a class="c-pager__link" href="{{ page_url }}"{% if not cl.formset %} {% include "console/crud/_hx_list.html" with url=page_url %}{% endif %}{% if i == cl.page_num %} aria-current="page"{% endif %} aria-label="{% blocktranslate with number=i %}Page {{ number }}{% endblocktranslate %}">{{ i }}</a></li>{% endif %}
+{% endfor %}
+{% if cl.page_num < cl.paginator.num_pages %}{% console_page_url cl cl.page_num|add:"1" as next_url %}
+<li class="c-pager__item"><a class="c-pager__link" rel="next" href="{{ next_url }}"{% if not cl.formset %} {% include "console/crud/_hx_list.html" with url=next_url %}{% endif %} aria-label="{% translate 'Next page' %}">{% console_icon "chevron-right" "c-icon--sm" %}</a></li>
+{% else %}<li class="c-pager__item"><span class="c-pager__link" aria-disabled="true"><span class="visually-hidden">{% translate "Next page" %}</span>{% console_icon "chevron-right" "c-icon--sm" %}</span></li>{% endif %}
+</ul>
+{% endif %}
+</nav>

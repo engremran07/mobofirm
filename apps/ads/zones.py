@@ -59,6 +59,14 @@ ZONES: tuple[Zone, ...] = (
         "300x250",
     ),
     Zone(
+        "in_article",
+        "In article (between paragraphs)",
+        "Placed automatically between the paragraphs of an article: first after "
+        "paragraph K, then every N, up to M per article. Never inside lists, tables, "
+        "figures, quotes or code, never next to a heading.",
+        "300x250",
+    ),
+    Zone(
         "after_content",
         "After content",
         "Banner after the main content, before the footer.",

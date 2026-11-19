@@ -1,4 +1,4 @@
-"""End-user pages: catalogue requests, "My requests", "My uploads" and the upload page.
+"""End-user pages: catalogue requests, "My requests" and the Contribute a firmware page.
 
 Every page that writes requires a signed-in user with a verified email, CSRF, and
 redirects after success. Brand, model and variant are chosen with the shared
@@ -13,14 +13,13 @@ from typing import Any
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
-from django.http import HttpRequest, HttpResponse
+from django.http import HttpRequest, HttpResponse, HttpResponsePermanentRedirect
 from django.shortcuts import redirect, render
 from django.urls import NoReverseMatch, reverse
 from django.views.decorators.http import require_GET, require_http_methods
 
 from apps.core.app_service import app_enabled
 from apps.users.decorators import email_verification_required
-from apps.users.request_user import current_user
 
 from . import catalog_requests as requests_service
 from .access import is_seller
@@ -33,7 +32,7 @@ from .forms import (
     UploadForm,
     VariantRequestForm,
 )
-from .models import Brand, Chipset, Model, PendingFirmware, Variant
+from .models import Brand, Chipset, Model, Variant
 from .services import FirmwareUploadError, max_upload_bytes
 from .submissions import submit_user_upload
 from .variant_rules import VariantIdentity
@@ -349,17 +348,33 @@ def my_requests(request: HttpRequest) -> HttpResponse:
 @verified_user_required
 @require_GET
 def my_uploads(request: HttpRequest) -> HttpResponse:
-    """The signed-in user's submissions with review status, tier and price state."""
-    submissions = (
-        PendingFirmware.objects.filter(uploader=current_user(request))
-        .select_related("uploaded_brand", "uploaded_model", "uploaded_variant")
-        .order_by("-created_at")[:200]
-    )
-    return render(
-        request,
-        "firmwares/my_uploads.html",
-        {"submissions": submissions, "seller": is_seller(request.user)},
-    )
+    """Legacy ``/firmwares/upload/mine/``: now "Firmware contributions" in My contributions."""
+    return _permanent(request, _contributions_url())
+
+
+def _contributions_url() -> str:
+    """The member's firmware contributions page (owned by ``users``), if routed."""
+    try:
+        return reverse("contributions:firmware")
+    except NoReverseMatch:
+        return reverse("firmwares:contribute")
+
+
+def _permanent(request: HttpRequest, target: str) -> HttpResponse:
+    query = request.META.get("QUERY_STRING", "")
+    return HttpResponsePermanentRedirect(f"{target}?{query}" if query else target)
+
+
+@require_http_methods(["GET", "HEAD", "POST"])
+def legacy_upload(request: HttpRequest) -> HttpResponse:
+    """Legacy ``/firmwares/upload/``: GET redirects (301, query kept) to Contribute.
+
+    A POST from a page or client that still targets the old address is handled by
+    the contribute view itself, so no submission is lost in a redirect.
+    """
+    if request.method == "POST":
+        return upload_page(request)
+    return _permanent(request, reverse("firmwares:contribute"))
 
 
 def _variant_field_context(form: Any, model: Model | None) -> dict[str, Any]:
@@ -392,10 +407,12 @@ def upload_variant_field(request: HttpRequest) -> HttpResponse:
     form = UploadForm(
         initial={"variant": variant.pk} if variant else None,
         seller=is_seller(request.user),
+        model=model,
     )
+    # The package-format select follows the device: it is swapped out of band.
     return render(
         request,
-        "firmwares/fragments/upload_variant.html",
+        "firmwares/fragments/upload_variant_response.html",
         {
             **_variant_field_context(form, model),
             "variant_label": variant.name if variant else "",
@@ -437,7 +454,7 @@ def upload_page(request: HttpRequest) -> HttpResponse:
                     f"“{pending.original_file_name}” was submitted for review. "
                     "You will be notified when it is published.",
                 )
-                return redirect("firmwares:my_uploads")
+                return redirect(_contributions_url())
     else:
         form = UploadForm(
             initial=_initial_from_query(request, "brand", "model", "variant"),

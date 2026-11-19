@@ -1,0 +1,16 @@
+{% extends "admin/base_site.html" %}{% load i18n console_ui %}
+{% comment %}Section page of one app (admin:app_list). Context: app_list (Django), title.{% endcomment %}
+{% block content %}
+{% component "page_header" title=title %}{% endcomponent %}
+<div class="c-dashboard__grid">
+{% for app in app_list %}
+  {% component "card" title=app.name icon="folder" flush=True css_class="c-widget c-widget--md" %}
+    <nav class="c-section-nav p-2" aria-label="{{ app.name }}">
+      {% for model in app.models %}{% if model.admin_url %}<a href="{{ model.admin_url }}">{{ model.name }}</a>{% elif model.add_url %}<a href="{{ model.add_url }}">{% blocktranslate with name=model.name %}Add {{ name }}{% endblocktranslate %}</a>{% endif %}{% endfor %}
+    </nav>
+  {% endcomponent %}
+{% empty %}
+  {% ui "empty_state" title=_("Nothing to show here") message=_("Your account has no permissions in this section.") icon="lock" %}
+{% endfor %}
+</div>
+{% endblock %}

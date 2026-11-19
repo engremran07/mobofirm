@@ -1,4 +1,4 @@
-{# Swapped into #chipset-results by HTMX; also included by the full page. Context: chipsets (page), total_chipsets, search_* (list_search_context), selected_vendor. #}
+{% load ad_tags %}{# Swapped into #chipset-results by HTMX; also included by the full page. Context: chipsets (page), total_chipsets, search_* (list_search_context), selected_vendor. #}
 {% include "components/search_feedback.html" with noun="chipset" %}
 {% if chipsets %}
   <h2 class="visually-hidden">Chipsets</h2>
@@ -12,6 +12,7 @@
         </div>
         <i class="icon cat-tile__go" data-lucide="chevron-right" aria-hidden="true"></i>
       </article>
+    {% ad_tile forloop.counter chipsets|length tile="card-ui--tile card-ui--chipset-tile" page="firmwares/chipset_list.html" %}
     {% endfor %}
   </div>
   {% include "components/pagination.html" with page_obj=chipsets label="Chipset pages" hx_target="#chipset-results" %}

@@ -1,4 +1,4 @@
-"""Distribution administration (Unfold): channels, campaigns, queue, links, log.
+"""Distribution administration: channels, campaigns, queue, links, log.
 
 The staff pages (dashboard, calendar, approvals, analytics, platform picker, preview) are
 in ``staff_views`` and mounted on the channel admin so their URLs live under
@@ -7,7 +7,7 @@ in ``staff_views`` and mounted on the channel admin so their URLs live under
 
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from django.contrib import messages
 from django.contrib.admin import register
@@ -18,10 +18,9 @@ from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import redirect
 from django.urls import URLPattern, path, reverse
 from django.utils.translation import gettext_lazy as _
-from unfold.contrib.filters.admin import ChoicesDropdownFilter, RangeDateTimeFilter
-from unfold.forms import BaseDialogForm
 
 from apps.core.admin_base import (
+    BaseDialogForm,
     ConfirmForm,
     ModelAdmin,
     NoAddModelAdmin,
@@ -35,6 +34,7 @@ from apps.core.admin_base import (
     htmx_redirect,
     return_url,
 )
+from apps.core.admin_filters import ChoicesDropdownFilter, RangeDateTimeFilter
 from apps.distribution import channels, services, staff_views
 from apps.distribution.forms import ChannelAdminForm, channel_form_for, cred_name
 from apps.distribution.models import (
@@ -47,6 +47,10 @@ from apps.distribution.models import (
     ShortLink,
 )
 
+if TYPE_CHECKING:
+    from django.contrib.admin.options import _FieldOpts
+    from django_stubs_ext import StrOrPromise
+
 STATE_BADGES = {
     "off": "info",
     "ready": "success",
@@ -57,6 +61,7 @@ JOB_BADGES = {
     "queued": "info",
     "pending": "warning",
     "needs_media": "warning",
+    "handoff": "warning",
     "sent": "success",
     "failed": "danger",
     "skipped": "warning",
@@ -145,7 +150,7 @@ class ChannelAdmin(ModelAdmin):
 
     def get_fieldsets(
         self, request: HttpRequest, obj: Channel | None = None
-    ) -> list[tuple[str | None, dict[str, Any]]]:
+    ) -> list[tuple[StrOrPromise | None, _FieldOpts]]:
         adapter = channels.get_adapter(self._kind(request, obj))
         creds = (
             tuple(cred_name(spec.name) for spec in adapter.fields) if adapter else ()
@@ -155,16 +160,26 @@ class ChannelAdmin(ModelAdmin):
             if adapter and (adapter.how_to or adapter.docs_url)
             else ""
         )
-        connection: dict[str, Any] = {
-            "fields": ("name", "kind", "enabled", *creds, "clear_secret"),
+        platform_tab: _FieldOpts = {"fields": ("kind",), "classes": ["tab"]}
+        if adapter is not None:
+            platform_tab["description"] = (
+                f"{adapter.label}. {hint} Next: enter the credentials, choose what "
+                "to share, set the schedule, then test."
+            )
+        connection: _FieldOpts = {
+            "fields": ("name", "enabled", *creds, "clear_secret"),
             "classes": ["tab"],
         }
-        if hint:
-            connection["description"] = hint
+        if adapter is not None and adapter.fields:
+            connection["description"] = (
+                "Secrets are stored encrypted and never shown again. "
+                "Use the setup guide on the platform menu for step-by-step help."
+            )
         return [
-            (str(_("Connection")), connection),
+            (str(_("1 · Platform")), platform_tab),
+            (str(_("2 · Credentials")), connection),
             (
-                str(_("What to share")),
+                str(_("3 · Content rules")),
                 {
                     "fields": (
                         "share_firmware",
@@ -186,7 +201,7 @@ class ChannelAdmin(ModelAdmin):
                 },
             ),
             (
-                str(_("Schedule & approval")),
+                str(_("4 · Schedule & approval")),
                 {
                     "fields": (
                         "approval_mode",
@@ -203,8 +218,14 @@ class ChannelAdmin(ModelAdmin):
                 },
             ),
             (
-                str(_("Status")),
+                str(_("5 · Test & status")),
                 {
+                    "description": str(
+                        _(
+                            "Save the channel, then use “Test connection” (read-only) and "
+                            "“Send test post” at the top of this page before enabling it."
+                        )
+                    ),
                     "fields": (
                         "platform_summary",
                         "status_summary",
@@ -234,6 +255,23 @@ class ChannelAdmin(ModelAdmin):
             return staff_views.platforms(request)
         return super().add_view(request, form_url, extra_context)
 
+    def response_add(
+        self, request: HttpRequest, obj: Channel, post_url_continue: str | None = None
+    ) -> HttpResponse:
+        """A plain save lands on the channel page so the next step (test) is one click."""
+        if "_save" in request.POST and "_popup" not in request.POST:
+            self.message_user(
+                request,
+                _(
+                    "Channel “%(name)s” added and still off. Last step: test the "
+                    "connection and send a test post, then enable it."
+                )
+                % {"name": obj.name},
+                messages.SUCCESS,
+            )
+            return redirect(change_url(self, obj.pk))
+        return super().response_add(request, obj, post_url_continue)
+
     def get_urls(self) -> list[URLPattern]:
         wrap = self.admin_site.admin_view
         routes = (
@@ -244,6 +282,39 @@ class ChannelAdmin(ModelAdmin):
             ("analytics/", staff_views.analytics_page, "analytics"),
             ("analytics/export/", staff_views.analytics_export, "analytics_export"),
             ("platforms/", staff_views.platforms, "platforms"),
+            (
+                "platforms/<slug:kind>/requirements/",
+                staff_views.requirements,
+                "requirements",
+            ),
+            ("handoff/", staff_views.handoff, "handoff"),
+            ("feeds/", staff_views.feeds_page, "feeds"),
+            ("videos/", staff_views.videos_page, "videos"),
+            ("videos/new/", staff_views.video_create, "video_create"),
+            ("videos/bulk/", staff_views.video_bulk, "video_bulk"),
+            ("videos/<int:pk>/render/", staff_views.video_render, "video_render"),
+            (
+                "videos/<int:pk>/<slug:decision>/decide/",
+                staff_views.video_decide,
+                "video_decide",
+            ),
+            ("videos/<int:pk>/schedule/", staff_views.video_schedule, "video_schedule"),
+            (
+                "videos/<int:pk>/<slug:part>/file/",
+                staff_views.video_media,
+                "video_media",
+            ),
+            ("feeds/settings/", staff_views.feeds_settings, "feeds_settings"),
+            ("feeds/toggle/", staff_views.feeds_toggle, "feeds_toggle"),
+            ("feeds/validate/", staff_views.feeds_validate, "feeds_validate"),
+            ("feeds/news-step/", staff_views.feeds_news_step, "feeds_news_step"),
+            ("feeds/pings/run/", staff_views.feeds_ping_run, "feeds_ping_run"),
+            (
+                "feeds/pings/<int:pk>/<slug:action>/",
+                staff_views.feeds_ping,
+                "feeds_ping",
+            ),
+            ("job/<int:pk>/posted/", staff_views.job_posted, "job_posted"),
             ("channel/<int:pk>/test/", staff_views.channel_test, "test_post"),
             ("channel/<int:pk>/check/", staff_views.channel_check, "check"),
             ("channel/<int:pk>/preview/", staff_views.preview, "preview"),
@@ -347,6 +418,11 @@ class ChannelAdmin(ModelAdmin):
         job = services.send_test(channel)
         if job.status == ShareJob.Status.SENT:
             self.message_user(request, _("Test post delivered."))
+        elif job.status == ShareJob.Status.HANDOFF:
+            self.message_user(
+                request,
+                _("Test post prepared. It is not sent: post it by hand from Hand-off."),
+            )
         else:
             self.message_user(
                 request,

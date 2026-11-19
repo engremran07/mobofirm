@@ -16,33 +16,104 @@ from django.utils.text import slugify
 
 MAX_RAW_LENGTH = 256
 
+MEDIATEK = "MediaTek"
+QUALCOMM = "Qualcomm"
+SAMSUNG = "Samsung"
+UNISOC = "Unisoc"
+HISILICON = "HiSilicon"
+GOOGLE = "Google"
+ROCKCHIP = "Rockchip"
+ALLWINNER = "Allwinner"
+APPLE = "Apple"
+
+# Smartphone and tablet SoC vendors only (canonical labels). Samsung means Exynos,
+# HiSilicon means Kirin, Google means Tensor, Apple means the A-series (iPhone, iPad)
+# and M-series (iPad) chips, and Unisoc also covers Spreadtrum and the RDA
+# Microelectronics parts Unisoc acquired. Nothing outside this tuple (for example
+# Intel or Mac silicon naming) is ever resolved to a Chipset row.
+SUPPORTED_CHIPSET_VENDORS: tuple[str, ...] = (
+    MEDIATEK,
+    QUALCOMM,
+    SAMSUNG,
+    UNISOC,
+    HISILICON,
+    GOOGLE,
+    ROCKCHIP,
+    ALLWINNER,
+    APPLE,
+)
+
+# Lower-cased spellings that map to a canonical vendor label.
+_VENDOR_ALIASES: dict[str, str] = {
+    "mediatek": MEDIATEK,
+    "mtk": MEDIATEK,
+    "qualcomm": QUALCOMM,
+    "snapdragon": QUALCOMM,
+    "samsung": SAMSUNG,
+    "samsung exynos": SAMSUNG,
+    "exynos": SAMSUNG,
+    "unisoc": UNISOC,
+    "spreadtrum": UNISOC,
+    "sprd": UNISOC,
+    "rda": UNISOC,
+    "rda microelectronics": UNISOC,
+    "hisilicon": HISILICON,
+    "huawei hisilicon": HISILICON,
+    "kirin": HISILICON,
+    "google": GOOGLE,
+    "google tensor": GOOGLE,
+    "tensor": GOOGLE,
+    "rockchip": ROCKCHIP,
+    "allwinner": ALLWINNER,
+    "apple": APPLE,
+    "apple silicon": APPLE,
+}
+
 # (vendor label, pattern identifying the vendor in raw text)
 _VENDOR_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
-    ("MediaTek", re.compile(r"mediatek|\bmt\s?\d{4}|helio|dimensity", re.IGNORECASE)),
+    (MEDIATEK, re.compile(r"mediatek|\bmt\s?\d{4}|helio|dimensity", re.IGNORECASE)),
     (
-        "Qualcomm",
-        re.compile(r"qualcomm|snapdragon|\bsm\d{4}|\bsdm\d+|\bmsm\d+", re.IGNORECASE),
+        QUALCOMM,
+        re.compile(
+            r"qualcomm|snapdragon|\bsm\d{4}|\bsdm\d+|\bmsm\d+|\bqcm\d{4}",
+            re.IGNORECASE,
+        ),
     ),
-    ("Samsung", re.compile(r"exynos", re.IGNORECASE)),
-    ("Unisoc", re.compile(r"unisoc|spreadtrum|\bsc\d{4}", re.IGNORECASE)),
-    ("Apple", re.compile(r"\bapple\b", re.IGNORECASE)),
-    ("HiSilicon", re.compile(r"hisilicon|kirin", re.IGNORECASE)),
-    ("Google", re.compile(r"\bgoogle\b|\btensor\b", re.IGNORECASE)),
-    ("Rockchip", re.compile(r"rockchip|\brk\d{4}", re.IGNORECASE)),
-    ("Intel", re.compile(r"\bintel\b|\batom\b", re.IGNORECASE)),
+    (SAMSUNG, re.compile(r"exynos", re.IGNORECASE)),
+    (
+        UNISOC,
+        re.compile(
+            r"unisoc|spreadtrum|\bsprd\b|\bsc\d{4}|\bums\d{3,4}"
+            r"|rda microelectronics|\brda\s?\d{4}",
+            re.IGNORECASE,
+        ),
+    ),
+    (APPLE, re.compile(r"\bapple\b|\bbionic\b", re.IGNORECASE)),
+    (HISILICON, re.compile(r"hisilicon|kirin", re.IGNORECASE)),
+    (GOOGLE, re.compile(r"\bgoogle\b|\btensor\b", re.IGNORECASE)),
+    (ROCKCHIP, re.compile(r"rockchip|\brk\d{4}", re.IGNORECASE)),
+    (ALLWINNER, re.compile(r"allwinner|sunxi|\bsun\d+i\b", re.IGNORECASE)),
 )
 _VENDOR_PREFIX = re.compile(
-    r"^(mediatek|qualcomm|samsung|unisoc|spreadtrum|apple|hisilicon|google|rockchip|intel)\s+",
+    r"^(mediatek|qualcomm|samsung|unisoc|spreadtrum|sprd|apple|hisilicon|google"
+    r"|rockchip|allwinner|rda microelectronics)\s+",
     re.IGNORECASE,
 )
-_FAMILY_PATTERNS: tuple[tuple[str, re.Pattern[str]], ...] = (
-    ("Helio", re.compile(r"\bhelio\b", re.IGNORECASE)),
-    ("Dimensity", re.compile(r"\bdimensity\b", re.IGNORECASE)),
-    ("Snapdragon", re.compile(r"\bsnapdragon\b", re.IGNORECASE)),
-    ("Exynos", re.compile(r"\bexynos\b", re.IGNORECASE)),
-    ("Kirin", re.compile(r"\bkirin\b", re.IGNORECASE)),
-    ("Tensor", re.compile(r"\btensor\b", re.IGNORECASE)),
-    ("Unisoc T", re.compile(r"^t\d{3}\b", re.IGNORECASE)),
+# (vendor, family label, pattern on the name). Families are scoped to their vendor
+# so an Allwinner T507 is never mistaken for a Unisoc T-series part.
+_FAMILY_PATTERNS: tuple[tuple[str, str, re.Pattern[str]], ...] = (
+    (MEDIATEK, "Helio", re.compile(r"\bhelio\b", re.IGNORECASE)),
+    (MEDIATEK, "Dimensity", re.compile(r"\bdimensity\b", re.IGNORECASE)),
+    (QUALCOMM, "Snapdragon", re.compile(r"\bsnapdragon\b", re.IGNORECASE)),
+    (SAMSUNG, "Exynos", re.compile(r"\bexynos\b", re.IGNORECASE)),
+    (HISILICON, "Kirin", re.compile(r"\bkirin\b", re.IGNORECASE)),
+    (GOOGLE, "Tensor", re.compile(r"\btensor\b", re.IGNORECASE)),
+    (UNISOC, "Unisoc T", re.compile(r"^t\d{3}\b", re.IGNORECASE)),
+    (UNISOC, "RDA", re.compile(r"^rda\s?\d{4}", re.IGNORECASE)),
+    (ALLWINNER, "Allwinner A", re.compile(r"^a\d{2,3}[a-z]?\b", re.IGNORECASE)),
+    (ALLWINNER, "Allwinner T", re.compile(r"^t\d{3}\b", re.IGNORECASE)),
+    (APPLE, "A-series", re.compile(r"^a\d{2}\b", re.IGNORECASE)),
+    (APPLE, "M-series", re.compile(r"^m\d\b", re.IGNORECASE)),
 )
 _NOISE = re.compile(r"\([^)]*\)|\bprocessor\b|\bchipset\b|\bsoc\b", re.IGNORECASE)
 
@@ -72,23 +143,44 @@ def normalize_chipset(raw: str | None) -> NormalizedChipset | None:
         if pattern.search(cleaned):
             vendor = label
             break
-    name = _VENDOR_PREFIX.sub("", cleaned).strip()
     if not vendor:
-        parts = cleaned.split(" ", 1)
-        if len(parts) < 2:
-            return None
-        vendor, name = parts[0].title(), parts[1]
+        # Not a smartphone/tablet SoC vendor we support (e.g. Intel, Apple silicon).
+        return None
+    name = _VENDOR_PREFIX.sub("", cleaned).strip()
     if not name:
         name = cleaned
     family = ""
-    for label, pattern in _FAMILY_PATTERNS:
-        if pattern.search(name):
+    for family_vendor, label, pattern in _FAMILY_PATTERNS:
+        if family_vendor == vendor and pattern.search(name):
             family = label
             break
     slug = slugify(f"{vendor} {name}")[:160]
     if not slug:
         return None
     return NormalizedChipset(vendor=vendor, family=family, name=name[:128], slug=slug)
+
+
+def canonical_vendor(label: str | None) -> str:
+    """The supported vendor label for a stored vendor/chipset label, or ``""``.
+
+    Accepts the canonical labels, aliases such as ``Spreadtrum`` or ``RDA`` (a
+    Unisoc-owned label) and falls back to pattern matching on the text.
+    """
+    text = re.sub(r"\s+", " ", (label or "").strip()).lower()
+    if not text:
+        return ""
+    alias = _VENDOR_ALIASES.get(text)
+    if alias:
+        return alias
+    for canonical in SUPPORTED_CHIPSET_VENDORS:
+        if canonical.lower() == text:
+            return canonical
+    return vendor_for(label)
+
+
+def is_supported_vendor(label: str | None) -> bool:
+    """True when the vendor label belongs to the phone/tablet SoC allow-list."""
+    return bool(canonical_vendor(label))
 
 
 def vendor_for(raw: str | None) -> str:

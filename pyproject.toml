@@ -15,7 +15,6 @@ dependencies = [
     "django-allauth>=65.13,<70",
     "django-countries>=9.1,<10",
     "django-solo>=2.4,<3",
-    "django-unfold>=0.110,<0.111",
     "djangorestframework>=3.16,<4",
     "Markdown>=3.7,<4",
     "nh3>=0.3.2,<1",
@@ -31,6 +30,11 @@ dependencies = [
 # Production runtime: the WSGI server used by the Docker image.
 prod = [
     "gunicorn>=23,<24",
+]
+# Motion video rendering (headless Chromium draws the frames; ffmpeg, installed separately,
+# encodes them). After installing: playwright install chromium
+video = [
+    "playwright>=1.55,<2",
 ]
 dev = [
     "pytest>=9,<10",
@@ -90,7 +94,7 @@ django_settings_module = "app.settings.base"
 # Third-party packages that ship neither inline types nor stubs; they cannot be
 # typed from this repository. First-party code stays fully checked.
 [[tool.mypy.overrides]]
-module = ["allauth.*", "unfold.*", "solo.*"]
+module = ["allauth.*", "solo.*"]
 ignore_missing_imports = true
 
 # Optional metrics backends are imported lazily and are not installed here.

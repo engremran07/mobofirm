@@ -1,4 +1,4 @@
-"""Credits economy administration (Unfold): wallets, rules, prices, requests, ledger.
+"""Credits economy administration: wallets, rules, prices, requests, ledger.
 
 Every balance-changing action goes through ``apps.wallet.services`` so permission
 checks, idempotency and the append-only ledger apply to staff exactly as to code.
@@ -9,7 +9,7 @@ from __future__ import annotations
 import logging
 import uuid
 from decimal import Decimal
-from typing import Any, ClassVar
+from typing import Any, NoReturn
 
 from django import forms
 from django.contrib import messages
@@ -21,9 +21,6 @@ from django.http import Http404, HttpRequest, HttpResponse
 from django.utils.html import format_html, format_html_join
 from django.utils.safestring import SafeString
 from django.utils.translation import gettext_lazy as _
-from unfold.contrib.filters.admin import ChoicesDropdownFilter, RangeDateTimeFilter
-from unfold.forms import BaseDialogForm
-from unfold.widgets import UnfoldAdminIntegerFieldWidget, UnfoldAdminTextInputWidget
 
 from apps.core.admin_base import (
     ModelAdmin,
@@ -39,6 +36,12 @@ from apps.core.admin_base import (
     htmx_redirect,
     return_url,
 )
+from apps.core.admin_filters import ChoicesDropdownFilter, RangeDateTimeFilter
+from apps.core.admin_forms import (
+    BaseDialogForm,
+    ConsoleIntegerWidget,
+    ConsoleTextInputWidget,
+)
 from apps.users.request_user import current_user
 
 from . import registry, services
@@ -51,6 +54,7 @@ from .models import (
     RewardRule,
     TopUpRequest,
     Wallet,
+    WalletRepair,
     WalletSettings,
 )
 
@@ -71,13 +75,13 @@ class AdjustForm(BaseDialogForm):
     credits = forms.IntegerField(
         label=_("Credits"),
         help_text=_("Positive adds credits, negative removes them."),
-        widget=UnfoldAdminIntegerFieldWidget,
+        widget=ConsoleIntegerWidget,
     )
     reason = forms.CharField(
         label=_("Reason"),
         max_length=255,
         help_text=_("Shown to the user and kept in the ledger."),
-        widget=UnfoldAdminTextInputWidget,
+        widget=ConsoleTextInputWidget,
     )
 
     def clean_credits(self) -> int:
@@ -93,11 +97,13 @@ class ReferenceForm(BaseDialogForm):
         required=False,
         max_length=200,
         help_text=_("Receipt or transfer reference kept on the request."),
-        widget=UnfoldAdminTextInputWidget,
+        widget=ConsoleTextInputWidget,
     )
 
 
 class WalletLedgerInline(TabularInline):
+    """Paginated by the console base (``per_page``): a busy wallet has many rows."""
+
     model = LedgerEntry
     fields = ("created_at", "direction", "reason", "amount", "balance_after", "note")
     readonly_fields = fields
@@ -146,7 +152,7 @@ class WalletPayoutInline(TabularInline):
 
 @register(WalletSettings)
 class WalletSettingsAdmin(SingletonModelAdmin):
-    """Credits & pricing: the one place that defines what a dollar is worth in credits."""
+    """Credits & pricing: the one place that sets what a dollar is worth in credits."""
 
     readonly_fields = ("rate_warning", "rate_preview")
     fieldsets = (
@@ -155,8 +161,8 @@ class WalletSettingsAdmin(SingletonModelAdmin):
             {
                 "classes": ["tab"],
                 "description": _(
-                    "Prices in the shop and marketplace are set in dollars; credits are "
-                    "always derived as price × rate."
+                    "Prices in the shop and marketplace are set in dollars; credits "
+                    "are always derived as price × rate."
                 ),
                 "fields": (
                     "currency_label",
@@ -235,8 +241,9 @@ class WalletSettingsAdmin(SingletonModelAdmin):
             self.message_user(
                 request,
                 _(
-                    "The rate changed from %(old)s to %(new)s credits per %(currency)s. "
-                    "Prices were re-derived; the ledger was not rewritten."
+                    "The rate changed from %(old)s to %(new)s credits per "
+                    "%(currency)s. Prices were re-derived; the ledger was not "
+                    "rewritten."
                 )
                 % {
                     "old": old_rate,
@@ -248,7 +255,13 @@ class WalletSettingsAdmin(SingletonModelAdmin):
 
 
 @register(Wallet)
-class WalletAdmin(NoAddModelAdmin):
+class WalletAdmin(ReadOnlyModelAdmin):
+    """Read-only: every change goes through a console action, i.e. the services.
+
+    A change form would write the counters back from a possibly stale copy; the model
+    refuses that too, so the form is not offered at all.
+    """
+
     list_display = (
         "user",
         "balance",
@@ -274,11 +287,6 @@ class WalletAdmin(NoAddModelAdmin):
     fields = readonly_fields
     inlines = (WalletLedgerInline, WalletEscrowInline, WalletPayoutInline)
     actions_detail = ("adjust_balance", "freeze_wallet", "unfreeze_wallet")
-
-    def has_delete_permission(
-        self, request: HttpRequest, obj: DjangoModel | None = None
-    ) -> bool:
-        return False
 
     @display(description=_("Available"))
     def available_credits(self, obj: Wallet) -> int:
@@ -404,6 +412,7 @@ class LedgerEntryAdmin(ReadOnlyModelAdmin):
     search_fields = ("key", "reference", "event_key", "wallet__user__email")
     list_select_related = ("wallet__user",)
     ordering = ("-id",)
+    show_full_result_count = False
 
     @display(
         description=_("Direction"),
@@ -515,9 +524,9 @@ class CreditPriceAdmin(ModelAdmin):
         if sink is not None and sink.user_price is not None:
             return str(
                 _(
-                    "A fixed number of credits, edited below. This is the global price: "
-                    "a package can set its own (Shop → Packages), and prices shown to "
-                    "users already follow that."
+                    "A fixed number of credits, edited below. This is the global "
+                    "price: a package can set its own (Pricing → Packages), and "
+                    "prices shown to users already follow that."
                 )
             )
         return str(_("A fixed number of credits, edited below."))
@@ -564,8 +573,40 @@ class EscrowHoldAdmin(ReadOnlyModelAdmin):
         return obj.status
 
 
+@register(WalletRepair)
+class WalletRepairAdmin(ReadOnlyModelAdmin):
+    """The audit trail of explicit counter repairs (made with ``repair_wallet``)."""
+
+    list_display = (
+        "id",
+        "wallet",
+        "previous_balance",
+        "repaired_balance",
+        "previous_held",
+        "repaired_held",
+        "actor",
+        "created_at",
+    )
+    list_filter = (("created_at", RangeDateTimeFilter),)
+    search_fields = ("key", "reason", "wallet__user__email")
+    list_select_related = ("wallet", "actor")
+
+
+class WorkflowOnlyAdmin(NoAddModelAdmin):
+    """Records that change only through their workflow actions (services), never a form.
+
+    A saved form would write every column back from a stale copy and skip the ledger
+    posting the action performs, so a form save is refused.
+    """
+
+    def save_model(
+        self, request: HttpRequest, obj: DjangoModel, form: Any, change: bool
+    ) -> NoReturn:
+        raise PermissionDenied("This record changes only through its actions.")
+
+
 @register(TopUpRequest)
-class TopUpRequestAdmin(NoAddModelAdmin):
+class TopUpRequestAdmin(WorkflowOnlyAdmin):
     list_display = ("id", "user", "credits", "price", "status_badge", "created_at")
     list_filter = (
         ("status", ChoicesDropdownFilter),
@@ -586,8 +627,8 @@ class TopUpRequestAdmin(NoAddModelAdmin):
         "created_at",
     )
     fields = readonly_fields
-    actions_row: ClassVar[tuple[str, ...]] = ("confirm_topup", "cancel_topup")
-    actions_detail: ClassVar[tuple[str, ...]] = ("confirm_topup", "cancel_topup")
+    actions_row = ("confirm_topup", "cancel_topup")
+    actions_detail = ("confirm_topup", "cancel_topup")
 
     def has_delete_permission(
         self, request: HttpRequest, obj: DjangoModel | None = None
@@ -653,7 +694,7 @@ class TopUpRequestAdmin(NoAddModelAdmin):
 
 
 @register(PayoutRequest)
-class PayoutRequestAdmin(NoAddModelAdmin):
+class PayoutRequestAdmin(WorkflowOnlyAdmin):
     list_display = (
         "id",
         "wallet",
@@ -687,12 +728,12 @@ class PayoutRequestAdmin(NoAddModelAdmin):
         "created_at",
     )
     fields = readonly_fields
-    actions_row: ClassVar[tuple[str, ...]] = (
+    actions_row = (
         "approve_request",
         "mark_request_paid",
         "reject_request",
     )
-    actions_detail: ClassVar[tuple[str, ...]] = actions_row
+    actions_detail = actions_row
 
     def has_delete_permission(
         self, request: HttpRequest, obj: DjangoModel | None = None

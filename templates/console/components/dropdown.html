@@ -1,0 +1,19 @@
+{% comment %}
+  dropdown - a menu button on the shared popover primitive (frontend/src/admin/js/ui/popover.js): data-ui-popover / data-ui-trigger / data-ui-panel, role=menu, items get role=menuitem; keyboard: Enter/Space/Arrow open, Arrows/Home/End/type-ahead move, Escape closes and restores focus.
+  Context: label (the button text, or its accessible name when icon_only/kebab), icon (Lucide), icon_only, variant (button variant; default secondary),
+  size (sm|lg), align (start|end; default end), css_class, kebab (use the quiet three-dot trigger; see kebab_menu),
+  items (list of dicts):
+    {"label", "url", "icon", "variant": "danger", "current": True, "disabled": True, "attrs": {...}}   a link (hx-* attrs welcome)
+    {"label", "url", "post": True, ...}                                                                a CSRF-protected POST form button
+    {"header": "Group"}   {"divider": True}
+  Slot: content = extra ready-made <li> items appended after items.
+{% endcomment %}{% load i18n console_ui %}<div class="dropdown{% if css_class %} {{ css_class }}{% endif %}" data-ui-popover>
+<button type="button" class="{% if kebab %}c-kebab{% else %}btn btn-{{ variant|default:'secondary' }}{% if size %} btn-{{ size }}{% endif %}{% if icon_only %} btn-icon{% endif %} dropdown-toggle{% endif %}" data-ui-trigger aria-haspopup="menu" aria-expanded="false"{% if kebab or icon_only %} aria-label="{{ label|default:_('More actions') }}"{% endif %}>{% if kebab %}{% console_icon "ellipsis-vertical" %}{% else %}{% if icon %}{% console_icon icon %}{% endif %}{% if icon_only %}<span class="visually-hidden">{{ label }}</span>{% else %}<span>{{ label }}</span>{% endif %}{% endif %}</button>
+<ul class="dropdown-menu{% if align != 'start' %} dropdown-menu-end{% endif %}" data-ui-panel data-ui-fixed role="menu" hidden>
+{% for item in items %}{% if item.divider %}<li><hr class="dropdown-divider"></li>
+{% elif item.header %}<li><h6 class="dropdown-header">{{ item.header }}</h6></li>
+{% elif item.post %}<li><form method="post" action="{{ item.url }}">{% csrf_token %}<button type="submit" class="dropdown-item{% if item.variant == 'danger' %} is-danger{% endif %}"{% if item.disabled %} disabled{% endif %}{{ item.attrs|console_attrs }}>{% if item.icon %}{% console_icon item.icon "c-icon--sm c-menu__icon" %}{% endif %}<span>{{ item.label }}</span></button></form></li>
+{% else %}<li><a class="dropdown-item{% if item.variant == 'danger' %} is-danger{% endif %}{% if item.disabled %} disabled{% endif %}" href="{{ item.url|default:'#' }}"{% if item.current %} aria-current="page"{% endif %}{% if item.disabled %} aria-disabled="true" tabindex="-1"{% endif %}{{ item.attrs|console_attrs }}>{% if item.icon %}{% console_icon item.icon "c-icon--sm c-menu__icon" %}{% endif %}<span>{{ item.label }}</span></a></li>
+{% endif %}{% endfor %}{{ content }}
+</ul>
+</div>

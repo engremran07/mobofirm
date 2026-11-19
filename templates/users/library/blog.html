@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% load mf_ui %}
+{% block title %}Blog contributions | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block content %}
+{% url 'contributions:hub' as hub_url %}
+<div class="site-container py-4 py-lg-5">
+  {% include "components/breadcrumbs.html" with current="Blog contributions" parent_label="My contributions" parent_url=hub_url %}
+  {% include "components/page_header.html" with eyebrow="My contributions" title="Blog contributions" lead="Posts you wrote for the blog, where each one stands in review, and any reason a reviewer sent one back." %}
+  {% include "users/library/_tabs.html" %}
+  {% if blog_contribute_url %}<p><a class="btn btn-primary" href="{{ blog_contribute_url }}"><i class="icon" data-lucide="upload" aria-hidden="true"></i> Contribute a blog post</a></p>{% endif %}
+  {% if page_obj.object_list %}
+    {% table_scroll "Your blog contributions" %}
+    <table class="table align-middle mb-0">
+      <thead><tr><th scope="col">Post</th><th scope="col">Category</th><th scope="col">Access and price</th><th scope="col">Status</th><th scope="col">Submitted</th><th scope="col">Actions</th></tr></thead>
+      <tbody>
+        {% for post in page_obj %}
+          <tr>
+            <td><span class="d-block fw-semibold">{{ post.title }}</span>{% if post.view_url %}<a class="small" href="{{ post.view_url }}">View published post</a>{% endif %}</td>
+            <td>{% if post.category %}{{ post.category }}{% else %}<span class="muted">None</span>{% endif %}</td>
+            <td>{% if post.access == "free" %}{% include "components/status_pill.html" with label=post.access_label %}{% else %}{% include "components/status_pill.html" with label=post.access_label tone="accent" %}{% endif %}{% if post.price_note %}<span class="d-block small muted">{{ post.price_note }}</span>{% endif %}</td>
+            <td>
+              {% if post.status == "published" or post.status == "scheduled" %}{% include "components/status_pill.html" with label=post.status_label tone="success" icon="check" %}
+              {% elif post.status == "returned" or post.status == "archived" %}{% include "components/status_pill.html" with label=post.status_label tone="danger" icon="x" %}
+              {% elif post.status == "withdrawn" %}{% include "components/status_pill.html" with label=post.status_label %}
+              {% else %}{% include "components/status_pill.html" with label=post.status_label tone="warning" icon="clock" %}{% endif %}
+              {% if post.review_note %}<span class="d-block small muted">Reviewer: {{ post.review_note }}</span>{% endif %}
+            </td>
+            <td>{{ post.submitted_at|date:"j M Y" }}{% if post.updated_at != post.submitted_at %}<span class="d-block small muted">Updated {{ post.updated_at|date:"j M Y" }}</span>{% endif %}</td>
+            <td>
+              <div class="d-flex flex-wrap gap-2">
+                {% if post.edit_url %}<a class="btn btn-sm btn-outline-secondary" href="{{ post.edit_url }}">Edit<span class="visually-hidden">: {{ post.title }}</span></a>{% endif %}
+                {% if post.withdraw_url %}
+                  <form method="post" action="{{ post.withdraw_url }}">
+                    {% csrf_token %}
+                    <button class="btn btn-sm btn-outline-secondary" type="submit">Withdraw<span class="visually-hidden">: {{ post.title }}</span></button>
+                  </form>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endtable_scroll %}
+    {% include "components/pagination.html" with page_obj=page_obj label="Blog contribution pages" %}
+  {% elif not blog_available %}
+    {% include "components/empty_state.html" with title="Blog contributions are not available" message="The blog is not enabled on this site." %}
+  {% else %}
+    {% include "components/empty_state.html" with title="You have not contributed a blog post" message="Posts you submit appear here with their review status." action_label="Contribute a blog post" action_url=blog_contribute_url %}
+  {% endif %}
+</div>
+{% endblock %}

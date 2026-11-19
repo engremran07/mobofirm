@@ -58,6 +58,7 @@ jobs:
           export DJANGO_SECRET_KEY="$(.venv/bin/python -c 'import secrets; print(secrets.token_urlsafe(64))')"
           export MFA_ENCRYPTION_KEY="$(.venv/bin/python -c 'import secrets; print(secrets.token_urlsafe(48))')"
           export SOCIAL_CREDENTIAL_ENCRYPTION_KEY="$(.venv/bin/python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')"
+          export FERNET_KEY="$(.venv/bin/python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())')"
           export DB_PASSWORD=ci-only DJANGO_ALLOWED_HOSTS=ci.example.org SITE_URL=https://ci.example.org
           export CACHE_URL=redis://localhost:6379/1 CELERY_BROKER_URL=redis://localhost:6379/0
           export EMAIL_HOST=smtp.example.org DEFAULT_FROM_EMAIL=noreply@example.org

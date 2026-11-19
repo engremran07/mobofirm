@@ -1,2 +1,2 @@
 /* Legacy entry kept so the Vite build input stays valid. The SEO staff screens render
-   in the admin shell and are styled by admin-ui-seo.css; nothing loads this file. */
+   in the staff console and are styled by its own stylesheet; nothing loads this file. */

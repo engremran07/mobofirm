@@ -326,6 +326,15 @@ def health_check(request: HttpRequest) -> JsonResponse:
 # ============================================================
 # ERROR HANDLERS
 # ============================================================
+def staff_console_template(request: HttpRequest, public: str, staff: str) -> str:
+    """``staff`` for requests inside the staff console, ``public`` everywhere else."""
+    try:
+        prefix = reverse("admin:index")
+    except NoReverseMatch:
+        return public
+    return staff if request.path_info.startswith(prefix) else public
+
+
 def error_400_view(
     request: HttpRequest, exception: Exception | None = None
 ) -> HttpResponse:
@@ -342,7 +351,7 @@ def error_403_view(
 ) -> HttpResponse:
     return _render_safe(
         request,
-        "errors/403.html",
+        staff_console_template(request, "errors/403.html", "admin/403.html"),
         {"error": str(exception or "")},
         status=403,
     )
@@ -353,7 +362,7 @@ def error_404_view(
 ) -> HttpResponse:
     return _render_safe(
         request,
-        "errors/404.html",
+        staff_console_template(request, "errors/404.html", "admin/404.html"),
         {"error": str(exception or "")},
         status=404,
     )
@@ -362,7 +371,7 @@ def error_404_view(
 def error_500_view(request: HttpRequest) -> HttpResponse:
     return _render_safe(
         request,
-        "errors/500.html",
+        staff_console_template(request, "errors/500.html", "admin/500.html"),
         {},
         status=500,
     )

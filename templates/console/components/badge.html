@@ -1,0 +1,5 @@
+{% comment %}
+  badge - a soft status pill. Colour is never the only signal: always pair with text.
+  Context: label (required; aliases: text, value), variant (primary|success|warning|danger|info|neutral; alias: color; default neutral),
+  icon (Lucide name), dot (leading status dot), small (compact), title.
+{% endcomment %}{% load console_ui %}{% firstof variant tone color as raw_tone %}{% firstof label text value as caption %}{% with tone=raw_tone|console_variant %}<span class="c-badge{% if tone != 'neutral' %} c-badge--{{ tone }}{% endif %}{% if dot %} c-badge--dot{% endif %}{% if small %} c-badge--sm{% endif %}"{% if title %} title="{{ title }}"{% endif %}>{% if icon %}{% console_icon icon "c-icon--xs" %}{% endif %}{{ caption }}</span>{% endwith %}

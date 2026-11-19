@@ -9,6 +9,7 @@ import logging
 from typing import Any
 
 from allauth.account.adapter import DefaultAccountAdapter
+from allauth.account.internal.stagekit import clear_login
 from allauth.account.models import EmailAddress
 from allauth.core.exceptions import ImmediateHttpResponse
 from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
@@ -29,7 +30,9 @@ from django.utils.translation import gettext_lazy as _
 from apps.core.utils.ip import get_client_ip
 from apps.users.models import UsersSettings
 from apps.users.services.consent import hash_ip
+from apps.users.services.device_gate import device_gate_applied, evaluate_device_policy
 from apps.users.services.email_verification import issue_email_verification_code
+from apps.users.services.mfa import has_active_totp
 
 logger = logging.getLogger(__name__)
 
@@ -124,6 +127,27 @@ class CustomAccountAdapter(DefaultAccountAdapter):
         ):
             return True
         return super().is_email_verified(request, email)
+
+    def login(self, request: HttpRequest, user: Any) -> None:
+        """Establish the session only when the device policy allows it.
+
+        Every allauth sign-in ends here, whatever started it: a social callback,
+        an email-confirmation link or code (after the verification stage), or
+        sign-up. The password form and the API apply the policy themselves
+        (``mark_device_gate_applied``). A refusal that only a second factor could
+        lift lets an enrolled person through to the MFA challenge that
+        ``EnforceMfaMiddleware`` demands of every session; without an enrolled
+        factor it is final. A refusal leaves no session behind.
+        """
+        if not device_gate_applied(request):
+            decision = evaluate_device_policy(request, user)
+            if not (
+                decision.allowed or (decision.mfa_required and has_active_totp(user))
+            ):
+                clear_login(request)
+                messages.error(request, decision.message)
+                raise ImmediateHttpResponse(redirect("users:account_login"))
+        super().login(request, user)
 
     def get_login_redirect_url(self, request: HttpRequest) -> str:
         user = getattr(request, "user", None)

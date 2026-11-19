@@ -1,4 +1,4 @@
-"""Marketplace administration (Unfold): seller verification and listing review.
+"""Marketplace administration: seller verification and listing review.
 
 Decisions go through ``apps.marketplace.services`` so each request is reviewed
 exactly once, by a user holding the change permission, with the reason recorded.
@@ -20,12 +20,6 @@ from django.http import Http404, HttpRequest, HttpResponse
 from django.utils.html import format_html, format_html_join
 from django.utils.safestring import SafeString
 from django.utils.translation import gettext_lazy as _
-from unfold.contrib.filters.admin import (
-    ChoicesDropdownFilter,
-    RangeDateTimeFilter,
-)
-from unfold.forms import BaseDialogForm
-from unfold.widgets import UnfoldAdminTextInputWidget
 
 from apps.core.admin_base import (
     BADGE_APPROVAL,
@@ -41,6 +35,8 @@ from apps.core.admin_base import (
     htmx_redirect,
     return_url,
 )
+from apps.core.admin_filters import ChoicesDropdownFilter, RangeDateTimeFilter
+from apps.core.admin_forms import BaseDialogForm, ConsoleTextInputWidget
 from apps.core.editor.admin import RichTextAdminMixin
 
 from . import services
@@ -76,7 +72,7 @@ class OptionalReasonForm(BaseDialogForm):
         required=False,
         max_length=255,
         help_text=_("Optional note shown to the seller."),
-        widget=UnfoldAdminTextInputWidget,
+        widget=ConsoleTextInputWidget,
     )
 
 

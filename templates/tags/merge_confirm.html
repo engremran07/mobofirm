@@ -1,15 +1,20 @@
 {% extends "admin/staff_page.html" %}
-{% block mf_body %}
-<section class="mf-ui-card" aria-labelledby="merge-impact">
-  <h2 class="mf-ui-card__title" id="merge-impact">This will change {{ affected }} article{{ affected|pluralize }}</h2>
-  <p>Every article tagged <strong>{{ source.name }}</strong> will be tagged <strong>{{ target.name }}</strong> instead, and <strong>{{ source.name }}</strong> will be retired. This cannot be undone from this page.</p>
-  <form method="post" action="{% url 'tags:merge' %}" class="mf-ui-row">
+{% load i18n staff_ui %}
+{% block page_body %}
+{% blocktranslate count counter=affected asvar impact_title %}This will change {{ counter }} article{% plural %}This will change {{ counter }} articles{% endblocktranslate %}
+{% staff_card title=impact_title ident="merge-impact" %}
+  <p class="mb-0">{% blocktranslate with from=source.name to=target.name %}Every article tagged <strong>{{ from }}</strong> will be tagged <strong>{{ to }}</strong> instead, and <strong>{{ from }}</strong> will be retired. This cannot be undone from this page.{% endblocktranslate %}</p>
+  <form method="post" action="{% url 'tags:merge' %}">
     {% csrf_token %}
     <input type="hidden" name="source" value="{{ source.slug }}">
     <input type="hidden" name="target" value="{{ target.slug }}">
     <input type="hidden" name="confirm" value="1">
-    <button class="mf-ui-btn mf-ui-btn--primary" type="submit">Merge into {{ target.name }}</button>
-    <a class="mf-ui-btn" href="{% url 'tags:manage' %}">Cancel</a>
+    {% url 'tags:manage' as manage_url %}
+    {% staff_row %}
+      {% blocktranslate with name=target.name asvar merge_label %}Merge into {{ name }}{% endblocktranslate %}
+      {% staff_button merge_label tone="primary" %}
+      {% staff_button _("Cancel") href=manage_url %}
+    {% endstaff_row %}
   </form>
-</section>
+{% endstaff_card %}
 {% endblock %}

@@ -1,21 +1,22 @@
 {% extends "base.html" %}
-{% block title %}My files · Library | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block title %}Downloads · My contributions | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block content %}
 <div class="site-container py-4 py-lg-5">
-  {% include "components/breadcrumbs.html" with current="My files" %}
-  {% include "components/page_header.html" with eyebrow="My files" title="Your firmware library" lead="Every file served to you, free, paid or featured, ready to download again." %}
+  {% url 'contributions:hub' as hub_url %}
+  {% include "components/breadcrumbs.html" with current="Downloads" parent_label="My contributions" parent_url=hub_url %}
+  {% include "components/page_header.html" with eyebrow="My contributions" title="Your firmware downloads" lead="Every file served to you, free, paid or featured, ready to download again." %}
   {% include "users/library/_tabs.html" %}
-  <nav class="d-flex flex-wrap gap-2 mb-3" aria-label="Library views" data-library-tabs>
-    <a class="btn btn-sm {% if library_tab == 'active' %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="{% url 'library:my_files' %}" data-library-tab="active"{% if library_tab == 'active' %} aria-current="page"{% endif %}>Active <span class="badge text-bg-light">{{ active_count }}</span></a>
-    <a class="btn btn-sm {% if library_tab == 'history' %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="{% url 'library:my_files' %}?tab=history" data-library-tab="history"{% if library_tab == 'history' %} aria-current="page"{% endif %}>History <span class="badge text-bg-light">{{ history_count }}</span></a>
+  <nav class="d-flex flex-wrap gap-2 mb-3" aria-label="Download views" data-library-tabs>
+    <a class="btn btn-sm {% if library_tab == 'active' %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="{% url 'contributions:downloads' %}" data-library-tab="active"{% if library_tab == 'active' %} aria-current="page"{% endif %}>Active <span class="badge text-bg-light">{{ active_count }}</span></a>
+    <a class="btn btn-sm {% if library_tab == 'history' %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="{% url 'contributions:downloads' %}?tab=history" data-library-tab="history"{% if library_tab == 'history' %} aria-current="page"{% endif %}>History <span class="badge text-bg-light">{{ history_count }}</span></a>
   </nav>
   {% if library_tab == 'history' %}<p class="small muted" data-history-note>Files you can no longer download: a package that ended or a free re-download allowance that was used up. They are read-only and kept for your records.</p>{% endif %}
 
   <div class="row g-4">
     <div class="col-12 col-xl-8 order-2 order-xl-1 min-w-0">
-      <form id="library-filters" class="row g-2 mb-4" method="get" action="{% url 'library:my_files' %}"
-            hx-get="{% url 'library:my_files' %}" hx-trigger="change, submit, input changed delay:250ms from:#library-q, search from:#library-q"
-            hx-target="#library-results" hx-include="this" hx-swap="innerHTML" hx-push-url="true" role="search" aria-label="Filter your library">
+      <form id="library-filters" class="row g-2 mb-4" method="get" action="{% url 'contributions:downloads' %}"
+            hx-get="{% url 'contributions:downloads' %}" hx-trigger="change, submit, input changed delay:250ms from:#library-q, search from:#library-q"
+            hx-target="#library-results" hx-include="this" hx-swap="innerHTML" hx-push-url="true" role="search" aria-label="Filter your downloads">
         {% if library_tab == 'history' %}<input type="hidden" name="tab" value="history">{% endif %}        <div class="col-12 col-md-6">
           <label class="form-label" for="library-q">Search</label>
           <input id="library-q" class="form-control" type="search" name="q" value="{{ filters.query }}" maxlength="100" placeholder="File, brand or device" autocomplete="off">
@@ -44,7 +45,7 @@
         </div>
         <div class="col-12 col-md-6 d-flex align-items-end justify-content-md-end gap-2">
           <button type="submit" class="btn btn-primary">Apply</button>
-          <a class="btn btn-outline-secondary" href="{% url 'library:my_files' %}">Clear filters</a>
+          <a class="btn btn-outline-secondary" href="{% url 'contributions:downloads' %}">Clear filters</a>
         </div>
       </form>
       <div id="library-results" aria-live="polite">{% include "users/library/_results.html" %}</div>

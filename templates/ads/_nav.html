@@ -1,12 +1,13 @@
-<nav class="mf-ui-ads-nav" aria-label="Ad management">
-  <ul class="mf-ui-tabs">
-    <li><a href="{% url 'ads:dashboard' %}"{% if ads_tab == "dashboard" %} aria-current="page"{% endif %}>Dashboard</a></li>
-    {% if perms.ads.change_adplacement %}
-      <li><a href="{% url 'ads:placement_manager' %}"{% if ads_tab == "placements" %} aria-current="page"{% endif %}>Placement manager</a></li>
-      <li><a href="{% url 'ads:discoveries' %}"{% if ads_tab == "discoveries" %} aria-current="page"{% endif %}>Scan suggestions</a></li>
-    {% endif %}
-    <li><a href="{% url 'admin:ads_campaign_changelist' %}">Campaigns</a></li>
-    <li><a href="{% url 'admin:ads_adcreative_changelist' %}">Creatives</a></li>
-    <li><a href="{% url 'admin:ads_adssettings_changelist' %}">Settings</a></li>
-  </ul>
-</nav>
+{% load i18n staff_ui %}
+{% url 'ads:dashboard' as dashboard_url %}{% url 'ads:placement_manager' as placements_url %}{% url 'ads:discoveries' as discoveries_url %}
+{% url 'admin:ads_campaign_changelist' as campaigns_url %}{% url 'admin:ads_adcreative_changelist' as creatives_url %}{% url 'admin:ads_adssettings_changelist' as settings_url %}
+{% staff_tabs label=_("Ad management") %}
+  {% staff_tab dashboard_url _("Dashboard") key="dashboard" selected=ads_tab %}
+  {% if perms.ads.change_adplacement %}
+    {% staff_tab placements_url _("Placement manager") key="placements" selected=ads_tab %}
+    {% staff_tab discoveries_url _("Scan suggestions") key="discoveries" selected=ads_tab %}
+  {% endif %}
+  {% staff_tab campaigns_url _("Campaigns") %}
+  {% staff_tab creatives_url _("Creatives") %}
+  {% staff_tab settings_url _("Settings") %}
+{% endstaff_tabs %}

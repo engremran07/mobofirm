@@ -248,6 +248,47 @@ class SEOSettings(SingletonModel):
     search_console_enabled = models.BooleanField(default=False)
     pagespeed_enabled = models.BooleanField(default=False)
 
+    sitemap_page_size = models.PositiveIntegerField(
+        default=5000,
+        validators=[MinValueValidator(100), MaxValueValidator(50000)],
+        help_text="URLs per sitemap file (protocol limit 50,000).",
+    )
+    sitemap_images_enabled = models.BooleanField(
+        default=True,
+        help_text="Add <image:image> entries for images that exist on this site.",
+    )
+    sitemap_news_enabled = models.BooleanField(
+        default=False,
+        help_text="Publish sitemap-news.xml with blog posts from the last 48 hours. "
+        "Only enable for a site that qualifies for Google News.",
+    )
+    robots_crawl_delay = models.PositiveSmallIntegerField(
+        default=0,
+        validators=[MaxValueValidator(30)],
+        help_text="Seconds between requests for bingbot only (Google ignores "
+        "Crawl-delay). 0 omits the directive.",
+    )
+
+    security_contact = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        help_text="security.txt Contact: an email address or an https:// URL.",
+    )
+    security_policy_url = models.URLField(
+        blank=True, default="", help_text="security.txt Policy: https:// URL."
+    )
+    security_expires = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="security.txt Expires (required; the file is served only while "
+        "this date is in the future).",
+    )
+    humans_txt_enabled = models.BooleanField(default=False)
+    humans_txt = models.TextField(
+        blank=True, default="", max_length=4000, help_text="Body of /humans.txt."
+    )
+
     class Meta:
         verbose_name = "SEO Settings"
 
@@ -266,6 +307,21 @@ class SEOSettings(SingletonModel):
         if self.indexnow_enabled and not self.indexnow_key:
             raise ValidationError(
                 {"indexnow_key": "A key is required to enable IndexNow."}
+            )
+        contact = self.security_contact.strip()
+        if contact and not (
+            contact.startswith("https://") or ("@" in contact and " " not in contact)
+        ):
+            raise ValidationError(
+                {"security_contact": "Use an email address or an https:// URL."}
+            )
+        if self.security_policy_url and not self.security_policy_url.startswith(
+            "https://"
+        ):
+            raise ValidationError({"security_policy_url": "Use an https:// URL."})
+        if contact and self.security_expires is None:
+            raise ValidationError(
+                {"security_expires": "RFC 9116 requires an Expires date."}
             )
 
 

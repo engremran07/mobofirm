@@ -4,19 +4,6 @@ Abstract interfaces for decoupling apps from each other.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any
-
-
-class SettingsProvider(ABC):
-    """Abstract interface for accessing site settings without direct model dependency"""
-
-    @abstractmethod
-    def get(self, key: str, default: Any = None) -> Any:
-        """Get a setting value by key"""
-
-    @abstractmethod
-    def get_all(self) -> dict[str, Any]:
-        """Get all settings as dictionary"""
 
 
 class NotificationService(ABC):
@@ -42,31 +29,3 @@ class NotificationService(ABC):
         notification_type: str = "info",
     ) -> int:
         """Send notification to multiple users, returns count sent"""
-
-
-class CacheService(ABC):
-    """Abstract interface for caching without direct dependency on cache backend"""
-
-    @abstractmethod
-    def get(self, key: str, default: Any = None) -> Any:
-        """Get cached value"""
-
-    @abstractmethod
-    def set(self, key: str, value: Any, timeout: int | None = None) -> bool:
-        """Set cached value"""
-
-    @abstractmethod
-    def delete(self, key: str) -> bool:
-        """Delete cached value"""
-
-
-class RateLimitService(ABC):
-    """Abstract interface for rate limiting"""
-
-    @abstractmethod
-    def check_limit(self, identifier: str, limit: int, period: int) -> bool:
-        """Check if rate limit is exceeded"""
-
-    @abstractmethod
-    def increment(self, identifier: str, period: int) -> int:
-        """Increment counter and return current count"""

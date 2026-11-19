@@ -21,6 +21,7 @@ from django.utils import timezone
 
 from .catalog import PUBLIC_FIRMWARE_TYPES, get_public_firmware_queryset
 from .models import DownloadToken, Model
+from .references import content_type_for
 from .tracking_models import FirmwareView
 
 DOWNLOAD_WEIGHT: Final[int] = 5
@@ -85,9 +86,7 @@ def _ranked_ids(
     ranked: list[tuple[str, UUID, int]] = []
     for type_key, model_class in PUBLIC_FIRMWARE_TYPES:
         public = _scoped(get_public_firmware_queryset(model_class), brand, chipset)
-        content_type = ContentType.objects.get_for_model(
-            model_class, for_concrete_model=False
-        )
+        content_type = content_type_for(model_class)
         scores = _scores(content_type, since, public)
         ranked.extend((type_key, pk, score) for pk, score in scores.items() if score)
     ranked.sort(key=lambda item: (-item[2], str(item[1])))

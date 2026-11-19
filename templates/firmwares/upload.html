@@ -1,18 +1,18 @@
 {% extends "base.html" %}
-{% block title %}Upload firmware | {{ site_name|default:"Mobofirm" }}{% endblock %}
-{% block meta_description %}Submit a firmware file or link for a specific device variant. Reviewers check every upload before it is published.{% endblock %}
+{% block title %}Contribute firmware | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block meta_description %}Contribute a firmware file or link for a specific device variant. Reviewers check every contribution before it is published.{% endblock %}
 {% block content %}
 {% url 'firmwares:request_brand' as brand_request_url %}
 {% url 'firmwares:request_model' as model_request_url %}
 {% url 'firmwares:request_variant' as variant_request_url %}
 {% url 'firmwares:browse' as browse_url %}
 <div class="site-container cat-page" data-upload-wizard>
-  {% include "components/breadcrumbs.html" with current="Upload firmware" parent_label="Firmware" parent_url=browse_url %}
+  {% include "components/breadcrumbs.html" with current="Contribute firmware" parent_label="Firmware" parent_url=browse_url %}
   <div class="row justify-content-center">
     <div class="col-12 col-xl-9">
-      {% include "components/page_header.html" with eyebrow="Contribute" title="Upload firmware" lead="Pick the exact device variant, then add the file or an approved download link. A reviewer checks every submission; once approved it is published under that variant and you are notified." %}
-      <p class="small muted">Files up to {{ max_upload_mb }} MB. {% if not seller %}Your uploads are free for everyone to download.{% endif %} <a href="{% url 'firmwares:my_uploads' %}">My uploads</a></p>
-      <ol class="stepper-ui wizard-steps" data-wizard-steps aria-label="Upload progress">
+      {% include "components/page_header.html" with eyebrow="Contribute" title="Contribute firmware" lead="Pick the exact device variant, then add the file or an approved download link. A reviewer checks every contribution; once approved it is published under that variant and you are notified." %}
+      <p class="small muted">Files up to {{ max_upload_mb }} MB. {% if not seller %}Firmware you contribute is free for everyone to download.{% endif %} <a href="{% url 'contributions:firmware' %}">My contributions</a></p>
+      <ol class="stepper-ui wizard-steps" data-wizard-steps aria-label="Contribution progress">
         <li data-step="brand" class="is-current"><a href="#step-device">Brand</a></li>
         <li data-step="model"><a href="#step-device">Model</a></li>
         <li data-step="variant"><a href="#step-device">Variant</a></li>
@@ -59,7 +59,7 @@
           <div class="row g-3 mt-1">
             <div class="col-12 col-md-6">{% include "components/form_field.html" with field=form.build_number %}</div>
             <div class="col-12 col-md-6">{% include "components/form_field.html" with field=form.android_version %}</div>
-            <div class="col-12">{% include "components/form_field.html" with field=form.package_format %}</div>
+            <div class="col-12" id="upload-format-region">{% include "firmwares/fragments/upload_format.html" %}</div>
             <div class="col-12">{% include "components/form_field.html" with field=form.changelog %}</div>
             <div class="col-12">{% include "components/form_field.html" with field=form.notes %}</div>
           </div>
@@ -74,9 +74,10 @@
           <section class="upload-access" aria-labelledby="upload-access-title">
             <h3 id="upload-access-title" class="upload-access__title">Access control</h3>
             {% if seller %}
-              <p class="small muted">As an approved seller you can offer this file as free, featured or paid. Reviewers set the final price and confirm the tier.</p>
+              <p class="small muted">As an approved seller you can offer this file as free, featured or paid. Reviewers set the final price and confirm the access type.</p>
             {% else %}
-              <p class="small muted upload-access__note" data-upload-access-note>Only approved sellers can offer paid or featured files{% if become_seller_url %} — <a href="{{ become_seller_url }}">Become a seller</a>{% endif %}</p>
+              <p class="small muted">Choose Free or Featured. Reviewers confirm the access type and may change it with a reason.</p>
+              <p class="small muted upload-access__note" data-upload-access-note>Only approved sellers can offer paid files{% if become_seller_url %} — <a href="{{ become_seller_url }}">Become a seller</a>{% endif %}</p>
             {% endif %}
             {% include "components/form_field.html" with field=form.access_tier %}
             {% if seller %}<div x-bind:hidden="priceHidden" data-price-field>{% include "components/form_field.html" with field=form.proposed_price %}</div>{% endif %}

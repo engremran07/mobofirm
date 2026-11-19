@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
@@ -80,6 +80,24 @@ class FirmwareStorageLocation(models.Model):
 
     def __str__(self) -> str:
         return f"{self.get_provider_display()} location for {self.object_id}"
+
+    def resolve_firmware(self) -> Any | None:
+        """The firmware row this location describes, or ``None`` if unresolvable.
+
+        ``firmware`` (the generic relation) raises ``AttributeError`` when the
+        stored content type no longer maps to an installed model (a removed or
+        renamed model leaves a stale ``django_content_type`` row), and
+        ``ValidationError``/``ValueError`` when ``object_id`` is not a valid key
+        for the target model. A location whose owner cannot be resolved is an
+        orphan, not a reason to fail the whole page.
+        """
+        content_type = self.content_type
+        if content_type.model_class() is None:
+            return None
+        try:
+            return self.firmware
+        except (ValidationError, ValueError):
+            return None
 
     def clean(self) -> None:
         super().clean()

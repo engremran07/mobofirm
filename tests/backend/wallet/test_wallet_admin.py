@@ -5,19 +5,25 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from django.apps import apps
 from django.contrib import admin
 from django.contrib.auth.models import Permission
+from django.db import connection
 from django.test import Client
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
-from apps.wallet import services
+from apps.wallet import admin as wallet_admin
+from apps.wallet import reconcile, services
 from apps.wallet.models import (
     LedgerEntry,
     LedgerReason,
     PayoutRequest,
     TopUpRequest,
     Wallet,
+    WalletRepair,
     WalletSettings,
+    ledger_posting,
 )
 
 pytestmark = pytest.mark.django_db
@@ -31,16 +37,10 @@ MODELS = (
     "creditprice",
     "rewardrefusal",
     "escrowhold",
+    "walletrepair",
     "topuprequest",
     "payoutrequest",
 )
-
-
-@pytest.fixture
-def admin_client(staff: Any) -> Client:
-    client = Client()
-    client.force_login(staff)
-    return client
 
 
 def test_every_wallet_model_is_registered_and_its_changelist_loads(
@@ -48,9 +48,9 @@ def test_every_wallet_model_is_registered_and_its_changelist_loads(
 ) -> None:
     services.sync_registry()
     registered = {
-        m._meta.model_name
-        for m in admin.site._registry
-        if m._meta.app_label == "wallet"
+        model._meta.model_name
+        for model in apps.get_app_config("wallet").get_models()
+        if admin.site.is_registered(model)
     }
     assert registered == set(MODELS)
 
@@ -224,3 +224,100 @@ def test_wallet_settings_singleton_page_loads(admin_client: Client) -> None:
 
     assert response.status_code == 200
     assert b"credits_per_currency" in response.content
+
+
+def test_a_wallet_form_can_never_write_the_counters_back(
+    admin_client: Client, user: Any
+) -> None:
+    services.credit(user, 50, reason=LedgerReason.TOPUP, key="admin:stale")
+    wallet = Wallet.objects.get(user=user)
+    url = reverse("admin:wallet_wallet_change", args=[wallet.pk])
+
+    response = admin_client.post(url, {"balance": "999999", "held": "0"})
+
+    assert response.status_code == 403
+    assert Wallet.objects.get(pk=wallet.pk).balance == 50
+
+
+def test_request_records_change_only_through_their_actions(
+    admin_client: Client, user: Any
+) -> None:
+    topup = services.request_topup(user, 100)
+
+    response = admin_client.post(
+        reverse("admin:wallet_topuprequest_change", args=[topup.pk]),
+        {"status": "paid"},
+    )
+
+    assert response.status_code == 403
+    topup.refresh_from_db()
+    assert topup.status == TopUpRequest.Status.PENDING
+    assert services.balance(user) == 0
+
+
+def test_wallet_page_pages_the_ledger_instead_of_listing_every_row(
+    admin_client: Client, user: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(wallet_admin.WalletLedgerInline, "per_page", 3)
+    for number in range(1, 6):
+        services.credit(
+            user,
+            5,
+            reason=LedgerReason.TOPUP,
+            key=f"admin:row:{number}",
+            note=f"marker-{number}",
+        )
+    wallet = Wallet.objects.get(user=user)
+
+    page = admin_client.get(reverse("admin:wallet_wallet_change", args=[wallet.pk]))
+
+    assert page.status_code == 200
+    body = page.content.decode()
+    assert all(f"marker-{number}" in body for number in (3, 4, 5))
+    assert not any(f"marker-{number}" in body for number in (1, 2))
+
+
+def test_repair_records_are_read_only_in_the_admin(
+    admin_client: Client, user: Any, staff: Any
+) -> None:
+    services.credit(user, 50, reason=LedgerReason.TOPUP, key="admin:repair")
+    wallet = Wallet.objects.get(user=user)
+    with ledger_posting():
+        Wallet.objects.filter(pk=wallet.pk).update(balance=60)
+    record = reconcile.repair_wallet(
+        wallet.pk, actor=staff, reason_text="Counter drift", key="admin:repair:1"
+    )
+
+    detail = admin_client.get(
+        reverse("admin:wallet_walletrepair_change", args=[record.pk])
+    )
+    add = admin_client.get(reverse("admin:wallet_walletrepair_add"))
+    delete = admin_client.post(
+        reverse("admin:wallet_walletrepair_delete", args=[record.pk]), {"post": "yes"}
+    )
+
+    assert detail.status_code == 200
+    assert add.status_code == 403
+    assert delete.status_code == 403
+    assert WalletRepair.objects.filter(pk=record.pk).exists()
+
+
+def test_the_ledger_changelist_does_not_query_per_row(
+    admin_client: Client, make_user: Any
+) -> None:
+    url = reverse("admin:wallet_ledgerentry_changelist")
+
+    def count_queries() -> int:
+        with CaptureQueriesContext(connection) as captured:
+            assert admin_client.get(url).status_code == 200
+        return len(captured)
+
+    members = [make_user(f"member{number}") for number in range(6)]
+    for number, member in enumerate(members[:2]):
+        services.credit(member, 5, reason=LedgerReason.TOPUP, key=f"q:{number}")
+    count_queries()  # warms the permission and content-type caches
+    few = count_queries()
+    for number, member in enumerate(members[2:], start=2):
+        services.credit(member, 5, reason=LedgerReason.TOPUP, key=f"q:{number}")
+
+    assert count_queries() == few

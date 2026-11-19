@@ -1,7 +1,8 @@
-"""Gamification administration (Unfold)."""
+"""Gamification administration."""
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import ClassVar
 
 from django.contrib.admin import register
@@ -9,7 +10,6 @@ from django.db.models import Count, QuerySet
 from django.forms import ModelForm
 from django.http import HttpRequest
 from django.utils.translation import gettext_lazy as _
-from unfold.contrib.filters.admin import ChoicesDropdownFilter, RangeDateTimeFilter
 
 from apps.core.admin_base import (
     ModelAdmin,
@@ -17,6 +17,7 @@ from apps.core.admin_base import (
     ReadOnlyModelAdmin,
     display,
 )
+from apps.core.admin_filters import ChoicesDropdownFilter, RangeDateTimeFilter
 from apps.gamification import services
 from apps.gamification.models import (
     Badge,
@@ -65,7 +66,7 @@ class BadgeAdmin(ModelAdmin):
     )
     list_filter = (("tier", ChoicesDropdownFilter), "is_active")
     search_fields = ("name", "slug")
-    prepopulated_fields: ClassVar[dict[str, tuple[str, ...]]] = {"slug": ("name",)}
+    prepopulated_fields: ClassVar[dict[str, Sequence[str]]] = {"slug": ("name",)}
     fieldsets = (
         (
             _("Badge"),

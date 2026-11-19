@@ -1,0 +1,9 @@
+{% comment %}
+  button - a Bootstrap button or link-styled button.
+  Context: label (required; also the accessible name when icon_only), url (renders an <a> instead of a <button>),
+  variant (primary|secondary|ghost|danger|success|warning|outline-primary|outline-secondary|outline-danger|link; default secondary),
+  size (sm|lg), icon (Lucide name), icon_end (Lucide name after the label), icon_only (hide the label visually),
+  type (button|submit|reset; default button), name, value, disabled, busy, css_class, title,
+  attrs (dict of extra attributes, e.g. {"hx-get": url, "hx-target": "#console-dialog", "hx-swap": "innerHTML"}).
+  Inline event handlers and style are refused by console_attrs (strict CSP).
+{% endcomment %}{% load console_ui %}{% if url and not disabled %}<a class="btn btn-{{ variant|default:'secondary' }}{% if size %} btn-{{ size }}{% endif %}{% if icon_only %} btn-icon{% endif %}{% if css_class %} {{ css_class }}{% endif %}" href="{{ url }}"{% if icon_only %} aria-label="{{ label }}"{% endif %}{% if title %} title="{{ title }}"{% endif %}{{ attrs|console_attrs }}>{% else %}<button class="btn btn-{{ variant|default:'secondary' }}{% if size %} btn-{{ size }}{% endif %}{% if icon_only %} btn-icon{% endif %}{% if css_class %} {{ css_class }}{% endif %}" type="{{ type|default:'button' }}"{% if name %} name="{{ name }}"{% endif %}{% if value %} value="{{ value }}"{% endif %}{% if disabled %} disabled{% endif %}{% if busy %} aria-busy="true"{% endif %}{% if icon_only %} aria-label="{{ label }}"{% endif %}{% if title %} title="{{ title }}"{% endif %}{{ attrs|console_attrs }}>{% endif %}{% if icon %}{% console_icon icon %}{% endif %}{% if icon_only %}<span class="visually-hidden">{{ label }}</span>{% else %}<span>{{ label }}</span>{% endif %}{% if icon_end %}{% console_icon icon_end %}{% endif %}{% if url and not disabled %}</a>{% else %}</button>{% endif %}

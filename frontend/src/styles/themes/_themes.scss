@@ -6,11 +6,9 @@
 //   data-motion="reduce"  forces reduced motion (themes/_motion.scss)
 
 :root[data-bs-theme="dark"] {
-  --mf-inset-highlight: inset 0 1px 0 color-mix(in srgb, #fff 8%, transparent);
-
   .hero-panel,
   .hero-ui {
-    box-shadow: var(--mf-elev-4), inset 0 1px 0 color-mix(in srgb, #fff 8%, transparent);
+    box-shadow: var(--mf-elev-4), var(--mf-inset-highlight);
   }
 
   body {
@@ -20,7 +18,7 @@
   .surface-card,
   .card-ui,
   .stat-tile {
-    border-color: color-mix(in srgb, #fff 9%, var(--mf-border));
+    border-color: var(--mf-card-edge);
   }
 }
 
@@ -46,8 +44,4 @@
   a:not(.btn):not(.site-nav-link):not(.card-ui__link) {
     text-decoration: underline;
   }
-}
-
-:root[data-bs-theme="light"] {
-  --mf-inset-highlight: inset 0 1px 0 color-mix(in srgb, #fff 55%, transparent);
 }

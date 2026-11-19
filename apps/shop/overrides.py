@@ -13,7 +13,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from . import request_cache
-from .models import QuotaOverrideAudit, UserQuotaOverride
+from .models import PackageQuotaOverride, QuotaOverrideAudit, UserQuotaOverride
 from .services import OrderError, lock_user
 
 LIMIT_FIELDS = (
@@ -118,3 +118,30 @@ def audit_saved(override: UserQuotaOverride, *, actor: Any, created: bool) -> No
 def audit_deleted(override: UserQuotaOverride, *, actor: Any) -> None:
     record(QuotaOverrideAudit.Action.DELETED, override, actor)
     request_cache.invalidate()
+
+
+def package_snapshot(override: PackageQuotaOverride) -> dict[str, Any]:
+    """The JSON-safe state of a per-package override, for the same audit trail."""
+    return {
+        "scope": "package",
+        "user_package": override.user_package_id,
+        "limit_files": override.limit_files,
+        "limit_size_mb": override.limit_size_mb,
+        "device_limit": override.device_limit,
+        "expires_at": override.expires_at.isoformat() if override.expires_at else None,
+        "reason": override.reason,
+    }
+
+
+def audit_package_override(
+    action: str, override: PackageQuotaOverride, *, actor: Any
+) -> QuotaOverrideAudit:
+    """Audit a staff exception on one user package (granted, changed or deleted)."""
+    request_cache.invalidate()
+    return QuotaOverrideAudit.objects.create(
+        user_id=override.user_package.user_id,
+        action=action,
+        actor=actor if getattr(actor, "pk", None) else None,
+        reason=override.reason,
+        snapshot=package_snapshot(override),
+    )

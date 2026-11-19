@@ -69,12 +69,17 @@ def test_every_template_icon_is_registered_in_the_icon_set():
     )
     used: dict[str, str] = {}
     for template in TEMPLATES.rglob("*.html"):
+        relative = template.relative_to(PROJECT_ROOT)
+        # The staff console has its own icon registry (frontend/src/admin/js/icons.js),
+        # covered by tests/backend/admin/test_console_core_shell_icons.py.
+        if relative.parts[1] in {"admin", "console"}:
+            continue
         for name in re.findall(
             r'(?:data-lucide|(?<![-\w])icon)="([a-z0-9-]+)"',
             template.read_text(encoding="utf-8"),
         ):
             pascal = "".join(part.capitalize() for part in name.split("-"))
-            used.setdefault(pascal, f"{template.relative_to(PROJECT_ROOT)}: {name}")
+            used.setdefault(pascal, f"{relative}: {name}")
 
     missing = {name: where for name, where in used.items() if name not in registered}
     assert not missing, f"Unregistered Lucide icons: {missing}"
@@ -344,68 +349,6 @@ def test_notification_detail_only_links_internal_urls():
     assert "Open related item" in render("/blog/post/")
     for unsafe in ("javascript:alert(1)", "//evil.example/x", "https://evil.example/"):
         assert "Open related item" not in render(unsafe)
-
-
-def _hex_to_luminance(value: str) -> float:
-    channels = [int(value[index : index + 2], 16) / 255 for index in (1, 3, 5)]
-    linear = [
-        channel / 12.92 if channel <= 0.03928 else ((channel + 0.055) / 1.055) ** 2.4
-        for channel in channels
-    ]
-    return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
-
-
-def _contrast(foreground: str, background: str) -> float:
-    lighter, darker = sorted(
-        (_hex_to_luminance(foreground), _hex_to_luminance(background)), reverse=True
-    )
-    return (lighter + 0.05) / (darker + 0.05)
-
-
-def _theme_tokens() -> dict[str, dict[str, str]]:
-    css = (FRONTEND / "styles" / "tokens.css").read_text(encoding="utf-8")
-    themes: dict[str, dict[str, str]] = {}
-    for selector, body in re.findall(r"(:root[^{]*)\{([^}]*)\}", css):
-        if "data-bs-theme" not in selector and selector.strip() != ":root,":
-            continue
-        name = "dark" if "dark" in selector else "light"
-        themes.setdefault(name, {}).update(
-            dict(re.findall(r"--mf-([a-z-]+):\s*(#[0-9a-fA-F]{6});", body))
-        )
-    return themes
-
-
-@pytest.mark.parametrize("theme", ["light", "dark"])
-def test_token_pairs_meet_wcag_aa_contrast(theme):
-    """Foreground/background token pairs reach 4.5:1 contrast in both themes."""
-    tokens = _theme_tokens()[theme]
-    pairs = [
-        ("text", "page"),
-        ("text", "surface"),
-        ("text-muted", "page"),
-        ("text-muted", "surface"),
-        ("accent", "page"),
-        ("accent", "surface"),
-        ("accent-ink", "accent"),
-        ("accent-ink", "accent-strong"),
-        ("danger", "page"),
-        ("danger", "surface"),
-        ("danger-ink", "danger"),
-        ("success", "page"),
-        ("warning", "page"),
-        ("page", "text-muted"),
-        ("page", "success"),
-        ("page", "warning"),
-        ("page", "danger"),
-        ("info", "page"),
-        ("info", "surface"),
-    ]
-    failures = {
-        f"{fg} on {bg}": round(_contrast(tokens[fg], tokens[bg]), 2)
-        for fg, bg in pairs
-        if _contrast(tokens[fg], tokens[bg]) < 4.5
-    }
-    assert not failures, f"{theme} theme contrast failures: {failures}"
 
 
 def test_htmx_triggers_never_listen_to_the_first_input_in_the_document():

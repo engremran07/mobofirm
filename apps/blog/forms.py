@@ -5,10 +5,11 @@ from typing import Any, ClassVar
 
 from django import forms
 
+from apps.core.editor import text_length
 from apps.core.editor.forms import RichTextFormMixin
 from apps.tags.selectors import public_tags
 
-from .access import can_set_premium_access
+from .access import can_set_premium_access, is_approved_seller
 from .models import Category, Post, PostAccess
 
 
@@ -31,6 +32,119 @@ class CategoryForm(forms.ModelForm):
             "slug": forms.TextInput(attrs={"class": "form-control"}),
             "parent": forms.Select(attrs={"class": "form-select"}),
         }
+
+
+class ContributionForm(RichTextFormMixin, forms.ModelForm):
+    """A member's blog contribution: the article and who may read it.
+
+    Free and Featured are open to every contributor. Paid is offered only to approved
+    marketplace sellers, who must also propose a price; a forged Paid value from anyone
+    else is not a valid choice and is rejected. SEO, comments and hero image stay with
+    editors, and reviewers confirm (or lower) the access type.
+    """
+
+    rich_text_fields: ClassVar[Mapping[str, str]] = {"body": "blog_contribution"}
+    MIN_BODY_CHARS: ClassVar[int] = 40
+
+    class Meta:
+        model = Post
+        fields = (
+            "title",
+            "summary",
+            "body",
+            "category",
+            "tags",
+            "access",
+            "proposed_price",
+        )
+        widgets: ClassVar[dict[str, Any]] = {
+            "title": forms.TextInput(attrs={"class": "form-control"}),
+            "summary": forms.Textarea(attrs={"rows": 3, "class": "form-control"}),
+            "body": forms.Textarea(attrs={"rows": 15, "class": "form-control"}),
+            "category": forms.Select(attrs={"class": "form-select"}),
+            "tags": forms.SelectMultiple(attrs={"class": "form-select", "size": 8}),
+            "access": forms.Select(attrs={"class": "form-select"}),
+            "proposed_price": forms.NumberInput(
+                attrs={"class": "form-control", "step": "0.01", "min": "0.01"}
+            ),
+        }
+        labels: ClassVar[dict[str, str]] = {
+            "access": "Access",
+            "proposed_price": "Proposed price (USD)",
+        }
+        help_texts: ClassVar[dict[str, str]] = {
+            "summary": "One or two sentences shown in lists. Optional.",
+            "category": "Pick the closest topic.",
+            "tags": "Pick existing tags that fit; reviewers can add more.",
+        }
+
+    def __init__(self, *args, user=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        allowed = public_tags()
+        if self.instance.pk:
+            allowed = allowed | self.instance.tags.all()
+        tags_field = self.fields["tags"]
+        assert isinstance(tags_field, forms.ModelMultipleChoiceField)
+        tags_field.queryset = allowed.distinct().order_by("name")
+        tags_field.required = False
+        self.fields["category"].required = True
+        self.fields["category"].empty_label = "Choose a category"
+        self.seller = user is not None and is_approved_seller(user)
+        access_field = self.fields["access"]
+        assert isinstance(access_field, forms.ChoiceField)
+        access_field.choices = [
+            (value, label)
+            for value, label in PostAccess.choices
+            if self.seller or value != PostAccess.PAID
+        ]
+        access_field.required = False
+        access_field.initial = PostAccess.FREE
+        if self.seller:
+            access_field.help_text = (
+                "Free is open to everyone. Featured shows a teaser to readers without "
+                "access. Paid needs a proposed price. Reviewers confirm the access "
+                "type and the final price."
+            )
+            self.fields["proposed_price"].required = False
+            self.fields[
+                "proposed_price"
+            ].help_text = "Needed for paid posts. Reviewers set the final price."
+        else:
+            access_field.help_text = (
+                "Free is open to everyone. Featured shows a teaser to readers without "
+                "access. Paid is available to approved sellers. Reviewers confirm the "
+                "access type."
+            )
+            del self.fields["proposed_price"]
+
+    def clean_access(self) -> str:
+        return self.cleaned_data.get("access") or PostAccess.FREE
+
+    def clean(self) -> dict[str, Any]:
+        cleaned = super().clean()
+        access = cleaned.get("access") or PostAccess.FREE
+        price = cleaned.get("proposed_price")
+        if access == PostAccess.PAID:
+            if not self.seller:
+                self.add_error("access", "Only approved sellers can offer paid posts.")
+            elif price is None or price <= 0:
+                self.add_error(
+                    "proposed_price", "A paid post needs a proposed price above zero."
+                )
+        else:
+            cleaned["proposed_price"] = None
+        body = cleaned.get("body")
+        if (
+            body is not None
+            and "body" not in self.errors
+            and text_length(body) < self.MIN_BODY_CHARS
+        ):
+            self.add_error(
+                "body",
+                f"Write at least {self.MIN_BODY_CHARS} characters so reviewers "
+                "have something to assess.",
+            )
+        return cleaned
 
 
 class PostForm(RichTextFormMixin, forms.ModelForm):

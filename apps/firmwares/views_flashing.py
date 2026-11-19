@@ -6,9 +6,9 @@ import logging
 
 from django.core.paginator import Paginator
 from django.db.models import F, Prefetch, Q
-from django.http import HttpRequest, HttpResponse
-from django.shortcuts import get_object_or_404, render
-from django.utils import timezone
+from django.http import Http404, HttpRequest, HttpResponse
+from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views.decorators.vary import vary_on_headers
 
 from apps.core.search import list_search_context, search_queryset
@@ -19,9 +19,14 @@ from .models import (
     FlashingGuideTemplate,
     FlashingTool,
     FlashingToolCategory,
-    GeneratedFlashingGuide,
 )
 from .search_providers import GUIDE_FIELDS, TOOL_FIELDS
+from .tool_categories import (
+    CategoryIndex,
+    listed_groups,
+    published_guides,
+    resolve_category,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -30,15 +35,7 @@ GUIDES_PAGE_SIZE = 12
 
 def _published_guides():
     """Guides whose blog post is live; drafts are never exposed publicly."""
-    from apps.blog.models import PostStatus
-
-    return (
-        GeneratedFlashingGuide.objects.filter(
-            post__status=PostStatus.PUBLISHED, post__publish_at__lte=timezone.now()
-        )
-        .select_related("post", "brand", "model", "template")
-        .order_by("-post__published_at", "-created_at")
-    )
+    return published_guides()
 
 
 @vary_on_headers("HX-Request")
@@ -66,6 +63,9 @@ def flashing_tools(request: HttpRequest) -> HttpResponse:
 
     context = {
         "categories": categories,
+        "browse_groups": []
+        if result.is_active
+        else listed_groups(CategoryIndex.build()),
         "featured_tools": []
         if result.is_active
         else tools.filter(is_featured=True).select_related("category")[:6],
@@ -92,7 +92,15 @@ def flashing_guides(request: HttpRequest) -> HttpResponse:
     """
     guide_type = request.GET.get("type", "").strip()
     brand_slug = request.GET.get("brand", "").strip()
+    category_slug = request.GET.get("category", "").strip()
     guides = _published_guides()
+    index = CategoryIndex.build()
+    listed = index.listed()
+    category = next((cat for cat in listed if cat.slug == category_slug), None)
+    if category is not None:
+        guides = guides.filter(pk__in=index.guide_ids(category))
+    else:
+        category_slug = ""
     if guide_type in dict(FlashingGuideTemplate.GuideType.choices):
         guides = guides.filter(template__guide_type=guide_type)
     else:
@@ -112,6 +120,12 @@ def flashing_guides(request: HttpRequest) -> HttpResponse:
         .order_by("name"),
         "selected_type": guide_type,
         "selected_brand": brand_slug,
+        "selected_category": category_slug,
+        "category_options": [
+            cat
+            for cat in listed
+            if index.guide_ids(cat) and cat.kind != FlashingToolCategory.Kind.GENERAL
+        ],
         **list_search_context(
             result,
             page.paginator.count,
@@ -124,6 +138,48 @@ def flashing_guides(request: HttpRequest) -> HttpResponse:
     return render(request, "firmwares/flashing_guides.html", context)
 
 
+def flashing_category(request: HttpRequest, slug: str) -> HttpResponse:
+    """Tools and guides of one category (vendor, family, brand or operating system).
+
+    Only categories that hold an active tool or a published guide (or have a child
+    that does) are public. A renamed category redirects to its current slug; an empty
+    one redirects to its listed parent, else answers 404.
+    """
+    category, renamed = resolve_category(slug)
+    if category is None:
+        raise Http404("No such category.")
+    if renamed:
+        return redirect(category, permanent=True)
+    index = CategoryIndex.build()
+    parent = category.parent
+    listed_parent = parent if parent is not None and index.is_listed(parent) else None
+    if not index.is_listed(category):
+        if listed_parent is not None:
+            return redirect(listed_parent)
+        raise Http404("This category is empty.")
+    tools = FlashingTool.objects.filter(
+        pk__in=index.tool_ids(category), is_active=True
+    ).order_by("-is_featured", "name")
+    guides = _published_guides().filter(pk__in=index.guide_ids(category))[:12]
+    return render(
+        request,
+        "firmwares/flashing_category.html",
+        {
+            "category": category,
+            "parent": listed_parent,
+            "children": [
+                (child, *index.counts(child))
+                for child in index.listed_children(category)
+            ],
+            "tools": tools,
+            "guides": guides,
+            "tool_total": len(index.tool_ids(category)),
+            "guide_total": len(index.guide_ids(category)),
+            "guides_url": f"{reverse('firmwares:flashing_guides')}?category={category.slug}",
+        },
+    )
+
+
 def flashing_tool_detail(request: HttpRequest, slug: str) -> HttpResponse:
     """Single flashing tool detail page."""
     tool = get_object_or_404(
@@ -132,9 +188,7 @@ def flashing_tool_detail(request: HttpRequest, slug: str) -> HttpResponse:
         is_active=True,
     )
     if should_count(request, "tool", tool.pk):
-        FlashingTool.objects.filter(pk=tool.pk).update(
-            views_count=F("views_count") + 1
-        )
+        FlashingTool.objects.filter(pk=tool.pk).update(views_count=F("views_count") + 1)
         tool.views_count += 1
 
     return render(

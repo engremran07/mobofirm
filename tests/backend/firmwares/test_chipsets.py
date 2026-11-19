@@ -74,10 +74,12 @@ class NormalizationTests(TestCase):
         self.assertEqual(vendor_for("Technology"), "")
         self.assertEqual(vendor_for("Snapdragon 680"), "Qualcomm")
 
-    def test_unknown_vendors_use_their_first_word(self):
-        normalized = self.normalized("Acme X1 Pro")
-
-        self.assertEqual((normalized.vendor, normalized.name), ("Acme", "X1 Pro"))
+    def test_vendors_outside_the_phone_and_tablet_allow_list_are_not_chipsets(self):
+        for raw in ("Acme X1 Pro", "Intel Atom Z3560", "Intel Core i5"):
+            with self.subTest(raw=raw):
+                self.assertIsNone(normalize_chipset(raw))
+                self.assertIsNone(resolve_chipset(raw))
+        self.assertFalse(Chipset.objects.exists())
 
 
 class ResolutionTests(TestCase):

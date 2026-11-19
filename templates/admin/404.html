@@ -1,0 +1,5 @@
+{% extends "console/error_page.html" %}{% load i18n %}
+{% block page_title %}{% translate "Page not found" %}{% endblock %}
+{% block code %}404{% endblock %}
+{% block error_title %}{% translate "We can't find that page" %}{% endblock %}
+{% block message %}{% translate "The page may have been moved or deleted, or the link may be mistyped. Use the dashboard or the search to find your way." %}{% endblock %}

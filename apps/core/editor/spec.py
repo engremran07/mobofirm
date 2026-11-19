@@ -17,6 +17,7 @@ from .video import DEFAULT_PROVIDERS, normalize_providers
 
 CONTEXT_BLOG_POST = "blog_post"
 CONTEXT_GUIDE_REQUEST = "guide_request"
+CONTEXT_BLOG_CONTRIBUTION = "blog_contribution"
 CONTEXT_COMMENT = "comment"
 CONTEXT_PAGE = "page"
 CONTEXT_LISTING = "listing"
@@ -28,6 +29,7 @@ CONTEXT_ADMIN_DEFAULT = "admin_default"
 CONTEXT_LABELS: dict[str, str] = {
     CONTEXT_BLOG_POST: "Blog posts",
     CONTEXT_GUIDE_REQUEST: "Guide requests and solutions",
+    CONTEXT_BLOG_CONTRIBUTION: "Community blog contributions",
     CONTEXT_COMMENT: "Comments",
     CONTEXT_PAGE: "CMS pages",
     CONTEXT_LISTING: "Marketplace listings",
@@ -151,6 +153,13 @@ DEFAULT_PROFILES: dict[str, ProfileSpec] = {
         layout=Layout(
             20_000, True, "Describe the device, what you tried and what happened…", 300
         ),
+    ),
+    # Community posts: formatting, lists, links and tables only. No images, video,
+    # raw styles or uploads: reviewers read plain structure, staff add media.
+    CONTEXT_BLOG_CONTRIBUTION: ProfileSpec(
+        CONTEXT_BLOG_CONTRIBUTION,
+        features=_ARTICLE - {"script", "style", "images"},
+        layout=Layout(20_000, True, "Write your post…", 360),
     ),
     CONTEXT_COMMENT: ProfileSpec(
         CONTEXT_COMMENT,

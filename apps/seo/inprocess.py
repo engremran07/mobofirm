@@ -4,6 +4,11 @@ When the site audits itself, an HTTP round trip to its own host is slow, blocked
 private-network guard in development, and impossible from a single-threaded dev server.
 ``InProcessFetcher`` answers the crawler's ``fetch`` calls with the real URL conf,
 middleware and templates, so the observations are the same HTML a visitor receives.
+
+Every request carries the internal-crawl identity (``apps.core.internal_request``), an
+environ flag a remote client cannot send. Page rendering and authorization behave as
+for an anonymous visitor, while view counters, ad impressions, referral clicks and
+short-link clicks stay silent. Private, download and token URLs are never requested.
 """
 
 from __future__ import annotations
@@ -16,6 +21,8 @@ from urllib.parse import urljoin, urlsplit
 from django.conf import settings
 from django.test import Client
 
+from apps.core.internal_request import internal_crawl_environ
+
 from . import fetcher as fetcher_module
 from .fetcher import (
     REDIRECT_STATUSES,
@@ -26,6 +33,7 @@ from .fetcher import (
     TooManyRedirects,
 )
 from .inventory import serving_host
+from .policy import is_noindex_path
 
 TRANSPORT_SETTING = "SEO_CRAWL_TRANSPORT"
 
@@ -56,6 +64,11 @@ class InProcessFetcher(SafeFetcher):
             hostname = (parts.hostname or "").lower()
             if allowed_hosts is not None and hostname not in allowed_hosts:
                 raise BlockedDestination(f"{hostname} is not an allowed host.")
+            if is_noindex_path(parts.path or "/"):
+                raise BlockedDestination(
+                    "The in-process crawl never requests private, download or "
+                    f"token URLs ({parts.path})."
+                )
             target = (parts.path or "/") + (f"?{parts.query}" if parts.query else "")
             response = client.generic(
                 method,
@@ -63,6 +76,7 @@ class InProcessFetcher(SafeFetcher):
                 secure=parts.scheme == "https",
                 HTTP_HOST=serving_host(),
                 HTTP_USER_AGENT=self.policy.user_agent,
+                **internal_crawl_environ(),
             )
             reply = {key.lower(): value for key, value in response.items()}
             location = reply.get("location", "")

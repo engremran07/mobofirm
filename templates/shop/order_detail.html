@@ -4,7 +4,7 @@
 {% url 'shop:pricing' as shop_url %}
 {% url 'shop:order_history' as orders_url %}
 <div class="site-container cm-page py-4 py-lg-5">
-  {% include "components/breadcrumbs.html" with current="Order" parent_label="My orders" parent_url=orders_url grandparent_label="Shop" grandparent_url=shop_url %}
+  {% include "components/breadcrumbs.html" with current="Order" parent_label="My orders" parent_url=orders_url grandparent_label="Pricing" grandparent_url=shop_url %}
   {% include "components/page_header.html" with eyebrow="Account" title="Order" %}
   <div class="order-banner">
     <p class="order-banner__id">#{{ order.pk }}</p>
@@ -59,7 +59,7 @@
       </dl>
       <p class="small cm-muted mt-3 mb-0">
         {% if order.status == "pending" %}Waiting for staff to confirm your payment.
-        {% elif order.status == "paid" %}{% if order.credits_spent %}Paid with {{ order.credits_spent }} credits and fulfilled immediately.{% else %}Payment confirmed and the order has been fulfilled.{% endif %} Bought files are listed in <a href="{% url 'library:my_files' %}">My files</a>.
+        {% elif order.status == "paid" %}{% if order.credits_spent %}Paid with {{ order.credits_spent }} credits and fulfilled immediately.{% else %}Payment confirmed and the order has been fulfilled.{% endif %} Bought files are listed in <a href="{% url 'contributions:downloads' %}">My contributions</a>.
         {% elif order.status == "cancelled" %}This order was cancelled.
         {% else %}This order was refunded; anything it unlocked has been withdrawn.{% endif %}
       </p>

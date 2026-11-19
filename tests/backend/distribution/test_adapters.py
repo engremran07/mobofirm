@@ -64,7 +64,7 @@ def adapter_for(kind: str) -> channels.Adapter:
 def test_every_platform_choice_has_exactly_one_adapter():
     kinds = {value for value, _label in Channel.Kind.choices}
     assert kinds == set(channels.adapters())
-    assert len(kinds) == 16
+    assert len(kinds) == 17
 
 
 def test_each_adapter_declares_requirements_and_guidance():
@@ -76,7 +76,7 @@ def test_each_adapter_declares_requirements_and_guidance():
         for spec in adapter.fields:
             assert spec.store in {"secret", "option", "target", "endpoint_url"}
             assert spec.label and (spec.help or not spec.required), (kind, spec.name)
-        assert adapter.secret_fields() or kind == "webhook"
+        assert adapter.secret_fields() or kind == "webhook" or adapter.assisted
 
 
 def test_media_requirements_match_the_platform_rules():

@@ -1,0 +1,275 @@
+// Data table + changelist.
+//   <div id="console-changelist" class="c-changelist [c-changelist--filters]" data-density="comfortable|compact">
+//     <div class="c-cl-toolbar"><form class="c-cl-search"><svg class="c-icon c-cl-search__icon"/><input class="form-control"><button data-console-search-clear class="c-cl-search__clear"/></form>
+//       <div class="btn-group" role="group" aria-label="Density"><button class="btn btn-secondary btn-sm" data-console-density=".." aria-pressed="true"></button></div></div>
+//     <div class="c-cl-chips">..c-chip..</div>
+//     <div class="c-cl-results" | class="c-table-wrap"> <table class="c-table [c-table--compact]"><thead><tr><th class="action-checkbox-column"><input type=checkbox>
+//       <th class="sortable sorted ascending"><a class="c-table__sort">Name</a>..<tbody><tr><td class="action-checkbox">..<th class="field-name"><a>..</a></th><td class="c-table__num">..
+//       <td class="c-table__actions"><div class="c-row-actions">..</div></td></tr></tbody></table></div>
+//     <div class="c-bulkbar" data-console-bulkbar hidden>..</div> <nav class="c-pager">..</nav> <div class="c-fbar">..</div></div>
+// The scroll container (.c-cl-results/.c-table-wrap) scrolls horizontally AND vertically inside its own box
+// so the header row stays sticky (inside the container) and the page never overflows horizontally.
+// Add .c-table-wrap--flow for short tables that should not scroll vertically (sticky header then off).
+@layer components {
+  .c-changelist {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: var(--mf-space-3);
+    min-inline-size: 0;
+
+    > * { grid-column: 1; min-inline-size: 0; }
+  }
+
+  // Density: any ancestor (or the table) with data-density="compact"
+  [data-density="compact"] { --cl-pad-y: 0.375rem; --cl-pad-x: 0.75rem; }
+
+  .c-cl-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--mf-space-2) var(--mf-space-3);
+  }
+
+  .c-cl-toolbar__spacer { flex: 1 1 auto; }
+
+  .c-cl-search {
+    position: relative;
+    flex: 1 1 16rem;
+    max-inline-size: 28rem;
+    margin: 0;
+
+    .form-control {
+      padding-inline: 2.5rem 2.5rem;
+      border-radius: var(--mf-radius-pill);
+    }
+  }
+
+  .c-cl-search__icon {
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-start: 0.875rem;
+    color: var(--mf-text-muted);
+    transform: translateY(-50%);
+    pointer-events: none;
+  }
+
+  .c-cl-search__clear,
+  [data-console-search-clear] {
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-end: 0.375rem;
+    display: grid;
+    place-items: center;
+    inline-size: 1.75rem;
+    block-size: 1.75rem;
+    padding: 0;
+    color: var(--mf-text-muted);
+    background: transparent;
+    border: 0;
+    border-radius: 50%;
+    transform: translateY(-50%);
+    cursor: pointer;
+
+    &:hover { color: var(--mf-text); background: var(--mf-surface-soft); }
+  }
+
+  // Always rendered (live search can fill the box after the page loaded); shown only while the box has text
+  .c-cl-search input:placeholder-shown ~ .c-cl-search__clear { display: none; }
+
+  .c-cl-chips {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--mf-space-2);
+    &:empty { display: none; }
+  }
+
+  // ---- Scroll container ---------------------------------------------------------
+  .c-cl-results,
+  .c-table-wrap {
+    position: relative;
+    min-inline-size: 0;
+    max-block-size: max(24rem, calc(100dvh - var(--mf-header-h) - 11rem));
+    overflow: auto;
+    overscroll-behavior-x: contain;
+    background: var(--mf-surface);
+    border: 1px solid var(--mf-border);
+    border-radius: var(--mf-radius-lg);
+    box-shadow: var(--mf-elev-1);
+  }
+
+  .c-table-wrap--flow { max-block-size: none; }
+
+  .c-cl-results[aria-busy="true"] > .c-table,
+  .c-cl-results.htmx-request > .c-table { opacity: 0.55; transition: opacity var(--mf-duration-base) var(--mf-ease-out); }
+
+  // ---- Table ---------------------------------------------------------------------
+  .c-table {
+    inline-size: 100%;
+    margin: 0;
+    font-size: var(--mf-fs-sm);
+    font-variant-numeric: tabular-nums;
+    border-collapse: separate;
+    border-spacing: 0;
+
+    th,
+    td {
+      padding: var(--cl-pad-y, 0.75rem) var(--cl-pad-x, 1rem);
+      text-align: start;
+      vertical-align: middle;
+      border-block-end: 1px solid var(--mf-border-soft);
+      transition: background-color var(--mf-duration-fast) var(--mf-ease-out);
+    }
+
+    thead th {
+      position: sticky;
+      inset-block-start: 0;
+      z-index: 2;
+      color: var(--mf-text-muted);
+      font-size: var(--mf-fs-xs);
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      white-space: nowrap;
+      background: color-mix(in srgb, var(--mf-surface-soft) 70%, var(--mf-surface));
+      border-block-end: 1px solid var(--mf-border);
+
+      &.sorted { color: var(--mf-text); }
+    }
+
+    tbody tr:last-child > * { border-block-end: 0; }
+
+    // Row identity cell (Django renders it as <th>)
+    tbody th {
+      min-inline-size: 13rem;
+      color: var(--mf-text);
+      font-weight: 600;
+
+      a { text-decoration: none; }
+      a:hover { text-decoration: underline; }
+    }
+
+    tbody tr:hover > * { background: var(--mf-hover); }
+
+    // Selected rows: tint + accent bar on the leading edge
+    tbody tr.selected > *,
+    tbody tr:has(.action-select:checked) > * { background: var(--mf-selected); }
+
+    tbody tr.selected > :first-child,
+    tbody tr:has(.action-select:checked) > :first-child { box-shadow: inset 3px 0 0 var(--mf-accent); }
+
+    tbody tr[data-deleted] > * { opacity: 0.5; }
+
+    tfoot td { font-weight: 650; background: var(--mf-surface-soft); }
+
+    .action-checkbox,
+    .action-checkbox-column {
+      inline-size: 3rem;
+      padding-inline-end: 0;
+    }
+  }
+
+  .c-table--compact { --cl-pad-y: 0.375rem; --cl-pad-x: 0.75rem; }
+
+  .c-table__num { text-align: end !important; }
+
+  .c-table__actions {
+    inline-size: 1%;
+    text-align: end;
+    white-space: nowrap;
+  }
+
+  .c-table__empty { padding: 0 !important; }
+
+  // Sort control inside <th>
+  .c-table__sort {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--mf-space-1);
+    color: inherit;
+    text-decoration: none;
+
+    &:hover { color: var(--mf-text); }
+  }
+
+  .c-table th.sorted .c-table__sort::after,
+  .c-table__sort[aria-sort]::after {
+    content: "";
+    inline-size: 0;
+    block-size: 0;
+    border-inline: 0.28rem solid transparent;
+    border-block-start: 0.38rem solid currentcolor;
+  }
+
+  .c-table th.sorted.ascending .c-table__sort::after { border-block-start: 0; border-block-end: 0.38rem solid currentcolor; }
+  .c-table__sort[aria-sort="ascending"]::after { border-block-start: 0; border-block-end: 0.38rem solid currentcolor; }
+
+  // Row actions appear on hover/focus for pointer users, always for touch/keyboard
+  .c-row-actions {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--mf-space-1);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .c-table tbody tr:not(:hover, :focus-within) .c-row-actions > :not(.show, [aria-expanded="true"]) { opacity: 0; }
+    .c-row-actions > * { transition: opacity var(--mf-duration-fast) var(--mf-ease-out); }
+  }
+
+  // ---- Bulk action bar -----------------------------------------------------------
+  // A raised surface with a border and shadow (token pair text/surface-raised clears AA in
+  // both themes): controls inside are the normal themed controls, never inverted.
+  .c-bulkbar {
+    position: sticky;
+    inset-block-end: var(--mf-space-4);
+    z-index: 20;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--mf-space-2) var(--mf-space-4);
+    inline-size: 100%;
+    padding: var(--mf-space-3) var(--mf-space-4);
+    color: var(--mf-text);
+    font-size: var(--mf-fs-sm);
+    background: var(--mf-surface-raised);
+    border: 1px solid var(--mf-border-strong);
+    border-radius: var(--mf-radius-md);
+    box-shadow: var(--mf-elev-3);
+    animation: c-rise var(--mf-duration-base) var(--mf-ease-out) both;
+
+    .form-select,
+    .form-control {
+      min-block-size: var(--mf-control-h-sm);
+      inline-size: auto;
+      font-size: var(--mf-fs-sm);
+    }
+
+    // Disabled "Run": readable (>= 3:1) on the raised surface; the reason is the select's empty state.
+    .btn:disabled,
+    .btn[disabled] {
+      color: var(--mf-text-muted);
+      background: var(--mf-surface-soft);
+      border-color: var(--mf-border-strong);
+      opacity: 1;
+      cursor: not-allowed;
+    }
+
+    a { color: var(--mf-accent-strong); }
+  }
+
+  .c-bulkbar[hidden] { display: none; }
+  .c-bulkbar__count { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .c-bulkbar__actions { display: flex; flex: 1 1 auto; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--mf-space-2); }
+  .c-bulkbar__clear { margin-inline-start: var(--mf-space-1); }
+
+  // Keep the last rows clear of the sticky bar.
+  #c-cl-results { padding-block-end: var(--mf-space-3); }
+  .c-changelist:has(.c-bulkbar:not([hidden])) #c-cl-results { padding-block-end: var(--mf-space-7); }
+
+  @keyframes c-rise {
+    from { opacity: 0; transform: translateY(0.5rem); }
+  }
+
+}

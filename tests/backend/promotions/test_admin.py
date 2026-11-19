@@ -12,6 +12,7 @@ from django.test import Client
 from django.urls import reverse
 from django.utils import timezone
 
+from apps.core.admin_dashboard import invalidate_metrics
 from apps.promotions import lifecycle
 from apps.promotions.grants import claim
 from apps.promotions.models import (
@@ -26,7 +27,8 @@ DIALOG = {"_form_submitted": "on"}
 
 @pytest.fixture
 def root(staff: Any) -> Client:
-    client = Client()
+    # Dialogs submit through HTMX, which is answered with an HX-Redirect header.
+    client = Client(headers={"HX-Request": "true"})
     client.force_login(staff)
     return client
 
@@ -220,16 +222,22 @@ def test_a_running_promotion_cannot_be_deleted_but_an_ended_one_can(
 
 
 def test_the_navigation_group_lists_the_campaign_models(root: Client) -> None:
-    html = root.get(reverse("admin:index")).content.decode()
+    # A full page (not the HTMX fragment) carries the sidebar.
+    html = root.get(reverse("admin:index"), headers={"HX-Request": "false"}).content
+    text = html.decode()
 
-    assert "Campaigns" in html and "Promotions" in html
+    assert "Campaigns" in text and "Promotions" in text
 
 
 def test_the_dashboard_shows_the_campaign_kpi(
     root: Client, make_promotion: Any
 ) -> None:
     make_promotion()
+    invalidate_metrics()
 
-    html = root.get(reverse("admin:index")).content.decode()
+    # The KPI tiles load lazily into the dashboard as their own fragment.
+    html = root.get(
+        reverse("admin:console_dashboard_widget", args=["overview"])
+    ).content.decode()
 
     assert "Campaigns running" in html

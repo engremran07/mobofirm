@@ -2,7 +2,7 @@
 
 ## Status
 
-HTMX and Alpine are part of the user-approved frontend foundation. The current build imports HTMX as an ES module, exposes its instance to `window.htmx`, and disables eval- and script-tag processing. Alpine uses `@alpinejs/csp`; expressions must remain compatible with that CSP-safe runtime.
+HTMX and Alpine are part of the user-approved frontend foundation. This document describes the **public site** (htmx 2.0.11, installed as the `htmx2` npm alias): the build imports HTMX as an ES module, exposes its instance to `window.htmx`, and disables eval- and script-tag processing. The staff console runs htmx 4.0.2 with different event names and explicit attribute inheritance; its conventions are in `admin-console.md`. Alpine uses `@alpinejs/csp`; expressions must remain compatible with that CSP-safe runtime.
 
 ## Interaction contracts
 

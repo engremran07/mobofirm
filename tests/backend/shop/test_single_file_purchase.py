@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from decimal import Decimal
 from importlib import import_module
 
@@ -146,7 +147,7 @@ class TestFeaturedFileWithoutAPackage:
         client.force_login(funded)
 
         waiting = entitlements.purchased_unserved(funded)
-        page = client.get(reverse("library:my_files"))
+        page = client.get(reverse("contributions:downloads"))
 
         assert [file.label for file in waiting] == [featured.original_file_name]
         assert page.status_code == 200
@@ -329,7 +330,9 @@ class TestPages:
         )
 
         page = client.get(url)
-        done = client.post(url)
+        token = re.search(r'name="request_id" value="([0-9a-f]{32})"', page.content.decode())
+        assert token is not None
+        done = client.post(url, {"request_id": token.group(1)})
 
         assert page.status_code == 200 and "40" in page.content.decode()
         assert done.status_code == 302

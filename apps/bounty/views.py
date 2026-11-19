@@ -88,7 +88,7 @@ def bounty_detail(request: HttpRequest, pk: int) -> HttpResponse:
     upload_url = (
         f"{reverse('blog:post_create')}?solves={bounty.target_id}"
         if is_guide
-        else reverse("firmwares:upload")
+        else reverse("firmwares:contribute")
     )
     return render(
         request,

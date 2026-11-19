@@ -1,51 +1,48 @@
 {% extends "admin/staff_page.html" %}
-{% block mf_nav %}{% include "seo/_tabs.html" %}{% endblock %}
-{% block mf_body %}
-<form method="get" class="mf-ui-seo-filter" role="search" aria-label="Inspect a page">
-  <div class="mf-ui-field mf-ui-seo-grow"><label for="seo-inspect-url">Page path or URL</label>
-    <input id="seo-inspect-url" type="text" name="url" value="{{ url }}" placeholder="/firmwares/samsung/" required></div>
-  <button type="submit" class="mf-ui-btn mf-ui-btn--primary">Inspect</button>
+{% load i18n staff_ui %}
+{% block page_nav %}{% include "seo/_tabs.html" %}{% endblock %}
+{% block page_body %}
+<form method="get" role="search" aria-label="{% translate 'Inspect a page' %}" class="d-flex flex-wrap align-items-end gap-2">
+  {% staff_input ident="seo-inspect-url" name="url" label=_("Page path or URL") value=url placeholder="/firmwares/samsung/" required=True %}
+  {% staff_button _("Inspect") tone="primary" %}
 </form>
 {% if report %}
   {% with resolved=report.resolved observation=report.observation %}
-  <h2 class="mf-ui-seo-heading">{{ report.path }}</h2>
+  <h2 class="h5 mb-0">{{ report.path }}</h2>
   {% if resolved %}
-    <section class="mf-ui-card" aria-labelledby="seo-intended">
-      <h3 id="seo-intended" class="mf-ui-card__title">What the resolver intends</h3>
-      <dl class="mf-ui-seo-dl">
-        <dt>Page type</dt><dd>{{ resolved.page_type }}</dd>
-        <dt>Title</dt><dd>{{ resolved.title }} <small>({{ resolved.provenance.title }})</small></dd>
-        <dt>Description</dt><dd>{{ resolved.description }} <small>({{ resolved.provenance.description }})</small></dd>
-        <dt>Canonical</dt><dd>{{ resolved.canonical }} <small>({{ resolved.provenance.canonical }})</small></dd>
-        <dt>Robots</dt><dd>{{ resolved.robots }} <small>({{ resolved.provenance.robots }})</small></dd>
-        <dt>Indexable</dt><dd>{{ resolved.indexable|yesno:"Yes,No" }}{% if resolved.noindex_reason %} - {{ resolved.noindex_reason }}{% endif %}</dd>
-        <dt>In sitemap</dt><dd>{{ report.in_sitemap|yesno:"Yes,No" }}</dd>
-        <dt>Policy version</dt><dd>{{ resolved.policy_version }}</dd>
-        {% if snapshot %}<dt>Last scanned</dt><dd>{{ snapshot.scanned_at|date:"Y-m-d H:i" }} &middot; {{ snapshot.word_count }} words</dd>{% endif %}
-      </dl>
-    </section>
+    {% staff_card title=_("What the resolver intends") ident="seo-intended" %}
+      {% staff_dl %}
+        {% staff_dd label=_("Page type") %}{{ resolved.page_type }}{% endstaff_dd %}
+        {% staff_dd label=_("Title") %}{{ resolved.title }} <small class="text-body-secondary">({{ resolved.provenance.title }})</small>{% endstaff_dd %}
+        {% staff_dd label=_("Description") %}{{ resolved.description }} <small class="text-body-secondary">({{ resolved.provenance.description }})</small>{% endstaff_dd %}
+        {% staff_dd label=_("Canonical") %}{{ resolved.canonical }} <small class="text-body-secondary">({{ resolved.provenance.canonical }})</small>{% endstaff_dd %}
+        {% staff_dd label=_("Robots") %}{{ resolved.robots }} <small class="text-body-secondary">({{ resolved.provenance.robots }})</small>{% endstaff_dd %}
+        {% staff_dd label=_("Indexable") %}{{ resolved.indexable|yesno:"Yes,No" }}{% if resolved.noindex_reason %} - {{ resolved.noindex_reason }}{% endif %}{% endstaff_dd %}
+        {% staff_dd label=_("In sitemap") %}{{ report.in_sitemap|yesno:"Yes,No" }}{% endstaff_dd %}
+        {% staff_dd label=_("Policy version") %}{{ resolved.policy_version }}{% endstaff_dd %}
+        {% if snapshot %}{% staff_dd label=_("Last scanned") %}{{ snapshot.scanned_at|date:"Y-m-d H:i" }} &middot; {{ snapshot.word_count }} {% translate "words" %}{% endstaff_dd %}{% endif %}
+      {% endstaff_dl %}
+    {% endstaff_card %}
   {% else %}
-    <p class="mf-ui-empty">No route matches this path.</p>
+    {% staff_empty %}{% translate "No route matches this path." %}{% endstaff_empty %}
   {% endif %}
-  <section class="mf-ui-card" aria-labelledby="seo-served">
-    <h3 id="seo-served" class="mf-ui-card__title">What the server last returned</h3>
+  {% staff_card title=_("What the server last returned") ident="seo-served" %}
     {% if observation %}
-      <dl class="mf-ui-seo-dl">
-        <dt>Crawl</dt><dd>{{ observation.run_id }} at {{ observation.observed_at }}</dd>
-        <dt>Status</dt><dd>{{ observation.status_code|default:"-" }}{% if observation.fetch_error %} ({{ observation.fetch_error }}){% endif %}</dd>
-        <dt>Titles</dt><dd>{{ observation.titles|join:" | " }}</dd>
-        <dt>Canonicals</dt><dd>{{ observation.canonicals|join:", " }}</dd>
-        <dt>Robots meta</dt><dd>{{ observation.robots_meta|join:", " }} {{ observation.x_robots_tag }}</dd>
-        <dt>JSON-LD</dt><dd>{{ observation.jsonld_types|join:", "|default:"none" }}</dd>
-      </dl>
+      {% staff_dl %}
+        {% staff_dd label=_("Crawl") %}{{ observation.run_id }} {% translate "at" %} {{ observation.observed_at }}{% endstaff_dd %}
+        {% staff_dd label=_("Status") %}{{ observation.status_code|default:"-" }}{% if observation.fetch_error %} ({{ observation.fetch_error }}){% endif %}{% endstaff_dd %}
+        {% staff_dd label=_("Titles") %}{{ observation.titles|join:" | " }}{% endstaff_dd %}
+        {% staff_dd label=_("Canonicals") %}{{ observation.canonicals|join:", " }}{% endstaff_dd %}
+        {% staff_dd label=_("Robots meta") %}{{ observation.robots_meta|join:", " }} {{ observation.x_robots_tag }}{% endstaff_dd %}
+        {% staff_dd label=_("JSON-LD") %}{{ observation.jsonld_types|join:", "|default:"none" }}{% endstaff_dd %}
+      {% endstaff_dl %}
     {% else %}
-      <p class="mf-ui-help">This URL has not been crawled yet.</p>
+      <p class="text-body-secondary mb-0">{% translate "This URL has not been crawled yet." %}</p>
     {% endif %}
-  </section>
-  <section class="mf-ui-card" aria-labelledby="seo-page-issues">
-    <h3 id="seo-page-issues" class="mf-ui-card__title">Open issues</h3>
-    <ul class="mf-ui-seo-list">{% for issue in report.issues %}<li><strong>{{ issue.code }}</strong> ({{ issue.severity }}): {{ issue.message }} <a href="{% url 'seo:issue_detail' pk=issue.pk %}">Review{% if issue.fixable %} and fix{% endif %}</a></li>{% empty %}<li>None.</li>{% endfor %}</ul>
-  </section>
+  {% endstaff_card %}
+  {% staff_card title=_("Open issues") ident="seo-page-issues" %}
+    {% staff_list %}{% for issue in report.issues %}{% staff_item %}<span><strong>{{ issue.code }}</strong> ({{ issue.severity }}): {{ issue.message }} <a href="{% url 'seo:fix' %}?issue={{ issue.pk }}">{% translate "View and fix" %}</a></span>{% endstaff_item %}{% empty %}{% staff_item %}{% translate "None." %}{% endstaff_item %}{% endfor %}{% endstaff_list %}
+  {% endstaff_card %}
   {% endwith %}
 {% endif %}
 {% endblock %}

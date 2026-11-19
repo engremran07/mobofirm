@@ -1,0 +1,7 @@
+{% comment %}
+  Date and time as two native inputs (both carry the widget's form-control class, which MultiWidget passes to its subwidgets).
+  Each gets a visually hidden label so the two controls are announced as "Date" and "Time".
+{% endcomment %}{% load i18n %}<div class="u-cluster u-gap-2">
+{% for subwidget in widget.subwidgets %}{% if forloop.first %}<label class="visually-hidden" for="{{ subwidget.attrs.id }}">{% firstof date_label _("Date") %}</label>{% else %}<label class="visually-hidden" for="{{ subwidget.attrs.id }}">{% firstof time_label _("Time") %}</label>{% endif %}{% with widget=subwidget %}{% include widget.template_name %}{% endwith %}
+{% endfor %}{% include "console/widgets/_timezone_note.html" %}
+</div>

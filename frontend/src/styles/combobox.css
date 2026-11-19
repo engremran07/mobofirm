@@ -198,7 +198,7 @@
   height: auto;
   padding: 0.5rem;
   border-radius: var(--mf-radius-md);
-  background: #fff;
+  background: var(--mf-surface-raised);
 }
 
 .mfa-setup-key {

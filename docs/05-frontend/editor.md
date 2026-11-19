@@ -25,7 +25,7 @@ browser only produces what the server will accept.
   (`tests/frontend/test_editor_browser.py`).
 - **Theming**: `frontend/src/styles/editor.css` uses the design tokens
   (`--mf-surface-raised`, `--mf-text`, `--mf-border`, `--mf-accent`, …) with literal
-  fallbacks so it also works in the Unfold admin (`html.dark`). Logical properties,
+  fallbacks so it also works in the staff console (which does not load the public tokens). Its dark overrides are keyed on `:root[data-bs-theme="dark"]` (what both shells set on `<html>`, see `theme-init.js`, `admin-console.md`), with `:root.dark` kept for older callers. Logical properties,
   `dir="auto"` on the editing area, wrapping toolbar and 2.5 rem touch targets on phones.
   Content classes (`mf-fg-*`, `mf-bg-*`, `mf-font-*`, `mf-size-*`, `mf-align-*`,
   `mf-table`, `mf-video`) live in `frontend/src/styles/editor-content.css`; the palette

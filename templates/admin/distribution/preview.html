@@ -1,24 +1,29 @@
 {% extends "admin/staff_page.html" %}
-{% block mf_actions %}<a class="mf-ui-btn" href="{% url 'admin:distribution_channel_change' channel.pk %}">Edit channel</a>{% endblock %}
-{% block mf_nav %}{% include "admin/distribution/_nav.html" %}{% endblock %}
-{% block mf_body %}
+{% load i18n staff_ui %}
+{% block page_actions %}{% url 'admin:distribution_channel_change' channel.pk as edit_url %}{% staff_button _("Edit channel") href=edit_url %}{% endblock %}
+{% block page_nav %}{% include "admin/distribution/_nav.html" %}{% endblock %}
+{% block page_body %}
 {% for item in previews %}
-<section class="mf-ui-card" aria-labelledby="pv-{{ forloop.counter }}">
-  <h2 class="mf-ui-card__title" id="pv-{{ forloop.counter }}">{% if item.sample %}Sample content{% else %}Latest shared content{% endif %}: {{ item.title }}</h2>
-  <div class="mf-ui-dist-post" role="group" aria-label="Post text">{{ item.preview.text }}</div>
-  <p class="mf-ui-row">
-    <span class="mf-ui-badge{% if item.preview.length > item.preview.limit %} mf-ui-badge--danger{% else %} mf-ui-badge--success{% endif %}">{{ item.preview.length }} / {{ item.preview.limit }} characters</span>
-    <span class="mf-ui-badge mf-ui-badge--info">Needs: {{ item.preview.requires }}</span>
-    {% if item.hook %}<span class="mf-ui-badge">Opening: {{ item.hook }}</span>{% endif %}
-  </p>
-  {% if item.preview.media_problem %}<p class="mf-ui-note mf-ui-note--warning">{{ item.preview.media_problem }}</p>{% endif %}
-  {% for warning in item.preview.warnings %}<p class="mf-ui-note mf-ui-note--warning">{{ warning }}</p>{% endfor %}
-  {% if item.preview.steps %}
-  <p class="mf-ui-help">Requests it would make:</p>
-  <ul class="mf-ui-dist-list">{% for step in item.preview.steps %}<li><code class="mf-ui-code">{{ step }}</code></li>{% endfor %}</ul>
-  {% endif %}
-</section>
+  {% if item.sample %}{% translate "Sample content" as kind_label %}{% else %}{% translate "Latest shared content" as kind_label %}{% endif %}
+  {% blocktranslate with kind=kind_label title=item.title asvar card_title %}{{ kind }}: {{ title }}{% endblocktranslate %}
+  {% with pv_key=forloop.counter0|stringformat:"s" %}
+  {% staff_card title=card_title ident="pv-"|add:pv_key %}
+    <div class="border rounded p-3 text-break" role="group" aria-label="{% translate 'Post text' %}">{{ item.preview.text|linebreaksbr }}</div>
+    {% staff_row %}
+      {% blocktranslate with length=item.preview.length limit=item.preview.limit asvar length_label %}{{ length }} / {{ limit }} characters{% endblocktranslate %}
+      {% if item.preview.length > item.preview.limit %}{% staff_badge length_label "danger" %}{% else %}{% staff_badge length_label "success" %}{% endif %}
+      {% blocktranslate with requires=item.preview.requires asvar needs_label %}Needs: {{ requires }}{% endblocktranslate %}{% staff_badge needs_label "info" %}
+      {% if item.hook %}{% blocktranslate with hook=item.hook asvar hook_label %}Opening: {{ hook }}{% endblocktranslate %}{% staff_badge hook_label %}{% endif %}
+    {% endstaff_row %}
+    {% if item.preview.media_problem %}{% staff_notice tone="warning" %}{{ item.preview.media_problem }}{% endstaff_notice %}{% endif %}
+    {% for warning in item.preview.warnings %}{% staff_notice tone="warning" %}{{ warning }}{% endstaff_notice %}{% endfor %}
+    {% if item.preview.steps %}
+      <p class="small text-body-secondary mb-0">{% translate "Requests it would make:" %}</p>
+      {% staff_list %}{% for step in item.preview.steps %}{% staff_item %}<code>{{ step }}</code>{% endstaff_item %}{% endfor %}{% endstaff_list %}
+    {% endif %}
+  {% endstaff_card %}
+  {% endwith %}
 {% empty %}
-<p class="mf-ui-empty">This channel has an unknown platform, so no preview is available.</p>
+  {% staff_empty %}{% translate "This channel has an unknown platform, so no preview is available." %}{% endstaff_empty %}
 {% endfor %}
 {% endblock %}

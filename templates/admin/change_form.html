@@ -1,0 +1,80 @@
+{% extends "admin/base_site.html" %}
+{% load i18n l10n admin_urls admin_modify admin_filters console_ui console_admin %}
+
+{% block title %}{% if errors %}{% translate "Error:" %} {% endif %}{{ block.super }}{% endblock %}
+
+{% block extrahead %}{{ block.super }}
+{% console_media media %}
+{% endblock %}
+
+{% block bodyclass %}{{ block.super }} app-{{ opts.app_label }} model-{{ opts.model_name }} change-form{% endblock %}
+
+{% block content_title %}{% endblock %}
+{% block object-tools %}{% endblock %}
+
+{% block content %}
+{% console_dialog_request as in_dialog %}{% console_id_prefix as id_prefix %}
+{% if in_dialog %}
+<div class="modal-dialog modal-lg" data-console-dialog-content>
+{% else %}
+{% component "page_header" title=title subtitle=subtitle eyebrow=opts.app_config.verbose_name %}
+{% slot "actions" %}{% block object-tools-items %}{% if change and not is_popup %}
+{% for action in actions_detail %}{% include "console/crud/_action.html" with action=action %}{% endfor %}
+{% if not actions_detail_hide_default %}{% url opts|admin_urlname:'history' original.pk|admin_urlquote as history_url %}<a class="btn btn-secondary" href="{% add_preserved_filters history_url %}">{% console_icon "history" %}<span>{% translate "History" %}</span></a>
+{% if has_absolute_url %}<a class="btn btn-secondary" href="{{ absolute_url }}">{% console_icon "external-link" %}<span>{% translate "View on site" %}</span></a>{% endif %}{% endif %}
+{% endif %}{% endblock %}{% endslot %}
+{% endcomponent %}
+{% endif %}
+<form {% if has_file_field %}enctype="multipart/form-data" {% endif %}{% if form_url %}action="{{ form_url }}" {% endif %}method="post" {% if not in_dialog %}id="{{ opts.model_name }}_form" {% endif %}class="{% if in_dialog %}modal-content{% else %}c-form{% endif %}" novalidate{% if console_warn_unsaved_form is not False %} data-console-unsaved-guard{% endif %}>{% csrf_token %}{% block form_top %}{% endblock %}
+{% if in_dialog %}
+<div class="modal-header"><h2 class="modal-title">{{ title }}</h2><button type="button" class="btn-close" data-console-dialog-close aria-label="{% translate 'Close' %}"></button></div>
+<div class="modal-body">
+{% endif %}
+{% if action_form and not is_popup %}<input type="hidden" name="{{ action_checkbox_name }}" value="{{ original.pk|unlocalize }}">{% endif %}
+{% if is_popup %}<input type="hidden" name="{{ is_popup_var }}" value="1">{% endif %}
+{% if to_field %}<input type="hidden" name="{{ to_field_var }}" value="{{ to_field }}">{% endif %}
+{% if source_model %}<input type="hidden" name="{{ source_model_var }}" value="{{ source_model }}">{% endif %}
+{% block submit_buttons_top %}{% endblock %}
+{% if errors %}
+{% blocktranslate count counter=errors|length asvar error_message %}Please correct the error below.{% plural %}Please correct the errors below.{% endblocktranslate %}
+{% ui "alert" variant="danger" message=error_message %}
+{% if adminform.form.errors %}<ul class="u-text-sm" id="{{ id_prefix }}form-error-summary" aria-label="{% translate 'Error summary' %}">{% for name, field_errors in adminform.form.errors.items %}{% if name != "__all__" %}{% for field_error in field_errors %}<li><strong>{{ name }}</strong>: {{ field_error }}</li>{% endfor %}{% endif %}{% endfor %}</ul>{% endif %}
+{{ adminform.form.non_field_errors }}
+{% endif %}
+{% if console_conditional_rules %}{{ console_conditional_rules|json_script:"console-conditional-rules" }}{% endif %}
+{% if in_dialog %}{% console_form_layout adminform inline_admin_formsets id_prefix as layout %}{% else %}{% console_form_layout adminform inline_admin_formsets as layout %}{% endif %}
+
+{% block field_sets %}
+{% for item in layout.main %}{% include "admin/includes/fieldset.html" with fieldset=item.fieldset heading_level=2 prefix="fieldset" heading_id=item.index %}{% endfor %}
+{% if layout.tabs %}
+<div class="c-tabs" data-console-tabs>
+<div class="c-tabs__list" role="tablist" aria-label="{% translate 'Sections' %}">
+{% for tab in layout.tabs %}<button type="button" class="c-tabs__tab" role="tab" id="{{ tab.id }}-tab" data-console-tab aria-controls="{{ tab.id }}" aria-selected="{% if forloop.first %}true{% else %}false{% endif %}"{% if not forloop.first %} tabindex="-1"{% endif %}{% if tab.errors %} data-has-errors{% endif %}>{{ tab.title }}{% if tab.errors %}<span class="visually-hidden"> ({% blocktranslate count counter=tab.errors %}{{ counter }} error{% plural %}{{ counter }} errors{% endblocktranslate %})</span>{% endif %}</button>{% endfor %}
+</div>
+{% for tab in layout.tabs %}
+<div class="c-tabs__panel" role="tabpanel" id="{{ tab.id }}" data-console-tabpanel aria-labelledby="{{ tab.id }}-tab" tabindex="0">
+{% if tab.kind == "fieldset" %}{% include "admin/includes/fieldset.html" with fieldset=tab.fieldset heading_level=3 prefix="tab" heading_id=tab.index %}{% else %}{% include tab.inline.opts.template with inline_admin_formset=tab.inline %}{% endif %}
+</div>
+{% endfor %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block after_field_sets %}{% endblock %}
+
+{% block inline_field_sets %}
+{% for inline_admin_formset in layout.plain_inlines %}{% include inline_admin_formset.opts.template %}{% endfor %}
+{% endblock %}
+
+{% block after_related_objects %}{% endblock %}
+
+{% if in_dialog %}
+</div>
+{% endif %}
+{% block submit_buttons_bottom %}{% submit_row %}{% endblock %}
+
+{% block admin_change_form_document_ready %}{% endblock %}
+{% prepopulated_fields_js %}
+</form>
+{% if in_dialog %}</div>{% endif %}
+{% endblock %}

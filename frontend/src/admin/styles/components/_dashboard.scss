@@ -1,0 +1,214 @@
+// Dashboard + small list-like widgets.
+//   <div class="c-dashboard"><div class="c-greeting"><h1 class="c-greeting__title">Good morning, Sam</h1><p class="c-greeting__meta">..</p></div>
+//     <div class="c-dashboard__stats"><a class="c-stat">..</a></div>
+//     <div class="c-dashboard__grid"><section class="c-card c-widget c-widget--sm|md|lg|full" aria-busy="false"><header class="c-widget__head c-card__header">..</header>..</section></div></div>
+//   Key/value: <dl class="c-kv"><div class="c-kv__row"><dt class="c-kv__term">Status</dt><dd class="c-kv__desc">..</dd></div></dl>
+//   Activity:  <ul class="c-activity"><li class="c-activity__item"><span class="c-activity__icon"/><div class="c-activity__body"><p class="c-activity__title"/><p class="c-activity__meta"/></div><time class="c-activity__time"/></li></ul>
+//   Queue:     <ul class="c-queue"><li class="c-queue__item [c-queue__item--danger|--warning]"><span class="c-queue__icon"/><div class="c-queue__body"><a class="c-queue__title"/><p class="c-queue__hint"/></div><span class="c-queue__count">4</span></li></ul>
+//   Progress:  <progress class="c-progress" value="40" max="100"></progress>  (native, no inline style needed)
+//              or <div class="c-progress" role="progressbar" aria-valuenow="40"><span class="c-progress__bar"></span></div> (bar width set by JS/CSS var if ever needed)
+//   Quick links: <ul class="c-quick"><li class="c-quick__item"><a>..</a></li></ul>     Section nav: <nav class="c-section-nav"><a aria-current="page">..</a></nav>
+@layer components {
+  .c-dashboard { display: grid; gap: var(--mf-space-5); }
+
+  .c-greeting { display: grid; gap: var(--mf-space-1); }
+  .c-greeting__title { margin: 0; font-size: var(--mf-fs-3xl); letter-spacing: -0.02em; }
+  .c-greeting__meta { margin: 0; color: var(--mf-text-muted); }
+
+  .c-dashboard__stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 13rem), 1fr));
+    gap: var(--mf-space-4);
+  }
+
+  // 12-column widget grid; widgets are cards
+  .c-dashboard__grid {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: var(--mf-space-4);
+
+    > * { grid-column: span 12; }
+  }
+
+  @media (min-width: 768px) {
+    .c-widget--sm,
+    .c-widget--md { grid-column: span 6; }
+  }
+
+  @media (min-width: 1200px) {
+    .c-widget--sm { grid-column: span 4; }
+    .c-widget--md { grid-column: span 6; }
+    .c-widget--lg { grid-column: span 8; }
+  }
+
+  .c-widget { display: flex; flex-direction: column; min-block-size: 0; }
+  .c-widget__head { display: flex; align-items: center; justify-content: space-between; gap: var(--mf-space-3); }
+  .c-widget > .c-card__body { flex: 1; }
+
+  // ---- Lists -------------------------------------------------------------------------------
+  .c-kv { display: grid; gap: 0; margin: 0; }
+
+  .c-kv__row {
+    display: grid;
+    grid-template-columns: minmax(6rem, 11rem) minmax(0, 1fr);
+    gap: var(--mf-space-1) var(--mf-space-4);
+    padding-block: var(--mf-space-2);
+    border-block-end: 1px solid var(--mf-border-soft);
+    &:last-child { border-block-end: 0; }
+  }
+
+  .c-kv__term { margin: 0; color: var(--mf-text-muted); font-size: var(--mf-fs-sm); font-weight: 600; }
+  .c-kv__desc { margin: 0; min-inline-size: 0; }
+
+  @media (max-width: 575.98px) {
+    .c-kv__row { grid-template-columns: minmax(0, 1fr); }
+  }
+
+  .c-activity,
+  .c-queue,
+  .c-quick {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .c-activity__item,
+  .c-queue__item {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--mf-space-3);
+    padding: var(--mf-space-3) 0;
+    border-block-end: 1px solid var(--mf-border-soft);
+    &:last-child { border-block-end: 0; }
+  }
+
+  .c-activity__icon,
+  .c-queue__icon {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: 2rem;
+    block-size: 2rem;
+    color: var(--mf-accent-strong);
+    background: var(--mf-accent-soft);
+    border-radius: 50%;
+  }
+
+  .c-activity__body,
+  .c-queue__body { flex: 1; min-inline-size: 0; }
+
+  .c-activity__title,
+  .c-queue__title {
+    display: block;
+    margin: 0;
+    color: var(--mf-text);
+    font-size: var(--mf-fs-sm);
+    font-weight: 600;
+    text-decoration: none;
+  }
+
+  a.c-queue__title:hover { text-decoration: underline; }
+
+  .c-activity__meta,
+  .c-queue__hint { margin: 0; color: var(--mf-text-muted); font-size: var(--mf-fs-xs); }
+  .c-activity__time { flex: none; color: var(--mf-text-muted); font-size: var(--mf-fs-xs); white-space: nowrap; }
+
+  .c-queue__count {
+    align-self: center;
+    min-inline-size: 1.75rem;
+    padding: 0.1rem 0.5rem;
+    color: var(--mf-text);
+    font-size: var(--mf-fs-sm);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+    background: var(--mf-surface-soft);
+    border-radius: var(--mf-radius-pill);
+  }
+
+  .c-queue__item--warning .c-queue__icon { color: var(--mf-warning); background: var(--mf-warning-soft); }
+  .c-queue__item--danger .c-queue__icon { color: var(--mf-danger); background: var(--mf-danger-soft); }
+  .c-queue__item--warning .c-queue__count { color: var(--mf-warning); background: var(--mf-warning-soft); }
+  .c-queue__item--danger .c-queue__count { color: var(--mf-danger); background: var(--mf-danger-soft); }
+
+  // Progress: native <progress class="c-progress" value max> or .c-progress > .c-progress__bar
+  .c-progress {
+    display: block;
+    inline-size: 100%;
+    block-size: 0.5rem;
+    overflow: hidden;
+    background: var(--mf-surface-soft);
+    border: 0;
+    border-radius: var(--mf-radius-pill);
+    appearance: none;
+
+    &::-webkit-progress-bar { background: var(--mf-surface-soft); }
+    &::-webkit-progress-value { background: var(--mf-accent); border-radius: var(--mf-radius-pill); }
+    &::-moz-progress-bar { background: var(--mf-accent); border-radius: var(--mf-radius-pill); }
+  }
+
+  .c-progress__bar {
+    display: block;
+    block-size: 100%;
+    background: var(--mf-accent);
+    border-radius: inherit;
+    transition: inline-size var(--mf-duration-base) var(--mf-ease-out);
+  }
+
+  .c-quick { grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr)); gap: var(--mf-space-2); }
+
+  .c-quick__item > a {
+    display: flex;
+    align-items: center;
+    gap: var(--mf-space-3);
+    padding: var(--mf-space-3);
+    color: var(--mf-text);
+    font-size: var(--mf-fs-sm);
+    font-weight: 600;
+    text-decoration: none;
+    background: var(--mf-surface-raised);
+    border: 1px solid var(--mf-border);
+    border-radius: var(--mf-radius-md);
+    transition: border-color var(--mf-duration-fast) var(--mf-ease-out), background-color var(--mf-duration-fast) var(--mf-ease-out);
+
+    .c-icon { color: var(--mf-accent-strong); }
+    &:hover { color: var(--mf-text); background: var(--mf-accent-soft); border-color: var(--mf-accent); }
+  }
+
+  .c-section-nav {
+    display: grid;
+    gap: 2px;
+
+    a {
+      padding: 0.5rem var(--mf-space-3);
+      color: var(--mf-text-muted);
+      font-size: var(--mf-fs-sm);
+      font-weight: 600;
+      text-decoration: none;
+      border-radius: var(--mf-radius-md);
+
+      &:hover { color: var(--mf-text); background: var(--mf-hover); }
+      &[aria-current] { color: var(--mf-accent-strong); background: var(--mf-accent-soft); }
+    }
+  }
+
+  // Widget states (js/components/widgets.js sets data-state="loading|error"): a failed request replaces the skeleton
+  // with a message and a retry button; a refresh of loaded content only dims it.
+  .c-widget__error {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--mf-space-3);
+    padding: var(--mf-space-3);
+    color: var(--mf-danger);
+    background: var(--mf-danger-soft);
+    border-radius: var(--mf-radius-md);
+
+    .btn { flex: none; }
+  }
+
+  .c-widget__error-text { flex: 1 1 12rem; margin: 0; color: var(--mf-text); font-size: var(--mf-fs-sm); }
+  [data-console-widget][data-state="error"] .c-skeleton-group { display: none; }
+  [data-console-widget].htmx-request:not([data-state="loading"]) { opacity: 0.7; transition: opacity var(--mf-duration-fast) var(--mf-ease-out); }
+}

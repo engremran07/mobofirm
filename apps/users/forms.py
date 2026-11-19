@@ -255,7 +255,7 @@ class CustomSignupForm(forms.Form):
             user.signup_method = "manual"
 
         user.save()
-        logger.info("New user created via signup: %s", user.email)
+        logger.info("New user created via signup: user_id=%s", user.pk)
 
         return user
 

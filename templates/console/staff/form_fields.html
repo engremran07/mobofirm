@@ -1,0 +1,17 @@
+{% load staff_ui mf_ui %}
+{% comment %}Every field of ``form`` with its label, widget, errors and help text wired for assistive technology.{% endcomment %}
+{% for field in form %}
+  {% if field.is_hidden %}{{ field }}{% else %}
+    <div class="console-staff-field{% if field|mf_is_check %} form-check{% endif %}">
+      {% if field|mf_is_check %}
+        {{ field|mf_widget }}
+        <label class="form-check-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+      {% else %}
+        <label class="form-label" for="{{ field.id_for_label }}"{% if field|mf_is_group %} id="{{ field.auto_id }}_label"{% endif %}>{{ field.label }}</label>
+        {{ field|mf_widget }}
+      {% endif %}
+      <div class="invalid-feedback" id="{{ field.auto_id }}_errors" role="alert"{% if not field.errors %} hidden{% endif %}>{% for error in field.errors %}<p class="mb-0">{{ error }}</p>{% endfor %}</div>
+      {% if field.help_text %}<div class="form-text" id="{{ field.auto_id }}_help">{{ field.help_text }}</div>{% endif %}
+    </div>
+  {% endif %}
+{% endfor %}

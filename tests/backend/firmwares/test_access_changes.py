@@ -101,8 +101,9 @@ def promote(firmware: OfficialFirmware, to_tier: str, price: Any = None, **kw: A
 
 
 class TestStaffChange:
+    @pytest.mark.usefixtures("notices")
     def test_free_to_featured_to_paid_and_back_is_recorded(
-        self, make_file, people, notices, seller_ids
+        self, make_file, people, seller_ids
     ) -> None:
         seller_ids.add(people["uploader"].pk)
         firmware = make_file()
@@ -479,7 +480,8 @@ class TestAutoFeature:
         firmware.refresh_from_db()
         assert firmware.access_tier == "free"
 
-    def test_every_threshold_must_be_met(self, make_file, auto_config) -> None:
+    @pytest.mark.usefixtures("auto_config")
+    def test_every_threshold_must_be_met(self, make_file) -> None:
         few = make_file()
         download(few, 5)
         stale = make_file()
@@ -508,9 +510,8 @@ class TestAutoFeature:
         assert result.skipped.get("too_slow") == 1
         assert result.skipped.get("too_few_people") == 1
 
-    def test_paid_files_are_never_touched(
-        self, make_file, auto_config, people, seller_ids
-    ) -> None:
+    @pytest.mark.usefixtures("auto_config")
+    def test_paid_files_are_never_touched(self, make_file, people, seller_ids) -> None:
         seller_ids.add(people["uploader"].pk)
         firmware = make_file(access_tier="paid", approved_price=Decimal("5.00"))
         download(firmware, 50)
@@ -521,8 +522,9 @@ class TestAutoFeature:
         assert firmware.access_tier == "paid"
         assert result.promoted == []
 
+    @pytest.mark.usefixtures("auto_config")
     def test_a_manually_demoted_file_is_never_promoted_again(
-        self, make_file, auto_config, people
+        self, make_file, people
     ) -> None:
         firmware = make_file()
         download(firmware, 30)
@@ -536,8 +538,9 @@ class TestAutoFeature:
         assert firmware.access_tier == "free"
         assert result.skipped == {"demoted_by_staff": 1}
 
+    @pytest.mark.usefixtures("auto_config")
     def test_revert_returns_the_file_and_blocks_a_second_promotion(
-        self, make_file, auto_config, people
+        self, make_file, people
     ) -> None:
         firmware = make_file()
         download(firmware, 30)
@@ -556,9 +559,8 @@ class TestAutoFeature:
         with pytest.raises(AccessChangeError, match="latest"):
             access_changes.revert_change(log, actor=people["staff"], reason="again")
 
-    def test_the_cooldown_skips_recently_changed_files(
-        self, make_file, auto_config, people
-    ) -> None:
+    @pytest.mark.usefixtures("auto_config")
+    def test_the_cooldown_skips_recently_changed_files(self, make_file, people) -> None:
         firmware = make_file()
         download(firmware, 30)
         AccessChangeLog.objects.create(

@@ -1,33 +1,36 @@
 {% extends "admin/staff_page.html" %}
-{% block mf_actions %}<a class="mf-ui-btn" href="{% url 'seo:issues' %}?{{ query_string }}">Back to the board</a>{% endblock %}
-{% block mf_nav %}{% include "seo/_tabs.html" %}{% endblock %}
-{% block mf_body %}
-<div class="mf-ui-card">
+{% load i18n staff_ui %}
+{% block page_actions %}{% url 'seo:issues' as board_url %}{% staff_button _("Back to the board") href=board_url|add:"?"|add:query_string %}{% endblock %}
+{% block page_nav %}{% include "seo/_tabs.html" %}{% endblock %}
+{% block page_body %}
+{% url 'seo:issues' as board_url %}
+{% staff_card %}
   {% if total %}
-    <p><strong>{{ total }}</strong> missing title or description will be filled from each object's own stored data through the SEO override layer. Each change is recorded in the ledger with before and after values and can be rolled back. Rewrites of values someone wrote are never part of this batch.</p>
-    <form method="post" action="{% url 'seo:issues_bulk' %}" class="mf-ui-row">
+    <p class="mb-0">{% blocktranslate count counter=total %}<strong>{{ counter }}</strong> missing title or description will be filled from each object's own stored data through the SEO override layer. Each change is recorded in the ledger with before and after values and can be rolled back. Rewrites of values someone wrote are never part of this batch.{% plural %}<strong>{{ counter }}</strong> missing titles or descriptions will be filled from each object's own stored data through the SEO override layer. Each change is recorded in the ledger with before and after values and can be rolled back. Rewrites of values someone wrote are never part of this batch.{% endblocktranslate %}</p>
+    <form method="post" action="{% url 'seo:issues_bulk' %}">
       {% csrf_token %}
       <input type="hidden" name="status" value="{{ flt.status }}"><input type="hidden" name="group" value="{{ flt.group }}">
       <input type="hidden" name="severity" value="{{ flt.severity }}"><input type="hidden" name="code" value="{{ flt.code }}">
-      <input type="hidden" name="q" value="{{ flt.query }}">{% if flt.fixable %}<input type="hidden" name="fixable" value="1">{% endif %}
-      <button type="submit" class="mf-ui-btn mf-ui-btn--primary">Apply {{ total }} change{{ total|pluralize }}</button>
-      <a class="mf-ui-btn" href="{% url 'seo:issues' %}?{{ query_string }}">Cancel</a>
+      <input type="hidden" name="q" value="{{ flt.query }}">
+      {% staff_row %}
+        {% blocktranslate count counter=total asvar apply_label %}Apply {{ counter }} change{% plural %}Apply {{ counter }} changes{% endblocktranslate %}
+        {% staff_button apply_label tone="primary" %}
+        {% staff_button _("Cancel") href=board_url|add:"?"|add:query_string %}
+      {% endstaff_row %}
     </form>
   {% else %}
-    <p class="mf-ui-empty">There is nothing safe to apply for this filter.</p>
+    {% staff_empty %}{% translate "There is nothing safe to apply for this filter." %}{% endstaff_empty %}
   {% endif %}
-</div>
+{% endstaff_card %}
 {% if preview %}
-  <div class="mf-ui-table-wrap" role="region" aria-label="Preview of changes" tabindex="0">
-    <table class="mf-ui-table">
-      <caption class="mf-ui-sr">First {{ preview|length }} of {{ total }} changes</caption>
-      <thead><tr><th scope="col">Page</th><th scope="col">Check</th><th scope="col">Before</th><th scope="col">After</th></tr></thead>
-      <tbody>
-        {% for row in preview %}
-          <tr><td>{{ row.issue.object_title|default:row.issue.url }}</td><td>{{ row.rule.label }}</td><td>{{ row.before|default:"-" }}</td><td>{{ row.after }}</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+  {% blocktranslate with shown=preview|length all=total asvar preview_caption %}First {{ shown }} of {{ all }} changes{% endblocktranslate %}
+  {% staff_table label=_("Preview of changes") caption=preview_caption %}
+    <thead><tr><th scope="col">{% translate "Page" %}</th><th scope="col">{% translate "Check" %}</th><th scope="col">{% translate "Before" %}</th><th scope="col">{% translate "After" %}</th></tr></thead>
+    <tbody>
+      {% for row in preview %}
+        <tr><td>{{ row.issue.object_title|default:row.issue.url }}</td><td>{{ row.rule.label }}</td><td>{{ row.before|default:"-" }}</td><td>{{ row.after }}</td></tr>
+      {% endfor %}
+    </tbody>
+  {% endstaff_table %}
 {% endif %}
 {% endblock %}

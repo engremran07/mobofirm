@@ -1,0 +1,10 @@
+{% comment %}
+  stat_tile - a KPI tile; a link when url is set.
+  Context: label (required), value (required; None renders an em dash and "not available" for screen readers), hint, icon (Lucide),
+  variant (success|warning|danger|info|neutral), url, delta (e.g. "+12"), delta_dir (up|down), badge (short text such as "Action needed").
+{% endcomment %}{% load i18n console_ui %}<{% if url %}a href="{{ url }}"{% else %}div{% endif %} class="c-stat{% if url %} c-stat--link{% endif %}{% if variant %} c-stat--{{ variant|console_variant }}{% endif %}">
+{% if icon %}<span class="c-stat__icon">{% console_icon icon %}</span>{% endif %}
+<span class="c-stat__label">{{ label }}</span>
+<span class="c-stat__value">{% if value is None or value == "" %}<span aria-hidden="true">&mdash;</span><span class="visually-hidden">{% translate "Not available right now" %}</span>{% else %}{{ value }}{% endif %}</span>
+{% if hint or delta or badge %}<span class="c-stat__meta">{% if delta %}<span class="c-stat__delta{% if delta_dir %} c-stat__delta--{{ delta_dir }}{% endif %}">{{ delta }}</span> {% endif %}{% if hint %}{{ hint }}{% endif %}{% if badge %} <span class="c-badge c-badge--{{ variant|console_variant }}">{{ badge }}</span>{% endif %}</span>{% endif %}
+</{% if url %}a{% else %}div{% endif %}>

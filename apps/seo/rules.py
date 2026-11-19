@@ -15,6 +15,7 @@ DESCRIPTION_MIN, DESCRIPTION_MAX = 70, 160
 THIN_POST_WORDS = 150
 THIN_PAGE_WORDS = 80
 SLUG_MAX_LENGTH = 75
+DISCOVER_IMAGE_MIN_WIDTH = 1200
 
 GROUPS: tuple[tuple[str, str], ...] = (
     ("posts", "Posts"),
@@ -50,6 +51,7 @@ GROUP_BY_PAGE_TYPE: dict[str, str] = {
     "pages_index": "pages",
     "tag": "pages",
     "tag_list": "pages",
+    "feeds_index": "pages",
 }
 
 OBJECT_GROUPS: dict[str, str] = {
@@ -254,6 +256,43 @@ SCAN_RULES: dict[str, Rule] = _rules(
         "Brand has no description",
         "A written brand description makes the page unique.",
         "content",
+    ),
+    Rule(
+        "discover_no_image",
+        "No large image for Discover",
+        f"Articles need an image at least {DISCOVER_IMAGE_MIN_WIDTH}px wide "
+        "for Google Discover and large previews.",
+        "discover",
+    ),
+    Rule(
+        "discover_image_small",
+        "Social image is smaller than 1200px",
+        f"Use an image at least {DISCOVER_IMAGE_MIN_WIDTH}px wide.",
+        "discover",
+    ),
+    Rule(
+        "discover_max_image_preview",
+        "Large image previews are not allowed",
+        "Indexable articles should send max-image-preview:large.",
+        "discover",
+    ),
+    Rule(
+        "discover_article_schema",
+        "No Article structured data",
+        "Articles need Article, BlogPosting or NewsArticle JSON-LD.",
+        "discover",
+    ),
+    Rule(
+        "discover_dates",
+        "Article dates are missing",
+        "Article JSON-LD needs datePublished and dateModified.",
+        "discover",
+    ),
+    Rule(
+        "discover_author",
+        "Article has no author",
+        "Article JSON-LD needs an author name.",
+        "discover",
     ),
 )
 

@@ -1,0 +1,105 @@
+{% extends "admin/staff_page.html" %}
+{% load i18n staff_ui %}
+{% block page_actions %}
+  <a class="btn btn-outline-secondary btn-sm" href="{% url 'seo:sitemaps' %}?validate=1">{% translate "Validate with the resolver" %}</a>
+{% endblock %}
+{% block page_nav %}{% include "seo/_tabs.html" %}{% endblock %}
+{% block page_body %}
+{% staff_card title=_("Sitemaps") ident="seo-sitemaps" %}
+  <p class="text-body-secondary">{% blocktranslate with total=report.total_urls size=page_size limit=max_urls %}{{ total }} URLs listed. Files hold at most {{ size }} URLs (protocol limit {{ limit }}, 50 MB uncompressed). Sections are generated on request, so the last build is always now; “latest lastmod” is the newest real update time of a listed page.{% endblocktranslate %}</p>
+  {% if not settings_row.sitemap_enabled %}{% staff_notice tone="warning" %}{% translate "Sitemaps are switched off in the SEO settings." %}{% endstaff_notice %}{% endif %}
+  {% staff_table label=_("Sitemap sections") %}
+    <thead><tr><th scope="col">{% translate "Section" %}</th><th scope="col" class="text-end">{% translate "URLs" %}</th><th scope="col" class="text-end">{% translate "Files" %}</th><th scope="col">{% translate "Latest lastmod" %}</th><th scope="col" class="text-end">{% translate "Size estimate" %}</th><th scope="col">{% translate "Validation" %}</th></tr></thead>
+    <tbody>
+      {% for item in report.sections %}
+        <tr>
+          <th scope="row">{{ item.section }}</th>
+          <td class="text-end">{{ item.url_count }}</td>
+          <td class="text-end">{{ item.pages }}</td>
+          <td>{% if item.lastmod %}{{ item.lastmod|date:"Y-m-d H:i" }}{% else %}<span class="text-body-secondary">{% translate "none (omitted)" %}</span>{% endif %}</td>
+          <td class="text-end">{{ item.size_bytes|filesizeformat }}</td>
+          <td>
+            {% if item.ok %}{% staff_badge _("Within limits") "success" %}{% else %}{% staff_badge _("Needs attention") "danger" %}{% endif %}
+            {% if report.validated_live %}<small class="text-body-secondary">{% blocktranslate with count=item.sampled %}{{ count }} URLs checked against the resolver{% endblocktranslate %}</small>{% endif %}
+            {% for problem in item.problems %}<br><small>{{ problem }}</small>{% endfor %}
+            {% for conflict in item.conflicts %}<br><small><strong>{{ conflict }}</strong></small>{% endfor %}
+            <br><small class="text-body-secondary">{% for file in item.files|slice:":4" %}<a href="{{ file.path }}">{{ file.name }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}{% if item.files|length > 4 %} …{% endif %}</small>
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="6">{% translate "No section lists any URL." %}</td></tr>
+      {% endfor %}
+    </tbody>
+  {% endstaff_table %}
+  <p class="small mb-0">
+    {% if report.duplicates %}{% staff_badge _("Duplicate URLs") "danger" %} {{ report.duplicates|join:", " }}{% else %}{% staff_badge _("No duplicate URLs") "success" %}{% endif %}
+    {% if report.news_count %}{% staff_badge _("News sitemap") "info" %} {{ report.news_count }} {% translate "fresh posts" %}{% elif settings_row.sitemap_news_enabled %}{% staff_badge _("News enabled, no qualifying posts") "warning" %}{% endif %}
+    {% staff_badge _("Video sitemap: off (no video metadata exists)") %}
+  </p>
+  {% if not report.validated_live %}<p class="small text-body-secondary mb-0">{% translate "Noindex and canonical conflicts are checked against the resolver on a sample when you press “Validate with the resolver”; the full set is audited by every scan." %}</p>{% endif %}
+  <h3 class="h6 mt-3">{% translate "Latest crawl: listed URLs that did not return 200" %}</h3>
+  {% if report.crawl %}
+    {% if report.crawl_errors %}
+      {% staff_list %}{% for url, reason in report.crawl_errors %}{% staff_item %}<span><code>{{ url }}</code> {{ reason }}</span>{% endstaff_item %}{% endfor %}{% endstaff_list %}
+    {% else %}
+      <p class="small mb-0">{% blocktranslate with run=report.crawl.pk %}Crawl {{ run }}: every listed URL that was crawled answered 200.{% endblocktranslate %}</p>
+    {% endif %}
+  {% else %}
+    <p class="small text-body-secondary mb-0">{% translate "No completed crawl yet; run a crawl from the overview to measure responses." %}</p>
+  {% endif %}
+{% endstaff_card %}
+
+{% staff_card title=_("robots.txt preview") ident="seo-robots" %}
+  <p class="text-body-secondary">{% blocktranslate with size=robots_size %}Generated from the SEO settings and policy (not editable here), {{ size }} bytes; the limit is 500 KiB. Change AI crawler groups, Crawl-delay and the news sitemap in the settings.{% endblocktranslate %}</p>
+  {% for problem in robots_problems %}{% staff_notice tone="danger" %}{{ problem }}{% endstaff_notice %}{% endfor %}
+  <pre class="small border rounded p-3 mb-0" tabindex="0"><code>{{ robots_text }}</code></pre>
+{% endstaff_card %}
+
+{% staff_card title=_("Test a URL") ident="seo-robots-test" %}
+  <form method="get" role="search" aria-label="{% translate 'Test a URL against robots.txt' %}" class="d-flex flex-wrap align-items-end gap-2">
+    {% staff_input ident="seo-robots-url" name="url" label=_("URL or path") value=test_url placeholder="/firmwares/browse/?sort=newest" required=True %}
+    {% staff_input ident="seo-robots-agent" name="agent" label=_("Crawler") value=test_agent list_id="seo-robots-agents" %}
+    <datalist id="seo-robots-agents">{% for name in test_agents %}<option value="{{ name }}"></option>{% endfor %}</datalist>
+    {% staff_button _("Test") tone="primary" %}
+  </form>
+  {% if tested %}
+    <p class="mb-0 mt-3" role="status">
+      {% if tested.allowed %}{% staff_badge _("Allowed") "success" %}{% else %}{% staff_badge _("Blocked") "danger" %}{% endif %}
+      <code>{{ tested.url }}</code> {% translate "for" %} <strong>{{ tested.agent }}</strong>: {{ tested.reason }}
+    </p>
+  {% endif %}
+{% endstaff_card %}
+
+{% staff_card title=_("What changed") ident="seo-robots-changes" %}
+  {% if has_previous %}
+    <h3 class="h6">{% translate "Difference from the file before the latest settings change" %}</h3>
+    {% if diff %}<pre class="small border rounded p-3" tabindex="0"><code>{% for line in diff %}{{ line }}
+{% endfor %}</code></pre>{% else %}<p class="small text-body-secondary">{% translate "The generated file is identical." %}</p>{% endif %}
+  {% else %}
+    <p class="small text-body-secondary">{% translate "No settings change has altered robots.txt yet." %}</p>
+  {% endif %}
+  {% if history %}
+    {% staff_table label=_("robots.txt related changes") %}
+      <thead><tr><th scope="col">{% translate "When" %}</th><th scope="col">{% translate "Who" %}</th><th scope="col">{% translate "Change" %}</th><th scope="col">{% translate "Ledger" %}</th></tr></thead>
+      <tbody>
+        {% for row in history %}
+          <tr>
+            <td>{{ row.entry.created_at|date:"Y-m-d H:i" }}</td>
+            <td>{{ row.entry.source }}</td>
+            <td>{% for name, before, after in row.changes %}<code>{{ name }}</code>: {{ before }} &rarr; {{ after }}{% if not forloop.last %}<br>{% endif %}{% endfor %}</td>
+            <td><a href="{% url 'seo:ledger' %}">#{{ row.entry.pk }}</a></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    {% endstaff_table %}
+  {% endif %}
+{% endstaff_card %}
+
+{% staff_card title=_("Telling search engines about changes") ident="seo-guidance" %}
+  {% staff_list %}
+    {% staff_item %}<span><strong>Google</strong>: {% translate "the sitemap ping endpoint was retired, so this site never pings. Submit" %} <code>{{ origin }}/sitemap.xml</code> {% translate "once in Search Console (Sitemaps); Google then re-reads it by itself. Accurate lastmod values are what it uses." %}</span>{% endstaff_item %}
+    {% staff_item %}<span><strong>Bing</strong>: {% translate "submit the same sitemap in Bing Webmaster Tools, and use IndexNow for changed URLs." %} {% if settings_row.indexnow_enabled %}{% staff_badge _("IndexNow on") "success" %}{% else %}{% staff_badge _("IndexNow off") %}{% endif %}</span>{% endstaff_item %}
+    {% staff_item %}<span><strong>IndexNow</strong>: {% translate "changed URLs are queued after the content commit (one job per object and state per hour, duplicates collapse) and submitted only in Safe autopilot or Full mode; failures retry with backoff and stay visible under Jobs. It never reaches Google and never guarantees indexing." %}</span>{% endstaff_item %}
+  {% endstaff_list %}
+{% endstaff_card %}
+{% endblock %}

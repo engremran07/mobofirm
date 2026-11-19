@@ -36,6 +36,7 @@ from .access_changes import (
 )
 from .catalog import PUBLIC_FIRMWARE_TYPES
 from .models import AccessTier, BaseFirmware, DownloadToken
+from .references import content_type_for
 
 
 @dataclass(frozen=True)
@@ -147,9 +148,7 @@ def find_candidates(
     skipped: dict[str, int] = {}
     found: list[Candidate] = []
     for _key, model_class in PUBLIC_FIRMWARE_TYPES:
-        content_type = ContentType.objects.get_for_model(
-            model_class, for_concrete_model=False
-        )
+        content_type = content_type_for(model_class)
         stats = _popular_ids(content_type, config, now)
         files = model_class.objects.filter(
             pk__in=stats.keys(),

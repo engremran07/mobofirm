@@ -67,6 +67,14 @@ except (ValueError, TypeError) as exc:
         "(32 url-safe base64-encoded bytes)."
     ) from exc
 
+try:
+    Fernet(base.FERNET_KEY)
+except (ValueError, TypeError) as exc:
+    raise ImproperlyConfigured(
+        "FERNET_KEY must be a Fernet key (32 url-safe base64-encoded bytes); it "
+        "encrypts ad-network credentials and firmware archive passwords."
+    ) from exc
+
 _require(
     bool(os.getenv("CACHE_URL")),
     "CACHE_URL (a shared Redis cache) is required so rate limits hold across workers.",

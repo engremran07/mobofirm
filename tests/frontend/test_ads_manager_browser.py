@@ -1,6 +1,6 @@
 """Browser checks for the ads staff screens and the public ad zones.
 
-The manager, queue and dashboard render in the Unfold admin shell without console/CSP
+The manager, queue and dashboard render in the staff console shell without console/CSP
 errors or overflow (light and dark, 360/768/1365). The place flow, test profile and a real
 consented zone are exercised end to end with real interaction.
 """
@@ -36,6 +36,7 @@ from tests.frontend.browser_support import (
 
 PAGE = "firmwares/library_hub.html"
 BANNER = "section.consent-banner"
+DIALOG = ".modal[data-console-dialog]"
 
 
 def ads_manager(username: str):
@@ -102,7 +103,7 @@ def test_ads_staff_screens_render_in_the_admin_shell_light_and_dark(live_server)
         for scheme in ("light", "dark"):
             context = session_context(browser, live_server, cookie)
             context.add_init_script(
-                f"window.localStorage.setItem('adminTheme', '\"{scheme}\"')"
+                f"window.localStorage.setItem('mobofirm-theme', '{scheme}')"
             )
             page = context.new_page()
             watch(page, failures)
@@ -111,12 +112,12 @@ def test_ads_staff_screens_render_in_the_admin_shell_light_and_dark(live_server)
             for path in paths:
                 page.goto(f"{live_server.url}{path}")
                 ready(page)
-                if page.locator("nav a[href]").count() < 3:
+                if page.locator("aside[data-console-sidebar] a[href]").count() < 3:
                     failures.append(f"{path}: admin sidebar is missing ({scheme})")
                 if page.locator(".site-header, .site-container").count():
                     failures.append(f"{path}: public shell markup rendered")
                 is_dark = page.evaluate(
-                    "() => document.documentElement.classList.contains('dark')"
+                    "() => document.documentElement.dataset.bsTheme === 'dark'"
                 )
                 if is_dark != (scheme == "dark"):
                     failures.append(f"{path}: expected {scheme} theme")
@@ -142,14 +143,14 @@ def test_place_enable_and_remove_with_app_owned_dialogs(live_server):
 
         row = page.get_by_role("row").filter(has_text=PAGE)
         row.get_by_role("link", name="Place ad here").click()
-        dialog = page.locator("dialog[data-staff-dialog]")
+        dialog = page.locator(DIALOG)
         expect(dialog).to_be_visible(timeout=10_000)
         expect(dialog.get_by_role("heading")).to_have_text("Place an ad")
         page.keyboard.press("Escape")
-        expect(page.locator("dialog[data-staff-dialog]")).to_have_count(0)
+        expect(page.locator(DIALOG)).to_have_count(0)
 
         row.get_by_role("link", name="Place ad here").click()
-        dialog = page.locator("dialog[data-staff-dialog]")
+        dialog = page.locator(DIALOG)
         expect(dialog).to_be_visible(timeout=10_000)
         dialog.get_by_label("Zone").select_option("header")
         dialog.get_by_role("button", name="Create placement").click()
@@ -164,7 +165,7 @@ def test_place_enable_and_remove_with_app_owned_dialogs(live_server):
         expect(row.get_by_text("On", exact=True).first).to_be_visible()
 
         row.get_by_role("link", name="Remove").click()
-        dialog = page.locator("dialog[data-staff-dialog]")
+        dialog = page.locator(DIALOG)
         expect(dialog).to_be_visible(timeout=10_000)
         expect(dialog).to_contain_text("stops serving at once")
         dimensions = overflow(page)
@@ -193,11 +194,11 @@ def test_discovery_queue_approves_and_rejects_through_dialogs(live_server):
 
         page.get_by_label("Select Library Hub Above Footer").check()
         page.get_by_role("button", name="Reject selected").click()
-        dialog = page.locator("dialog[data-staff-dialog]")
+        dialog = page.locator(DIALOG)
         expect(dialog).to_be_visible(timeout=10_000)
         expect(dialog).to_contain_text("Reject 1 suggestion?")
         dialog.get_by_role("button", name="Cancel").click()
-        expect(page.locator("dialog[data-staff-dialog]")).to_have_count(0)
+        expect(page.locator(DIALOG)).to_have_count(0)
 
         page.get_by_role("button", name="Approve", exact=True).first.click()
         page.wait_for_url(f"**{reverse('ads:discoveries')}")

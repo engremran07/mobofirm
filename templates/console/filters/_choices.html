@@ -1,0 +1,17 @@
+{% comment %}
+  One filter as a popover listbox in the filter bar (shared by admin/filter.html and the choices/related filters).
+  Context: title, choices ({selected, query_string, display}), uid, active, cl.
+  Contract (frontend/src/admin/js/ui/popover.js): [data-ui-popover] > button[data-ui-trigger] + [data-ui-panel] > [role=listbox] > a[role=option].
+  State is exposed as data-open / data-selected / data-active; every option is a normal GET link that refreshes the results over HTMX.
+{% endcomment %}{% load i18n console_ui %}
+<div class="c-fctl" id="{{ uid }}" data-ui-popover{% if active %} data-active{% endif %}>
+<button type="button" class="c-fctl__btn" data-ui-trigger aria-haspopup="listbox" aria-expanded="false" aria-controls="{{ uid }}-panel">
+<span class="c-fctl__title">{{ title }}</span>{% if active %}{% for choice in choices %}{% if choice.selected %}<span class="c-fctl__value">{{ choice.display }}</span>{% endif %}{% endfor %}{% endif %}
+{% console_icon "chevron-down" "c-icon--xs c-fctl__caret" %}</button>
+<div class="c-fpanel" id="{{ uid }}-panel" data-ui-panel hidden>
+<ul class="c-fpanel__list" role="listbox" aria-label="{{ title }}">
+{% for choice in choices %}<li role="presentation"><a role="option" tabindex="-1" href="{{ choice.query_string|iriencode }}" {% include "console/crud/_hx_list.html" with url=choice.query_string %} aria-selected="{% if choice.selected %}true{% else %}false{% endif %}"{% if choice.selected %} data-selected{% endif %}>{{ choice.display }}</a></li>
+{% endfor %}
+</ul>
+</div>
+</div>

@@ -1,0 +1,9 @@
+{% comment %}
+  radio_group - a segmented single choice (role=radiogroup) with a roving tabindex.
+  Context: name (hidden input), label (accessible name), options (list of {"value", "label", "disabled"}), value (current).
+  Keyboard: Arrow keys and Home/End move and select, Space/Enter select, Tab enters on the checked radio only.
+  State attributes: data-selected / data-disabled on each radio; the hidden input fires "change".
+{% endcomment %}<div class="c-radiogroup" role="radiogroup" data-ui-radiogroup aria-label="{{ label }}">
+{% for option in options %}<button type="button" class="c-radiogroup__item" role="radio" data-value="{{ option.value }}" aria-checked="{% if option.value|stringformat:'s' == value|stringformat:'s' %}true{% else %}false{% endif %}" tabindex="{% if option.value|stringformat:'s' == value|stringformat:'s' %}0{% else %}-1{% endif %}"{% if option.value|stringformat:'s' == value|stringformat:'s' %} data-selected{% endif %}{% if option.disabled %} data-disabled aria-disabled="true"{% endif %}>{{ option.label }}</button>
+{% endfor %}<input type="hidden" name="{{ name }}" value="{{ value }}" data-ui-radiogroup-input>
+</div>

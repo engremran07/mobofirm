@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from allauth.account.models import EmailAddress
@@ -276,8 +277,11 @@ class GoogleApiHardeningTests(TestCase):
 
         enforcement = Mock(side_effect=DevicePolicyError("blocked_device"))
         with patch(
-            "apps.users.api_auth.AppService.get",
-            return_value=Mock(enforce_device_policy_for_login=enforcement),
+            "apps.users.services.device_gate.AppService.get",
+            return_value=SimpleNamespace(
+                DevicePolicyError=DevicePolicyError,
+                enforce_device_policy_for_login=enforcement,
+            ),
         ):
             response = self.post_google()
 
@@ -294,8 +298,8 @@ class GoogleApiHardeningTests(TestCase):
 
     def test_no_browser_session_is_left_behind(self):
         with patch(
-            "apps.users.api_auth.AppService.get",
-            return_value=Mock(
+            "apps.users.services.device_gate.AppService.get",
+            return_value=SimpleNamespace(
                 enforce_device_policy_for_login=Mock(return_value=(True, {}))
             ),
         ):

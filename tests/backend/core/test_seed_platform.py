@@ -33,10 +33,12 @@ from apps.firmwares.models import (
     PendingFirmware,
 )
 from apps.firmwares.seed_data import (
+    APPLE_BRAND,
     BRANDS,
     CHIPSETS,
     CHIPSETS_BY_KEY,
     GUIDES,
+    PLATFORM_COVERAGE_KEYS,
     TOOLS,
 )
 from apps.firmwares.seeding import (
@@ -79,19 +81,23 @@ class TestSeedData:
     def test_every_chipset_reference_resolves(self):
         used = {
             key
-            for brand in BRANDS
+            for brand in (*BRANDS, APPLE_BRAND)
             for seed in brand.models
             for key in (seed.chipset, *(v.chipset for v in seed.variants))
             if key
         }
         assert used <= set(CHIPSETS_BY_KEY)
         assert len(CHIPSETS_BY_KEY) == len(CHIPSETS)
-        assert used == set(CHIPSETS_BY_KEY), "unused chipsets are seeded"
+        # Platform coverage chipsets (tablet, RDA and Apple parts) are seeded with the
+        # full catalogue even when no seeded model uses them yet.
+        assert used | PLATFORM_COVERAGE_KEYS == set(CHIPSETS_BY_KEY), (
+            "unused chipsets are seeded"
+        )
         for tool in TOOLS:
             assert set(tool.chipsets) <= set(CHIPSETS_BY_KEY)
 
     def test_guides_reference_known_brands_and_tools(self):
-        brands = {brand.slug: brand for brand in BRANDS}
+        brands = {brand.slug: brand for brand in (*BRANDS, APPLE_BRAND)}
         tools = {tool.slug for tool in TOOLS}
         for guide in GUIDES:
             assert guide.brand in brands
@@ -206,11 +212,11 @@ class TestSeedGuards:
         assert Model.objects.count() == 0
 
 
-@pytest.fixture
-def seeded_slice(transactional_db):
+@pytest.fixture(name="seeded_slice")
+def build_seeded_slice(request: pytest.FixtureRequest) -> str:
     """Two brands seeded end to end (the on-commit automation must run)."""
-    output = _run("seed_platform", confirm=True, limit_brands=2)
-    return output
+    request.getfixturevalue("transactional_db")
+    return _run("seed_platform", confirm=True, limit_brands=2)
 
 
 class TestSeedPlatformSlice:
@@ -232,7 +238,8 @@ class TestSeedPlatformSlice:
         assert not PendingFirmware.objects.exclude(admin_decision="approved").exists()
         assert "Platform seed complete" in seeded_slice
 
-    def test_one_automated_post_per_target_with_grouped_firmware(self, seeded_slice):
+    @pytest.mark.usefixtures("seeded_slice")
+    def test_one_automated_post_per_target_with_grouped_firmware(self):
         used = {
             key
             for brand in BRANDS[:2]
@@ -262,7 +269,8 @@ class TestSeedPlatformSlice:
             assert "Download (external host)" in post.body
             assert post.tags.filter(name=model.brand.name).exists()
 
-    def test_editorial_posts_are_published_by_the_workflow(self, seeded_slice):
+    @pytest.mark.usefixtures("seeded_slice")
+    def test_editorial_posts_are_published_by_the_workflow(self):
         published = Post.objects.filter(
             slug__in=[a.slug for a in ARTICLES], status=PostStatus.PUBLISHED
         )
@@ -273,7 +281,8 @@ class TestSeedPlatformSlice:
             assert post.tags.exists()
             assert post.revisions.exists()
 
-    def test_comments_are_moderated_by_the_service(self, seeded_slice):
+    @pytest.mark.usefixtures("seeded_slice")
+    def test_comments_are_moderated_by_the_service(self):
         statuses = dict(
             Comment.objects.values_list("status")
             .annotate(total=Count("pk"))
@@ -289,7 +298,8 @@ class TestSeedPlatformSlice:
             .exists()
         )
 
-    def test_guides_tools_and_ads(self, seeded_slice):
+    @pytest.mark.usefixtures("seeded_slice")
+    def test_guides_tools_and_ads(self):
         assert FlashingTool.objects.count() == len(TOOLS)
         assert FlashingGuideTemplate.objects.count() >= 1
         guides = GeneratedFlashingGuide.objects.select_related("post")
@@ -300,13 +310,15 @@ class TestSeedPlatformSlice:
             for name in ("ads_enabled", "auto_ads_enabled", "rewarded_ads_enabled")
         )
 
-    def test_accounts_cannot_sign_in(self, seeded_slice):
+    @pytest.mark.usefixtures("seeded_slice")
+    def test_accounts_cannot_sign_in(self):
         users = CustomUser.objects.filter(username__in=[p.username for p in ALL_PEOPLE])
         assert users.count() == len(ALL_PEOPLE)
         assert not any(user.has_usable_password() for user in users)
         assert not users.filter(is_superuser=True).exists()
 
-    def test_rerun_is_idempotent(self, seeded_slice):
+    @pytest.mark.usefixtures("seeded_slice")
+    def test_rerun_is_idempotent(self):
         def counts() -> tuple[int, ...]:
             return (
                 Brand.objects.count(),
@@ -326,13 +338,17 @@ class TestSeedPlatformSlice:
 
 
 class TestSeedPlatformFullScale:
-    def test_full_catalogue_meets_the_acceptance_criteria(self, transactional_db):
+    @pytest.mark.usefixtures("transactional_db")
+    def test_full_catalogue_meets_the_acceptance_criteria(self):
         output = _run("seed_platform", confirm=True, skip_seo=False)
         assert "Verification" in output
         assert Brand.objects.count() >= 20
         for brand in Brand.objects.all():
             assert brand.models.count() >= 5
-        assert OfficialFirmware.objects.count() >= Model.objects.count() * 2
+        # Apple models are catalogued without seeded firmware (only signed IPSW files
+        # install, so listings come from reviewed uploads).
+        with_firmware = Model.objects.exclude(brand__slug="apple").count()
+        assert OfficialFirmware.objects.count() >= with_firmware * 2
         assert AutomatedBlogLink.objects.filter(kind="model").count() == (
             Model.objects.count()
         )

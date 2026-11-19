@@ -1,7 +1,7 @@
 {# Contract: page_obj (UploadEntry page), status. HTMX fragment for #uploads-results. #}
 {% load mf_ui %}
 {% if page_obj.object_list %}
-  {% table_scroll "Your firmware submissions" %}
+  {% table_scroll "Your firmware contributions" %}
   <table class="table align-middle mb-0">
     <thead><tr><th scope="col">File</th><th scope="col">Linked to</th><th scope="col">Status</th><th scope="col">Access and price</th><th scope="col">Submitted</th></tr></thead>
     <tbody>
@@ -26,6 +26,6 @@
 {% elif status %}
   {% include "components/empty_state.html" with title="No submissions with this status" message="Choose another status to see the rest." %}
 {% else %}
-  {% url 'firmwares:firmware-upload' as upload_url %}
-  {% include "components/empty_state.html" with title="You have not uploaded any firmware" message="Submissions you send appear here with their review status." action_label="Upload firmware" action_url=upload_url %}
+  {% url 'firmwares:contribute' as upload_url %}
+  {% include "components/empty_state.html" with title="You have not contributed any firmware" message="Firmware you contribute appears here with its review status." action_label="Contribute a firmware" action_url=upload_url %}
 {% endif %}

@@ -1,0 +1,78 @@
+// =============================================================================
+// Shared component layer (public site + staff console).
+//
+// What is shared, and how: components keep their own surface-specific class names
+// (public `.badge-ui`, console `.c-badge`) because their markup differs, but the
+// *design decisions* behind them live here exactly once and both bundles `@use` them:
+//
+//   shared.each($selector, $ink-prop, [$soft-prop], [$edge-prop])
+//       The status-tone contract. Emits `<selector>--success|warning|danger|info|accent`
+//       modifiers that set custom properties from the colour tokens:
+//         ink  -> var(--mf-<tone>)           (accent uses --mf-accent-strong)
+//         soft -> var(--mf-<tone>-soft)      (tinted surface the ink must clear AA on)
+//         edge -> color-mix of the tone on the border colour
+//       Used by: .badge-ui, .c-badge, .c-alert.
+//   shared.focus-ring($offset)
+//       The one focus-visible treatment (colour --mf-focus, width --mf-focus-width).
+//   shared.card-surface($radius) / shared.control-base
+//       Skeleton shimmer gradient; honours reduced motion through the duration tokens.
+//
+// Rules for new shared components
+//   1. Colours come from --mf-* tokens only (see shared/tokens/_palette.scss).
+//   2. A new tone, size or density is a modifier added HERE and consumed by both bundles.
+//   3. Keep Bootstrap out of this directory: Bootstrap is imported only through
+//      admin/styles/_bootstrap.scss (console) and the site entry (public).
+//   4. Mixins only: this directory emits no CSS by itself, so importing it never grows a bundle.
+// =============================================================================
+$tones: (success, warning, danger, info, accent);
+
+@function ink($tone) {
+  @if $tone == accent {
+    @return var(--mf-accent-strong);
+  }
+
+  @return var(--mf-#{$tone});
+}
+
+@mixin each($selector, $ink-prop, $soft-prop: null, $edge-prop: null) {
+  @each $tone in $tones {
+    $selectors: "#{$selector}--#{$tone}";
+
+    @if $tone == accent {
+      $selectors: "#{$selector}--accent, #{$selector}--primary";
+    }
+
+    #{$selectors} {
+      #{$ink-prop}: #{ink($tone)};
+      @if $soft-prop { #{$soft-prop}: var(--mf-#{$tone}-soft); }
+      @if $edge-prop { #{$edge-prop}: color-mix(in srgb, var(--mf-#{$tone}) 35%, var(--mf-border)); }
+    }
+  }
+}
+
+@mixin focus-ring($offset: var(--mf-focus-offset)) {
+  outline: var(--mf-focus-width) solid color-mix(in srgb, var(--mf-focus) 55%, transparent);
+  outline-offset: $offset;
+}
+
+@mixin shimmer($base: var(--mf-skeleton-base), $shine: var(--mf-skeleton-shine)) {
+  background: linear-gradient(100deg, $base 30%, $shine 50%, $base 70%) 100% 0 / 300% 100%;
+}
+
+// Card surface: the one look of a raised content surface (public .surface-card, console .c-card / .c-stat / .c-section).
+// The caller keeps its own border width/style so Bootstrap's `.card` border or a console `border: 1px solid` still applies.
+@mixin card-surface($radius: var(--mf-radius-lg)) {
+  background: var(--mf-surface);
+  border-color: var(--mf-border);
+  border-radius: $radius;
+  box-shadow: var(--mf-elev-1);
+}
+
+// Form control base: radius, transition and the disabled/read-only state shared by the public and console `.form-control` / `.form-select`.
+@mixin control-base {
+  border-radius: var(--mf-radius-md);
+  transition: border-color var(--mf-duration-fast) var(--mf-ease-out), box-shadow var(--mf-duration-base) var(--mf-ease-out), background-color var(--mf-duration-fast) var(--mf-ease-out);
+
+  &:disabled,
+  &[readonly] { background-color: var(--mf-surface-soft); }
+}

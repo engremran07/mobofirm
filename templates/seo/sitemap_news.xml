@@ -1,0 +1,12 @@
+{% load static %}<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/css" href="{% static 'seo/sitemap.css' %}"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:news="http://www.google.com/schemas/sitemap-news/0.9">
+{% for item in news %}  <url>
+    <loc>{{ item.loc }}</loc>
+    <news:news>
+      <news:publication><news:name>{{ publication }}</news:name><news:language>{{ item.language }}</news:language></news:publication>
+      <news:publication_date>{{ item.published }}</news:publication_date>
+      <news:title>{{ item.title }}</news:title>
+    </news:news>
+  </url>
+{% endfor %}</urlset>

@@ -1,6 +1,7 @@
 {% extends "components/dialog.html" %}
-{# Contract: dialog_title, dialog_message, dialog_action, credit_cost, credit_balance, missing, back_url, earn_url, error (see shop/dialogs/pay_with_credits.html). Credits payment body for the shared dialog shell. #}
+{# Contract: dialog_title, dialog_message, dialog_action, credit_cost, credit_balance, missing, back_url, earn_url, error, request_id (the one-purchase token posted back so a repeated submit never charges twice; see shop/dialogs/pay_with_credits.html). Credits payment body for the shared dialog shell. #}
 {% block dialog_body %}
+  {% if request_id %}<input type="hidden" name="request_id" value="{{ request_id }}">{% endif %}
   <dl class="eco-kv mb-3">
     <dt>Price</dt><dd><strong>{{ credit_cost }} credits</strong></dd>
     <dt>Your balance</dt><dd>{{ credit_balance }} credits</dd>

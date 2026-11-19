@@ -1,8 +1,9 @@
-"""Unfold admin for the shop: one tabbed Package form, summaries, actions, orders."""
+"""Staff console admin for the shop: one tabbed Package form, summaries, actions, orders."""
 
 from __future__ import annotations
 
 import pytest
+from django.apps import apps
 from django.contrib import admin
 from django.contrib.auth.models import Permission
 from django.test import Client, RequestFactory
@@ -54,6 +55,10 @@ def package_form(**overrides) -> dict[str, str]:
         "max_concurrent_downloads": "0",
         "cooldown_seconds": "0",
         "resume_support": "on",
+        "unlock_ads_free": "3",
+        "unlock_ads_featured": "5",
+        "unlock_cooldown_seconds": "30",
+        "unlock_daily_cap": "5",
         "user_packages-TOTAL_FORMS": "0",
         "user_packages-INITIAL_FORMS": "0",
         "user_packages-MIN_NUM_FORMS": "0",
@@ -64,19 +69,30 @@ def package_form(**overrides) -> dict[str, str]:
     return {key: value for key, value in data.items() if value is not None}
 
 
-@pytest.fixture
-def root(client, staff):
+@pytest.fixture(name="root")
+def root_fixture(staff):
+    """A signed-in staff client that submits dialogs the way the console does (HTMX)."""
+    client = Client(headers={"HX-Request": "true"})
     client.force_login(staff)
     return client
 
 
-@pytest.fixture
-def order(user, pro_tier):
+@pytest.fixture(name="order")
+def order_fixture(user, pro_tier):
     return services.create_order(user, pro_tier)
 
 
-def order_url(order: Order, name: str) -> str:
-    return reverse(f"admin:shop_order_{name}", args=[order.pk])
+def order_url(placed: Order, name: str) -> str:
+    return reverse(f"admin:shop_order_{name}", args=[placed.pk])
+
+
+def registered_shop_admins() -> dict:
+    """Shop models with their ModelAdmin, through the public admin API."""
+    return {
+        model: admin.site.get_model_admin(model)
+        for model in apps.get_app_config("shop").get_models()
+        if admin.site.is_registered(model)
+    }
 
 
 class TestPackageAdmin:
@@ -94,6 +110,7 @@ class TestPackageAdmin:
             "Extra",
             "Fair usage",
             "Perks",
+            "Ads & unlocks",
             "Preview",
         ]
         text = response.content.decode()
@@ -153,7 +170,8 @@ class TestPackageAdmin:
         assert message in response.content.decode()
         assert not PackageTier.objects.exists()
 
-    def test_only_one_default_package(self, root, default_tier):
+    @pytest.mark.usefixtures("default_tier")
+    def test_only_one_default_package(self, root):
         response = root.post(
             reverse("admin:shop_packagetier_add"),
             package_form(
@@ -218,7 +236,7 @@ class TestPackageAdmin:
         assert pending.status == Order.Status.CANCELLED
         assert default_tier.is_active and default_tier.is_public
 
-    def test_dialog_actions_need_permission(self, user, make_user, pro_tier):
+    def test_dialog_actions_need_permission(self, make_user, pro_tier):
         staff_member = make_user("plain-staff", verified=True)
         staff_member.is_staff = True
         staff_member.save()
@@ -302,7 +320,8 @@ class TestOrderAdmin:
         assert response.status_code == 200
         assert "Pro" in response.content.decode()
 
-    def test_the_list_summarises_the_items(self, root, order):
+    @pytest.mark.usefixtures("order")
+    def test_the_list_summarises_the_items(self, root):
         text = root.get(reverse("admin:shop_order_changelist")).content.decode()
 
         assert "Pro" in text and "Items" in text
@@ -382,14 +401,12 @@ class TestOrderAdmin:
 
 
 class TestRegistration:
+    @pytest.mark.usefixtures("default_tier")
     def test_the_retired_models_are_gone_and_every_page_renders(
-        self, root, staff, order, default_tier
+        self, root, staff, order
     ):
-        labels = {
-            model._meta.label
-            for model in admin.site._registry
-            if model._meta.app_label == "shop"
-        }
+        registered = registered_shop_admins()
+        labels = {model._meta.label for model in registered}
         assert labels == {
             "shop.PackageTier",
             "shop.UserPackage",
@@ -397,6 +414,7 @@ class TestRegistration:
             "shop.Order",
             "shop.QuotaConsumption",
             "shop.FeaturedBlogPurchase",
+            "shop.AdUnlockTicket",
             "shop.UserQuotaOverride",
             "shop.QuotaOverrideAudit",
             "shop.ShopSettings",
@@ -404,9 +422,7 @@ class TestRegistration:
 
         request = RequestFactory().get("/")
         request.user = staff
-        for model, model_admin in admin.site._registry.items():
-            if model._meta.app_label != "shop":
-                continue
+        for model, model_admin in registered.items():
             name = model._meta.model_name
             assert root.get(reverse(f"admin:shop_{name}_changelist")).status_code == 200
             if model_admin.has_add_permission(request):

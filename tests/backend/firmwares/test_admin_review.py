@@ -9,8 +9,10 @@ from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
 from apps.firmwares.models import (
+    AdGateLog,
     Brand,
     Chipset,
+    DownloadSession,
     DownloadToken,
     Model,
     OfficialFirmware,
@@ -199,6 +201,8 @@ class FirmwareAdminTests(TestCase):
         token = DownloadToken.objects.create(
             firmware=firmware, token="admin-token", expires_at=firmware.created_at
         )
+        session = DownloadSession.objects.create(token=token)
+        AdGateLog.objects.create(token=token, session=session)
 
         urls = [
             reverse("admin:firmwares_chipset_changelist"),
@@ -206,6 +210,8 @@ class FirmwareAdminTests(TestCase):
             reverse("admin:firmwares_automatedbloglink_changelist"),
             reverse("admin:firmwares_downloadtoken_changelist"),
             reverse("admin:firmwares_downloadtoken_change", args=[token.pk]),
+            reverse("admin:firmwares_downloadsession_changelist"),
+            reverse("admin:firmwares_adgatelog_changelist"),
             reverse("admin:firmwares_pendingfirmware_change", args=[self.pending.pk]),
             reverse("admin:firmwares_flashingtool_add"),
         ]

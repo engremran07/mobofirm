@@ -1,0 +1,159 @@
+{% extends "admin/staff_page.html" %}
+{% load i18n staff_ui %}
+{% block page_actions %}
+  {% staff_button _("View the page") href=screen.path target="_blank" %}
+  {% for link in screen.console_links|slice:":1" %}{% staff_button link.label href=link.url %}{% endfor %}
+  {% staff_button _("Back to the board") href=next_url %}
+{% endblock %}
+{% block page_nav %}{% include "seo/_tabs.html" %}{% endblock %}
+{% block page_body %}
+{% if not can_fix %}{% staff_notice tone="warning" %}{% translate "You can review this page but need the “change metadata” permission to save fixes." %}{% endstaff_notice %}{% endif %}
+
+{% staff_card title=_("Findings") ident="seo-findings" %}
+  <p class="text-body-secondary">
+    {{ screen.group_label|default:_("Site-wide") }} &middot; <code>{{ screen.path }}</code>
+    {% if screen.indexable %}{% staff_badge _("Indexable") "success" %}{% else %}{% staff_badge _("Not indexable") "warning" %}{% if screen.noindex_reason %} <small>{{ screen.noindex_reason }}</small>{% endif %}{% endif %}
+    {% if screen.is_route %}<small>{% translate "This page has no content object; its fixes are saved as a page-level SEO override." %}</small>{% endif %}
+  </p>
+  {% if screen.issues %}
+    {% staff_list %}
+      {% for issue in screen.issues %}
+        {% staff_item %}
+          <span id="finding-{{ issue.pk }}">
+            {% if issue.severity == "error" %}{% staff_badge issue.get_severity_display "danger" %}{% elif issue.severity == "warning" %}{% staff_badge issue.get_severity_display "warning" %}{% else %}{% staff_badge issue.get_severity_display "info" %}{% endif %}
+            <strong>{{ issue.code }}</strong>: {{ issue.message }}
+            {% if issue.measured %}<small class="text-body-secondary"> {% translate "Measured:" %} {{ issue.measured }}</small>{% endif %}
+            {% if issue.expected %}<small class="text-body-secondary"> {% translate "Standard:" %} {{ issue.expected }}</small>{% endif %}
+            {% if screen.focus and screen.focus.pk == issue.pk %}{% staff_badge _("Selected") "info" %}{% endif %}
+          </span>
+        {% endstaff_item %}
+      {% endfor %}
+    {% endstaff_list %}
+  {% else %}
+    {% staff_empty %}{% translate "No open issues on this page. You can still edit its SEO fields below." %}{% endstaff_empty %}
+  {% endif %}
+{% endstaff_card %}
+
+<form method="post" action="{% url 'seo:fix_apply' %}" id="seo-fix-form" class="d-flex flex-column gap-4" novalidate>
+  {% csrf_token %}
+  <input type="hidden" name="url" value="{{ screen.path }}">
+  <input type="hidden" name="next" value="{{ next_url }}">
+  <fieldset class="d-flex flex-column gap-4 border-0 p-0 m-0"{% if not can_fix %} disabled{% endif %}>
+    {% staff_card title=_("Search result") ident="seo-serp" %}
+      <div hx-post="{% url 'seo:fix_preview' %}" hx-trigger="input delay:400ms from:#seo-fix-form" hx-target="#seo-serp-preview" hx-swap="outerHTML" hx-include="#seo-fix-form">
+        {% include "seo/partials/serp_preview.html" with serp=screen.serp %}
+      </div>
+    {% endstaff_card %}
+
+    {% if screen.flagged or screen.alt_inputs or screen.h1_in_body %}
+      {% staff_card title=_("Fix these") ident="seo-fix-flagged" tone="warning" %}
+        <div class="d-flex flex-column gap-3">
+          {% for field in screen.flagged %}{% include "seo/partials/fix_field.html" %}{% endfor %}
+          {% if screen.alt_inputs %}
+            <section aria-label="{% translate 'Images without alt text' %}" class="d-flex flex-column gap-2">
+              <h3 class="h6 mb-0">{% translate "Images without alt text" %}{% if screen.alt_flagged %} {% staff_badge _("Finding") "warning" %}{% endif %}</h3>
+              {% for image in screen.alt_inputs %}
+                <input type="hidden" name="altsrc_{{ image.position }}" value="{{ image.src }}">
+                {% with position=image.position|stringformat:"s" %}{% with alt_id="fix-alt-"|add:position alt_name="alt_"|add:position %}
+                  {% blocktranslate with src=image.src asvar alt_label %}Alt text for {{ src }}{% endblocktranslate %}
+                  {% staff_input ident=alt_id name=alt_name label=alt_label value=image.value maxlength=200 placeholder=_("Describe what the image shows") %}
+                {% endwith %}{% endwith %}
+              {% endfor %}
+            </section>
+          {% endif %}
+          {% if screen.h1_in_body %}
+            <div class="d-flex flex-column gap-1">
+              {% staff_check ident="fix-demote-h1" name="demote_h1" value="1" label=_("Turn the <h1> headings in the body into <h2>") %}
+              {% if screen.h1_flagged %}<p class="small mb-0">{% staff_badge _("Finding") "warning" %} {% translate "The page title is the only <h1>." %}</p>{% endif %}
+            </div>
+          {% endif %}
+        </div>
+      {% endstaff_card %}
+    {% endif %}
+
+    {% if screen.other %}
+      {% staff_card title=_("All SEO fields") ident="seo-fix-other" %}
+        <details>
+          <summary>{% translate "Show every editable SEO field of this page" %}</summary>
+          <div class="d-flex flex-column gap-3 mt-3">
+            {% for field in screen.other %}{% include "seo/partials/fix_field.html" %}{% endfor %}
+          </div>
+        </details>
+      {% endstaff_card %}
+    {% endif %}
+  </fieldset>
+
+  {% if screen.console_links or screen.guides_url %}
+    {% staff_card title=_("Fix at the source") ident="seo-fix-source" %}
+      <p class="small text-body-secondary">{% translate "These findings are repaired in the content itself. The edit form opens at the field." %}</p>
+      {% staff_row %}
+        {% for link in screen.console_links %}{% staff_button link.label href=link.url size="sm" %}{% endfor %}
+        {% if screen.guides_url %}{% staff_button _("Generate flash guides") href=screen.guides_url size="sm" %}{% endif %}
+      {% endstaff_row %}
+    {% endstaff_card %}
+  {% endif %}
+
+  {% staff_card title=_("In context: what this page serves") ident="seo-context" %}
+    {% if screen.page.error %}
+      {% staff_notice tone="warning" %}{{ screen.page.error }}{% endstaff_notice %}
+    {% else %}
+      {% staff_dl %}
+        {% staff_dd label=_("HTTP status") %}{{ screen.page.status }}{% endstaff_dd %}
+        {% staff_dd label=_("Canonical") %}{{ screen.page.canonical|default:"-" }}{% endstaff_dd %}
+        {% staff_dd label=_("Robots") %}{{ screen.page.robots|join:", "|default:"-" }}{% endstaff_dd %}
+        {% staff_dd label=_("Open Graph") %}{% for key, value in screen.page.open_graph.items %}<code>{{ key }}</code> {{ value }}<br>{% empty %}-{% endfor %}{% endstaff_dd %}
+        {% staff_dd label=_("Twitter") %}{% for key, value in screen.page.twitter.items %}<code>{{ key }}</code> {{ value }}<br>{% empty %}-{% endfor %}{% endstaff_dd %}
+        {% staff_dd label=_("Structured data") %}{{ screen.page.schema_types|join:", "|default:"-" }}{% endstaff_dd %}
+        {% staff_dd label=_("Internal links") %}{{ screen.page.internal_links }} ({{ screen.page.nofollow_links }} {% translate "nofollow" %}){% endstaff_dd %}
+      {% endstaff_dl %}
+      <h3 class="h6 mt-3">{% translate "Heading outline" %}</h3>
+      {% if screen.page.headings %}
+        <ol class="list-unstyled mb-0" aria-label="{% translate 'Heading outline' %}">
+          {% for heading in screen.page.headings %}
+            <li><code>h{{ heading.level }}</code> {{ heading.text }}{% if heading.level == 1 and screen.page.h1_count != 1 %} {% staff_badge _("Expected exactly one h1") "warning" %}{% endif %}</li>
+          {% endfor %}
+        </ol>
+      {% else %}
+        <p class="small text-body-secondary mb-0">{% translate "The page has no headings." %}</p>
+      {% endif %}
+      <h3 class="h6 mt-3">{% translate "Images" %}</h3>
+      {% if screen.page.images %}
+        <ul class="list-unstyled mb-0">
+          {% for image in screen.page.images %}
+            <li><code class="text-break">{{ image.src }}</code> {% if image.alt is None %}{% staff_badge _("No alt attribute") "warning" %}{% elif not image.alt %}{% staff_badge _("Empty alt (decorative)") %}{% else %}&ldquo;{{ image.alt }}&rdquo;{% endif %}</li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="small text-body-secondary mb-0">{% translate "No images in the page content." %}</p>
+      {% endif %}
+    {% endif %}
+  {% endstaff_card %}
+
+  {% if can_fix %}
+    <div class="d-flex flex-wrap gap-2" role="group" aria-label="{% translate 'Save the changes' %}">
+      {% staff_button _("Save and re-audit") tone="primary" name="action" value="save" %}
+      {% staff_button _("Save and next issue") name="action" value="next" %}
+      {% staff_button _("Re-audit only") name="action" value="reaudit" %}
+    </div>
+    {% if upcoming %}<p class="small text-body-secondary mb-0">{% blocktranslate with url=upcoming.url %}Next open issue: {{ url }}{% endblocktranslate %}</p>{% endif %}
+  {% endif %}
+</form>
+
+{% if can_manage and screen.issues %}
+  {% staff_card title=_("Not an issue here?") ident="seo-ignore" %}
+    {% for issue in screen.issues %}
+      <form method="post" action="{% url 'seo:issue_ignore' pk=issue.pk %}" class="d-flex flex-wrap align-items-end gap-2 mb-2">
+        {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+        {% with key=issue.pk|stringformat:"s" %}{% with ignore_id="ignore-reason-"|add:key %}{% blocktranslate with code=issue.code asvar ignore_label %}Reason for ignoring {{ code }}{% endblocktranslate %}{% staff_input ident=ignore_id name="reason" label=ignore_label placeholder=_("Reason for ignoring") maxlength=255 required=True %}{% endwith %}{% endwith %}
+        {% staff_button _("Ignore with reason") size="sm" %}
+      </form>
+    {% endfor %}
+  {% endstaff_card %}
+{% endif %}
+
+{% if ledger_entries %}
+  {% staff_card title=_("Recent changes to this page") ident="seo-fix-ledger" %}
+    {% staff_list %}{% for entry in ledger_entries %}{% staff_item %}<span><a href="{% url 'seo:ledger' %}?status={{ entry.status }}">#{{ entry.pk }}</a> {{ entry.target_label }} ({{ entry.get_status_display }}) {{ entry.created_at|timesince }} {% translate "ago" %}</span>{% endstaff_item %}{% endfor %}{% endstaff_list %}
+  {% endstaff_card %}
+{% endif %}
+{% endblock %}

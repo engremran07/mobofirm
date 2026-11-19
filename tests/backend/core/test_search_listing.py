@@ -163,7 +163,7 @@ def test_did_you_mean_suggests_firmware_type() -> None:
     """Firmware classifications are suggested with their own label."""
     suggestions = did_you_mean("enginering")
     assert [(item.title, item.noun) for item in suggestions] == [
-        ("Engineering", "firmware type")
+        ("Service / Engineering", "firmware type")
     ]
     assert "type=engineering" in suggestions[0].url
 

@@ -1,0 +1,77 @@
+{% comment %}
+  The changelist workspace: toolbar (search, density, filters), active-filter chips, the bulk-action form with
+  the results region, and the filter drawer. Used by admin/change_list.html as a page and inside the lookup dialog.
+  HTMX regions (see _hx_list.html): #c-cl-results is swapped; #c-cl-filters, #c-cl-chips, #c-cl-status and
+  #c-cl-params refresh out of band. Hooks for changelist.js: data-console-changelist, data-console-density,
+  data-console-drawer(-toggle), data-console-search-clear, data-console-bulkbar, data-console-select-all,
+  data-console-row-select, data-console-selected-count, data-console-select-across.
+{% endcomment %}{% load i18n admin_urls admin_list console_ui console_admin %}
+<div id="c-changelist" class="c-changelist{% if cl.has_filters %} c-changelist--filters{% endif %}" data-console-changelist data-density="comfortable">
+{% if cl.formset and cl.formset.errors %}
+{% blocktranslate count counter=cl.formset.total_error_count asvar formset_error_message %}Please correct the error below.{% plural %}Please correct the errors below.{% endblocktranslate %}
+{% ui "alert" variant="danger" message=formset_error_message %}
+{{ cl.formset.non_form_errors }}
+{% endif %}
+{% console_filter_chips cl as chips %}
+<div class="c-cl-toolbar">
+{% search_form cl %}
+<span class="c-cl-toolbar__spacer"></span>
+<p id="c-cl-status" class="u-text-sm u-muted mb-0" role="status" aria-live="polite" aria-atomic="true">{% blocktranslate count counter=cl.result_count %}{{ counter }} result{% plural %}{{ counter }} results{% endblocktranslate %}{% if cl.has_active_filters or cl.query %} · {% translate "filtered" %}{% endif %}</p>
+<div class="btn-group btn-group-sm" role="group" aria-label="{% translate 'Row density' %}">
+<button type="button" class="btn btn-secondary btn-sm" data-console-density="comfortable" aria-pressed="true">{% console_icon "rows-3" %}<span class="visually-hidden">{% translate "Comfortable rows" %}</span></button>
+<button type="button" class="btn btn-secondary btn-sm" data-console-density="compact" aria-pressed="false">{% console_icon "list" %}<span class="visually-hidden">{% translate "Compact rows" %}</span></button>
+</div>
+{% if cl.has_filters %}<button type="button" class="btn btn-secondary btn-sm c-fbar-toggle" data-ui-sheet-toggle="c-cl-filters" aria-controls="c-cl-filters" aria-expanded="false">{% console_icon "funnel" %}<span>{% translate "Filters" %}{% if chips %} ({{ chips|length }}){% endif %}</span></button>{% endif %}
+</div>
+{% if cl.has_filters %}
+<div id="c-cl-filters" class="c-fbar" role="group" aria-label="{% translate 'Filters' %}" data-ui-sheet>
+<div class="c-fbar__head"><h2 class="c-fbar__title" id="c-cl-filters-title">{% translate "Filters" %}</h2><button type="button" class="btn-close" data-ui-sheet-toggle="c-cl-filters" aria-label="{% translate 'Close filters' %}"></button></div>
+<div class="c-fbar__controls">
+{% for spec in cl.filter_specs %}{% console_filter cl spec forloop.counter0 %}{% endfor %}
+{% if cl.is_facets_optional %}{% if cl.add_facets %}<a class="c-fctl__link" href="{{ cl.remove_facet_link }}" {% include "console/crud/_hx_list.html" with url=cl.remove_facet_link %}>{% translate "Hide counts" %}</a>{% else %}<a class="c-fctl__link" href="{{ cl.add_facet_link }}" {% include "console/crud/_hx_list.html" with url=cl.add_facet_link %}>{% translate "Show counts" %}</a>{% endif %}{% endif %}
+</div>
+</div>
+{% endif %}<div id="c-cl-chips" class="c-cl-chips" role="group" aria-label="{% translate 'Active filters' %}">{% for chip in chips %}<span class="c-chip">{{ chip.title }}: <strong>{{ chip.label }}</strong><a class="c-chip__remove" href="{{ chip.remove_url }}" {% include "console/crud/_hx_list.html" with url=chip.remove_url %} aria-label="{% blocktranslate with title=chip.title %}Remove filter: {{ title }}{% endblocktranslate %}">{% console_icon "x" "c-icon--xs" %}</a></span>{% endfor %}{% if chips|length > 1 and cl.has_active_filters %}<a class="c-chip c-chip--add" href="{{ cl.clear_all_filters_qs }}" {% include "console/crud/_hx_list.html" with url=cl.clear_all_filters_qs %}>{% translate "Clear all filters" %}</a>{% endif %}</div>
+<form id="changelist-form" method="post" action="" novalidate{% if cl.formset %} data-console-unsaved-guard{% if cl.formset.is_multipart %} enctype="multipart/form-data"{% endif %}{% endif %}>{% csrf_token %}
+{% if action_form and cl.show_admin_actions %}
+<div class="c-bulkbar" data-console-bulkbar hidden role="region" aria-label="{% translate 'Bulk actions' %}">
+<span class="c-bulkbar__count" role="status" aria-live="polite"><span data-console-selected-count>0</span> {% translate "selected" %}</span>
+{% if cl.result_count != cl.result_list|length %}<a class="c-bulkbar__across" href="#" data-console-select-across>{% blocktranslate with total=cl.result_count %}Select all {{ total }}{% endblocktranslate %}</a>{% endif %}
+<div class="c-bulkbar__actions">
+{% include "console/crud/_bulk_fields.html" %}
+<button type="button" class="btn btn-ghost btn-sm c-bulkbar__clear" data-console-clear-selection>{% translate "Clear selection" %}</button>
+</div>
+</div>
+<noscript><div class="c-bulkbar__actions">{% include "console/crud/_bulk_fields.html" with plain=True %}</div></noscript>
+{% endif %}
+<div id="c-cl-results" data-console-results>
+{% if cl.formset %}{{ cl.formset.management_form }}{% endif %}
+{% if cl.date_hierarchy %}{% console_date_hierarchy cl %}{% endif %}
+{% if cl.result_list %}
+{% console_result_list cl %}
+{% elif cl.has_active_filters or cl.query %}
+{% translate "Nothing matches your search or filters" as empty_title %}
+{% translate "Try fewer filters or a different search term." as empty_message %}
+{% translate "Clear search and filters" as clear_label %}
+{% url cl.opts|admin_urlname:'changelist' as list_url %}
+{% ui "empty_state" icon="search-x" title=empty_title message=empty_message action_label=clear_label action_url=list_url %}
+{% else %}
+{% blocktranslate with name=cl.opts.verbose_name_plural asvar empty_title %}No {{ name }} yet{% endblocktranslate %}
+{% if has_add_permission %}
+{% translate "Records you add will show up here." as empty_message %}
+{% blocktranslate with name=cl.opts.verbose_name asvar add_label %}Add {{ name }}{% endblocktranslate %}
+{% url cl.opts|admin_urlname:'add' as add_url %}
+{% ui "empty_state" icon="inbox" title=empty_title message=empty_message action_label=add_label action_url=add_url %}
+{% else %}
+{% translate "Records will show up here once they exist." as empty_message %}
+{% ui "empty_state" icon="inbox" title=empty_title message=empty_message %}
+{% endif %}
+{% endif %}
+{% pagination cl %}
+{% if cl.formset and cl.result_count %}
+<div class="c-savebar"><span class="c-savebar__meta">{% translate "Changes to the rows above are saved together." %}</span><div class="c-savebar__actions"><button type="submit" name="_save" class="btn btn-primary">{% translate "Save" %}</button></div></div>
+{% endif %}
+</div>
+</form>
+
+</div>

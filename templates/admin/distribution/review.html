@@ -1,31 +1,27 @@
 {% extends "admin/staff_page.html" %}
-{% block mf_nav %}{% include "admin/distribution/_nav.html" %}{% endblock %}
-{% block mf_body %}
+{% load i18n staff_ui %}
+{% block page_nav %}{% include "admin/distribution/_nav.html" %}{% endblock %}
+{% block page_body %}
 {% if rows %}
-<div class="mf-ui-grid mf-ui-grid--wide">
-  {% for row in rows %}{% with job=row.job %}
-  <article class="mf-ui-card" aria-labelledby="review-{{ job.pk }}">
-    <h2 class="mf-ui-card__title" id="review-{{ job.pk }}">{{ job.title }}</h2>
-    <p class="mf-ui-help">{{ job.channel.name }} · {{ job.content_kind }} · planned {{ row.time|date:"Y-m-d H:i" }}{% if job.hook %} · style: {{ job.hook }}{% endif %}</p>
-    <form method="post" action="{% url 'admin:distribution_channel_job_decide' job.pk %}" class="mf-ui-form">{% csrf_token %}
-      <div class="mf-ui-field">
-        <label for="text-{{ job.pk }}">Post text (edit before it is sent)</label>
-        <textarea id="text-{{ job.pk }}" name="text" rows="6">{{ job.text }}</textarea>
-        <span class="mf-ui-help">Limit {{ row.limit }} characters. The tracked link must stay in the text.</span>
-      </div>
-      <div class="mf-ui-field">
-        <label for="note-{{ job.pk }}">Reason (only used when rejecting)</label>
-        <input type="text" id="note-{{ job.pk }}" name="note" maxlength="300">
-      </div>
-      <div class="mf-ui-row">
-        <button type="submit" name="decision" value="approve" class="mf-ui-btn mf-ui-btn--primary">Approve</button>
-        <button type="submit" name="decision" value="reject" class="mf-ui-btn mf-ui-btn--danger">Reject</button>
-      </div>
-    </form>
-  </article>
-  {% endwith %}{% endfor %}
-</div>
+  {% staff_grid wide=True %}
+    {% for row in rows %}{% with job=row.job %}
+      {% with review_key=job.pk|stringformat:"s" %}
+      {% staff_card title=job.title ident="review-"|add:review_key cell=True %}
+        <p class="small text-body-secondary mb-0">{{ job.channel.name }} · {{ job.content_kind }} · {% translate "planned" %} {{ row.time|date:"Y-m-d H:i" }}{% if job.hook %} · {% translate "style:" %} {{ job.hook }}{% endif %}</p>
+        <form method="post" action="{% url 'admin:distribution_channel_job_decide' job.pk %}" class="d-flex flex-column gap-3">{% csrf_token %}
+          {% blocktranslate with limit=row.limit asvar text_help %}Limit {{ limit }} characters. The tracked link must stay in the text.{% endblocktranslate %}
+          {% staff_textarea ident="text-"|add:review_key name="text" label=_("Post text (edit before it is sent)") value=job.text rows=6 help_text=text_help %}
+          {% staff_input ident="note-"|add:review_key name="note" label=_("Reason (only used when rejecting)") maxlength=300 %}
+          {% staff_row %}
+            {% staff_button _("Approve") name="decision" value="approve" tone="primary" %}
+            {% staff_button _("Reject") name="decision" value="reject" tone="danger" %}
+          {% endstaff_row %}
+        </form>
+      {% endstaff_card %}
+      {% endwith %}
+    {% endwith %}{% endfor %}
+  {% endstaff_grid %}
 {% else %}
-<p class="mf-ui-empty">Nothing is waiting for approval. Set a channel to “Staff approval required” to review its posts here first.</p>
+  {% staff_empty title=_("Nothing is waiting for approval") %}{% translate "Set a channel to “Staff approval required” to review its posts here first." %}{% endstaff_empty %}
 {% endif %}
 {% endblock %}

@@ -21,10 +21,16 @@
       <dl class="eco-kv mb-0">
         <dt>Download quota</dt><dd>{{ package.quota_text }}</dd>
         {% if package.extra_text %}<dt>Extra</dt><dd>{{ package.extra_text }}</dd>{% endif %}
+        {% if package.fair_text %}<dt>Fair use limits</dt><dd>{{ package.fair_text }}</dd>{% endif %}
+        <dt>Simultaneous downloads</dt><dd>{{ package.concurrency_text }}</dd>
+        <dt>Wait between files</dt><dd>{{ package.cooldown_text }}</dd>
         <dt>Item types</dt><dd>{{ package.types_text|capfirst }}{% if package.paid_discount_percent %} · {{ package.paid_discount_percent }}% off paid files{% endif %}</dd>
+        <dt>Featured blog articles</dt><dd>{{ package.blog_text }}</dd>
         <dt>Devices</dt><dd>{{ package.devices_text|capfirst }}</dd>
         <dt>Duration</dt><dd>{{ package.duration_text }}</dd>
         {% if package.perk_labels %}<dt>Perks</dt><dd>{{ package.perk_labels|join:", " }}</dd>{% endif %}
+        <dt>Ads</dt><dd>{{ package.ads_text }}</dd>
+        {% if package.unlock_offers_free or package.unlock_offers_featured %}<dt>Ad unlocks</dt><dd>{{ package.unlock_text }}</dd>{% endif %}
       </dl>
     </section>
 

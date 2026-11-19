@@ -1,0 +1,5 @@
+<div class="console-staff-field">
+  <label class="form-label{% if hide_label %} visually-hidden{% endif %}" for="{{ ident }}">{{ label }}</label>
+  <input class="form-control" type="{{ input_type }}" id="{{ ident }}" name="{{ name }}" value="{{ value }}"{% if placeholder %} placeholder="{{ placeholder }}"{% endif %}{% if maxlength %} maxlength="{{ maxlength }}"{% endif %}{% if required %} required{% endif %}{% if list_id %} list="{{ list_id }}"{% endif %}{% if help_text %} aria-describedby="{{ ident }}-help"{% endif %}>
+  {% if help_text %}<div class="form-text" id="{{ ident }}-help">{{ help_text }}</div>{% endif %}
+</div>

@@ -1,0 +1,28 @@
+{% comment %}
+  One fieldset of the change form (also used by stacked inline rows).
+  Params: fieldset, heading_level, prefix, heading_id (heading id parts; NOT Django's id_prefix, which would shadow the page's dialog id prefix that
+  field ids/aria-describedby use); inline (rows of a
+  stacked inline render a bare grid without the card). Fieldset classes are not echoed: "collapse" makes the fieldset a disclosure,
+  "tab" is handled by the form layout. Fieldsets that hold validation errors always start open.
+{% endcomment %}{% load i18n console_admin %}{% console_fieldset_errors fieldset as fieldset_errors %}
+{% if inline %}
+<div class="c-form-grid">
+{% for line in fieldset %}{% for field in line %}{% include "console/crud/_field.html" with field=field line_size=line.fields|length %}{% endfor %}{% endfor %}
+</div>
+{% elif fieldset.is_collapsible %}
+<details class="c-fieldset"{% if fieldset_errors %} open{% endif %}>
+<summary class="c-fieldset__legend">{{ fieldset.name|default:_("More options") }}</summary>
+{% if fieldset.description %}<div class="c-fieldset__desc">{{ fieldset.description|safe }}</div>{% endif %}
+<div class="c-form-grid">
+{% for line in fieldset %}{% for field in line %}{% include "console/crud/_field.html" with field=field line_size=line.fields|length %}{% endfor %}{% endfor %}
+</div>
+</details>
+{% else %}
+<fieldset class="c-fieldset"{% if fieldset.name %} aria-labelledby="{{ prefix }}-{{ heading_id }}-heading"{% endif %}>
+{% if fieldset.name %}<h{{ heading_level|default:2 }} class="c-fieldset__legend" id="{{ prefix }}-{{ heading_id }}-heading">{{ fieldset.name }}</h{{ heading_level|default:2 }}>{% endif %}
+{% if fieldset.description %}<div class="c-fieldset__desc">{{ fieldset.description|safe }}</div>{% endif %}
+<div class="c-form-grid">
+{% for line in fieldset %}{% for field in line %}{% include "console/crud/_field.html" with field=field line_size=line.fields|length %}{% endfor %}{% endfor %}
+</div>
+</fieldset>
+{% endif %}

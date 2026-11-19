@@ -43,8 +43,8 @@ pytestmark = pytest.mark.django_db
 User = get_user_model()
 
 
-@pytest.fixture
-def catalog():
+@pytest.fixture(name="catalog")
+def build_catalog():
     brand = Brand.objects.create(name="Zephyrix", slug="zephyrix")
     chipset = Chipset.objects.create(
         vendor="Quantum", family="Qx", name="Qx 900", slug="quantum-qx-900"
@@ -100,7 +100,8 @@ def titles(hits: list[SearchHit]) -> list[str]:
     return [hit.title for hit in hits]
 
 
-def test_firmware_providers_return_every_catalog_kind(catalog):
+@pytest.mark.usefixtures("catalog")
+def test_firmware_providers_return_every_catalog_kind():
     hits = search("zephyr", limit=50)
     assert {"brand", "model", "variant", "tool", "firmware"} <= kinds_of(hits)
     chipset_hits = search("qx 900", limit=20)
@@ -113,7 +114,8 @@ def test_firmware_providers_return_every_catalog_kind(catalog):
     assert by_kind["firmware"].url.startswith("/firmwares/file/")
 
 
-def test_only_public_approved_content_is_returned(catalog):
+@pytest.mark.usefixtures("catalog")
+def test_only_public_approved_content_is_returned():
     hits = search("zephyr", limit=50)
     assert "zephyr-approved.zip" in titles(hits)
     assert "zephyr-pending.zip" not in titles(hits)
@@ -135,7 +137,8 @@ def test_model_and_variant_pickers_are_narrowed_by_filters(catalog):
     assert titles(variants) == ["Global Edition"]
 
 
-def test_blog_tag_and_page_providers_respect_visibility(catalog):
+@pytest.mark.usefixtures("catalog")
+def test_blog_tag_and_page_providers_respect_visibility():
     author = User.objects.create_user(username="writer", email="w@example.com")
     category = Category.objects.create(name="Flashing Guides")
     tag = Tag.objects.create(name="Bootloader", is_curated=True, is_active=True)
@@ -187,7 +190,8 @@ def test_blog_tag_and_page_providers_respect_visibility(catalog):
     assert "Zephyr staff notes" in titles(search("zephyr", limit=50, user=staff))
 
 
-def test_staff_only_kinds_are_hidden_from_everyone_else(catalog):
+@pytest.mark.usefixtures("catalog")
+def test_staff_only_kinds_are_hidden_from_everyone_else():
     User.objects.create_user(username="zoe-account", email="zoe@example.com")
     staff = User.objects.create_user(
         username="zed-admin", email="zed@example.com", is_staff=True
@@ -221,7 +225,8 @@ def test_countries_and_calling_codes_are_pick_only_and_typed_ahead():
     assert len(browse) == 5
 
 
-def test_ranking_prefers_exact_then_prefix_then_substring(catalog):
+@pytest.mark.usefixtures("catalog")
+def test_ranking_prefers_exact_then_prefix_then_substring():
     Brand.objects.create(name="Atlas", slug="atlas")
     Brand.objects.create(name="Atlas Mobile", slug="atlas-mobile")
     Brand.objects.create(name="Grand Atlas", slug="grand-atlas")
@@ -229,7 +234,8 @@ def test_ranking_prefers_exact_then_prefix_then_substring(catalog):
     assert ranked == ["Atlas", "Atlas Mobile", "Grand Atlas"]
 
 
-def test_empty_and_short_queries_do_not_hit_the_catalog(catalog):
+@pytest.mark.usefixtures("catalog")
+def test_empty_and_short_queries_do_not_hit_the_catalog():
     assert search("") == []
     assert search("   ") == []
     # Catalog pickers (brand/model/variant) answer from one character; the rest want two.
@@ -240,7 +246,8 @@ def test_empty_and_short_queries_do_not_hit_the_catalog(catalog):
     assert "Zephyrix" in titles(search("", kinds=["brand"]))
 
 
-def test_every_word_must_match(catalog):
+@pytest.mark.usefixtures("catalog")
+def test_every_word_must_match():
     assert search("zephyr nonsense", kinds=["model"]) == []
     assert titles(search("zephyr one", kinds=["model"])) == ["Zephyr One"]
 
@@ -268,7 +275,8 @@ def test_registry_rejects_conflicting_kinds_and_accepts_custom_providers():
         unregister("unit_test_kind")
 
 
-def test_failing_provider_does_not_break_the_search(catalog):
+@pytest.mark.usefixtures("catalog")
+def test_failing_provider_does_not_break_the_search():
     from django.db import DatabaseError
 
     class Broken(SearchProvider):
@@ -286,7 +294,8 @@ def test_failing_provider_does_not_break_the_search(catalog):
         unregister("unit_broken")
 
 
-def test_suggest_endpoint_renders_an_accessible_listbox(catalog, client: Client):
+@pytest.mark.usefixtures("catalog")
+def test_suggest_endpoint_renders_an_accessible_listbox(client: Client):
     response = client.get(
         reverse("search:suggest"), {"q": "zephyr", "id": "site-search"}
     )
@@ -311,7 +320,8 @@ def test_suggest_pick_mode_exposes_values_and_data_attributes(client: Client):
     assert "<a " not in html  # no navigation links in pick mode
 
 
-def test_suggest_escapes_queries_and_titles(catalog, client: Client):
+@pytest.mark.usefixtures("catalog")
+def test_suggest_escapes_queries_and_titles(client: Client):
     Brand.objects.create(name='<script>alert("x")</script>', slug="xss-brand")
     payload = "<script>alert(1)</script>"
     empty = client.get(reverse("search:suggest"), {"q": payload}).content.decode()
@@ -324,7 +334,8 @@ def test_suggest_escapes_queries_and_titles(catalog, client: Client):
     assert payload not in page
 
 
-def test_suggest_sanitises_prefix_kinds_and_limit(catalog, client: Client):
+@pytest.mark.usefixtures("catalog")
+def test_suggest_sanitises_prefix_kinds_and_limit(client: Client):
     response = client.get(
         reverse("search:suggest"),
         {"q": "zephyr", "id": '"><x', "kinds": "BRAND, bad kind!", "limit": "nope"},
@@ -335,7 +346,8 @@ def test_suggest_sanitises_prefix_kinds_and_limit(catalog, client: Client):
     assert "<x" not in html
 
 
-def test_results_page_groups_by_kind_and_filters(catalog, client: Client):
+@pytest.mark.usefixtures("catalog")
+def test_results_page_groups_by_kind_and_filters(client: Client):
     response = client.get(reverse("search:results"), {"q": "zephyr"})
     html = response.content.decode()
     assert response.status_code == 200
@@ -363,7 +375,8 @@ def test_results_page_hides_pick_only_kinds(client: Client):
     )
 
 
-def test_empty_results_offer_request_ctas_with_the_typed_query(catalog, client: Client):
+@pytest.mark.usefixtures("catalog")
+def test_empty_results_offer_request_ctas_with_the_typed_query(client: Client):
     page = client.get(reverse("search:results"), {"q": "Nonexistium"}).content.decode()
     assert "No results" in page
     for kind in ("brand", "model", "variant", "chipset", "firmware"):
@@ -374,7 +387,8 @@ def test_empty_results_offer_request_ctas_with_the_typed_query(catalog, client: 
     assert "Nonexistium" in page
 
 
-def test_signed_in_users_get_direct_prefilled_request_links(catalog, client: Client):
+@pytest.mark.usefixtures("catalog")
+def test_signed_in_users_get_direct_prefilled_request_links(client: Client):
     user = User.objects.create_user(username="asker", email="asker@example.com")
     client.force_login(user)
     page = client.get(reverse("search:results"), {"q": "Nonexistium"}).content.decode()
@@ -383,7 +397,8 @@ def test_signed_in_users_get_direct_prefilled_request_links(catalog, client: Cli
     assert f"{reverse('firmwares:request_brand')}?name=Nonexistium" in page
 
 
-def test_suggest_empty_state_lists_request_ctas(catalog, client: Client):
+@pytest.mark.usefixtures("catalog")
+def test_suggest_empty_state_lists_request_ctas(client: Client):
     html = client.get(
         reverse("search:suggest"), {"q": "Nonexistium", "id": "site-search"}
     ).content.decode()
@@ -396,7 +411,8 @@ def test_suggest_empty_state_lists_request_ctas(catalog, client: Client):
     assert "#request-missing" in footer
 
 
-def test_legacy_universal_search_url_still_resolves(catalog, client: Client):
+@pytest.mark.usefixtures("catalog")
+def test_legacy_universal_search_url_still_resolves(client: Client):
     response = client.get(reverse("firmwares:universal_search"), {"q": "zephyr"})
     assert response.status_code == 200
 

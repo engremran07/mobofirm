@@ -1,0 +1,25 @@
+{% comment %}
+  dialog - the content of #console-dialog (Bootstrap modal markup, swapped in by HTMX, opened by the dialog behaviour).
+  Return it from a view for HX-Request GETs; without JavaScript the same markup is a plain page (cancel_url + normal POST).
+  Context: title (required), message (lead sentence), icon (Lucide), danger (red icon/edge + danger submit),
+  size (sm|lg|xl|fullscreen), static (no Esc/backdrop close), action (POST URL: wraps the body in a CSRF-protected form),
+  submit_label (default "Confirm"), submit_variant (primary|danger|...; default primary, danger when danger),
+  cancel_label (default "Cancel"), cancel_url (no-JavaScript way back), attrs (extra <form> attributes).
+  content = the body. Slot "footer" replaces the Cancel/Confirm buttons.
+  GET never mutates; the POST needs the CSRF token ({% csrf_token %} is emitted here) and a server-side permission check.
+{% endcomment %}{% load i18n console_ui %}<div class="modal-dialog modal-dialog-centered modal-dialog-scrollable{% if size %} modal-{{ size }}{% endif %}" data-console-dialog-content{% if size %} data-console-dialog-size="{{ size }}"{% endif %}{% if static %} data-console-dialog-static{% endif %}>
+{% if action %}<form class="modal-content{% if danger %} c-dialog--danger{% endif %}" method="post" action="{{ action }}" novalidate{{ attrs|console_attrs }}>{% csrf_token %}{% else %}<div class="modal-content{% if danger %} c-dialog--danger{% endif %}">{% endif %}
+<div class="modal-header">
+{% if icon or danger %}<span class="c-dialog__icon">{% if danger %}{% console_icon icon|default:"triangle-alert" %}{% else %}{% console_icon icon %}{% endif %}</span>{% endif %}
+<h2 class="modal-title">{{ title }}</h2>
+<button type="button" class="btn-close" data-ui-dismiss="modal" aria-label="{% translate 'Close' %}"></button>
+</div>
+<div class="modal-body">{% if message %}<p>{{ message }}</p>{% endif %}{{ content }}</div>
+<div class="modal-footer">
+{% if slots.footer %}{{ slots.footer }}{% else %}
+{% if cancel_url %}<a class="btn btn-ghost" href="{{ cancel_url }}" data-console-dialog-close>{{ cancel_label|default:_("Cancel") }}</a>{% else %}<button type="button" class="btn btn-ghost" data-ui-dismiss="modal">{{ cancel_label|default:_("Cancel") }}</button>{% endif %}
+{% if action %}<button type="submit" class="btn btn-{% if submit_variant %}{{ submit_variant }}{% elif danger %}danger{% else %}primary{% endif %}">{{ submit_label|default:_("Confirm") }}</button>{% endif %}
+{% endif %}
+</div>
+{% if action %}</form>{% else %}</div>{% endif %}
+</div>

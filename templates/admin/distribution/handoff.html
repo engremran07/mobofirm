@@ -1,0 +1,27 @@
+{% extends "admin/staff_page.html" %}
+{% load i18n staff_ui %}
+{% block page_nav %}{% include "admin/distribution/_nav.html" %}{% endblock %}
+{% block page_body %}
+{% staff_notice %}{% translate "These platforms have no posting API (for example WhatsApp Channels), so nothing is sent automatically. Paste the text where it belongs, then press “Mark as posted”. Until then the post is never counted as sent." %}{% endstaff_notice %}
+{% if rows %}
+  {% for row in rows %}{% with job=row.job %}
+  <article class="c-handoff" aria-labelledby="handoff-{{ job.pk }}">
+    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+      <h2 class="h6 mb-0" id="handoff-{{ job.pk }}">{{ job.channel.name }} · {{ job.title }}</h2>
+      <span class="c-badge c-badge--warning">{% translate "Ready to post by hand" %}</span>
+    </div>
+    <label class="visually-hidden" for="handoff-text-{{ job.pk }}">{% translate "Copy-ready post" %}</label>
+    <textarea class="c-handoff__text" id="handoff-text-{{ job.pk }}" readonly rows="5">{{ job.text }}</textarea>
+    {% staff_row %}
+      {% if row.link %}{% blocktranslate with name=job.channel.name asvar open_label %}Open {{ name }}{% endblocktranslate %}{% staff_button open_label href=row.link target="_blank" %}{% endif %}
+      {% if can_change %}
+        <form method="post" action="{% url 'admin:distribution_channel_job_posted' job.pk %}">{% csrf_token %}{% staff_button _("Mark as posted") tone="primary" %}</form>
+        <form method="post" action="{% url 'admin:distribution_channel_job_cancel' job.pk %}">{% csrf_token %}<input type="hidden" name="next" value="{% url 'admin:distribution_channel_handoff' %}">{% staff_button _("Cancel") tone="danger" %}</form>
+      {% endif %}
+    {% endstaff_row %}
+  </article>
+  {% endwith %}{% endfor %}
+{% else %}
+  {% staff_empty title=_("Nothing to post by hand") %}{% translate "Posts for assisted platforms appear here when new content is ready." %}{% endstaff_empty %}
+{% endif %}
+{% endblock %}

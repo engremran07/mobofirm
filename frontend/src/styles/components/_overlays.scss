@@ -21,7 +21,7 @@
       linear-gradient(color-mix(in srgb, var(--mf-text) 5%, transparent) 1px, transparent 1px),
       linear-gradient(90deg, color-mix(in srgb, var(--mf-text) 5%, transparent) 1px, transparent 1px);
     background-size: 2.5rem 2.5rem;
-    mask-image: radial-gradient(ellipse at 70% 0%, #000, transparent 70%);
+    mask-image: radial-gradient(ellipse at 70% 0%, var(--mf-black), transparent 70%);
   }
 }
 
@@ -65,13 +65,6 @@
   flex-wrap: wrap;
   gap: var(--mf-space-3);
   margin-top: var(--mf-space-5);
-}
-
-.hero-ui__stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
-  gap: var(--mf-space-3);
-  margin-top: var(--mf-space-6);
 }
 
 // ---- Command palette (templates/components/command_palette.html) ----

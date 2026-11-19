@@ -12,6 +12,7 @@ staff mark as paid after receiving payment outside the platform.
 from __future__ import annotations
 
 from decimal import Decimal
+from importlib import import_module
 from typing import ClassVar
 
 from django.conf import settings
@@ -228,11 +229,60 @@ class PackageTier(models.Model):
     )
 
     # --- Perks ---
-    ad_free = models.BooleanField(default=False, help_text="Skip ad gates")
+    ad_free = models.BooleanField(
+        default=False,
+        help_text=(
+            "Skip the download-gate ads and never offer rewarded ads to unlock files. "
+            "The highest tier is fully ad-free."
+        ),
+    )
     priority_queue = models.BooleanField(default=False)
     resume_support = models.BooleanField(default=True)
-    direct_links = models.BooleanField(default=False)
+    direct_links = models.BooleanField(
+        default=False,
+        help_text="Plain download links: no URL shortener on this package's downloads.",
+    )
     early_access = models.BooleanField(default=False)
+
+    # --- Ads & unlocks ---
+    unlock_by_ads_free = models.BooleanField(
+        default=False,
+        verbose_name="Unlock free files by watching ads",
+        help_text=(
+            "When the allowance is used up, offer to unlock one free file by watching "
+            "rewarded ads. Ignored when the package is ad-free."
+        ),
+    )
+    unlock_ads_free = models.PositiveSmallIntegerField(
+        default=3,
+        validators=[MinValueValidator(1), MaxValueValidator(20)],
+        verbose_name="Ads per free file",
+        help_text="Rewarded ads to watch to unlock one free file (at least 1; 3 is typical).",
+    )
+    unlock_by_ads_featured = models.BooleanField(
+        default=False,
+        verbose_name="Unlock featured files by watching ads",
+        help_text=(
+            "Offer to unlock one featured file by watching rewarded ads. Only for "
+            "packages that do not already include featured files."
+        ),
+    )
+    unlock_ads_featured = models.PositiveSmallIntegerField(
+        default=5,
+        validators=[MinValueValidator(1), MaxValueValidator(50)],
+        verbose_name="Ads per featured file",
+        help_text="Rewarded ads to watch to unlock one featured file.",
+    )
+    unlock_cooldown_seconds = models.PositiveIntegerField(
+        default=30,
+        verbose_name="Wait between ads (seconds)",
+        help_text="Pause between two ads of the same unlock; 0 = none.",
+    )
+    unlock_daily_cap = models.PositiveSmallIntegerField(
+        default=5,
+        verbose_name="Unlocked files per day",
+        help_text="Most files one account can unlock by ads in 24 hours; 0 = no cap.",
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -371,7 +421,17 @@ class PackageTier(models.Model):
             errors["featured_blog_limit"] = (
                 "A featured-article limit needs “Featured blog articles” switched on."
             )
-        if self.credit_price_override is not None:
+        self._clean_bandwidth_extras(errors)
+        self._clean_ad_unlocks(errors)
+        if self.slot_reset_credits is not None and not self.limit_devices:
+            errors["slot_reset_credits"] = (
+                "A device slot reset price needs the device cap switched on."
+            )
+        if self.credit_price_override == 0:
+            errors["credit_price_override"] = (
+                "Use a number of credits above 0, or leave it empty to use the rate."
+            )
+        elif self.credit_price_override is not None:
             if not self.allow_credits:
                 errors["credit_price_override"] = (
                     "A credits price needs “Payable with credits” switched on."
@@ -399,7 +459,84 @@ class PackageTier(models.Model):
         if errors:
             raise ValidationError(errors)
 
+    def _clean_bandwidth_extras(self, errors: dict[str, str]) -> None:
+        """Extra daily allowances only make sense on top of a window allowance."""
+        if self.is_metered:
+            return
+        if self.extra_daily_files:
+            errors["extra_daily_files"] = (
+                "An extra daily allowance needs a file or size limit to add to."
+            )
+        if self.extra_daily_size:
+            errors["extra_daily_size"] = (
+                "An extra daily allowance needs a file or size limit to add to."
+            )
+
+    def _clean_ad_unlocks(self, errors: dict[str, str]) -> None:
+        """Ad unlocks must be consistent with the item types and the ad-free perk."""
+        if self.unlock_by_ads_free:
+            if self.ad_free:
+                errors["unlock_by_ads_free"] = (
+                    "An ad-free package never offers rewarded ads: turn one off."
+                )
+            elif not self.applies_to_free:
+                errors["unlock_by_ads_free"] = (
+                    "Unlocking free files needs the free item type."
+                )
+        if self.unlock_by_ads_featured:
+            if self.applies_to_featured:
+                errors["unlock_by_ads_featured"] = (
+                    "This package already includes featured files: nothing to unlock."
+                )
+            elif self.ad_free:
+                errors["unlock_by_ads_featured"] = (
+                    "An ad-free package never offers rewarded ads: turn one off."
+                )
+
     # --- Human summary: the one description shown in admin and on the site ---
+
+    @property
+    def unlock_offers_free(self) -> bool:
+        """Whether over-limit accounts on this package may unlock free files by ads."""
+        return self.unlock_by_ads_free and not self.ad_free and self.applies_to_free
+
+    @property
+    def unlock_offers_featured(self) -> bool:
+        """Whether this package's accounts may unlock featured files by ads."""
+        return (
+            self.unlock_by_ads_featured
+            and not self.ad_free
+            and not self.applies_to_featured
+        )
+
+    @property
+    def unlock_text(self) -> str:
+        """Plain-language description of the ad unlocks, e.g. for the pricing rows."""
+        if self.ad_free:
+            return "No ads, nothing to watch"
+        parts = []
+        if self.unlock_offers_free:
+            parts.append(
+                f"Over your limit: watch {_plural(self.unlock_ads_free, 'ad')} to unlock a free file"
+            )
+        if self.unlock_offers_featured:
+            parts.append(
+                f"watch {_plural(self.unlock_ads_featured, 'ad')} to unlock a featured file"
+            )
+        if not parts:
+            return "No ad unlocks"
+        text = "; ".join(parts)
+        if self.unlock_daily_cap:
+            text += f" (up to {_plural(self.unlock_daily_cap, 'file')} a day)"
+        return text
+
+    @property
+    def ads_text(self) -> str:
+        """How much advertising this package shows, in one phrase."""
+        links = "direct links" if self.direct_links else "link shortener"
+        if self.ad_free:
+            return "No ads, direct links" if self.direct_links else "No ads"
+        return f"Download-gate ads, {links}"
 
     @property
     def currency(self) -> str:
@@ -434,6 +571,70 @@ class PackageTier(models.Model):
         if self.extra_daily_size:
             parts.append(f"{self.extra_daily_size} {self.size_unit}")
         return f"+{' / '.join(parts)} extra per day" if parts else ""
+
+    @staticmethod
+    def _cap_text(files: int, size: int, unit: str) -> str:
+        parts = []
+        if files:
+            parts.append(_plural(files, "file"))
+        if size:
+            parts.append(f"{size} {unit}")
+        return " / ".join(parts)
+
+    @property
+    def fair_text(self) -> str:
+        """The hard fair-usage caps, e.g. ``30 files per day, 600 files per month``."""
+        daily = self._cap_text(self.fair_daily_files, self.fair_daily_size, self.size_unit)
+        monthly = self._cap_text(
+            self.fair_monthly_files, self.fair_monthly_size, self.size_unit
+        )
+        parts = [
+            f"{text} {period}"
+            for text, period in ((daily, "per day"), (monthly, "per month"))
+            if text
+        ]
+        return ", ".join(parts)
+
+    @property
+    def concurrency_text(self) -> str:
+        """How many downloads may run at once."""
+        if not self.max_concurrent_downloads:
+            return "No limit"
+        return _plural(self.max_concurrent_downloads, "download") + " at a time"
+
+    @property
+    def cooldown_text(self) -> str:
+        """The wait between two new files."""
+        if not self.cooldown_seconds:
+            return "None"
+        return f"{_plural(self.cooldown_seconds, 'second')} between new files"
+
+    @property
+    def paid_files_text(self) -> str:
+        """Paid files: not included, included, or included with a discount."""
+        if not self.applies_to_paid:
+            return "Not included"
+        if self.paid_discount_percent:
+            return f"{self.paid_discount_percent}% off"
+        return "Included"
+
+    @property
+    def slot_reset_text(self) -> str:
+        """What freeing the registered browsers costs holders of this package."""
+        if not self.limit_devices:
+            return "Not needed"
+        if self.slot_reset_credits is None:
+            return "Standard price"
+        return f"{self.slot_reset_credits} credits"
+
+    @property
+    def blog_text(self) -> str:
+        """Featured blog articles: none, a number per window, or unlimited."""
+        if not self.applies_to_featured_blog:
+            return "Not included"
+        if self.featured_blog_limit:
+            return f"{_plural(self.featured_blog_limit, 'article')} {self.window_phrase}"
+        return "Unlimited"
 
     @property
     def types_text(self) -> str:
@@ -878,6 +1079,20 @@ class Order(models.Model):
         verbose_name = "Order"
         verbose_name_plural = "Orders"
         ordering: ClassVar[list[str]] = ["-created_at"]
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.CheckConstraint(
+                condition=Q(total__gte=0), name="shop_order_total_not_negative"
+            ),
+            models.UniqueConstraint(
+                fields=["payment_reference"],
+                condition=Q(payment_method="credits"),
+                name="shop_one_credit_order_per_key",
+                violation_error_message="This credits payment was already recorded.",
+            ),
+        ]
+        indexes: ClassVar[list[models.Index]] = [
+            models.Index(fields=["user", "status"], name="shop_order_user_status_idx"),
+        ]
 
     def __str__(self) -> str:
         return f"Order #{self.pk} [{self.status}] {self.total} {self.currency}"
@@ -1071,11 +1286,11 @@ class ShopSettings(SingletonModel):
     )
 
     class Meta:
-        verbose_name = "Shop settings"
-        verbose_name_plural = "Shop settings"
+        verbose_name = "Pricing settings"
+        verbose_name_plural = "Pricing settings"
 
     def __str__(self) -> str:
-        return "Shop settings"
+        return "Pricing settings"
 
 
 class FeaturedBlogPurchase(models.Model):
@@ -1142,3 +1357,7 @@ class FeaturedBlogUnlock(models.Model):
 
     def __str__(self) -> str:
         return f"{self.user} · post {self.post_id}"
+
+
+# Ad unlock tickets live in their own module; importing it registers the models.
+import_module(".unlock_models", __package__)

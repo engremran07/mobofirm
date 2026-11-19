@@ -32,7 +32,7 @@ class MarketplaceAdminActionTests(TestCase):
         self.listing = Listing.objects.create(
             seller=self.seller, title="Pending item", price=Decimal("5.00")
         )
-        self.client = Client()
+        self.client = Client(headers={"HX-Request": "true"})
         self.client.force_login(self.staff)
 
     def verification_url(self, name: str) -> str:

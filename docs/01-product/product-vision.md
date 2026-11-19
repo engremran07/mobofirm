@@ -1,6 +1,6 @@
 # Product Vision (Draft)
 
-**Approval status: draft.** This document describes the apparent product direction from the current code, not an authorized commitment for the full product scope. The frontend foundation is separately owner-approved as recorded in `../05-frontend/design-system.md`.
+**Approval status: draft.** This document describes the apparent product direction from the current code, not an authorized commitment for the full product scope. The frontend foundation is separately owner-approved as recorded in `../05-frontend/design-system.md` (public site) and `../05-frontend/admin-console.md` (staff console).
 
 ## Intent
 

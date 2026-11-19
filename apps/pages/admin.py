@@ -1,8 +1,8 @@
-"""CMS page administration (Unfold): publishing workflow and draft preview."""
+"""CMS page administration: publishing workflow and draft preview."""
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from django.contrib import messages
@@ -14,11 +14,6 @@ from django.http import Http404, HttpRequest, HttpResponse
 from django.template.response import TemplateResponse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from unfold.contrib.filters.admin import (
-    ChoicesDropdownFilter,
-    RangeDateTimeFilter,
-)
-from unfold.forms import BaseDialogForm
 
 from apps.core.admin_base import (
     ModelAdmin,
@@ -29,6 +24,8 @@ from apps.core.admin_base import (
     htmx_redirect,
     return_url,
 )
+from apps.core.admin_filters import ChoicesDropdownFilter, RangeDateTimeFilter
+from apps.core.admin_forms import BaseDialogForm
 from apps.core.editor.admin import RichTextAdminMixin
 
 from .models import Page
@@ -73,7 +70,7 @@ class PageAdmin(RichTextAdminMixin, ModelAdmin):
         ("updated_at", RangeDateTimeFilter),
     )
     search_fields = ("title", "slug", "seo_title")
-    prepopulated_fields: ClassVar[dict[str, tuple[str, ...]]] = {"slug": ("title",)}
+    prepopulated_fields: ClassVar[dict[str, Sequence[str]]] = {"slug": ("title",)}
     readonly_fields = ("created_by", "updated_by", "created_at", "updated_at")
     actions = ("publish_selected", "unpublish_selected")
     actions_row = ("publish_page", "unpublish_page")

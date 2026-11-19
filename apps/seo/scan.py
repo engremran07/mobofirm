@@ -30,6 +30,7 @@ from django.utils import timezone
 from . import audit
 from .audit import Finding
 from .contracts import ResolvedSEO
+from .imagefacts import local_image_width
 from .inventory import (
     describe,
     iter_static_routes,
@@ -39,12 +40,13 @@ from .inventory import (
 )
 from .models import CrawlRun, Issue, PageSnapshot, SEOSettings
 from .object_checks import Check, ContentFacts, content_facts
-from .policy import is_private_path
+from .policy import is_private_path, route_ref
 from .proposals import DESCRIPTION_FIELD, GENERIC_SOURCES, TITLE_FIELD, propose
 from .providers import get_provider
 from .resolver import override_for
 from .rules import (
     DESCRIPTION_MIN,
+    DISCOVER_IMAGE_MIN_WIDTH,
     SCAN_CODES,
     SLUG_MAX_LENGTH,
     TITLE_MAX,
@@ -376,6 +378,106 @@ def _metadata_findings(
     return found
 
 
+ARTICLE_TYPES = frozenset({"Article", "BlogPosting", "NewsArticle"})
+DISCOVER_ROBOTS = "index, follow, max-image-preview:large, max-snippet:-1"
+
+
+def _discover_findings(
+    resolved: ResolvedSEO, path: str, where: dict[str, str]
+) -> list[Finding]:
+    """Google Discover readiness of an indexable article (blog post)."""
+    if resolved.page_type != "blog_post":
+        return []
+    found: list[Finding] = []
+    if not resolved.image:
+        found.append(
+            _finding(
+                path,
+                where,
+                "discover_no_image",
+                WARNING,
+                "The article has no social/lead image.",
+                seo_field="social_image",
+                measured="no image",
+                expected=f"an image at least {DISCOVER_IMAGE_MIN_WIDTH}px wide",
+            )
+        )
+    else:
+        width = local_image_width(resolved.image)
+        if width is not None and width < DISCOVER_IMAGE_MIN_WIDTH:
+            found.append(
+                _finding(
+                    path,
+                    where,
+                    "discover_image_small",
+                    WARNING,
+                    f"The lead image is {width}px wide.",
+                    seo_field="social_image",
+                    measured=f"{width}px",
+                    expected=f"at least {DISCOVER_IMAGE_MIN_WIDTH}px",
+                )
+            )
+    if "max-image-preview:large" not in resolved.robots:
+        found.append(
+            _finding(
+                path,
+                where,
+                "discover_max_image_preview",
+                WARNING,
+                "The robots directive does not allow large image previews.",
+                seo_field="robots_directives",
+                measured=resolved.robots,
+                expected="max-image-preview:large",
+                suggestion={
+                    "field": "robots_directives",
+                    "value": DISCOVER_ROBOTS,
+                    "basis": "Google Discover guidance",
+                },
+            )
+        )
+    articles = [n for n in resolved.schema if str(n.get("@type", "")) in ARTICLE_TYPES]
+    if not articles:
+        found.append(
+            _finding(
+                path,
+                where,
+                "discover_article_schema",
+                WARNING,
+                "No Article, BlogPosting or NewsArticle JSON-LD is emitted.",
+                expected="Article structured data",
+            )
+        )
+    for node in articles[:1]:
+        absent = [
+            name for name in ("datePublished", "dateModified") if not node.get(name)
+        ]
+        if absent:
+            found.append(
+                _finding(
+                    path,
+                    where,
+                    "discover_dates",
+                    WARNING,
+                    f"The article JSON-LD lacks {', '.join(absent)}.",
+                    measured=", ".join(absent),
+                    expected="datePublished and dateModified",
+                )
+            )
+        author = node.get("author")
+        if not (isinstance(author, dict) and author.get("name")):
+            found.append(
+                _finding(
+                    path,
+                    where,
+                    "discover_author",
+                    WARNING,
+                    "The article JSON-LD has no author name.",
+                    expected="author with a name",
+                )
+            )
+    return found
+
+
 def _noindex_findings(
     resolved: ResolvedSEO, path: str, where: dict[str, str], in_raw_sitemap: bool
 ) -> list[Finding]:
@@ -446,11 +548,12 @@ def scan_target(
     path = target.path
     resolved = resolve_path(path)
     if resolved is None:
+        label, pk = route_ref(urlsplit(path).path)
         where = {
             "group": "site",
-            "object_label": "",
-            "object_pk": "",
-            "object_title": "",
+            "object_label": label,
+            "object_pk": pk,
+            "object_title": path,
         }
         state.scanned.add(path)
         if target.section.startswith("sitemap:"):
@@ -467,7 +570,7 @@ def scan_target(
         return None
     if resolved.page_type in SKIPPED_PAGE_TYPES:
         return None
-    where = describe(resolved)
+    where = describe(resolved, path)
     state.scanned.add(path)
     found: list[Finding] = []
     facts = ContentFacts()
@@ -479,6 +582,7 @@ def scan_target(
     if resolved.indexable:
         found.extend(_metadata_findings(resolved, path, where, row, site_name))
         found.extend(_schema_findings(resolved, path, where))
+        found.extend(_discover_findings(resolved, path, where))
         if where["group"] != "site":
             found.extend(_slug_findings(path, where))
     else:

@@ -1,0 +1,25 @@
+{% comment %}
+  Between-two-values filter (date, datetime or number) as a popover form in the filter bar. Context: spec (name_from, name_to, value_from,
+  value_to, input_type), choices[0] ("hidden": the other active query parameters, "query_string": clears this filter), title, uid, active, path.
+  A GET form: it works without JavaScript and refreshes the results over HTMX otherwise.
+{% endcomment %}{% load i18n console_ui %}
+<div class="c-fctl" id="{{ uid }}" data-ui-popover{% if active %} data-active{% endif %}>
+<button type="button" class="c-fctl__btn" data-ui-trigger aria-haspopup="dialog" aria-expanded="false" aria-controls="{{ uid }}-panel">
+<span class="c-fctl__title">{{ title }}</span>{% if active %}<span class="c-fctl__value">{% if spec.value_from %}{{ spec.value_from }}{% endif %}&ndash;{% if spec.value_to %}{{ spec.value_to }}{% endif %}</span>{% endif %}
+{% console_icon "chevron-down" "c-icon--xs c-fctl__caret" %}</button>
+<div class="c-fpanel c-fpanel--form" id="{{ uid }}-panel" data-ui-panel role="dialog" aria-label="{{ title }}" hidden>
+{% with all=choices.0 %}
+<form method="get" action="{{ path }}" {% include "console/crud/_hx_list.html" with url=path %}>
+{% for name, value in all.hidden %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
+<div class="c-filter__range">
+<label for="{{ uid }}-from">{% translate "From" %}<input class="form-control" id="{{ uid }}-from" type="{{ spec.input_type }}" name="{{ spec.name_from }}" value="{{ spec.value_from }}"{% if spec.input_type == "number" %} step="any"{% endif %}></label>
+<label for="{{ uid }}-to">{% translate "To" %}<input class="form-control" id="{{ uid }}-to" type="{{ spec.input_type }}" name="{{ spec.name_to }}" value="{{ spec.value_to }}"{% if spec.input_type == "number" %} step="any"{% endif %}></label>
+</div>
+<div class="c-fpanel__actions">
+<button type="submit" class="btn btn-primary btn-sm">{% translate "Apply" %}</button>
+{% if active %}<a class="btn btn-ghost btn-sm" href="{{ all.query_string }}" {% include "console/crud/_hx_list.html" with url=all.query_string %}>{% translate "Clear" %}</a>{% endif %}
+</div>
+</form>
+{% endwith %}
+</div>
+</div>

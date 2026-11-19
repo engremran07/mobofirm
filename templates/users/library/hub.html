@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}My contributions | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block content %}
+<div class="site-container py-4 py-lg-5">
+  {% include "components/breadcrumbs.html" with current="My contributions" %}
+  {% include "components/page_header.html" with eyebrow="My contributions" title="What you have shared" lead="Firmware and blog posts you contributed, where each one stands in review, the files served to you and your download quota." %}
+  {% include "users/library/_tabs.html" %}
+
+  <div class="row g-4">
+    <div class="col-12 col-lg-6">
+      <section class="surface-card p-3 p-md-4 h-100" aria-labelledby="hub-firmware-heading" data-contribution-card="firmware">
+        <h2 class="h5" id="hub-firmware-heading">Firmware contributions <span class="badge text-bg-light">{{ firmware_total }}</span></h2>
+        {% if firmware_chips %}
+          <p class="d-flex flex-wrap gap-2 mb-3">
+            {% for chip in firmware_chips %}
+              {% if chip.code == "approved" %}{% include "components/status_pill.html" with label=chip.text tone="success" %}
+              {% elif chip.code == "rejected" %}{% include "components/status_pill.html" with label=chip.text tone="danger" %}
+              {% else %}{% include "components/status_pill.html" with label=chip.text tone="warning" %}{% endif %}
+            {% endfor %}
+          </p>
+        {% else %}
+          <p class="muted">You have not contributed any firmware yet. Share a build for review and track it here.</p>
+        {% endif %}
+        <p class="mb-0 d-flex flex-wrap gap-2">
+          <a class="btn btn-sm btn-outline-secondary" href="{% url 'contributions:firmware' %}">View firmware contributions</a>
+          {% if firmware_contribute_url %}<a class="btn btn-sm btn-primary" href="{{ firmware_contribute_url }}">Contribute a firmware</a>{% endif %}
+        </p>
+      </section>
+    </div>
+    <div class="col-12 col-lg-6">
+      <section class="surface-card p-3 p-md-4 h-100" aria-labelledby="hub-blog-heading" data-contribution-card="blog">
+        <h2 class="h5" id="hub-blog-heading">Blog contributions <span class="badge text-bg-light">{{ blog_total }}</span></h2>
+        {% if blog_chips %}
+          <p class="d-flex flex-wrap gap-2 mb-3">
+            {% for chip in blog_chips %}
+              {% if chip.code == "published" or chip.code == "scheduled" %}{% include "components/status_pill.html" with label=chip.text tone="success" %}
+              {% elif chip.code == "returned" or chip.code == "archived" %}{% include "components/status_pill.html" with label=chip.text tone="danger" %}
+              {% else %}{% include "components/status_pill.html" with label=chip.text tone="warning" %}{% endif %}
+            {% endfor %}
+          </p>
+        {% else %}
+          <p class="muted">You have not contributed a blog post yet. A reviewer reads every post before it is published.</p>
+        {% endif %}
+        <p class="mb-0 d-flex flex-wrap gap-2">
+          <a class="btn btn-sm btn-outline-secondary" href="{% url 'contributions:blog' %}">View blog contributions</a>
+          {% if blog_contribute_url %}<a class="btn btn-sm btn-primary" href="{{ blog_contribute_url }}">Contribute a blog post</a>{% endif %}
+        </p>
+      </section>
+    </div>
+    <div class="col-12 col-lg-6">
+      <section class="surface-card p-3 p-md-4 h-100" aria-labelledby="hub-downloads-heading" data-contribution-card="downloads">
+        <h2 class="h5" id="hub-downloads-heading">Downloads</h2>
+        <p class="muted">{{ active_downloads }} file{{ active_downloads|pluralize }} ready to download again{% if history_downloads %}, {{ history_downloads }} in history{% endif %}.</p>
+        <p class="mb-0 d-flex flex-wrap gap-2">
+          <a class="btn btn-sm btn-outline-secondary" href="{% url 'contributions:downloads' %}">Open downloads</a>
+          {% if shop_available %}<a class="btn btn-sm btn-outline-secondary" href="{% url 'contributions:quota' %}">Download quota</a>{% endif %}
+        </p>
+      </section>
+    </div>
+    <div class="col-12 col-lg-6">
+      <section class="surface-card p-3 p-md-4 h-100" aria-labelledby="hub-rewards-heading" data-contribution-card="rewards">
+        <h2 class="h5" id="hub-rewards-heading">Contribution rewards</h2>
+        {% if reward_credits is None %}
+          <p class="muted mb-0">Credit rewards are not enabled on this site.</p>
+        {% else %}
+          <p class="mb-1"><strong data-reward-credits>{{ reward_credits }}</strong> credit{{ reward_credits|pluralize }} earned from approved contributions.</p>
+          <p class="small muted mb-0">Credits are paid once per approved firmware or published post, never for your own approval.</p>
+        {% endif %}
+      </section>
+    </div>
+  </div>
+</div>
+{% endblock %}

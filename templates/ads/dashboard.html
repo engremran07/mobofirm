@@ -1,178 +1,183 @@
 {% extends "admin/staff_page.html" %}
-{% block mf_actions %}
-  {% if perms.ads.change_adplacement %}<a class="mf-ui-btn mf-ui-btn--primary" href="{% url 'ads:placement_manager' %}">Place ads on templates</a>{% endif %}
-  <a class="mf-ui-btn" href="{% url 'admin:index' %}">Open administration</a>
+{% load i18n staff_ui %}
+{% block page_actions %}
+  {% url 'ads:placement_manager' as placements_url %}{% url 'admin:index' as admin_url %}
+  {% if perms.ads.change_adplacement %}{% staff_button _("Place ads on templates") href=placements_url tone="primary" %}{% endif %}
+  {% staff_button _("Open administration") href=admin_url %}
 {% endblock %}
-{% block mf_nav %}{% include "ads/_nav.html" %}{% endblock %}
-{% block mf_body %}
-<section class="mf-ui-ads-section" aria-labelledby="ads-ready-title">
-  <h2 class="mf-ui-ads-section__title" id="ads-ready-title">Why am I (not) seeing ads?</h2>
-  <div class="mf-ui-card">
-    <ul class="mf-ui-ads-checks">
+{% block page_nav %}{% include "ads/_nav.html" %}{% endblock %}
+{% block page_body %}
+{% staff_section title=_("Why am I (not) seeing ads?") ident="ads-ready-title" %}
+  {% staff_card %}
+    {% staff_list %}
       {% for check in overview.checks %}
-        <li class="mf-ui-ads-check">
-          <span class="mf-ui-badge {% if check.ok %}mf-ui-badge--success{% else %}mf-ui-badge--warning{% endif %}">{% if check.ok %}Ready{% else %}To do{% endif %}</span>
-          <span><strong>{{ check.label }}.</strong> {{ check.detail }}{% if not check.ok and check.url_name %} <a href="{% url check.url_name %}">Open</a>{% endif %}</span>
-        </li>
+        {% staff_item %}
+          {% if check.ok %}{% staff_badge _("Ready") "success" %}{% else %}{% staff_badge _("To do") "warning" %}{% endif %}
+          <span><strong>{{ check.label }}.</strong> {{ check.detail }}{% if not check.ok and check.url_name %} <a href="{% url check.url_name %}">{% translate "Open" %}</a>{% endif %}</span>
+        {% endstaff_item %}
       {% endfor %}
-    </ul>
-    <p class="mf-ui-help">Visitors also need to allow the “advertising” cookie category in the consent banner; without it nothing renders and nothing is counted.</p>
-  </div>
-</section>
+    {% endstaff_list %}
+    <p class="small text-body-secondary mb-0">{% translate "Visitors also need to allow the “advertising” cookie category in the consent banner; without it nothing renders and nothing is counted." %}</p>
+  {% endstaff_card %}
+{% endstaff_section %}
 
-<section class="mf-ui-ads-section" aria-labelledby="ads-stats-title">
-  <h2 class="mf-ui-ads-section__title" id="ads-stats-title">Performance</h2>
-  <div class="mf-ui-grid">
-    <div class="mf-ui-card mf-ui-stat"><span class="mf-ui-stat__label">Impressions</span><span class="mf-ui-stat__value">{{ impressions }}</span></div>
-    <div class="mf-ui-card mf-ui-stat"><span class="mf-ui-stat__label">Clicks</span><span class="mf-ui-stat__value">{{ clicks }}</span></div>
-    <div class="mf-ui-card mf-ui-stat"><span class="mf-ui-stat__label">Click-through rate</span><span class="mf-ui-stat__value">{{ ctr }}%</span></div>
-    <div class="mf-ui-card mf-ui-stat"><span class="mf-ui-stat__label">Zone placements on</span><span class="mf-ui-stat__value">{{ overview.placements_on }}<small> / {{ overview.placements_total }}</small></span><span class="mf-ui-stat__hint">{{ overview.servable }} with a live creative</span></div>
-    <div class="mf-ui-card mf-ui-stat"><span class="mf-ui-stat__label">Suggestions waiting</span><span class="mf-ui-stat__value">{{ overview.pending_discoveries }}</span>{% if perms.ads.change_adplacement %}<span class="mf-ui-stat__hint"><a href="{% url 'ads:discoveries' %}">Review queue</a></span>{% endif %}</div>
-  </div>
-</section>
-
-<div class="mf-ui-grid mf-ui-grid--wide">
-  <section class="mf-ui-card" aria-labelledby="ads-controls-title">
-    <h2 class="mf-ui-card__title" id="ads-controls-title">Serving controls</h2>
-    <form method="post" action="{% url 'ads:toggle_settings' %}" class="mf-ui-form">
-      {% csrf_token %}
-      <label class="mf-ui-ads-check-field"><input type="hidden" name="ads_enabled" value="0"><input type="checkbox" name="ads_enabled" value="1"{% if ads_enabled %} checked{% endif %}> Ads enabled</label>
-      <label class="mf-ui-ads-check-field"><input type="hidden" name="ad_networks_enabled" value="0"><input type="checkbox" name="ad_networks_enabled" value="1"{% if ad_networks_enabled %} checked{% endif %}> Ad networks enabled</label>
-      <label class="mf-ui-ads-check-field"><input type="hidden" name="affiliate_enabled" value="0"><input type="checkbox" name="affiliate_enabled" value="1"{% if affiliate_enabled %} checked{% endif %}> Affiliate links enabled</label>
-      <div class="mf-ui-field">
-        <label for="ads-intensity">Intensity</label>
-        <select id="ads-intensity" name="ad_aggressiveness_level">
-          <option value="minimal"{% if ad_aggressiveness_level == "minimal" %} selected{% endif %}>Minimal</option>
-          <option value="balanced"{% if ad_aggressiveness_level == "balanced" %} selected{% endif %}>Balanced</option>
-          <option value="aggressive"{% if ad_aggressiveness_level == "aggressive" %} selected{% endif %}>Aggressive</option>
-        </select>
-      </div>
-      <button class="mf-ui-btn mf-ui-btn--primary" type="submit">Save serving settings</button>
-    </form>
-  </section>
-
-  <section class="mf-ui-card" aria-labelledby="ads-profile-title">
-    <h2 class="mf-ui-card__title" id="ads-profile-title">Test profile</h2>
-    {% if profile.on %}
-      <p><span class="mf-ui-badge mf-ui-badge--warning">On for you</span> Every public page shows marked <strong>TEST AD</strong> boxes to you only. Nothing is counted and no consent is needed.</p>
+{% staff_section title=_("Performance") ident="ads-stats-title" %}
+  {% staff_grid %}
+    {% staff_stat label=_("Impressions") value=impressions %}
+    {% staff_stat label=_("Clicks") value=clicks %}
+    {% staff_stat label=_("Click-through rate") value=ctr unit="%" %}
+    {% with total=overview.placements_total|stringformat:"s" %}
+      {% blocktranslate with live=overview.servable asvar servable_hint %}{{ live }} with a live creative{% endblocktranslate %}
+      {% staff_stat label=_("Zone placements on") value=overview.placements_on unit="/ "|add:total hint=servable_hint %}
+    {% endwith %}
+    {% if perms.ads.change_adplacement %}
+      {% url 'ads:discoveries' as discoveries_url %}
+      {% staff_stat label=_("Suggestions waiting") value=overview.pending_discoveries hint_url=discoveries_url hint_label=_("Review queue") %}
     {% else %}
-      <p><span class="mf-ui-badge">Off</span> Switch it on to browse the real site with every ad zone marked, to check where ads would appear. Other visitors never see it.</p>
+      {% staff_stat label=_("Suggestions waiting") value=overview.pending_discoveries %}
+    {% endif %}
+  {% endstaff_grid %}
+{% endstaff_section %}
+
+{% staff_grid wide=True %}
+  {% staff_card title=_("Serving controls") ident="ads-controls-title" cell=True %}
+    <form method="post" action="{% url 'ads:toggle_settings' %}" class="d-flex flex-column gap-3">
+      {% csrf_token %}
+      {% staff_check ident="ads-enabled" name="ads_enabled" label=_("Ads enabled") checked=ads_enabled unchecked_value="0" %}
+      {% staff_check ident="ads-networks-enabled" name="ad_networks_enabled" label=_("Ad networks enabled") checked=ad_networks_enabled unchecked_value="0" %}
+      {% staff_check ident="ads-affiliate-enabled" name="affiliate_enabled" label=_("Affiliate links enabled") checked=affiliate_enabled unchecked_value="0" %}
+      {% staff_select ident="ads-intensity" name="ad_aggressiveness_level" label=_("Intensity") %}
+        <option value="minimal"{% if ad_aggressiveness_level == "minimal" %} selected{% endif %}>{% translate "Minimal" %}</option>
+        <option value="balanced"{% if ad_aggressiveness_level == "balanced" %} selected{% endif %}>{% translate "Balanced" %}</option>
+        <option value="aggressive"{% if ad_aggressiveness_level == "aggressive" %} selected{% endif %}>{% translate "Aggressive" %}</option>
+      {% endstaff_select %}
+      <div>{% staff_button _("Save serving settings") tone="primary" %}</div>
+    </form>
+  {% endstaff_card %}
+
+  {% staff_card title=_("Test profile") ident="ads-profile-title" cell=True %}
+    {% if profile.on %}
+      <p class="mb-0">{% staff_badge _("On for you") "warning" %} {% translate "Every public page shows marked TEST AD boxes to you only. Nothing is counted and no consent is needed." %}</p>
+    {% else %}
+      <p class="mb-0">{% staff_badge _("Off") %} {% translate "Switch it on to browse the real site with every ad zone marked, to check where ads would appear. Other visitors never see it." %}</p>
     {% endif %}
     {% if can_place %}
       <form method="post" action="{% url 'ads:test_profile' %}">
         {% csrf_token %}
         <input type="hidden" name="state" value="{% if profile.on %}off{% else %}on{% endif %}">
-        <button class="mf-ui-btn {% if not profile.on %}mf-ui-btn--primary{% endif %}" type="submit">{% if profile.on %}Switch test profile off{% else %}Switch test profile on{% endif %}</button>
+        {% if profile.on %}{% staff_button _("Switch test profile off") %}{% else %}{% staff_button _("Switch test profile on") tone="primary" %}{% endif %}
       </form>
     {% else %}
-      <p class="mf-ui-help">You need the “change ad placement” permission to use the test profile.</p>
+      <p class="small text-body-secondary mb-0">{% translate "You need the “change ad placement” permission to use the test profile." %}</p>
     {% endif %}
-  </section>
+  {% endstaff_card %}
+{% endstaff_grid %}
+
+<div id="rewarded-ads">
+{% staff_section title=_("Rewarded ads") ident="rewarded-title" %}
+  {% staff_card %}
+    {% if not rewarded.rows %}
+      {% url 'admin:ads_rewardedadconfig_add' as rewarded_add_url %}
+      {% staff_notice tone="warning" %}<strong>{% translate "Not configured." %}</strong> {% translate "No rewarded ad exists yet, so users are told rewarded ads are not enabled." %} <a href="{{ rewarded_add_url }}">{% translate "Create a rewarded ad" %}</a>.{% endstaff_notice %}
+    {% elif not rewarded.switch_on %}
+      {% url 'admin:ads_adssettings_changelist' as ads_settings_url %}
+      {% staff_notice tone="warning" %}<strong>{% translate "Switched off." %}</strong> {% translate "Rewarded ads need both “Ads enabled” and the rewarded-ads switch in" %} <a href="{{ ads_settings_url }}">{% translate "Ads settings" %}</a>.{% endstaff_notice %}
+    {% elif not rewarded.configured %}
+      {% staff_notice tone="warning" %}<strong>{% translate "Not configured." %}</strong> {% translate "No rewarded ad is enabled with a live placement yet." %}{% endstaff_notice %}
+    {% endif %}
+    {% staff_list %}
+      {% for row in rewarded.rows %}
+        {% staff_item %}
+          <span>{{ row.config.name }} · {{ row.config.get_reward_type_display }} ·
+            {% if row.reason %}{{ row.reason }}{% else %}<strong>{% translate "Live" %}</strong>{% endif %}</span>
+          <a href="{% url 'admin:ads_rewardedadconfig_change' row.config.pk %}">{% translate "Edit" %}</a>
+        {% endstaff_item %}
+      {% endfor %}
+    {% endstaff_list %}
+    <p class="small text-body-secondary mb-0">{% translate "Starts" %} {{ rewarded.stats.starts }} · {% translate "Completed" %} {{ rewarded.stats.completions }} ({{ rewarded.stats.completion_rate }}%) · {% translate "Rewards granted" %} {{ rewarded.stats.rewards_granted }} · {% translate "Flagged" %} {{ rewarded.stats.flagged }} · <a href="{% url 'admin:ads_rewardedadview_changelist' %}">{% translate "Views" %}</a></p>
+  {% endstaff_card %}
+{% endstaff_section %}
 </div>
 
-<section class="mf-ui-ads-section" aria-labelledby="rewarded-title" id="rewarded-ads">
-  <h2 class="mf-ui-ads-section__title" id="rewarded-title">Rewarded ads</h2>
-  <div class="mf-ui-card">
-    {% if not rewarded.rows %}
-      <p role="status"><strong>Not configured.</strong> No rewarded ad exists yet, so users are told rewarded ads are not enabled. <a href="{% url 'admin:ads_rewardedadconfig_add' %}">Create a rewarded ad</a>.</p>
-    {% elif not rewarded.switch_on %}
-      <p role="status"><strong>Switched off.</strong> Rewarded ads need both “Ads enabled” and the rewarded-ads switch in <a href="{% url 'admin:ads_adssettings_changelist' %}">Ads settings</a>.</p>
-    {% elif not rewarded.configured %}
-      <p role="status"><strong>Not configured.</strong> No rewarded ad is enabled with a live placement yet.</p>
-    {% endif %}
-    {% for row in rewarded.rows %}
-      <p class="mf-ui-ads-line">{{ row.config.name }} · {{ row.config.get_reward_type_display }} ·
-        {% if row.reason %}<span>{{ row.reason }}</span>{% else %}<strong>Live</strong>{% endif %}
-        · <a href="{% url 'admin:ads_rewardedadconfig_change' row.config.pk %}">Edit</a></p>
-    {% endfor %}
-    <p class="mf-ui-help">Starts {{ rewarded.stats.starts }} · Completed {{ rewarded.stats.completions }} ({{ rewarded.stats.completion_rate }}%) · Rewards granted {{ rewarded.stats.rewards_granted }} · Flagged {{ rewarded.stats.flagged }} · <a href="{% url 'admin:ads_rewardedadview_changelist' %}">Views</a></p>
-  </div>
-</section>
-
-<section class="mf-ui-ads-section" aria-labelledby="placements-title">
-  <div class="mf-ui-row"><h2 class="mf-ui-ads-section__title" id="placements-title">Placements</h2>{% if can_place %}<a class="mf-ui-btn mf-ui-btn--small" href="{% url 'ads:placement_manager' %}">Manage zones</a>{% endif %}</div>
+{% url 'ads:placement_manager' as placements_url %}
+{% if can_place %}{% url 'ads:placement_manager' as manage_zones_url %}{% endif %}
+{% staff_section title=_("Placements") ident="placements-title" action_url=manage_zones_url action_label=_("Manage zones") %}
   {% if placement_rows %}
-    <div class="mf-ui-table-wrap" role="region" aria-label="Ad placements" tabindex="0">
-      <table class="mf-ui-table">
-        <thead><tr><th scope="col">Placement</th><th scope="col">Where</th><th scope="col">State</th><th scope="col">Creatives</th><th scope="col" class="is-number">Impr.</th><th scope="col" class="is-number">Clicks</th><th scope="col" class="is-number">CTR</th><th scope="col"><span class="mf-ui-ads-sr">Actions</span></th></tr></thead>
-        <tbody>
-          {% for row in placement_rows %}
-            {% with placement=row.placement stats=row.stats %}
-            <tr>
-              <th scope="row"><a href="{% url 'admin:ads_adplacement_change' placement.pk %}">{{ placement.name }}</a><br><code class="mf-ui-code">{{ placement.code }}</code></th>
-              <td>{% if placement.zone %}{{ placement.get_zone_display }}<br>{% endif %}<span class="mf-ui-help">{{ placement.template_reference|default:"every page / code" }}</span></td>
-              <td>{% if placement.is_enabled %}<span class="mf-ui-badge mf-ui-badge--success">On</span>{% else %}<span class="mf-ui-badge mf-ui-badge--warning">Off</span>{% endif %}{% if placement.locked %} <span class="mf-ui-badge">Locked</span>{% endif %}</td>
-              <td>{% for item in row.creatives %}<span class="mf-ui-ads-line">{{ item.creative }}{% if item.campaign %} <span class="mf-ui-help">({{ item.campaign }})</span>{% endif %}</span>{% empty %}<span class="mf-ui-help">None assigned</span>{% endfor %}</td>
-              <td class="is-number">{{ stats.impressions }}</td><td class="is-number">{{ stats.clicks }}</td><td class="is-number">{{ stats.ctr }}%</td>
-              <td>
-                <form method="post" action="{% url 'ads:toggle_settings' %}" class="mf-ui-row">
-                  {% csrf_token %}<input type="hidden" name="placement" value="{{ placement.pk }}">
-                  <button class="mf-ui-btn mf-ui-btn--small" name="action" value="{% if placement.is_enabled %}disable_placement{% else %}enable_placement{% endif %}" type="submit">{% if placement.is_enabled %}Disable{% else %}Enable{% endif %}</button>
-                  <button class="mf-ui-btn mf-ui-btn--small" name="action" value="toggle_lock" type="submit">{% if placement.locked %}Unlock{% else %}Lock{% endif %}</button>
-                </form>
-              </td>
-            </tr>
-            {% endwith %}
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+    {% staff_table label=_("Ad placements") %}
+      <thead><tr><th scope="col">{% translate "Placement" %}</th><th scope="col">{% translate "Where" %}</th><th scope="col">{% translate "State" %}</th><th scope="col">{% translate "Creatives" %}</th><th scope="col" class="text-end">{% translate "Impr." %}</th><th scope="col" class="text-end">{% translate "Clicks" %}</th><th scope="col" class="text-end">{% translate "CTR" %}</th><th scope="col"><span class="visually-hidden">{% translate "Actions" %}</span></th></tr></thead>
+      <tbody>
+        {% for row in placement_rows %}
+          {% with placement=row.placement stats=row.stats %}
+          <tr>
+            <th scope="row"><a href="{% url 'admin:ads_adplacement_change' placement.pk %}">{{ placement.name }}</a><br><code>{{ placement.code }}</code></th>
+            <td>{% if placement.zone %}{{ placement.get_zone_display }}<br>{% endif %}<small class="text-body-secondary">{{ placement.template_reference|default:_("every page / code") }}</small></td>
+            <td>{% if placement.is_enabled %}{% staff_badge _("On") "success" %}{% else %}{% staff_badge _("Off") "warning" %}{% endif %}{% if placement.locked %} {% staff_badge _("Locked") %}{% endif %}</td>
+            <td>{% for item in row.creatives %}<div>{{ item.creative }}{% if item.campaign %} <small class="text-body-secondary">({{ item.campaign }})</small>{% endif %}</div>{% empty %}<small class="text-body-secondary">{% translate "None assigned" %}</small>{% endfor %}</td>
+            <td class="text-end">{{ stats.impressions }}</td><td class="text-end">{{ stats.clicks }}</td><td class="text-end">{{ stats.ctr }}%</td>
+            <td>
+              <form method="post" action="{% url 'ads:toggle_settings' %}" class="d-flex flex-wrap gap-2">
+                {% csrf_token %}<input type="hidden" name="placement" value="{{ placement.pk }}">
+                {% if placement.is_enabled %}{% staff_button _("Disable") name="action" value="disable_placement" size="sm" %}{% else %}{% staff_button _("Enable") name="action" value="enable_placement" size="sm" %}{% endif %}
+                {% if placement.locked %}{% staff_button _("Unlock") name="action" value="toggle_lock" size="sm" %}{% else %}{% staff_button _("Lock") name="action" value="toggle_lock" size="sm" %}{% endif %}
+              </form>
+            </td>
+          </tr>
+          {% endwith %}
+        {% endfor %}
+      </tbody>
+    {% endstaff_table %}
   {% else %}
-    <p class="mf-ui-empty">No ad placements yet. Scan the templates in the <a href="{% url 'ads:placement_manager' %}">placement manager</a> to get started.</p>
+    {% staff_empty title=_("No ad placements yet") %}{% translate "Scan the templates in the" %} <a href="{{ placements_url }}">{% translate "placement manager" %}</a> {% translate "to get started." %}{% endstaff_empty %}
   {% endif %}
-</section>
+{% endstaff_section %}
 
-<section class="mf-ui-ads-section" aria-labelledby="campaigns-title">
-  <div class="mf-ui-row"><h2 class="mf-ui-ads-section__title" id="campaigns-title">Campaigns</h2><a class="mf-ui-btn mf-ui-btn--small" href="{% url 'admin:ads_campaign_add' %}">New campaign</a></div>
+{% url 'admin:ads_campaign_add' as campaign_add_url %}
+{% staff_section title=_("Campaigns") ident="campaigns-title" action_url=campaign_add_url action_label=_("New campaign") %}
   {% if campaigns %}
-    <div class="mf-ui-table-wrap" role="region" aria-label="Campaigns" tabindex="0">
-      <table class="mf-ui-table">
-        <thead><tr><th scope="col">Campaign</th><th scope="col">Type</th><th scope="col">State</th><th scope="col"><span class="mf-ui-ads-sr">Actions</span></th></tr></thead>
-        <tbody>
-          {% for campaign in campaigns %}
-            <tr>
-              <th scope="row"><a href="{% url 'admin:ads_campaign_change' campaign.pk %}">{{ campaign.name }}</a></th>
-              <td>{{ campaign.get_type_display }}</td>
-              <td>{% if campaign.is_active %}<span class="mf-ui-badge mf-ui-badge--success">Active</span>{% else %}<span class="mf-ui-badge mf-ui-badge--warning">Paused</span>{% endif %}{% if campaign.locked %} <span class="mf-ui-badge">Locked</span>{% endif %}</td>
-              <td>
-                <form method="post" action="{% url 'ads:toggle_settings' %}" class="mf-ui-row">
-                  {% csrf_token %}<input type="hidden" name="campaign" value="{{ campaign.pk }}">
-                  <button class="mf-ui-btn mf-ui-btn--small" name="action" value="{% if campaign.is_active %}disable_campaign{% else %}enable_campaign{% endif %}" type="submit">{% if campaign.is_active %}Pause{% else %}Activate{% endif %}</button>
-                  <button class="mf-ui-btn mf-ui-btn--small" name="action" value="toggle_campaign_lock" type="submit">{% if campaign.locked %}Unlock{% else %}Lock{% endif %}</button>
-                </form>
-              </td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+    {% staff_table label=_("Campaigns") %}
+      <thead><tr><th scope="col">{% translate "Campaign" %}</th><th scope="col">{% translate "Type" %}</th><th scope="col">{% translate "State" %}</th><th scope="col"><span class="visually-hidden">{% translate "Actions" %}</span></th></tr></thead>
+      <tbody>
+        {% for campaign in campaigns %}
+          <tr>
+            <th scope="row"><a href="{% url 'admin:ads_campaign_change' campaign.pk %}">{{ campaign.name }}</a></th>
+            <td>{{ campaign.get_type_display }}</td>
+            <td>{% if campaign.is_active %}{% staff_badge _("Active") "success" %}{% else %}{% staff_badge _("Paused") "warning" %}{% endif %}{% if campaign.locked %} {% staff_badge _("Locked") %}{% endif %}</td>
+            <td>
+              <form method="post" action="{% url 'ads:toggle_settings' %}" class="d-flex flex-wrap gap-2">
+                {% csrf_token %}<input type="hidden" name="campaign" value="{{ campaign.pk }}">
+                {% if campaign.is_active %}{% staff_button _("Pause") name="action" value="disable_campaign" size="sm" %}{% else %}{% staff_button _("Activate") name="action" value="enable_campaign" size="sm" %}{% endif %}
+                {% if campaign.locked %}{% staff_button _("Unlock") name="action" value="toggle_campaign_lock" size="sm" %}{% else %}{% staff_button _("Lock") name="action" value="toggle_campaign_lock" size="sm" %}{% endif %}
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    {% endstaff_table %}
   {% else %}
-    <p class="mf-ui-empty">No campaigns yet. <a href="{% url 'admin:ads_campaign_add' %}">Create a campaign</a> (a house campaign works for testing).</p>
+    {% staff_empty title=_("No campaigns yet") %}<a href="{{ campaign_add_url }}">{% translate "Create a campaign" %}</a> {% translate "(a house campaign works for testing)." %}{% endstaff_empty %}
   {% endif %}
-</section>
+{% endstaff_section %}
 
-<section class="mf-ui-ads-section" aria-labelledby="creatives-title">
-  <h2 class="mf-ui-ads-section__title" id="creatives-title">Creatives</h2>
+{% staff_section title=_("Creatives") ident="creatives-title" %}
   {% if creative_rows %}
-    <div class="mf-ui-table-wrap" role="region" aria-label="Creatives" tabindex="0">
-      <table class="mf-ui-table">
-        <thead><tr><th scope="col">Creative</th><th scope="col">Type</th><th scope="col">Campaign</th><th scope="col" class="is-number">Impr.</th><th scope="col" class="is-number">Clicks</th><th scope="col" class="is-number">CTR</th></tr></thead>
-        <tbody>
-          {% for row in creative_rows %}
-            {% with creative=row.creative stats=row.stats %}
-            <tr>
-              <th scope="row"><a href="{% url 'admin:ads_adcreative_change' creative.pk %}">{{ creative.name }}</a></th>
-              <td>{{ creative.get_creative_type_display }}</td>
-              <td>{{ creative.campaign.name }}</td>
-              <td class="is-number">{{ stats.impressions }}</td><td class="is-number">{{ stats.clicks }}</td><td class="is-number">{{ stats.ctr }}%</td>
-            </tr>
-            {% endwith %}
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+    {% staff_table label=_("Creatives") %}
+      <thead><tr><th scope="col">{% translate "Creative" %}</th><th scope="col">{% translate "Type" %}</th><th scope="col">{% translate "Campaign" %}</th><th scope="col" class="text-end">{% translate "Impr." %}</th><th scope="col" class="text-end">{% translate "Clicks" %}</th><th scope="col" class="text-end">{% translate "CTR" %}</th></tr></thead>
+      <tbody>
+        {% for row in creative_rows %}
+          {% with creative=row.creative stats=row.stats %}
+          <tr>
+            <th scope="row"><a href="{% url 'admin:ads_adcreative_change' creative.pk %}">{{ creative.name }}</a></th>
+            <td>{{ creative.get_creative_type_display }}</td>
+            <td>{{ creative.campaign.name }}</td>
+            <td class="text-end">{{ stats.impressions }}</td><td class="text-end">{{ stats.clicks }}</td><td class="text-end">{{ stats.ctr }}%</td>
+          </tr>
+          {% endwith %}
+        {% endfor %}
+      </tbody>
+    {% endstaff_table %}
   {% else %}
-    <p class="mf-ui-empty">No creatives yet. <a href="{% url 'admin:ads_adcreative_add' %}">Add a creative</a> to a campaign.</p>
+    {% url 'admin:ads_adcreative_add' as creative_add_url %}
+    {% staff_empty title=_("No creatives yet") %}<a href="{{ creative_add_url }}">{% translate "Add a creative" %}</a> {% translate "to a campaign." %}{% endstaff_empty %}
   {% endif %}
-</section>
+{% endstaff_section %}
 {% endblock %}

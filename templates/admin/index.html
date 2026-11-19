@@ -1,92 +1,52 @@
-{% extends "admin/base.html" %}
-
-{% load i18n %}
-
-{% block title %}{{ title }} | {{ site_title|default:_("Operations") }}{% endblock %}
-
-{% block branding %}
-    {% include "unfold/helpers/site_branding.html" %}
-{% endblock %}
-
+{% extends "admin/base_site.html" %}
+{% load i18n console_ui %}
+{% comment %}
+  Dashboard. Renders instantly (greeting + shortcuts) and fills each panel lazily: every widget is a placeholder with a skeleton that
+  loads its fragment (admin:console_dashboard_widget) over HTMX the moment the page appears, then refreshes on "console-refresh".
+  Context (apps.core.admin_dashboard.dashboard_page_context): greeting, display_name, today, quick_actions, widgets.
+  Without JavaScript every panel keeps a link to its own page (<noscript>).
+{% endcomment %}
+{% block title %}{% translate "Dashboard" %} | {{ site_title }}{% endblock %}
+{% block breadcrumbs %}{% endblock %}
 {% block content %}
-    {% trans "Action needed" as action_needed %}
-    <section aria-label="{% trans 'Release and environment' %}" id="dashboard-release" class="flex flex-row flex-wrap gap-3 items-center mb-6 text-subtle text-sm">
-        <span data-app-version="{{ release_version }}">{% trans "Version" %} {{ release_version }}</span>
-        {% if release_build.git_sha %}<span>{% trans "Build" %} {{ release_build.git_sha }}{% if release_build.build_date %} ({{ release_build.build_date }}){% endif %}</span>{% endif %}
-        {% if environment %}{% include "unfold/helpers/label.html" with text=environment.0 type=environment.1 %}{% endif %}
+<div class="c-dashboard">
+  <div class="c-greeting">
+    <h1 class="c-greeting__title">{{ greeting }}, {{ display_name }}</h1>
+    <p class="c-greeting__meta">{{ today|date:"l, j F Y" }} &middot; {% translate "Here is what needs you today." %}</p>
+  </div>
+
+  {% for widget in widgets %}{% if widget.size == "stats" %}
+  <div id="widget-{{ widget.slug }}" aria-busy="true" data-console-widget="{{ widget.slug }}" data-state="loading" hx-get="{{ widget.url }}" hx-trigger="load" hx-target="this" hx-swap="outerHTML" hx-sync="this:replace">
+    {% include "console/dashboard/_widget_error.html" with url=widget.url %}{% ui "skeleton" shape=widget.skeleton label=widget.title %}
+    <noscript><a href="{{ widget.url }}">{% blocktranslate with title=widget.title %}Open &ldquo;{{ title }}&rdquo;{% endblocktranslate %}</a></noscript>
+  </div>
+  {% endif %}{% endfor %}
+
+  {% if quick_actions %}
+  <section aria-labelledby="dashboard-quick">
+    <h2 class="h4" id="dashboard-quick">{% translate "Quick actions" %}</h2>
+    <ul class="c-quick">
+      {% for action in quick_actions %}<li class="c-quick__item"><a href="{{ action.url }}">{% console_icon action.icon %}<span>{{ action.title }}</span></a></li>{% endfor %}
+    </ul>
+  </section>
+  {% endif %}
+
+  <div class="c-dashboard__grid">
+    {% for widget in widgets %}{% if widget.size != "stats" %}
+    <section class="c-card c-widget c-widget--{{ widget.size }}" id="widget-{{ widget.slug }}" aria-labelledby="widget-{{ widget.slug }}-title"     aria-busy="true" data-console-widget="{{ widget.slug }}" data-state="loading" hx-get="{{ widget.url }}" hx-trigger="load" hx-target="this" hx-swap="outerHTML" hx-sync="this:replace">
+      <header class="c-card__header c-widget__head">
+        <h2 class="c-card__title" id="widget-{{ widget.slug }}-title">{% console_icon widget.icon "c-icon--sm" %} {{ widget.title }}</h2>
+        <div class="c-card__actions"><button type="button" class="c-icon-btn" hx-get="{{ widget.url }}" hx-target="#widget-{{ widget.slug }}" hx-swap="outerHTML" aria-label="{% blocktranslate with title=widget.title %}Refresh {{ title }}{% endblocktranslate %}">{% console_icon "refresh-cw" "c-icon--sm" %}</button></div>
+      </header>
+      <div class="c-card__body">
+        {% include "console/dashboard/_widget_error.html" with url=widget.url %}{% ui "skeleton" shape=widget.skeleton label=widget.title %}
+        <noscript><a href="{{ widget.url }}">{% blocktranslate with title=widget.title %}Open &ldquo;{{ title }}&rdquo;{% endblocktranslate %}</a></noscript>
+      </div>
     </section>
-    <section aria-labelledby="dashboard-kpis" class="mb-6">
-        <h2 id="dashboard-kpis" class="font-semibold mb-3 text-important text-sm uppercase">{% trans "Needs your attention" %}</h2>
-        {% if kpis %}
-            <div class="gap-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {% for kpi in kpis %}
-                    <a href="{{ kpi.url }}" id="kpi-{{ kpi.key }}" class="bg-white block border border-base-200 p-6 relative rounded-default shadow-xs transition-all dark:bg-base-900 dark:border-base-800 hover:border-base-300 dark:hover:border-base-700">
-                        <div class="flex flex-row gap-3 items-center">
-                            <span class="material-symbols-outlined text-primary-600 dark:text-primary-400" aria-hidden="true">{{ kpi.icon }}</span>
-                            <h3 class="font-semibold text-important text-sm">{{ kpi.label }}</h3>
-                        </div>
-                        <p class="font-semibold mt-3 text-3xl text-important tabular-nums" data-kpi-value="{{ kpi.value|default_if_none:'' }}">{% if kpi.value is None %}&mdash;{% else %}{{ kpi.value }}{% endif %}</p>
-                        <p class="mt-1 text-subtle text-xs">{{ kpi.hint }}</p>
-                        {% if kpi.value and kpi.variant != "info" and kpi.variant != "success" %}
-                            <div class="absolute right-4 top-4">
-                                {% include "unfold/helpers/label.html" with variant=kpi.variant text=action_needed %}
-                            </div>
-                        {% endif %}
-                    </a>
-                {% endfor %}
-            </div>
-        {% else %}
-            <p class="text-subtle">{% trans "No queues are assigned to your account. Use the sidebar to open the sections you can manage." %}</p>
-        {% endif %}
-    </section>
-
-    <div class="gap-6 grid grid-cols-1 lg:grid-cols-3">
-        {% if can_view_pending_firmware %}
-            <section aria-labelledby="dash-firmware" class="bg-white border border-base-200 p-6 rounded-default shadow-xs dark:bg-base-900 dark:border-base-800">
-                <h2 id="dash-firmware" class="font-semibold mb-3 text-important text-sm">{% trans "Pending firmware uploads" %}</h2>
-                <ul class="flex flex-col gap-2">
-                    {% for row in recent_pending_firmware %}
-                        <li class="flex flex-row gap-3 justify-between">
-                            <a class="min-w-0 text-primary-600 truncate dark:text-primary-400" href="{% url 'admin:firmwares_pendingfirmware_change' row.pk %}">{{ row.label }}</a>
-                            <span class="text-subtle text-xs whitespace-nowrap">{{ row.when|timesince }} {% trans "ago" %}</span>
-                        </li>
-                    {% empty %}
-                        <li class="text-subtle">{% trans "Nothing is waiting for review." %}</li>
-                    {% endfor %}
-                </ul>
-            </section>
-        {% endif %}
-
-        {% if can_view_signups %}
-            <section aria-labelledby="dash-signups" class="bg-white border border-base-200 p-6 rounded-default shadow-xs dark:bg-base-900 dark:border-base-800">
-                <h2 id="dash-signups" class="font-semibold mb-3 text-important text-sm">{% trans "Recent sign-ups" %}</h2>
-                <ul class="flex flex-col gap-2">
-                    {% for row in recent_signups %}
-                        <li class="flex flex-row gap-3 justify-between">
-                            <a class="min-w-0 text-primary-600 truncate dark:text-primary-400" href="{% url 'admin:users_customuser_change' row.pk %}">{{ row.label }}</a>
-                            <span class="text-subtle text-xs whitespace-nowrap">{{ row.when|timesince }} {% trans "ago" %}</span>
-                        </li>
-                    {% empty %}
-                        <li class="text-subtle">{% trans "No accounts yet." %}</li>
-                    {% endfor %}
-                </ul>
-            </section>
-        {% endif %}
-
-        {% if can_view_orders %}
-            <section aria-labelledby="dash-orders" class="bg-white border border-base-200 p-6 rounded-default shadow-xs dark:bg-base-900 dark:border-base-800">
-                <h2 id="dash-orders" class="font-semibold mb-3 text-important text-sm">{% trans "Recent orders" %}</h2>
-                <ul class="flex flex-col gap-2">
-                    {% for row in recent_orders %}
-                        <li class="flex flex-row gap-3 justify-between">
-                            <a class="min-w-0 text-primary-600 truncate dark:text-primary-400" href="{% url 'admin:shop_order_change' row.pk %}">{{ row.label }} &middot; {{ row.status }} &middot; {{ row.total }}</a>
-                            <span class="text-subtle text-xs whitespace-nowrap">{{ row.when|timesince }} {% trans "ago" %}</span>
-                        </li>
-                    {% empty %}
-                        <li class="text-subtle">{% trans "No orders yet." %}</li>
-                    {% endfor %}
-                </ul>
-            </section>
-        {% endif %}
-    </div>
+    {% endif %}{% endfor %}
+  </div>
+  {% if not widgets %}
+    {% ui "empty_state" title=_("Your account has no dashboard panels yet") message=_("Use the sidebar to open the sections you can manage.") icon="layout-dashboard" %}
+  {% endif %}
+</div>
 {% endblock %}

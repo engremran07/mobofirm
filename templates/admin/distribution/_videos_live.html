@@ -1,0 +1,97 @@
+{% load i18n staff_ui console_ui %}
+{% comment %}
+  Live region of the Videos page. While a render runs it reloads itself every 5 seconds over
+  HTMX (hx-get on the page URL, answered with this fragment because the target is
+  #dist-videos-live). Context: jobs, filters, counts, statuses, kinds, busy, channels, can_edit,
+  budget, settings.
+{% endcomment %}
+{% url 'admin:distribution_channel_videos' as videos_url %}
+<div id="dist-videos-live" class="d-flex flex-column gap-4"{% if busy %} hx-get="{{ videos_url }}?status={{ filters.status|urlencode }}&amp;kind={{ filters.kind|urlencode }}&amp;q={{ filters.q|urlencode }}" hx-trigger="every 5s" hx-target="#dist-videos-live" hx-swap="outerHTML"{% endif %}>
+  <form class="c-picker__tools" method="get" action="{{ videos_url }}" role="search" aria-label="{% translate 'Filter videos' %}"
+    hx-get="{{ videos_url }}" hx-target="#dist-videos-live" hx-swap="outerHTML" hx-trigger="change, submit" hx-push-url="true">
+    <div class="c-picker__search">{% staff_input "vf-q" "q" _("Search videos") value=filters.q input_type="search" maxlength=80 %}</div>
+    {% staff_select "vf-status" "status" _("State") %}<option value="">{% translate "Any state" %}</option>{% for value, label in statuses %}<option value="{{ value }}"{% if filters.status == value %} selected{% endif %}>{{ label }}</option>{% endfor %}{% endstaff_select %}
+    {% staff_select "vf-kind" "kind" _("Content") %}<option value="">{% translate "Any content" %}</option>{% for kind in kinds %}<option value="{{ kind }}"{% if filters.kind == kind %} selected{% endif %}>{{ kind|title }}</option>{% endfor %}{% endstaff_select %}
+    <noscript><button type="submit" class="btn btn-primary">{% translate "Filter" %}</button></noscript>
+  </form>
+
+  {% if can_edit and jobs %}
+    <form method="post" action="{% url 'admin:distribution_channel_video_bulk' %}" id="video-bulk" class="u-cluster">
+      {% csrf_token %}
+      <label class="u-text-sm" for="bulk-action">{% translate "For the selected videos" %}</label>
+      <select class="form-select" name="action" id="bulk-action" aria-label="{% translate 'Bulk action' %}">
+        <option value="approve">{% translate "Approve" %}</option>
+        <option value="reject">{% translate "Reject" %}</option>
+        <option value="render">{% translate "Render again" %}</option>
+      </select>
+      {% staff_button _("Apply") size="sm" %}
+    </form>
+  {% endif %}
+
+  {% if jobs %}
+    <ul class="c-picker__grid c-video-grid">
+      {% for row in jobs %}{% with job=row.job %}
+      <li class="c-video c-video--{{ job.status }}">
+        <div class="c-video__frame">
+          {% if job.has_file %}
+            <video class="c-video__player" controls preload="none" playsinline
+              poster="{% if job.poster_name %}{% url 'admin:distribution_channel_video_media' job.pk 'poster' %}{% endif %}"
+              src="{% url 'admin:distribution_channel_video_media' job.pk 'video' %}" aria-label="{% blocktranslate with title=job.title %}Preview of {{ title }}{% endblocktranslate %}"></video>
+          {% else %}
+            <div class="c-video__placeholder">
+              {% if job.status == 'rendering' %}{% console_icon "clock" %}<span>{% if job.rendering_started_at %}{% translate "Rendering…" %}{% else %}{% translate "Waiting for a worker…" %}{% endif %}</span>
+              {% elif job.status == 'failed' %}{% console_icon "triangle-alert" %}<span>{% translate "Render failed" %}</span>
+              {% else %}{% console_icon "video" %}<span>{% translate "Not rendered yet" %}</span>{% endif %}
+            </div>
+          {% endif %}
+        </div>
+        <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+          <h3 class="c-platform__name">{{ job.title }}</h3>
+          <span class="c-badge c-badge--{% if job.status == 'approved' or job.status == 'posted' %}success{% elif job.status == 'ready' %}warning{% elif job.status == 'rejected' or job.status == 'failed' %}danger{% elif job.status == 'rendering' %}info{% else %}neutral{% endif %}">{{ job.get_status_display }}</span>
+        </div>
+        <dl class="c-platform__facts">
+          <dt>{% translate "Template" %}</dt><dd>{{ row.pack_label }} · v{{ job.template_version }} · {{ job.preset }} · {% blocktranslate with hook=job.hook %}hook {{ hook }}{% endblocktranslate %}</dd>
+          {% if job.duration_ms %}<dt>{% translate "Length" %}</dt><dd>{{ job.duration_seconds }} · {{ job.size_bytes|filesizeformat }}</dd>{% endif %}
+          {% if job.error %}<dt>{% translate "Problem" %}</dt><dd>{{ job.error }}</dd>{% endif %}
+          {% if job.decision_note %}<dt>{% translate "Note" %}</dt><dd>{{ job.decision_note }}</dd>{% endif %}
+        </dl>
+        {% if can_edit %}
+        <div class="c-platform__actions">
+          <label class="visually-hidden" for="sel-{{ job.pk }}">{% translate "Select" %} {{ job.title }}</label>
+          <input type="checkbox" id="sel-{{ job.pk }}" name="selected" value="{{ job.pk }}" form="video-bulk">
+          {% if job.status == 'ready' %}
+            <form method="post" action="{% url 'admin:distribution_channel_video_decide' job.pk 'approve' %}">{% csrf_token %}{% staff_button _("Approve") tone="primary" size="sm" %}</form>
+            <form method="post" action="{% url 'admin:distribution_channel_video_decide' job.pk 'reject' %}" class="u-cluster">{% csrf_token %}<label class="visually-hidden" for="note-{{ job.pk }}">{% translate "Reason" %}</label><input class="form-control" id="note-{{ job.pk }}" name="note" maxlength="300" placeholder="{% translate 'Reason (optional)' %}">{% staff_button _("Reject") tone="danger" size="sm" %}</form>
+          {% elif job.status == 'approved' %}
+            <form method="post" action="{% url 'admin:distribution_channel_video_decide' job.pk 'reject' %}">{% csrf_token %}<input type="hidden" name="note" value="Withdrawn">{% staff_button _("Withdraw approval") tone="danger" size="sm" %}</form>
+          {% endif %}
+          {% if job.status != 'rendering' and job.status != 'approved' and job.status != 'posted' %}
+            <form method="post" action="{% url 'admin:distribution_channel_video_render' job.pk %}" class="u-cluster">
+              {% csrf_token %}
+              <label class="visually-hidden" for="tpl-{{ job.pk }}">{% translate "Template" %}</label>
+              <select class="form-select" id="tpl-{{ job.pk }}" name="template">{% for pack in row.packs %}<option value="{{ pack.slug }}"{% if pack.slug == job.template %} selected{% endif %}>{{ pack.label }}</option>{% endfor %}</select>
+              <label class="visually-hidden" for="hook-{{ job.pk }}">{% translate "Hook" %}</label>
+              <select class="form-select" id="hook-{{ job.pk }}" name="hook"><option value="A"{% if job.hook == 'A' %} selected{% endif %}>{% translate "Hook A: statement" %}</option><option value="B"{% if job.hook == 'B' %} selected{% endif %}>{% translate "Hook B: question" %}</option></select>
+              {% staff_button _("Render") size="sm" tone="primary" %}
+            </form>
+          {% endif %}
+          {% if job.status == 'approved' or job.status == 'posted' %}
+            {% if channels %}
+              <form method="post" action="{% url 'admin:distribution_channel_video_schedule' job.pk %}" class="d-flex flex-column gap-1">
+                {% csrf_token %}
+                <fieldset class="border-0 p-0 m-0"><legend class="u-text-sm">{% translate "Schedule to" %}</legend>
+                  {% for channel in channels %}<label class="u-cluster u-text-sm"><input type="checkbox" name="channels" value="{{ channel.pk }}"> {{ channel.name }}</label>{% endfor %}
+                </fieldset>
+                {% staff_button _("Schedule") size="sm" tone="primary" %}
+              </form>
+            {% else %}<p class="u-muted u-text-sm mb-0">{% translate "Add and enable a TikTok, YouTube or Instagram channel to schedule this video." %}</p>{% endif %}
+          {% endif %}
+        </div>
+        {% endif %}
+      </li>
+      {% endwith %}{% endfor %}
+    </ul>
+  {% else %}
+    {% staff_empty title=_("No videos yet") %}{% translate "A draft is created for every published post and verified firmware (up to the daily limit). You can also create one by hand above." %}{% endstaff_empty %}
+  {% endif %}
+</div>

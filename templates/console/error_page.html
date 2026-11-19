@@ -1,0 +1,16 @@
+{% extends "console/standalone.html" %}{% load i18n console_ui %}
+{% comment %}
+  Error page of the staff console. Blocks: code, error_title, message, actions (and title).
+  Say what happened, that nothing was lost when that is true, and what to do next.
+{% endcomment %}
+{% block title %}{% block page_title %}{% endblock %} | {% translate "Staff console" %}{% endblock %}
+{% block body %}
+<main class="c-error" id="console-main" tabindex="-1">
+  <p class="c-error__code" aria-hidden="true">{% block code %}{% endblock %}</p>
+  <h1 class="c-error__title">{% block error_title %}{% endblock %}</h1>
+  <p class="c-error__text">{% block message %}{% endblock %}</p>
+  <div class="c-error__actions">{% block actions %}{% url 'admin:index' as dashboard_url %}
+    {% if request.user.is_staff %}{% ui "button" label=_("Back to the dashboard") url=dashboard_url variant="primary" icon="layout-dashboard" %}{% else %}{% url 'home' as home_url %}{% ui "button" label=_("Go to the public site") url=home_url variant="primary" icon="arrow-left" %}{% endif %}
+  {% endblock %}</div>
+</main>
+{% endblock %}

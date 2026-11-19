@@ -13,19 +13,14 @@ from django.db.models.functions import Lower
 from django.utils import timezone
 
 from .constants import MAIN_CATEGORIES, RESERVED_BRAND_SLUGS
+from .package_formats import (
+    FirmwarePackageFormat,
+    device_format_error,
+    tool_for_format,
+)
+from .references import ref_kwargs
+from .shortener_constants import ShortenerOverride
 from .variant_rules import normalize_variant_code
-
-
-class FirmwarePackageFormat(models.TextChoices):
-    UNKNOWN = "unknown", "Not specified"
-    RECOVERY_ROM = "recovery_rom", "Recovery ROM"
-    FASTBOOT_ROM = "fastboot_rom", "Fastboot ROM"
-    FULL_OTA = "full_ota", "Full OTA"
-    INCREMENTAL_OTA = "incremental_ota", "Incremental OTA"
-    FACTORY_IMAGE = "factory_image", "Factory image"
-    SERVICE_PACKAGE = "service_package", "Service package"
-    PARTITION_IMAGE = "partition_image", "Partition image"
-    OTHER = "other", "Other package format"
 
 
 class FirmwareSourceType(models.TextChoices):
@@ -151,6 +146,23 @@ def _validate_tier_fields(instance) -> None:
         raise ValidationError("The approved price must be greater than zero.")
 
 
+def _validate_package_format(
+    instance, *, variant, model, brand, chipset_text: str = ""
+) -> None:
+    """The package format must be generic or belong to the device's chipset vendor."""
+    from django.core.exceptions import ValidationError
+
+    message = device_format_error(
+        instance.package_format,
+        variant=variant,
+        model=model,
+        brand=brand,
+        chipset_text=chipset_text,
+    )
+    if message:
+        raise ValidationError({"package_format": message})
+
+
 def _validate_source_fields(instance) -> None:
     """Admin/form validation of the stored-vs-external source fields."""
     from django.core.exceptions import ValidationError
@@ -192,6 +204,15 @@ class Brand(Timestamped):
     )
     is_featured = models.BooleanField(
         default=False, help_text="Show prominently on device catalog page"
+    )
+    shortener_mode = models.CharField(
+        max_length=16,
+        choices=ShortenerOverride.choices,
+        default=ShortenerOverride.INHERIT,
+        help_text=(
+            "How shared external download links of this brand are shortened. "
+            "Inherit uses the global link shortener setting."
+        ),
     )
 
     class Meta:
@@ -873,6 +894,13 @@ class PendingFirmware(TieredAccess, Timestamped):
         super().clean()
         _validate_source_fields(self)
         _validate_tier_fields(self)
+        _validate_package_format(
+            self,
+            variant=self.uploaded_variant,
+            model=self.uploaded_model,
+            brand=self.uploaded_brand,
+            chipset_text=self.chipset,
+        )
 
 
 class BaseFirmware(TieredAccess, Timestamped):
@@ -989,6 +1017,18 @@ class BaseFirmware(TieredAccess, Timestamped):
         super().clean()
         _validate_source_fields(self)
         _validate_tier_fields(self)
+        _validate_package_format(
+            self,
+            variant=self.variant,
+            model=self.model,
+            brand=self.brand,
+            chipset_text=self.chipset,
+        )
+
+    @property
+    def package_format_tool(self):
+        """The flashing tool matching this package format (or ``None``)."""
+        return tool_for_format(self.package_format)
 
     @property
     def download_tokens(self):
@@ -1026,6 +1066,8 @@ class EngineeringFirmware(BaseFirmware):
 
     class Meta:
         constraints = _firmware_meta_constraints("eng")
+        verbose_name = "Service / Engineering firmware"
+        verbose_name_plural = "Service / Engineering firmware"
         indexes: ClassVar[list[models.Index]] = [
             models.Index(
                 fields=["brand", "model", "variant"], name="eng_hierarchy_idx"
@@ -1099,6 +1141,8 @@ class UnclassifiedFirmware(BaseFirmware):
 
 # Import tracking models so Django registers them in app registry
 import_module(".tracking_models", __package__)
+# External download link shortener (settings, short codes, clicks, cache, audit).
+import_module(".shortener_models", __package__)
 
 # =============================================================================
 # Firmware verification models
@@ -1245,10 +1289,7 @@ def gen_token() -> str:
 
 class DownloadTokenQuerySet(models.QuerySet):
     def for_firmware(self, firmware):
-        content_type = ContentType.objects.get_for_model(
-            firmware, for_concrete_model=False
-        )
-        return self.filter(content_type=content_type, object_id=firmware.pk)
+        return self.filter(**ref_kwargs(firmware))
 
 
 class DownloadToken(models.Model):
@@ -1278,6 +1319,16 @@ class DownloadToken(models.Model):
     ad_gate_required = models.BooleanField(default=True)
     ad_gate_completed = models.BooleanField(default=False)
     ip = models.GenericIPAddressField(null=True, blank=True)
+    anon_hash = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text=(
+            "Keyed hash of the signed download cookie that owns an anonymous token "
+            "(empty for signed-in users). The IP never identifies a token."
+        ),
+    )
     status = models.CharField(
         max_length=10, choices=Status.choices, default=Status.ACTIVE, db_index=True
     )
@@ -1305,7 +1356,16 @@ class DownloadToken(models.Model):
 
 
 class DownloadSession(models.Model):
-    """Tracks the full lifecycle of a download session."""
+    """One admitted download: its state and the lease that holds a transfer slot.
+
+    The package's "concurrent downloads" cap counts *leases*, not statuses: a session
+    holds a slot from admission (token consumed) until the transfer is reported
+    finished (:func:`apps.firmwares.download_leases.report_transfer`) or its lease
+    runs out, whichever is first. ``lease_expires_at`` is the hard bound (link TTL
+    before the file is opened, a size-aware transfer window afterwards), so a lost
+    completion signal can never hold a slot for good. ``released_at`` is set when the
+    slot is given back.
+    """
 
     class Status(models.TextChoices):
         STARTED = "started", "Started"
@@ -1325,26 +1385,56 @@ class DownloadSession(models.Model):
     )
     ip = models.GenericIPAddressField(null=True, blank=True)
     user_agent = models.CharField(max_length=255, blank=True, default="")
-    bytes_delivered = models.BigIntegerField(default=0)
+    bytes_delivered = models.BigIntegerField(
+        default=0, help_text="Bytes reported delivered (0 until a transfer reports)"
+    )
     status = models.CharField(
         max_length=10, choices=Status.choices, default=Status.STARTED
     )
     started_at = models.DateTimeField(auto_now_add=True)
     completed_at = models.DateTimeField(null=True, blank=True)
     error = models.TextField(blank=True, default="")
+    redeem_count = models.PositiveSmallIntegerField(
+        default=0, help_text="How often the signed link was opened (resume budget)"
+    )
+    redeemed_at = models.DateTimeField(null=True, blank=True)
+    lease_expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="The transfer slot is free after this moment, whatever happens",
+    )
+    released_at = models.DateTimeField(
+        null=True, blank=True, help_text="When the transfer slot was given back"
+    )
 
     class Meta:
         db_table = "download_links_downloadsession"
         verbose_name = "Download Session"
         verbose_name_plural = "Download Sessions"
         ordering: ClassVar[list[str]] = ["-started_at"]
+        indexes: ClassVar[list[models.Index]] = [
+            models.Index(
+                fields=["user", "released_at", "lease_expires_at"],
+                name="dl_session_lease_idx",
+            )
+        ]
 
     def __str__(self) -> str:
         return f"Session #{self.pk} [{self.status}]"
 
 
 class AdGateLog(models.Model):
-    """Records ad-gate completion for a download token."""
+    """Records ad-gate completion for a download token.
+
+    ``proof`` states how strong the evidence is: ``dwell`` is only the server's own
+    timer (a delay and an attention signal, never a proof of an impression), while
+    ``ad_unlock`` means the shop's rewarded-ad unlock of this very file, proven by the
+    ads app's server-validated watch, already covered the step.
+    """
+
+    class Proof(models.TextChoices):
+        DWELL = "dwell", "Server timer (delay only)"
+        AD_UNLOCK = "ad_unlock", "Rewarded-ad unlock (server verified)"
 
     token = models.ForeignKey(
         DownloadToken, on_delete=models.CASCADE, related_name="ad_logs"
@@ -1366,6 +1456,9 @@ class AdGateLog(models.Model):
         default="video",
     )
     ad_network = models.CharField(max_length=50, blank=True, default="")
+    proof = models.CharField(
+        max_length=12, choices=Proof.choices, default=Proof.DWELL, db_index=True
+    )
     watched_seconds = models.PositiveSmallIntegerField(default=0)
     required_seconds = models.PositiveSmallIntegerField(default=30)
     credits_earned = models.DecimalField(max_digits=10, decimal_places=4, default=0)
@@ -1568,7 +1661,23 @@ class FirmwareDiff(models.Model):
 
 
 class FlashingToolCategory(Timestamped):
-    """Categorize flashing tools (OEM, Crack/Patched, Local Market, Open Source)."""
+    """A category of flashing tools and guides.
+
+    ``general`` categories are the hand-made legacy groups (OEM, Crack/Patched, ...)
+    and the tool's own ``FlashingTool.category``. The other kinds are generated and
+    kept in sync by ``apps.firmwares.tool_categories``: one per chipset vendor
+    (``chipset_vendor``) with its product families as children (``chipset_family``),
+    one per brand (``brand``) and one per device operating system (``os_type``).
+    Which tools and guides belong to a generated category is derived from their
+    chipsets, brands and OS, never stored twice.
+    """
+
+    class Kind(models.TextChoices):
+        GENERAL = "general", "General"
+        CHIPSET_VENDOR = "chipset_vendor", "Chipset vendor"
+        CHIPSET_FAMILY = "chipset_family", "Chipset family"
+        BRAND = "brand", "Brand"
+        OS_TYPE = "os_type", "Operating system"
 
     name = models.CharField(max_length=100, unique=True)
     slug = models.SlugField(max_length=120, unique=True)
@@ -1576,15 +1685,88 @@ class FlashingToolCategory(Timestamped):
     icon = models.CharField(max_length=50, blank=True, default="wrench")
     sort_order = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=True)
+    kind = models.CharField(
+        max_length=20, choices=Kind.choices, default=Kind.GENERAL, db_index=True
+    )
+    parent = models.ForeignKey(
+        "self",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="children",
+        help_text="Chipset families sit under their vendor.",
+    )
+    vendor = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        help_text="Canonical chipset vendor label (vendor and family categories).",
+    )
+    family = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        help_text="Chipset family label (family categories).",
+    )
+    brand = models.ForeignKey(
+        "firmwares.Brand",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="tool_categories",
+        help_text="The brand this category was generated for (brand categories).",
+    )
+    os_key = models.CharField(
+        max_length=32,
+        blank=True,
+        default="",
+        help_text="Operating system key, e.g. android or ios (OS categories).",
+    )
+    is_auto = models.BooleanField(
+        default=False,
+        help_text="Generated and kept in sync automatically from the catalogue.",
+    )
+    slug_history = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Earlier slugs; they redirect to the current one.",
+    )
 
     class Meta:
         db_table = "firmwares_flashingtoolcategory"
         verbose_name = "Flashing Tool Category"
         verbose_name_plural = "Flashing Tool Categories"
         ordering: ClassVar[list[str]] = ["sort_order", "name"]
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.UniqueConstraint(
+                fields=["vendor"],
+                condition=Q(kind="chipset_vendor"),
+                name="tool_cat_one_per_vendor",
+            ),
+            models.UniqueConstraint(
+                fields=["vendor", "family"],
+                condition=Q(kind="chipset_family"),
+                name="tool_cat_one_per_family",
+            ),
+            models.UniqueConstraint(
+                fields=["brand"],
+                condition=Q(kind="brand", brand__isnull=False),
+                name="tool_cat_one_per_brand",
+            ),
+            models.UniqueConstraint(
+                fields=["os_key"],
+                condition=Q(kind="os_type"),
+                name="tool_cat_one_per_os",
+            ),
+        ]
 
     def __str__(self) -> str:
         return self.name
+
+    def get_absolute_url(self) -> str:
+        from django.urls import reverse
+
+        return reverse("firmwares:flashing_category", kwargs={"slug": self.slug})
 
 
 class FlashingTool(Timestamped):
@@ -1612,8 +1794,9 @@ class FlashingTool(Timestamped):
 
     category = models.ForeignKey(
         FlashingToolCategory,
-        on_delete=models.CASCADE,
+        on_delete=models.PROTECT,
         related_name="tools",
+        help_text="Deleting a category never deletes its tools: move them first.",
     )
     name = models.CharField(max_length=200)
     slug = models.SlugField(max_length=220, unique=True)

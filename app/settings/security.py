@@ -40,20 +40,22 @@ PRODUCTION_CSP: dict[str, list[str]] = {
     "upgrade-insecure-requests": [],
 }
 
-# Policy for the Unfold shell (the admin and the staff pages that extend it; see
-# apps.core.middleware.admin_csp; the public site keeps BASE_CSP). Unfold's Alpine build compiles x-data/x-on expressions with
-# `new Function`, which needs 'unsafe-eval' for scripts; every script stays
-# same-origin. Inline <style> blocks carry the per-request nonce, and Alpine's
-# style bindings need inline style *attributes* (style-src-attr), which cannot run
-# script. No ad or third-party hosts are allowed.
+# Policy for the staff console (the admin and the staff pages that share its shell; see
+# apps.core.middleware.admin_csp; the public site keeps BASE_CSP). The console ships
+# one same-origin script bundle (htmx + Alpine's CSP build, no expression evaluation)
+# and has no inline scripts or event handlers, so scripts need neither 'unsafe-eval'
+# nor 'unsafe-inline' nor a nonce. Styles are same-origin files; only <style> elements
+# carrying the per-request nonce are additionally allowed (no style *attributes*: the
+# components toggle classes and CSSOM properties, which CSP does not restrict). No ad
+# or third-party hosts are allowed, and forms may only post back to this site.
 ADMIN_CSP: dict[str, list[str]] = {
     **BASE_CSP,
     "connect-src": [CSP.SELF],
+    "form-action": [CSP.SELF],
     "frame-src": [CSP.NONE],
     "img-src": [CSP.SELF, "data:"],
-    "script-src": [CSP.SELF, CSP.NONCE, CSP.UNSAFE_EVAL],
+    "script-src": [CSP.SELF],
     "style-src": [CSP.SELF, CSP.NONCE],
-    "style-src-attr": [CSP.UNSAFE_INLINE],
 }
 
 PRODUCTION_ADMIN_CSP: dict[str, list[str]] = {

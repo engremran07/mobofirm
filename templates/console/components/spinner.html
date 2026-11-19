@@ -1,0 +1,3 @@
+{% comment %}
+  spinner - small inline busy indicator. Context: label (default "Loading"), css_class.
+{% endcomment %}{% load i18n %}<span class="spinner-border spinner-border-sm{% if css_class %} {{ css_class }}{% endif %}" role="status"><span class="visually-hidden">{{ label|default:_("Loading") }}</span></span>

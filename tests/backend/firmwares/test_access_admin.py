@@ -33,7 +33,7 @@ def staff_client_fixture(django_user_model) -> Client:
     staff = django_user_model.objects.create_superuser(
         username="access-admin", email="access-admin@example.test"
     )
-    client = Client()
+    client = Client(headers={"HX-Request": "true"})
     client.force_login(staff)
     return client
 

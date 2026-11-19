@@ -4,14 +4,14 @@ from typing import Any
 
 from django import forms
 from django.core.exceptions import ValidationError
-from unfold.widgets import (
-    UnfoldAdminPasswordWidget,
-    UnfoldAdminSelectWidget,
-    UnfoldAdminTextInputWidget,
-)
 
+from apps.core.admin_forms import (
+    ConsolePasswordWidget,
+    ConsoleSelectWidget,
+    ConsoleTextInputWidget,
+)
 from apps.distribution import channels, services
-from apps.distribution.models import Channel
+from apps.distribution.models import Channel, DistributionSettings
 
 CRED_PREFIX = "cred_"
 _FORM_CACHE: dict[str, type[ChannelAdminForm]] = {}
@@ -19,6 +19,25 @@ _FORM_CACHE: dict[str, type[ChannelAdminForm]] = {}
 
 def cred_name(field_name: str) -> str:
     return f"{CRED_PREFIX}{field_name}"
+
+
+class FeedSettingsForm(forms.ModelForm):
+    """Staff settings of the public feeds and the WebSub hub (https only)."""
+
+    class Meta:
+        model = DistributionSettings
+        fields = (
+            "feeds_enabled",
+            "feeds_dynamic_enabled",
+            "feed_item_limit",
+            "websub_hub_url",
+        )
+
+    def clean_websub_hub_url(self) -> str:
+        value = str(self.cleaned_data.get("websub_hub_url") or "").strip()
+        if value and not value.startswith("https://"):
+            raise ValidationError("Use an https:// address for the WebSub hub.")
+        return value
 
 
 class ChannelAdminForm(forms.ModelForm):
@@ -97,7 +116,7 @@ def channel_form_for(kind: str) -> type[ChannelAdminForm]:
                 required=False,
                 label=spec.label,
                 help_text=spec.help,
-                widget=UnfoldAdminSelectWidget,
+                widget=ConsoleSelectWidget,
             )
         elif spec.is_secret:
             field = forms.CharField(
@@ -106,7 +125,7 @@ def channel_form_for(kind: str) -> type[ChannelAdminForm]:
                 max_length=2000,
                 label=spec.label,
                 help_text=spec.help,
-                widget=UnfoldAdminPasswordWidget(
+                widget=ConsolePasswordWidget(
                     attrs={"autocomplete": "new-password"}, render_value=False
                 ),
             )
@@ -116,7 +135,7 @@ def channel_form_for(kind: str) -> type[ChannelAdminForm]:
                 max_length=500,
                 label=spec.label,
                 help_text=spec.help,
-                widget=UnfoldAdminTextInputWidget(attrs=attrs),
+                widget=ConsoleTextInputWidget(attrs=attrs),
             )
         declared[cred_name(spec.name)] = field
     form = type(f"{kind.title()}ChannelForm", (ChannelAdminForm,), declared)

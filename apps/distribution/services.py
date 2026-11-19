@@ -41,6 +41,7 @@ from apps.distribution import (
     scheduling,
     shortlinks,
     variants,
+    videos,
 )
 from apps.distribution.channels import Outcome, SendContext
 from apps.distribution.constants import (
@@ -86,7 +87,7 @@ __all__ = [
     "cancel_job",
     "check_connection",
     "enqueue",
-    "process_due_jobs",
+    "mark_posted",
     "reject_job",
     "reschedule_job",
     "retry_job",
@@ -585,6 +586,53 @@ def _finish(
     return result
 
 
+def _hand_off(job: ShareJob, now: datetime) -> str:
+    """Assisted platform: nothing is sent; the post waits for a person to publish it."""
+    job.status = ShareJob.Status.HANDOFF
+    job.response_code = "assisted"
+    job.last_error = ""
+    job.next_attempt_at = now
+    job.save(update_fields=["status", "response_code", "last_error", "next_attempt_at"])
+    _log(job.channel, "Ready to post by hand (assisted platform)", job=job)
+    return "handoff"
+
+
+def mark_posted(
+    job: ShareJob, user: Any = None, *, now: datetime | None = None
+) -> bool:
+    """Staff confirms they posted a hand-off job; idempotent (only from hand-off)."""
+    if job.status != ShareJob.Status.HANDOFF:
+        return False
+    moment = now or timezone.now()
+    with transaction.atomic():
+        updated = ShareJob.objects.filter(
+            pk=job.pk, status=ShareJob.Status.HANDOFF
+        ).update(
+            status=ShareJob.Status.SENT,
+            sent_at=moment,
+            decided_by=user if getattr(user, "pk", None) else None,
+            decided_at=moment,
+        )
+        if not updated:
+            return False
+        channel = job.channel
+        if job.content_kind != CONTENT_TEST:
+            channel.consecutive_failures = 0
+            channel.last_error = ""
+        channel.last_success_at = moment
+        channel.save(
+            update_fields=[
+                "consecutive_failures",
+                "last_error",
+                "last_success_at",
+                "updated_at",
+            ]
+        )
+    job.refresh_from_db()
+    _log(channel, f"Marked as posted by {_actor(user)}", job=job)
+    return True
+
+
 def _prepare_media(
     job: ShareJob, adapter: channels.Adapter, values: Mapping[str, str]
 ) -> tuple[channels.MediaRefs, str]:
@@ -595,16 +643,27 @@ def _prepare_media(
         adapter.image_optional and preset.generate_media and job.channel.use_composer
     )
     reasons: list[str] = []
-    if wants_card or need == MEDIA_VIDEO:
+    if wants_card:
         spec = media.spec_for(job.content_kind, job.object_ref, job.title, site_name())
         try:
-            if wants_card:
-                reasons.append(media.ensure_card(spec).reason)
-            if need == MEDIA_VIDEO:
-                reasons.append(media.ensure_video(spec).reason)
+            reasons.append(media.ensure_card(spec).reason)
         except OSError as error:
             reasons.append(f"Storage error: {error}")
     refs = media.refs_for(job.content_kind, job.object_ref)
+    if need == MEDIA_VIDEO:
+        # Hard rule: a video platform only ever gets a video staff approved. The old
+        # automatic slideshow is not used for posting.
+        approved = videos.approved_refs(job.content_kind, job.object_ref)
+        refs = replace(
+            refs,
+            video_url=approved.video_url if approved else "",
+            video_name=approved.video_name if approved else "",
+            reader=approved.reader if approved else refs.reader,
+        )
+        if approved is None:
+            reasons.append(
+                "Waiting for an approved motion video (Distribution > Videos)."
+            )
     problem = adapter.media_problem(refs, values)
     reason = next((r for r in reasons if r), "")
     return refs, (f"{problem} {reason}".strip() if problem else "")
@@ -672,6 +731,8 @@ def _run(
         return _finish(
             job, failure or Outcome(False, False, "config", "Not ready"), now
         )
+    if adapter.assisted:
+        return _hand_off(job, now)
     ctx.media, problem = _prepare_media(job, adapter, ctx.values)
     if problem:
         if job.content_kind == CONTENT_TEST:
@@ -685,7 +746,10 @@ def _run(
         outcome = Outcome(False, False, "config", ctx.http.scrub(str(error)))
     if ctx.updated:
         _persist_updated(channel, adapter, ctx.values, ctx.updated)
-    return _finish(job, outcome, now, final=final)
+    result = _finish(job, outcome, now, final=final)
+    if result == "sent" and ctx.media.video_name and job.content_kind != CONTENT_TEST:
+        videos.note_posted(job.content_kind, job.object_ref)
+    return result
 
 
 def attempt(
@@ -832,7 +896,7 @@ def retry_job(job: ShareJob) -> bool:
 
 
 def cancel_job(job: ShareJob, user: Any = None) -> bool:
-    if job.status not in PENDING_STATES:
+    if job.status not in (*PENDING_STATES, ShareJob.Status.HANDOFF):
         return False
     job.status = ShareJob.Status.CANCELLED
     job.save(update_fields=["status"])

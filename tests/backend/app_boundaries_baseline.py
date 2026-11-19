@@ -16,8 +16,10 @@ ALLOWED_EDGES: dict[str, frozenset[str]] = {
         {
             "admin_base",
             "admin_dialogs",
+            "admin_filters",
             "admin_pages",
             "dialogs",
+            "internal_request",
             "models",
             "seeding",
             "utils",
@@ -25,6 +27,7 @@ ALLOWED_EDGES: dict[str, frozenset[str]] = {
     ),
     "ads->devices": frozenset({"slots"}),
     "ads->firmwares": frozenset({"crypto", "models"}),
+    "ads->seo": frozenset({"wellknown"}),
     "ads->shop": frozenset({"(package)", "entitlements"}),
     "ads->users": frozenset({"services"}),
     "ads->wallet": frozenset({"api"}),
@@ -34,6 +37,8 @@ ALLOWED_EDGES: dict[str, frozenset[str]] = {
         {
             "(package)",
             "admin_base",
+            "admin_filters",
+            "admin_forms",
             "app_service",
             "dialogs",
             "editor",
@@ -44,6 +49,7 @@ ALLOWED_EDGES: dict[str, frozenset[str]] = {
             "services",
             "signals",
             "utils",
+            "view_counter",
         }
     ),
     "blog->firmwares": frozenset(
@@ -65,15 +71,25 @@ ALLOWED_EDGES: dict[str, frozenset[str]] = {
     "blog->users": frozenset({"models", "services"}),
     "blog->wallet": frozenset({"api"}),
     "bounty->core": frozenset(
-        {"admin_base", "app_service", "dialogs", "events", "services"}
+        {
+            "admin_base",
+            "admin_filters",
+            "admin_forms",
+            "app_service",
+            "dialogs",
+            "events",
+            "services",
+        }
     ),
-    "bounty->wallet": frozenset({"(package)", "api"}),
     "bounty->users": frozenset({"request_user"}),
+    "bounty->wallet": frozenset({"(package)", "api"}),
     "comments->blog": frozenset({"access", "models"}),
     "comments->core": frozenset(
         {
             "admin_base",
             "admin_dialogs",
+            "admin_filters",
+            "admin_forms",
             "admin_pages",
             "dialogs",
             "editor",
@@ -84,7 +100,7 @@ ALLOWED_EDGES: dict[str, frozenset[str]] = {
         }
     ),
     "comments->users": frozenset({"services"}),
-    "consent->core": frozenset({"admin_base", "app_service", "utils"}),
+    "consent->core": frozenset({"admin_base", "admin_filters", "app_service", "utils"}),
     "core->ads": frozenset({"models", "seeding"}),
     "core->blog": frozenset({"models"}),
     "core->comments": frozenset({"models"}),
@@ -94,13 +110,31 @@ ALLOWED_EDGES: dict[str, frozenset[str]] = {
     "core->users": frozenset({"models"}),
     "devices->ads": frozenset({"api"}),
     "devices->core": frozenset(
-        {"admin_base", "admin_pages", "dialogs", "models", "services", "utils"}
+        {
+            "admin_base",
+            "admin_filters",
+            "admin_forms",
+            "admin_pages",
+            "dialogs",
+            "models",
+            "services",
+            "utils",
+        }
     ),
     "devices->firmwares": frozenset({"models"}),
     "devices->shop": frozenset({"entitlements"}),
     "devices->users": frozenset({"services"}),
     "distribution->core": frozenset(
-        {"admin_base", "admin_pages", "app_service", "events", "signals"}
+        {
+            "admin_base",
+            "admin_filters",
+            "admin_forms",
+            "admin_pages",
+            "app_service",
+            "events",
+            "internal_request",
+            "signals",
+        }
     ),
     "distribution->seo": frozenset({"fetcher", "siteurls"}),
     "distribution->site_settings": frozenset({"crypto", "services"}),
@@ -109,6 +143,8 @@ ALLOWED_EDGES: dict[str, frozenset[str]] = {
         {
             "(package)",
             "admin_base",
+            "admin_filters",
+            "admin_forms",
             "admin_pages",
             "ai_client",
             "app_service",
@@ -121,6 +157,7 @@ ALLOWED_EDGES: dict[str, frozenset[str]] = {
             "signals",
             "throttling",
             "utils",
+            "view_counter",
         }
     ),
     "firmwares->pages": frozenset({"(package)"}),
@@ -129,6 +166,7 @@ ALLOWED_EDGES: dict[str, frozenset[str]] = {
             "(package)",
             "contentsources",
             "contracts",
+            "fetcher",
             "models",
             "policy",
             "providers",
@@ -140,18 +178,38 @@ ALLOWED_EDGES: dict[str, frozenset[str]] = {
     "firmwares->tags": frozenset({"services"}),
     "firmwares->users": frozenset({"decorators", "request_user", "services"}),
     "firmwares->wallet": frozenset({"api"}),
-    "gamification->core": frozenset({"admin_base", "events", "services"}),
+    "gamification->core": frozenset(
+        {"admin_base", "admin_filters", "events", "services"}
+    ),
     "gamification->users": frozenset({"request_user"}),
     "gamification->wallet": frozenset({"api"}),
     "marketplace->core": frozenset(
-        {"admin_base", "app_service", "decorators", "editor", "events", "search"}
+        {
+            "admin_base",
+            "admin_filters",
+            "admin_forms",
+            "app_service",
+            "decorators",
+            "editor",
+            "events",
+            "internal_request",
+            "search",
+        }
     ),
     "marketplace->firmwares": frozenset({"catalog", "models"}),
     "marketplace->pages": frozenset({"widgets"}),
     "marketplace->users": frozenset({"models", "request_user", "services"}),
     "pages->blog": frozenset({"models"}),
     "pages->core": frozenset(
-        {"admin_base", "app_service", "decorators", "editor", "search"}
+        {
+            "admin_base",
+            "admin_filters",
+            "admin_forms",
+            "app_service",
+            "decorators",
+            "editor",
+            "search",
+        }
     ),
     "pages->firmwares": frozenset({"catalog", "models"}),
     "pages->seo": frozenset(
@@ -167,6 +225,7 @@ ALLOWED_EDGES: dict[str, frozenset[str]] = {
     "promotions->core": frozenset(
         {
             "admin_base",
+            "admin_forms",
             "app_service",
             "decorators",
             "dialogs",
@@ -180,30 +239,74 @@ ALLOWED_EDGES: dict[str, frozenset[str]] = {
     "promotions->users": frozenset({"models", "request_user", "services"}),
     "promotions->wallet": frozenset({"(package)"}),
     "referral->core": frozenset(
-        {"admin_base", "app_service", "decorators", "events", "utils"}
+        {
+            "admin_base",
+            "admin_filters",
+            "app_service",
+            "decorators",
+            "events",
+            "internal_request",
+            "utils",
+        }
     ),
     "referral->users": frozenset({"request_user"}),
     "referral->wallet": frozenset({"(package)", "api", "models"}),
     "seo->blog": frozenset({"models"}),
     "seo->core": frozenset(
-        {"(package)", "admin_base", "admin_pages", "decorators", "models", "utils"}
+        {
+            "(package)",
+            "admin_base",
+            "admin_filters",
+            "admin_forms",
+            "admin_pages",
+            "decorators",
+            "internal_request",
+            "models",
+            "utils",
+        }
     ),
     "seo->firmwares": frozenset({"models"}),
     "seo->site_settings": frozenset({"services"}),
-    "shop->core": frozenset({"admin_base", "app_service", "decorators", "events"}),
+    "shop->core": frozenset(
+        {
+            "admin_base",
+            "admin_filters",
+            "admin_forms",
+            "app_service",
+            "decorators",
+            "events",
+        }
+    ),
     "shop->firmwares": frozenset({"(package)", "catalog"}),
     "shop->marketplace": frozenset({"services"}),
     "shop->users": frozenset({"request_user"}),
     "site_settings->consent": frozenset({"constants", "services"}),
-    "site_settings->core": frozenset({"admin_base", "editor"}),
+    "site_settings->core": frozenset({"admin_base", "admin_forms", "editor"}),
     "site_settings->pages": frozenset({"widgets"}),
     "storage->core": frozenset(
-        {"admin_base", "admin_pages", "app_service", "decorators", "utils"}
+        {
+            "admin_base",
+            "admin_filters",
+            "admin_forms",
+            "admin_pages",
+            "app_service",
+            "decorators",
+            "utils",
+        }
     ),
     "storage->firmwares": frozenset({"(package)", "catalog"}),
     "tags->blog": frozenset({"(package)", "models"}),
     "tags->core": frozenset(
-        {"admin_base", "admin_dialogs", "admin_pages", "dialogs", "models", "search"}
+        {
+            "admin_base",
+            "admin_dialogs",
+            "admin_filters",
+            "admin_forms",
+            "admin_pages",
+            "dialogs",
+            "models",
+            "search",
+        }
     ),
     "tags->seo": frozenset(
         {
@@ -222,6 +325,8 @@ ALLOWED_EDGES: dict[str, frozenset[str]] = {
     "users->core": frozenset(
         {
             "admin_base",
+            "admin_filters",
+            "admin_forms",
             "app_service",
             "cache",
             "editor",
@@ -240,7 +345,16 @@ ALLOWED_EDGES: dict[str, frozenset[str]] = {
     "users->site_settings": frozenset({"services"}),
     "users->wallet": frozenset({"(package)", "api"}),
     "wallet->core": frozenset(
-        {"admin_base", "app_service", "decorators", "events", "search", "services"}
+        {
+            "admin_base",
+            "admin_filters",
+            "admin_forms",
+            "app_service",
+            "decorators",
+            "events",
+            "search",
+            "services",
+        }
     ),
     "wallet->users": frozenset({"decorators", "request_user"}),
 }

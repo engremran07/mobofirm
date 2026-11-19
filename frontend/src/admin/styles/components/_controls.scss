@@ -1,0 +1,192 @@
+// Interaction primitives (visual layer). Behaviour: js/ui/popover.js + js/ui/controls.js; state is read from data attributes only.
+//   Menu       .dropdown[data-ui-popover] > button[data-ui-trigger] + ul.dropdown-menu[data-ui-panel data-ui-fixed role=menu] > li > a|button.dropdown-item
+//              (open: [data-open] on the root; items: [data-active] [data-selected] [data-disabled])
+//   Select     .c-select[data-ui-select data-ui-popover] > select (native value) + button.c-select__btn + .c-fpanel > ul[role=listbox] > li > button[role=option]
+//   Switch     label.c-switch > input.c-switch__input[role=switch data-ui-switch] + .c-switch__track > .c-switch__thumb + .c-switch__label
+//   Radio      .c-radiogroup[role=radiogroup data-ui-radiogroup] > button.c-radiogroup__item[role=radio] (+ hidden input)
+//   Dialog     dialog.c-dialog-native[data-ui-dialog] > header.c-dialog-native__head, .c-dialog-native__body, footer.c-dialog-native__foot (--end = offcanvas)
+@layer components {
+  // ---- Menu (popover, role=menu) -------------------------------------------------------
+  [data-ui-popover] > .dropdown-menu { display: none; }
+  [data-ui-popover][data-open] > .dropdown-menu { display: block; animation: c-pop var(--mf-duration-fast) var(--mf-ease-out); }
+  .dropdown-item[data-active],
+  .dropdown-item:hover { background: var(--mf-hover); }
+  .dropdown-item[data-selected] { color: var(--mf-accent-strong); background: var(--mf-accent-soft); }
+  .dropdown-item[data-disabled] { color: var(--mf-text-muted); pointer-events: none; }
+  .dropdown-item:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--mf-focus); }
+
+  // ---- Select (listbox over a native select) -------------------------------------------
+  .c-select { position: relative; display: inline-block; }
+  .c-select > select { min-block-size: var(--mf-control-h-sm); }
+  .c-select__btn { display: none; }
+  .c-select__value { min-inline-size: 7rem; text-align: start; white-space: nowrap; }
+  .c-select[data-empty] .c-select__value { color: var(--mf-text-muted); }
+  .c-select[data-open] .c-select__btn { border-color: var(--mf-accent); }
+
+  // With scripting on, the button is the control and the native select is only the value holder.
+  .js .c-select__btn { display: inline-flex; }
+  .js .c-select > select {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .c-fpanel__list button[role="option"] {
+    inline-size: 100%;
+    font: inherit;
+    text-align: start;
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+  }
+
+  // ---- Switch ----------------------------------------------------------------------------
+  .c-switch { display: inline-flex; align-items: center; gap: var(--mf-space-3); cursor: pointer; }
+  .c-switch__input { position: absolute; inline-size: 1px; block-size: 1px; opacity: 0; }
+
+  .c-switch__track {
+    position: relative;
+    flex: none;
+    inline-size: 2.5rem;
+    block-size: 1.5rem;
+    background: var(--mf-surface-soft);
+    border: 1px solid var(--mf-border-strong);
+    border-radius: var(--mf-radius-pill);
+    transition: background-color var(--mf-duration-fast) var(--mf-ease-out), border-color var(--mf-duration-fast) var(--mf-ease-out);
+  }
+
+  .c-switch__thumb {
+    position: absolute;
+    inset-block-start: 50%;
+    inset-inline-start: 0.1875rem;
+    inline-size: 1.0625rem;
+    block-size: 1.0625rem;
+    background: var(--mf-text-muted);
+    border-radius: 50%;
+    transform: translateY(-50%);
+    transition: transform var(--mf-duration-fast) var(--mf-ease-out), background-color var(--mf-duration-fast) var(--mf-ease-out);
+  }
+
+  .c-switch__input:checked + .c-switch__track,
+  .c-switch__input[data-checked] + .c-switch__track { background: var(--mf-accent-soft); border-color: var(--mf-accent); }
+  .c-switch__input:checked + .c-switch__track .c-switch__thumb,
+  .c-switch__input[data-checked] + .c-switch__track .c-switch__thumb { background: var(--mf-accent-strong); transform: translate(1.0625rem, -50%); }
+  [dir="rtl"] .c-switch__input:checked + .c-switch__track .c-switch__thumb,
+  [dir="rtl"] .c-switch__input[data-checked] + .c-switch__track .c-switch__thumb { transform: translate(-1.0625rem, -50%); }
+  .c-switch__input[data-focus] + .c-switch__track { box-shadow: var(--mf-focus-ring); }
+  .c-switch__input[data-disabled] + .c-switch__track { opacity: 0.6; cursor: not-allowed; }
+  .c-switch__label { font-size: var(--mf-fs-sm); }
+
+  // Self-contained switch: the checkbox itself (role=switch) drawn as a track and thumb, so a form field or a
+  // list_editable cell keeps its single native <input name=... value=...> and needs no extra markup.
+  .c-switch-input {
+    position: relative;
+    flex: none;
+    inline-size: 2.5rem;
+    block-size: 1.5rem;
+    margin: 0;
+    background: var(--mf-surface-soft);
+    border: 1px solid var(--mf-border-strong);
+    border-radius: var(--mf-radius-pill);
+    cursor: pointer;
+    appearance: none;
+    transition: background-color var(--mf-duration-fast) var(--mf-ease-out), border-color var(--mf-duration-fast) var(--mf-ease-out);
+
+    &::after {
+      content: "";
+      position: absolute;
+      inset-block-start: 50%;
+      inset-inline-start: 0.1875rem;
+      inline-size: 1.0625rem;
+      block-size: 1.0625rem;
+      background: var(--mf-text-muted);
+      border-radius: 50%;
+      transform: translateY(-50%);
+      transition: transform var(--mf-duration-fast) var(--mf-ease-out), background-color var(--mf-duration-fast) var(--mf-ease-out);
+    }
+
+    &:checked,
+    &[data-checked] { background: var(--mf-accent-soft); border-color: var(--mf-accent); }
+    &:checked::after,
+    &[data-checked]::after { background: var(--mf-accent-strong); transform: translate(1.0625rem, -50%); }
+    &:focus-visible { outline: none; box-shadow: var(--mf-focus-ring); }
+    &:disabled { opacity: 0.6; cursor: not-allowed; }
+  }
+
+  [dir="rtl"] .c-switch-input:checked::after,
+  [dir="rtl"] .c-switch-input[data-checked]::after { transform: translate(-1.0625rem, -50%); }
+
+  .c-switch-row { display: flex; align-items: center; gap: var(--mf-space-3); }
+  .c-switch-row__label { margin: 0; font-size: var(--mf-fs-sm); cursor: pointer; }
+
+  // ---- Radio group (segmented) -----------------------------------------------------------
+  .c-radiogroup {
+    display: inline-flex;
+    padding: 2px;
+    background: var(--mf-surface-soft);
+    border: 1px solid var(--mf-border);
+    border-radius: var(--mf-radius-md);
+  }
+
+  .c-radiogroup__item {
+    display: inline-flex;
+    align-items: center;
+    min-block-size: calc(var(--mf-control-h-sm) - 6px);
+    padding: 0 var(--mf-space-3);
+    color: var(--mf-text-muted);
+    font: inherit;
+    font-size: var(--mf-fs-sm);
+    font-weight: 600;
+    background: transparent;
+    border: 0;
+    border-radius: var(--mf-radius-sm);
+    cursor: pointer;
+
+    &:hover { color: var(--mf-text); }
+    &[data-selected] { color: var(--mf-accent-strong); background: var(--mf-surface-raised); box-shadow: var(--mf-elev-1); }
+    &[data-disabled] { opacity: 0.55; cursor: not-allowed; }
+    &:focus-visible { outline: none; box-shadow: var(--mf-focus-ring); }
+  }
+
+  // Native radios behind the segments: hidden visually, still the value and the keyboard model.
+  .c-radiogroup__option { position: relative; display: inline-flex; }
+  .c-radiogroup__input { position: absolute; inset: 0; margin: 0; opacity: 0; cursor: pointer; }
+  .c-radiogroup__input:checked + .c-radiogroup__item { color: var(--mf-accent-strong); background: var(--mf-surface-raised); box-shadow: var(--mf-elev-1); }
+  .c-radiogroup__input:focus-visible + .c-radiogroup__item { box-shadow: var(--mf-focus-ring); }
+  .c-radiogroup__input:disabled + .c-radiogroup__item { opacity: 0.55; cursor: not-allowed; }
+
+  // ---- Native dialog / offcanvas ----------------------------------------------------------
+  .c-dialog-native {
+    inline-size: min(32rem, calc(100vw - 2rem));
+    max-block-size: calc(100dvh - 2rem);
+    padding: 0;
+    overflow: auto;
+    color: var(--mf-text);
+    background: var(--mf-surface-raised);
+    border: 1px solid var(--mf-border);
+    border-radius: var(--mf-radius-lg);
+    box-shadow: var(--mf-elev-4);
+
+    &::backdrop { background: var(--mf-overlay); }
+    &[data-open] { animation: c-pop var(--mf-duration-base) var(--mf-ease-out); }
+  }
+
+  .c-dialog-native--end {
+    inline-size: min(26rem, 100vw);
+    block-size: 100dvh;
+    max-block-size: 100dvh;
+    margin-inline: auto 0;
+    border-radius: var(--mf-radius-lg) 0 0 var(--mf-radius-lg);
+  }
+
+  .c-dialog-native--danger { border-color: var(--mf-danger); }
+  .c-dialog-native__head { display: flex; align-items: center; justify-content: space-between; gap: var(--mf-space-3); padding: var(--mf-space-4) var(--mf-space-5); border-block-end: 1px solid var(--mf-border-soft); }
+  .c-dialog-native__title { margin: 0; font-size: var(--mf-fs-lg); }
+  .c-dialog-native__body { padding: var(--mf-space-4) var(--mf-space-5); }
+  .c-dialog-native__foot { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--mf-space-2); padding: var(--mf-space-3) var(--mf-space-5) var(--mf-space-4); border-block-start: 1px solid var(--mf-border-soft); }
+}

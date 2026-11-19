@@ -9,6 +9,8 @@ Staff refunds of such an order reverse the spend in the wallet.
 from __future__ import annotations
 
 import math
+import re
+import uuid
 from typing import Any
 
 from django.db import transaction
@@ -26,6 +28,8 @@ __all__ = [
     "InsufficientCreditsError",
     "credits_for_file",
     "credits_for_package",
+    "is_request_id",
+    "new_request_id",
     "pay_file_with_credits",
     "pay_package_with_credits",
     "purchase_block_reason",
@@ -105,6 +109,39 @@ def _next_key(user: Any, kind: str, object_id: Any) -> str:
     return f"shop:{kind}:{user.pk}:{object_id}:{taken + 1}"
 
 
+REQUEST_ID_PATTERN = re.compile(r"^[0-9a-f]{32}$")
+
+
+def new_request_id() -> str:
+    """A fresh confirmation token; the confirm dialog carries it to the POST."""
+    return uuid.uuid4().hex
+
+
+def is_request_id(value: str) -> bool:
+    return bool(REQUEST_ID_PATTERN.match(value))
+
+
+def _purchase_key(user: Any, kind: str, object_id: Any, request_id: str) -> str:
+    """The wallet idempotency key of one purchase attempt.
+
+    With a ``request_id`` (the token of one confirm dialog) the key is fixed, so a
+    double click, a retried request or a browser resubmit can never charge twice.
+    Without one every call is a new purchase (``_next_key`` numbers them).
+    """
+    if request_id:
+        if not is_request_id(request_id):
+            raise entitlements.PurchaseError("This confirmation is not valid.")
+        return f"shop:{kind}:{user.pk}:{object_id}:r{request_id}"
+    return _next_key(user, kind, object_id)
+
+
+def _replayed(user: Any, key: str) -> Order | None:
+    """The order an earlier request with the same key already completed."""
+    return Order.objects.filter(
+        user=user, payment_method=Order.PaymentMethod.CREDITS, payment_reference=key
+    ).first()
+
+
 def _charge(user: Any, sink: str, key: str, order: Order, amount: int) -> None:
     wallet_gateway.spend(
         user, sink, key=key, reference=f"order:{order.pk}", amount=amount
@@ -113,15 +150,26 @@ def _charge(user: Any, sink: str, key: str, order: Order, amount: int) -> None:
 
 
 @transaction.atomic
-def pay_package_with_credits(user: Any, package: PackageTier) -> Order:
-    """Buy ``package`` with credits and activate it immediately."""
+def pay_package_with_credits(
+    user: Any, package: PackageTier, *, request_id: str = ""
+) -> Order:
+    """Buy ``package`` with credits and activate it immediately.
+
+    Idempotent on ``request_id``: repeating a completed request returns its order and
+    charges nothing. Everything (spend, order, activation) commits or rolls back
+    together; an insufficient balance leaves no order behind.
+    """
+    services.lock_user(user)
+    key = _purchase_key(user, "package", package.pk, request_id)
+    if request_id:
+        replay = _replayed(user, key)
+        if replay is not None:
+            return replay
     cost = credits_for_package(package, user)
     if cost <= 0:
         raise entitlements.PurchaseError("This package cannot be bought with credits.")
     if not (package.is_active and package.is_public) or package.is_default:
         raise entitlements.PurchaseError("This package is not available.")
-    services.lock_user(user)
-    key = _next_key(user, "package", package.pk)
     quote = promotion_gateway.quote(user, package)
     price = quote.price if quote is not None else package.price
     order = Order.objects.create(
@@ -147,13 +195,21 @@ def pay_package_with_credits(user: Any, package: PackageTier) -> Order:
 
 
 @transaction.atomic
-def pay_file_with_credits(user: Any, firmware: Any) -> Order:
+def pay_file_with_credits(user: Any, firmware: Any, *, request_id: str = "") -> Order:
     """Buy one paid or featured file with credits; the download unlocks immediately.
 
     Atomic: the spend, the order and the entitlement commit together, so a failure
     after the charge rolls the charge back. The entitlement is per file and lifetime:
     it bypasses the free quota and the item-type restriction for this file only.
+    Idempotent on ``request_id`` like :func:`pay_package_with_credits`.
     """
+    services.lock_user(user)
+    content_type, object_id = entitlements.file_ref(firmware)
+    key = _purchase_key(user, "file", object_id, request_id)
+    if request_id:
+        replay = _replayed(user, key)
+        if replay is not None:
+            return replay
     reason = purchase_block_reason(user, firmware)
     if reason:
         raise entitlements.PurchaseError(reason)
@@ -162,14 +218,11 @@ def pay_file_with_credits(user: Any, firmware: Any) -> Order:
         raise entitlements.PurchaseError(
             "This file has no approved price yet, so it cannot be bought."
         )
-    services.lock_user(user)
     if entitlements.has_purchased(user, firmware):
         raise entitlements.PurchaseError("You already own this file.")
     cost = credits_for_file(user, firmware)
     if cost <= 0:
         raise entitlements.PurchaseError("This file cannot be bought with credits.")
-    content_type, object_id = entitlements.file_ref(firmware)
-    key = _next_key(user, "file", object_id)
     order = Order.objects.create(
         user=user,
         total=amount,

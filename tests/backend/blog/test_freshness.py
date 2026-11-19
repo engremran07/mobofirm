@@ -241,7 +241,10 @@ class PublicFreshnessTests(FreshnessTestCase):
     def test_sitemap_lastmod_is_the_real_update_time(self):
         post = self.post("Sitemap entry", age_days=12)
 
-        document = ElementTree.fromstring(self.client.get("/sitemap-blog.xml").content)
+        # Sections are numbered files; the unnumbered legacy URL only redirects to them.
+        document = ElementTree.fromstring(
+            self.client.get("/sitemap-blog-1.xml").content
+        )
         entry = next(
             url
             for url in document.findall("sm:url", NS)

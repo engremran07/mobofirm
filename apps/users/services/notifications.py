@@ -185,10 +185,16 @@ def _send_push_notification(notification: Notification, recipient: CustomUser) -
                 data=json.dumps(payload),
                 vapid_private_key=getattr(settings, "VAPID_PRIVATE_KEY", ""),
                 vapid_claims=vapid_claims,
+                timeout=10,
             )
         except pywebpush.WebPushException as exc:
-            logger.warning("Push failed for subscription %s: %s", subscription.pk, exc)
-            if exc.response is not None and exc.response.status_code in (404, 410):
+            status_code = exc.response.status_code if exc.response is not None else None
+            logger.warning(
+                "Push failed for subscription %s (status %s)",
+                subscription.pk,
+                status_code,
+            )
+            if status_code in (404, 410):
                 subscription.is_active = False
                 subscription.save(update_fields=["is_active"])
             continue

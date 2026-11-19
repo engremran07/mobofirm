@@ -1,0 +1,20 @@
+{% comment %}
+  command_palette - the "search or jump to" dialog (#console-palette): a search box that filters destinations and records through HTMX,
+  over a grouped list of every page the user may open. Opened by any [data-ui-dialog-open="console-palette"] control (a native <dialog>, see js/ui/modal.js).
+  Context: items (the palette items of the shell: {"title", "group", "icon", "url"}), search_url (the console search endpoint; required).
+  Without JavaScript the box is a normal GET form to the full search page, and the list below it is plain links.
+  The results container is #console-palette-results (aria-live: the count is announced as it changes).
+{% endcomment %}{% load i18n console_ui %}<dialog class="modal" id="console-palette" aria-labelledby="console-palette-title">
+<div class="modal-dialog">
+<div class="modal-content c-palette">
+<h2 class="visually-hidden" id="console-palette-title">{% translate "Search and jump to" %}</h2>
+<form class="c-palette__search" method="get" action="{{ search_url }}" role="search">
+{% console_icon "search" %}
+<input class="c-palette__input" type="search" name="q" autocomplete="off" spellcheck="false" maxlength="100" aria-label="{% translate 'Search pages and records' %}" aria-controls="console-palette-results" placeholder="{% translate 'Search pages, people, firmware, posts…' %}" hx-get="{{ search_url }}" hx-trigger="input changed delay:200ms, search" hx-target="#console-palette-results" hx-swap="innerHTML" hx-sync="this:replace">
+<button type="submit" class="visually-hidden">{% translate "Search" %}</button>
+</form>
+<div id="console-palette-results" aria-live="polite">{% ui "palette_list" items=items %}</div>
+<div class="c-palette__foot"><span>{% translate "Type at least two letters to search records." %}</span><span class="ms-auto"><kbd class="c-kbd">Esc</kbd> {% translate "closes" %}</span></div>
+</div>
+</div>
+</dialog>

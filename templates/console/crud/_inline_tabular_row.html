@@ -1,0 +1,25 @@
+{% load i18n admin_urls console_ui console_admin %}{% with formset=inline_admin_formset.formset %}
+{% if iform.form.non_field_errors %}<tr><td colspan="99"><div role="alert">{{ iform.form.non_field_errors }}</div></td></tr>{% endif %}
+<tr data-console-formset-row id="{{ formset.prefix }}-{{ prefix_index }}">
+<td>
+{% if iform.original %}<span>{{ iform.original }}</span>{% if iform.model_admin.show_change_link and iform.model_admin.has_registered_model %} <a class="u-text-sm" href="{% url iform.model_admin.opts|admin_urlname:'change' iform.original.pk|admin_urlquote %}">{% if inline_admin_formset.has_change_permission %}{% translate "Change" %}{% else %}{% translate "View" %}{% endif %}</a>{% endif %}{% elif not is_blank %}<span class="u-muted">#{{ prefix_index|add:1 }}</span>{% endif %}
+{% if iform.show_url %} <a class="u-text-sm" href="{{ iform.absolute_url }}">{% translate "View on site" %}</a>{% endif %}
+{% if iform.needs_explicit_pk_field %}{{ iform.pk_field.field }}{% endif %}
+{% if iform.fk_field %}{{ iform.fk_field.field }}{% endif %}
+{% for fieldset in iform %}{% for line in fieldset %}{% for field in line %}{% if field.field.is_hidden %}{{ field.field }}{% endif %}{% endfor %}{% endfor %}{% endfor %}
+</td>
+{% for fieldset in iform %}{% for line in fieldset %}{% for field in line %}{% if not field.field.is_hidden %}
+<td class="field-{{ field.field.name }}{% if not field.is_readonly and field.field.errors %} c-field--invalid{% endif %}">
+{% if field.is_readonly %}{{ field.contents }}{% else %}
+<label class="visually-hidden" for="{{ id_prefix }}{{ field.field.id_for_label }}">{{ field.field.label }}</label>
+{% console_field_widget field id_prefix %}
+{% if field.field.help_text %}<span class="visually-hidden" id="{{ id_prefix }}{{ field.field.auto_id }}_helptext">{{ field.field.help_text|striptags }}</span>{% endif %}{% if field.field.errors %}<ul class="c-field__errors errorlist" id="{{ id_prefix }}{{ field.field.auto_id }}_error" role="alert">{% for error in field.field.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+{% endif %}
+</td>{% endif %}{% endfor %}{% endfor %}{% endfor %}
+<td class="c-table__actions">
+{% if iform.original and inline.can_delete %}<span hidden>{{ iform.deletion_field.field }}</span>
+<button type="button" class="btn btn-ghost btn-icon btn-sm" data-console-formset-remove aria-pressed="false" aria-label="{% translate 'Mark for deletion' %}">{% console_icon "trash-2" %}</button>
+{% elif not iform.original and inline.blank %}<button type="button" class="btn btn-ghost btn-icon btn-sm" data-console-formset-remove aria-label="{% translate 'Remove this row' %}">{% console_icon "x" %}</button>{% endif %}
+</td>
+</tr>
+{% endwith %}

@@ -15,7 +15,6 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from html.parser import HTMLParser
 from urllib.parse import urldefrag, urljoin, urlsplit, urlunsplit
-from urllib.robotparser import RobotFileParser
 from xml.etree import ElementTree
 
 from django.db import DatabaseError
@@ -25,6 +24,7 @@ from . import audit, autonomy, interlinking
 from .fetcher import FetchError, FetchResult, SafeFetcher, default_fetcher
 from .inprocess import InProcessFetcher, choose_fetcher
 from .models import CrawlRun, PageObservation, SEOSettings
+from .robots import ParsedRobots, parse
 from .siteurls import site_origin
 
 USER_AGENT_TOKEN = "MobofirmSEOBot"
@@ -250,7 +250,7 @@ class Crawler:
         parts = urlsplit(self.base_url)
         self.origin = f"{parts.scheme}://{parts.netloc}"
         self.hosts = frozenset({(parts.hostname or "").lower()})
-        self.robots = RobotFileParser()
+        self.robots = ParsedRobots()
         self.robots_status: int | None = None
         self.sitemap_urls: set[str] = set()
 
@@ -261,10 +261,10 @@ class Crawler:
         try:
             result = self._get(f"{self.origin}/robots.txt")
         except FetchError:
-            self.robots.parse([])
             return
         self.robots_status = result.status
-        self.robots.parse(result.text.splitlines() if result.status == 200 else [])
+        if result.status == 200:
+            self.robots = parse(result.text)
 
     def _load_sitemaps(self) -> None:
         pending = deque([f"{self.origin}/sitemap.xml"])

@@ -1,4 +1,4 @@
-"""Firmware catalogue, moderation and download administration (Unfold).
+"""Firmware catalogue, moderation and download administration.
 
 Firmware records are only created and published through the moderation services in
 ``apps.firmwares.services``: the admin never adds typed firmware by hand and its
@@ -9,7 +9,8 @@ the same validated, audited code path as every other entry point.
 from __future__ import annotations
 
 import logging
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
+from contextvars import ContextVar
 from typing import Any, ClassVar
 
 from django import forms
@@ -20,26 +21,16 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import Count, QuerySet
 from django.db.models import Model as DjangoModel
 from django.http import Http404, HttpRequest, HttpResponse
+from django.template.response import SimpleTemplateResponse
 from django.urls import URLPattern, path, reverse
 from django.utils.html import format_html, format_html_join
 from django.utils.safestring import SafeString
 from django.utils.translation import gettext_lazy as _
-from unfold.contrib.filters.admin import (
-    ChoicesDropdownFilter,
-    RangeDateFilter,
-    RangeDateTimeFilter,
-    RelatedDropdownFilter,
-)
-from unfold.forms import ActionForm, BaseDialogForm
-from unfold.widgets import (
-    UnfoldAdminSelectWidget,
-    UnfoldAdminTextareaWidget,
-    UnfoldAdminTextInputWidget,
-)
 
 from apps.core.admin_base import (
     BADGE_APPROVAL,
     BADGE_JOB,
+    ImportExportMixin,
     ModelAdmin,
     NoAddModelAdmin,
     ReadOnlyModelAdmin,
@@ -52,10 +43,34 @@ from apps.core.admin_base import (
     htmx_redirect,
     return_url,
 )
+from apps.core.admin_filters import (
+    BooleanRadioFilter,
+    ChoicesDropdownFilter,
+    DropdownFilter,
+    RangeDateFilter,
+    RangeDateTimeFilter,
+    RelatedDropdownFilter,
+)
+from apps.core.admin_forms import (
+    ActionForm,
+    BaseDialogForm,
+    ConsoleSelectWidget,
+    ConsoleTextareaWidget,
+    ConsoleTextInputWidget,
+)
 from apps.core.editor.admin import RichTextAdminMixin
 
-from . import admin_access, admin_requests
+from . import admin_access, admin_requests, admin_shortener
 from .admin_access import AccessChangeAdmin
+from .admin_io import (
+    BrandResource,
+    ChipsetResource,
+    FlashingToolResource,
+    GuideTemplateResource,
+    ModelResource,
+    OfficialFirmwareResource,
+    ToolCategoryResource,
+)
 from .constants import MAIN_CATEGORIES
 from .models import (
     AccessTier,
@@ -94,6 +109,7 @@ from .services import (
     reject_pending_firmware,
     withdraw_firmware,
 )
+from .tool_categories import CategoryIndex
 from .tracking_models import (
     FirmwareDownloadAttempt,
     FirmwareStats,
@@ -102,7 +118,7 @@ from .tracking_models import (
 
 logger = logging.getLogger(__name__)
 
-# Status values of the firmware workflows -> Unfold badge colour.
+# Status values of the firmware workflows -> console badge colour.
 BADGE_STATE: Mapping[str, str] = {
     **BADGE_APPROVAL,
     **BADGE_JOB,
@@ -143,7 +159,15 @@ FIRMWARE_CATEGORY_MODELS = (
     UnclassifiedFirmware,
 )
 
-# Access tier -> Unfold badge colour.
+# Access tier -> console badge colour.
+EXPORT_ACTIONS = ("export_selected_csv", "export_selected_json")
+BADGE_CATEGORY_KIND: Mapping[str, str] = {
+    "general": "default",
+    "chipset_vendor": "info",
+    "chipset_family": "info",
+    "brand": "success",
+    "os_type": "warning",
+}
 BADGE_TIER: Mapping[str, str] = {
     "free": "success",
     "paid": "warning",
@@ -158,8 +182,7 @@ def external_link(url: str) -> SafeString | str:
     if not url.startswith(("https://", "http://")):
         return url
     return format_html(
-        '<a class="text-primary-600 underline dark:text-primary-500" href="{}" '
-        'target="_blank" rel="noopener noreferrer nofollow">{}</a>',
+        '<a href="{}" target="_blank" rel="noopener noreferrer nofollow">{}</a>',
         url,
         url,
     )
@@ -171,14 +194,17 @@ def external_link(url: str) -> SafeString | str:
 
 
 @register(Chipset)
-class ChipsetAdmin(ModelAdmin):
+class ChipsetAdmin(ImportExportMixin, ModelAdmin):
+    import_export_resource = ChipsetResource
+    actions = EXPORT_ACTIONS
+    actions_list = ("import_data", "export_data")
     list_display = ("display_name", "vendor", "family", "slug", "model_count")
     list_filter = (
         ("vendor", ChoicesDropdownFilter),
         ("family", ChoicesDropdownFilter),
     )
     search_fields = ("name", "vendor", "family", "slug")
-    prepopulated_fields: ClassVar[dict[str, tuple[str, ...]]] = {
+    prepopulated_fields: ClassVar[dict[str, Sequence[str]]] = {
         "slug": ("vendor", "name")
     }
     readonly_fields = ("created_at", "updated_at")
@@ -220,7 +246,10 @@ class BrandModelInline(TabularInline):
 
 
 @register(Brand)
-class BrandAdmin(ModelAdmin):
+class BrandAdmin(ImportExportMixin, ModelAdmin):
+    import_export_resource = BrandResource
+    actions = EXPORT_ACTIONS
+    actions_list = ("import_data", "export_data")
     list_display = (
         "name",
         "slug",
@@ -231,7 +260,7 @@ class BrandAdmin(ModelAdmin):
     )
     list_filter = ("is_featured", ("created_at", RangeDateTimeFilter))
     search_fields = ("name", "slug")
-    prepopulated_fields: ClassVar[dict[str, tuple[str, ...]]] = {"slug": ("name",)}
+    prepopulated_fields: ClassVar[dict[str, Sequence[str]]] = {"slug": ("name",)}
     readonly_fields = ("created_at", "updated_at", "website_link", "logo_link")
     ordering = ("name",)
     inlines = (BrandModelInline,)
@@ -251,6 +280,18 @@ class BrandAdmin(ModelAdmin):
                     "logo_link",
                 ),
                 "classes": ["tab"],
+            },
+        ),
+        (
+            _("Link shortening"),
+            {
+                "fields": ("shortener_mode",),
+                "classes": ["tab"],
+                "description": _(
+                    "How shared external download links of this brand are "
+                    "shortened. A per-firmware override (Firmware shortener "
+                    "overrides) beats this; Inherit follows Link shortener settings."
+                ),
             },
         ),
         (
@@ -285,7 +326,7 @@ class BrandAdmin(ModelAdmin):
 class VariantInline(TabularInline):
     model = Variant
     fields = ("name", "slug", "model_code", "region", "chipset", "is_active")
-    prepopulated_fields: ClassVar[dict[str, tuple[str, ...]]] = {"slug": ("name",)}
+    prepopulated_fields: ClassVar[dict[str, Sequence[str]]] = {"slug": ("name",)}
     show_change_link = True
     tab = True
     ordering = ("name",)
@@ -293,7 +334,10 @@ class VariantInline(TabularInline):
 
 
 @register(Model)
-class DeviceModelAdmin(ModelAdmin):
+class DeviceModelAdmin(ImportExportMixin, ModelAdmin):
+    import_export_resource = ModelResource
+    actions = EXPORT_ACTIONS
+    actions_list = ("import_data", "export_data")
     list_display = (
         "name",
         "brand",
@@ -310,7 +354,7 @@ class DeviceModelAdmin(ModelAdmin):
         ("created_at", RangeDateTimeFilter),
     )
     search_fields = ("name", "slug", "brand__name", "model_code", "codename")
-    prepopulated_fields: ClassVar[dict[str, tuple[str, ...]]] = {"slug": ("name",)}
+    prepopulated_fields: ClassVar[dict[str, Sequence[str]]] = {"slug": ("name",)}
     readonly_fields = (
         "created_at",
         "updated_at",
@@ -408,8 +452,7 @@ class DeviceModelAdmin(ModelAdmin):
             return str(_("No firmware yet."))
         return format_html_join(
             " · ",
-            '<a class="text-primary-600 underline dark:text-primary-500" '
-            'href="{}">{}: {}</a>',
+            '<a href="{}">{}: {}</a>',
             rows,
         )
 
@@ -424,8 +467,7 @@ class DeviceModelAdmin(ModelAdmin):
             return str(_("Nothing waiting for review."))
         url = reverse("admin:firmwares_pendingfirmware_changelist")
         return format_html(
-            '<a class="text-primary-600 underline dark:text-primary-500" '
-            'href="{}?uploaded_model__id__exact={}&admin_decision__exact=pending">'
+            '<a href="{}?uploaded_model__id__exact={}&admin_decision__exact=pending">'
             "{}</a>",
             url,
             obj.pk,
@@ -442,8 +484,7 @@ class DeviceModelAdmin(ModelAdmin):
         if link is None:
             return str(_("No automated blog post yet."))
         return format_html(
-            '<a class="text-primary-600 underline dark:text-primary-500" '
-            'href="{}">{}</a>',
+            '<a href="{}">{}</a>',
             reverse("admin:blog_post_change", args=[link.post_id]),
             link.post.title,
         )
@@ -468,7 +509,7 @@ class VariantAdminForm(forms.ModelForm):
         queryset=Brand.objects.order_by("name"),
         label=_("Brand"),
         help_text=_("Choose the brand first; the model list shows only its models."),
-        widget=UnfoldAdminSelectWidget,
+        widget=ConsoleSelectWidget,
     )
 
     class Meta:
@@ -544,7 +585,7 @@ class VariantAdmin(ModelAdmin):
         "region",
         "board_id",
     )
-    prepopulated_fields: ClassVar[dict[str, tuple[str, ...]]] = {"slug": ("name",)}
+    prepopulated_fields: ClassVar[dict[str, Sequence[str]]] = {"slug": ("name",)}
     readonly_fields = ("created_at", "updated_at")
     autocomplete_fields = ("chipset_ref",)
     ordering = ("model__brand__name", "model__name", "name")
@@ -620,7 +661,7 @@ class VariantAdmin(ModelAdmin):
 # Catalogue creation requests: see ``admin_requests`` (registered on import)
 # ---------------------------------------------------------------------------
 
-REGISTERED_ADMIN_MODULES = (admin_requests, admin_access)
+REGISTERED_ADMIN_MODULES = (admin_requests, admin_access, admin_shortener)
 
 
 # ---------------------------------------------------------------------------
@@ -638,7 +679,7 @@ def _price_field(label: str) -> forms.DecimalField:
         min_value=0,
         max_digits=10,
         decimal_places=2,
-        widget=UnfoldAdminTextInputWidget,
+        widget=ConsoleTextInputWidget,
     )
 
 
@@ -649,13 +690,13 @@ class FirmwareReviewActionForm(ActionForm):
         choices=[("", "— category (required to approve) —"), *MAIN_CATEGORIES],
         required=False,
         label="Firmware category",
-        widget=UnfoldAdminSelectWidget,
+        widget=ConsoleSelectWidget,
     )
     notes = forms.CharField(
         required=False,
         max_length=1000,
         label="Decision notes / rejection reason",
-        widget=UnfoldAdminTextareaWidget(attrs={"rows": 2}),
+        widget=ConsoleTextareaWidget(attrs={"rows": 2}),
     )
 
 
@@ -663,21 +704,21 @@ class ApproveUploadForm(BaseDialogForm):
     category = forms.ChoiceField(
         choices=MAIN_CATEGORIES,
         label=_("Firmware category"),
-        widget=UnfoldAdminSelectWidget,
+        widget=ConsoleSelectWidget,
     )
     access_tier = forms.ChoiceField(
         choices=TIER_CHOICES,
         required=False,
         label=_("Access tier"),
         help_text=_("Only files from approved sellers can be paid or featured."),
-        widget=UnfoldAdminSelectWidget,
+        widget=ConsoleSelectWidget,
     )
     approved_price = _price_field(str(_("Approved price (USD, paid files only)")))
     notes = forms.CharField(
         required=False,
         max_length=1000,
         label=_("Decision notes"),
-        widget=UnfoldAdminTextareaWidget(attrs={"rows": 3}),
+        widget=ConsoleTextareaWidget(attrs={"rows": 3}),
     )
 
     def clean(self) -> dict[str, Any]:
@@ -1020,7 +1061,11 @@ class PendingFirmwareAdmin(NoAddModelAdmin):
 class BaseFirmwareAdmin(AccessChangeAdmin):
     """Typed firmware records are created only by approving a pending upload."""
 
-    actions = ("activate_selected", "deactivate_selected", "change_access_selected")
+    actions: tuple[str, ...] = (
+        "activate_selected",
+        "deactivate_selected",
+        "change_access_selected",
+    )
     list_display = (
         "original_file_name",
         "brand",
@@ -1195,8 +1240,15 @@ class BaseFirmwareAdmin(AccessChangeAdmin):
 
 
 @register(OfficialFirmware)
-class OfficialFirmwareAdmin(BaseFirmwareAdmin):
-    pass
+class OfficialFirmwareAdmin(ImportExportMixin, BaseFirmwareAdmin):
+    """Imported firmware rows are submitted for review, never published verified."""
+
+    import_export_resource = OfficialFirmwareResource
+    actions = (*BaseFirmwareAdmin.actions, *EXPORT_ACTIONS)
+    actions_list = ("import_data", "export_data")
+
+    def has_import_data_permission(self, request: HttpRequest) -> bool:
+        return bool(request.user.has_perm("firmwares.add_pendingfirmware"))
 
 
 @register(EngineeringFirmware)
@@ -1329,7 +1381,7 @@ class VerificationCreditAdmin(ModelAdmin):
 class DownloadTokenAdmin(NoAddModelAdmin):
     list_display = (
         "token_short",
-        "firmware",
+        "firmware_target",
         "user",
         "status_badge",
         "ad_gate_completed",
@@ -1341,11 +1393,15 @@ class DownloadTokenAdmin(NoAddModelAdmin):
         ("expires_at", RangeDateTimeFilter),
     )
     search_fields = ("user__email",)
+    # Explicit on purpose: ``firmware`` is a generic foreign key, and Django 6.1 would
+    # otherwise try to ``select_related`` it from ``list_display`` and fail.
+    list_select_related = ("user",)
     exclude = ("token",)
     readonly_fields = (
         "content_type",
         "object_id",
         "user",
+        "anon_hash",
         "ad_gate_required",
         "ad_gate_completed",
         "ip",
@@ -1356,9 +1412,21 @@ class DownloadTokenAdmin(NoAddModelAdmin):
     )
     actions = ("revoke_selected",)
 
+    def get_queryset(self, request: HttpRequest) -> QuerySet[DownloadToken]:
+        """Resolve the generic firmware targets of a page in one query per type."""
+        return super().get_queryset(request).prefetch_related("firmware")
+
     @display(description=_("Token"))
     def token_short(self, obj: DownloadToken) -> str:
         return f"{obj.token[:12]}…"
+
+    @display(description=_("Firmware"))
+    def firmware_target(self, obj: DownloadToken) -> str:
+        content_type = obj.content_type
+        if content_type is None or content_type.model_class() is None:
+            return "-"
+        target = obj.firmware
+        return str(target) if target is not None else "-"
 
     @display(description=_("Status"), ordering="status", label=BADGE_STATE)
     def status_badge(self, obj: DownloadToken) -> str:
@@ -1382,6 +1450,9 @@ class DownloadSessionAdmin(ReadOnlyModelAdmin):
         "user",
         "status_badge",
         "bytes_delivered",
+        "redeem_count",
+        "lease_expires_at",
+        "released_at",
         "started_at",
     )
     list_filter = (
@@ -1401,12 +1472,14 @@ class AdGateLogAdmin(ReadOnlyModelAdmin):
         "token",
         "session",
         "ad_type",
+        "proof",
         "watched_seconds",
         "completed",
         "credits_earned",
     )
     list_filter = (
         ("ad_type", ChoicesDropdownFilter),
+        ("proof", ChoicesDropdownFilter),
         "completed",
         ("created_at", RangeDateTimeFilter),
     )
@@ -1426,16 +1499,140 @@ class HotlinkBlockAdmin(ModelAdmin):
 # ---------------------------------------------------------------------------
 
 
+_category_index: ContextVar[CategoryIndex | None] = ContextVar(
+    "tool_category_index", default=None
+)
+
+
+class CategoryEmptyFilter(DropdownFilter):
+    """Categories without any active tool or published guide (``empty``) or with some."""
+
+    title = _("Content")
+    parameter_name = "content"
+
+    def lookups(self, request: HttpRequest, model_admin: Any) -> list[tuple[str, str]]:
+        return [("empty", "Empty"), ("used", "Has tools or guides")]
+
+    def queryset(
+        self, request: HttpRequest, queryset: QuerySet[FlashingToolCategory]
+    ) -> QuerySet[FlashingToolCategory]:
+        value = self.value()
+        if value not in {"empty", "used"}:
+            return queryset
+        index = CategoryIndex.build()
+        empty = [cat.pk for cat in index.categories if index.is_empty(cat)]
+        return (
+            queryset.filter(pk__in=empty)
+            if value == "empty"
+            else queryset.exclude(pk__in=empty)
+        )
+
+
 @register(FlashingToolCategory)
-class FlashingToolCategoryAdmin(ModelAdmin):
-    list_display = ("name", "slug", "sort_order", "is_active")
-    list_filter = ("is_active",)
-    search_fields = ("name", "slug")
-    prepopulated_fields: ClassVar[dict[str, tuple[str, ...]]] = {"slug": ("name",)}
+class FlashingToolCategoryAdmin(ImportExportMixin, ModelAdmin):
+    """Staff view of every category with its kind, parent and content counts.
+
+    Generated categories (``is_auto``) are kept in sync by
+    ``apps.firmwares.tool_categories``; their source fields are read-only here.
+    Empty categories are flagged: they are never listed publicly.
+    """
+
+    import_export_resource = ToolCategoryResource
+    actions = EXPORT_ACTIONS
+    actions_list = ("import_data", "export_data")
+    list_display = (
+        "name",
+        "kind_badge",
+        "parent",
+        "auto_badge",
+        "tool_total",
+        "guide_total",
+        "empty_flag",
+        "sort_order",
+        "is_active",
+    )
+    list_filter = (
+        ("kind", ChoicesDropdownFilter),
+        ("parent", RelatedDropdownFilter),
+        ("is_auto", BooleanRadioFilter),
+        "is_active",
+        CategoryEmptyFilter,
+    )
+    search_fields = ("name", "slug", "vendor", "family", "brand__name")
+    list_select_related = ("parent", "brand")
+    prepopulated_fields: ClassVar[dict[str, Sequence[str]]] = {"slug": ("name",)}
+    autocomplete_fields = ("parent",)
+
+    def get_readonly_fields(
+        self, request: HttpRequest, obj: FlashingToolCategory | None = None
+    ) -> tuple[str, ...]:
+        locked = ("is_auto", "slug_history")
+        if obj is not None and obj.is_auto:
+            return (*locked, "kind", "parent", "vendor", "family", "brand", "os_key")
+        return locked
+
+    def get_form(
+        self,
+        request: HttpRequest,
+        obj: FlashingToolCategory | None = None,
+        change: bool = False,
+        **kwargs: Any,
+    ) -> Any:
+        """A hand-made category needs no kind: it stays a ``general`` category."""
+        form = super().get_form(request, obj, change=change, **kwargs)
+        kind = form.base_fields.get("kind")
+        if kind is not None:
+            kind.required = False
+        return form
+
+    def changelist_view(
+        self, request: HttpRequest, extra_context: dict[str, Any] | None = None
+    ) -> HttpResponse:
+        token = _category_index.set(CategoryIndex.build())
+        try:
+            response = super().changelist_view(request, extra_context)
+            if isinstance(response, SimpleTemplateResponse):
+                response.render()  # display callables read the index while set
+            return response
+        finally:
+            _category_index.reset(token)
+
+    def _counts(self, obj: FlashingToolCategory) -> tuple[int, int]:
+        index = _category_index.get()
+        return index.counts(obj) if index is not None else (0, 0)
+
+    @display(description=_("Kind"), ordering="kind", label=BADGE_CATEGORY_KIND)
+    def kind_badge(self, obj: FlashingToolCategory) -> tuple[str, str]:
+        return str(obj.kind), str(obj.get_kind_display())
+
+    @display(description=_("Source"), label={"auto": "info", "manual": "default"})
+    def auto_badge(self, obj: FlashingToolCategory) -> str:
+        return "auto" if obj.is_auto else "manual"
+
+    @display(description=_("Tools"))
+    def tool_total(self, obj: FlashingToolCategory) -> int:
+        return self._counts(obj)[0]
+
+    @display(description=_("Guides"))
+    def guide_total(self, obj: FlashingToolCategory) -> int:
+        return self._counts(obj)[1]
+
+    @display(
+        description=_("Public"),
+        label={"empty": "warning", "hidden": "default", "listed": "success"},
+    )
+    def empty_flag(self, obj: FlashingToolCategory) -> str:
+        index = _category_index.get()
+        if index is None or index.is_listed(obj):
+            return "listed"
+        return "empty" if index.is_empty(obj) else "hidden"
 
 
 @register(FlashingTool)
-class FlashingToolAdmin(RichTextAdminMixin, ModelAdmin):
+class FlashingToolAdmin(ImportExportMixin, RichTextAdminMixin, ModelAdmin):
+    import_export_resource = FlashingToolResource
+    actions = EXPORT_ACTIONS
+    actions_list = ("import_data", "export_data")
     rich_text_fields: ClassVar[Mapping[str, str]] = {"instructions": "firmware_notes"}
     list_display = (
         "name",
@@ -1455,7 +1652,7 @@ class FlashingToolAdmin(RichTextAdminMixin, ModelAdmin):
         "is_featured",
     )
     search_fields = ("name", "slug")
-    prepopulated_fields: ClassVar[dict[str, tuple[str, ...]]] = {"slug": ("name",)}
+    prepopulated_fields: ClassVar[dict[str, Sequence[str]]] = {"slug": ("name",)}
     filter_horizontal = ("supported_brands", "chipsets")
     readonly_fields = (
         "created_at",
@@ -1546,7 +1743,10 @@ class FlashingToolAdmin(RichTextAdminMixin, ModelAdmin):
 
 
 @register(FlashingGuideTemplate)
-class FlashingGuideTemplateAdmin(ModelAdmin):
+class FlashingGuideTemplateAdmin(ImportExportMixin, ModelAdmin):
+    import_export_resource = GuideTemplateResource
+    actions = EXPORT_ACTIONS
+    actions_list = ("import_data", "export_data")
     list_display = (
         "title_template",
         "guide_type",
@@ -1632,7 +1832,9 @@ class ServedDownloadAdmin(ReadOnlyModelAdmin):
     search_fields = ("user__email", "user__username")
     raw_id_fields = ("user",)
 
-    def has_reset_permission(self, request: HttpRequest) -> bool:
+    def has_reset_permission(
+        self, request: HttpRequest, _object_id: object | None = None
+    ) -> bool:
         """Staff who decide access changes may give a user a fresh allowance."""
         return bool(request.user.has_perm("firmwares.change_accesschangerequest"))
 

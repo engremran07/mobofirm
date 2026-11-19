@@ -1,0 +1,5 @@
+<div class="console-staff-field">
+  <label class="form-label" for="{{ ident }}">{{ label }}</label>
+  <textarea class="form-control" id="{{ ident }}" name="{{ name }}" rows="{{ rows }}"{% if help_text %} aria-describedby="{{ ident }}-help"{% endif %}>{{ value }}</textarea>
+  {% if help_text %}<div class="form-text" id="{{ ident }}-help">{{ help_text }}</div>{% endif %}
+</div>

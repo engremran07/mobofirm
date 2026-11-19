@@ -1,0 +1,2 @@
+{% load i18n console_ui %}{% for field in action_form %}{% if plain or field.is_hidden %}{{ field }}{% else %}{% include "console/components/listbox.html" with field=field label=_("Action") size="sm" %}{% endif %}{% endfor %}
+<button type="submit" class="btn btn-secondary btn-sm" name="index" value="{{ action_index|default:0 }}">{% translate "Run" %}</button>

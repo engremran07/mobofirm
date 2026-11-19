@@ -1,4 +1,4 @@
-{# Swapped into #firmware-table-content by HTMX and included by the full page. Context: firmwares (page), brands, chipsets, selected_*, firmware_types, package_formats, search_* (list_search_context). #}
+{% load ad_tags %}{# Swapped into #firmware-table-content by HTMX and included by the full page. Context: firmwares (page), brands, chipsets, selected_*, firmware_types, package_formats, search_* (list_search_context). #}
 {% include "components/search_feedback.html" with noun="firmware file" noun_plural="firmware files" %}
 <div class="cat-active" data-active-filters>
   <p class="cat-active__count" role="status">{{ firmwares.paginator.count }} firmware file{{ firmwares.paginator.count|pluralize }}</p>
@@ -12,7 +12,7 @@
 {% if firmwares %}
   <h2 class="visually-hidden">Firmware results</h2>
   <div class="card-grid" data-reveal-list>
-    {% for firmware in firmwares %}{% include "firmwares/includes/firmware_card.html" with firmware=firmware show_device=True %}{% endfor %}
+    {% for firmware in firmwares %}{% include "firmwares/includes/firmware_card.html" with firmware=firmware show_device=True %}{% ad_tile forloop.counter firmwares|length layout="card" tile="card-ui--firmware fw-card" page="firmwares/browse.html" %}{% endfor %}
   </div>
   {% include "components/pagination.html" with page_obj=firmwares label="Firmware result pages" hx_target="#firmware-table-content" %}
 {% else %}

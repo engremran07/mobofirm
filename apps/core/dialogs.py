@@ -3,7 +3,9 @@
 ``core`` owns only the generic shell: ``components/dialog.html``, the Alpine
 ``appDialog`` component and this module. Every concrete dialog (its template,
 form and view) lives in the app that owns the behaviour and subclasses
-``DialogView`` here, so core never imports a domain app.
+``DialogView`` here, so core never imports a domain app. Staff-console dialogs
+subclass ``apps.core.admin_dialogs.StaffDialogView`` (same request/response
+protocol, console templates, ``#console-dialog`` target).
 
 Conventions (see ``docs/05-frontend/dialogs.md``):
 

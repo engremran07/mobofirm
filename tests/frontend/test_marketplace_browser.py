@@ -323,7 +323,7 @@ def test_seller_dashboard_and_application_pages_fit_every_width(live_server):
         ready(page)
         assert page.get_by_role("heading", name="My submissions").is_visible()
         assert page.get_by_text("Proposed: 8.00 USD").is_visible()
-        assert page.get_by_role("link", name="Upload firmware").first.is_visible()
+        assert page.get_by_role("link", name="Contribute a firmware").first.is_visible()
         assert page.get_by_text("Credit balance").is_visible()
         assert page.get_by_role("heading", name="Recent sales").is_visible()
 

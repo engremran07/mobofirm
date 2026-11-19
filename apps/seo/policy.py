@@ -19,7 +19,9 @@ ROBOTS_DISALLOW = (
     "/ads/",
     "/storage/",
     "/files/",
+    "/contributions/",
     "/shop/orders/",
+    "/pricing/orders/",
     "/seo/",
     "/health/",
     "/firmwares/serve/",
@@ -36,19 +38,73 @@ SEARCH_ENGINE_ROBOTS = "max-image-preview:large, max-snippet:-1, max-video-previ
 _WHITESPACE = re.compile(r"\s+")
 
 AI_SEARCH_BOTS = ("OAI-SearchBot", "PerplexityBot", "Claude-SearchBot")
-AI_USER_AGENTS = ("ChatGPT-User", "Claude-User", "Perplexity-User")
+AI_USER_AGENTS = (
+    "ChatGPT-User",
+    "Claude-User",
+    "Perplexity-User",
+    "Meta-ExternalFetcher",
+)
 AI_TRAINING_BOTS = (
     "GPTBot",
     "ClaudeBot",
+    "anthropic-ai",
     "Google-Extended",
     "Applebot-Extended",
     "CCBot",
     "Bytespider",
+    "Meta-ExternalAgent",
+    "Amazonbot",
 )
+
+# Search engine crawlers that get an explicit group. Each vendor documents these
+# tokens; Googlebot-Image falls back to Googlebot only when it has no group of its own.
+SEARCH_BOTS = ("Googlebot", "Googlebot-Image", "bingbot")
+# Crawlers that honour ``Crawl-delay`` (Google documents that it ignores it).
+CRAWL_DELAY_BOTS = ("bingbot",)
+
+# Paths that stay fetchable for every crawler: rendering needs the CSS and JS bundles
+# and images are discovered through Googlebot-Image.
+ROBOTS_ALLOW = ("/static/", "/media/")
+
+# Query parameters that only create duplicate or session-specific URLs. They are
+# blocked with RFC 9309 wildcards (``?`` first parameter, ``&`` any later one).
+ROBOTS_PARAM_TRAPS = (
+    "sort",
+    "order",
+    "sessionid",
+    "session_id",
+    "sid",
+    "utm_source",
+    "utm_medium",
+    "utm_campaign",
+    "utm_term",
+    "utm_content",
+    "gclid",
+    "fbclid",
+    "msclkid",
+)
+
+# ``?page=N`` is not trapped here: RFC 9309 patterns cannot express a numeric limit,
+# so deep pagination stays crawlable and the resolver governs it (noindex, canonical).
 
 
 def is_private_path(path: str) -> bool:
     return any(path.startswith(prefix) for prefix in ROBOTS_DISALLOW)
+
+
+# Pages that have no content object (the home page, listings, hubs, feeds index) keep
+# their SEO override in ``seo.Metadata`` under this reference, keyed by the URL path.
+ROUTE_LABEL = "seo.seosettings"
+ROUTE_PREFIX = "route:"
+
+
+def route_ref(path: str) -> tuple[str, str]:
+    """Override reference of a route-level page (no content object)."""
+    return ROUTE_LABEL, f"{ROUTE_PREFIX}{path.split('?', 1)[0] or '/'}"
+
+
+def is_route_ref(label: str, pk: str) -> bool:
+    return label == ROUTE_LABEL and pk.startswith(ROUTE_PREFIX)
 
 
 _NOINDEX_PATHS = re.compile(r"^/firmwares/file/[^/]+/[^/]+/download/")

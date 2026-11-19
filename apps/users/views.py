@@ -22,12 +22,13 @@ from typing import Any
 from allauth.account.forms import LoginForm, SignupForm
 from allauth.account.models import EmailAddress
 from allauth.account.views import LoginView, PasswordResetView, SignupView
+from django import forms
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import ImproperlyConfigured, ValidationError
-from django.db import DatabaseError
+from django.db import DatabaseError, transaction
 from django.db.models import Q
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render, resolve_url
@@ -44,13 +45,17 @@ from django.views.decorators.http import (
 from apps.core.app_service import AppService
 from apps.core.geo import calling_code_label, country_label
 from apps.core.utils.ip import get_client_ip
-from apps.devices.services import DevicePolicyError
 from apps.site_settings.services import get_site_settings
 from apps.users.forms import TellUsAboutYouForm
 from apps.users.mfa_views import begin_login_mfa
 from apps.users.models import Announcement, Notification
 from apps.users.profile_models import Profile, Reputation
 from apps.users.request_user import current_user
+from apps.users.services.device_gate import (
+    device_registration_prompt,
+    evaluate_device_policy,
+    mark_device_gate_applied,
+)
 from apps.users.services.email_verification import (
     consume_email_verification_code,
     get_pending_email_address,
@@ -178,9 +183,9 @@ def _get_platform_features() -> list[dict[str, str]]:
         {
             "icon": "upload",
             "title": "Firmware Contributions",
-            "description": "Upload and share firmware files to help the community. Earn reputation points.",
+            "description": "Contribute firmware files for review and share them with the community. Earn reputation points.",
             "app": "Firmwares",
-            "url": "/firmwares/upload/",
+            "url": "/firmwares/contribute/",
         },
         {
             "icon": "shield-check",
@@ -232,33 +237,6 @@ def _get_platform_features() -> list[dict[str, str]]:
             "url": "/users/profile/",
         },
     ]
-
-
-def device_registration_prompt(
-    enforcement_ctx: dict[str, Any] | None,
-) -> dict[str, Any] | None:
-    """Session payload asking the user to register a new, untrusted browser."""
-    if not enforcement_ctx:
-        return None
-    device = enforcement_ctx.get("device")
-    if not (
-        device
-        and not device.is_trusted
-        and not device.is_blocked
-        and device.revoked_at is None
-    ):
-        return None
-    context = enforcement_ctx.get("context", {})
-    active_devices = context.get("current_device_count", 0)
-    max_devices = context.get("max_devices", 3)
-    return {
-        "device_name": device.display_name,
-        "os_family": device.os_family,
-        "browser_family": device.browser_family,
-        "active_devices": active_devices,
-        "max_devices": max_devices,
-        "can_approve": active_devices < max_devices,
-    }
 
 
 # ============================================================
@@ -314,7 +292,7 @@ class EnterpriseLoginView(LoginView):
             attempts = get_attempt_count(f"login:{ip}", fail_open=False)
             if attempts >= int(str(settings_obj.get("max_login_attempts", 5))):
                 form.add_error(None, "Too many login attempts. Please try again later.")
-                logger.warning("Rate limit exceeded for IP=%s", ip)
+                logger.warning("Login rate limit exceeded")
                 return super().form_invalid(form)
         except (*CACHE_ERRORS, DatabaseError):
             logger.exception("Login rate limiter is unavailable")
@@ -332,7 +310,7 @@ class EnterpriseLoginView(LoginView):
             rc_result = verify_recaptcha(token, ip, action="login")
             if not rc_result.get("ok"):
                 form.add_error(None, "reCAPTCHA verification failed. Please try again.")
-                logger.info("reCAPTCHA failed for %s : %s", ip, rc_result)
+                logger.info("reCAPTCHA failed at login: %s", rc_result.get("error"))
                 return self.form_invalid(form)
 
         if (
@@ -346,50 +324,31 @@ class EnterpriseLoginView(LoginView):
             return super().form_valid(form)
 
         if login_user is not None:
-            try:
-                enforce_policy = AppService.export(
-                    "devices", "enforce_device_policy_for_login"
-                )
-                if not callable(enforce_policy):
-                    raise TypeError("Device login policy service is unavailable")
-                allowed, enforcement_ctx = enforce_policy(self.request, login_user)
-                enforcement_ctx = enforcement_ctx or {}
-                if not allowed:
-                    reason = enforcement_ctx.get("reason", "policy_denied")
-                    form.add_error(None, self._device_policy_message(reason))
-                    return super().form_invalid(form)
-            except _DEVICE_CHECK_ERRORS:
-                logger.exception(
-                    "Device policy check failed for user %s", login_user.pk
-                )
-                form.add_error(
-                    None,
-                    "Device security check could not be completed. Try again later.",
-                )
-                return super().form_invalid(form)
-            except DevicePolicyError as exc:
-                policy_reason = str(getattr(exc, "reason", "policy_denied"))
-                if policy_reason in {"mfa_required", "mfa_required_risk"}:
-                    try:
-                        if has_active_totp(login_user):
-                            return begin_login_mfa(self.request, login_user)
-                    except DatabaseError:
-                        logger.exception(
-                            "MFA factors could not be loaded for user %s",
-                            login_user.pk,
-                        )
-                        form.add_error(
-                            None,
-                            "Two-factor verification is temporarily unavailable.",
-                        )
-                        return super().form_invalid(form)
+            decision = evaluate_device_policy(self.request, login_user)
+            if decision.mfa_required:
+                try:
+                    if has_active_totp(login_user):
+                        return begin_login_mfa(self.request, login_user)
+                except DatabaseError:
+                    logger.exception(
+                        "MFA factors could not be loaded for user %s",
+                        login_user.pk,
+                    )
                     form.add_error(
                         None,
-                        "Set up an authenticator on a trusted device before signing in here.",
+                        "Two-factor verification is temporarily unavailable.",
                     )
                     return super().form_invalid(form)
-                form.add_error(None, self._device_policy_message(policy_reason))
+                form.add_error(
+                    None,
+                    "Set up an authenticator on a trusted device before signing in here.",
+                )
                 return super().form_invalid(form)
+            if not decision.allowed:
+                form.add_error(None, decision.message)
+                return super().form_invalid(form)
+            enforcement_ctx = decision.context
+            mark_device_gate_applied(self.request)
 
         if login_user is not None:
             try:
@@ -439,26 +398,6 @@ class EnterpriseLoginView(LoginView):
 
         return response
 
-    @staticmethod
-    def _device_policy_message(reason: str) -> str:
-        messages_by_reason = {
-            "blocked_device": "This device is blocked. Contact support to unblock it.",
-            "device_key_required": "Device fingerprint is required. Allow device fingerprinting and try again.",
-            "untrusted_new_device": "This new device has not been approved. Use an existing trusted session to approve it or contact support.",
-            "revoked_device": "This browser registration was revoked. Contact an administrator.",
-            "mfa_required": "This device requires MFA, but verification is not currently available. Contact support.",
-            "mfa_required_risk": "This device requires additional security verification, which is not currently available. Contact support.",
-            "monthly_device_quota": "The monthly device limit has been reached. Contact an administrator.",
-            "yearly_device_quota": "The yearly device limit has been reached. Contact an administrator.",
-            "user_window_quota": "The device enrollment limit has been reached. Contact an administrator.",
-            "device_quota_exceeded": "The maximum number of devices has been reached. Contact an administrator.",
-            "limit_reached": "The maximum number of devices has been reached. Contact an administrator to reset or revoke a registration.",
-            "fallback_identity_blocked": "Device identity could not be verified. Allow device fingerprinting and try again.",
-        }
-        return messages_by_reason.get(
-            reason, "This device is not allowed to sign in. Contact support."
-        )
-
 
 # ============================================================
 # Enterprise Signup View
@@ -504,16 +443,12 @@ class EnterpriseSignupView(SignupView):
         if s.get("recaptcha_enabled", False):
             if not token:
                 form.add_error(None, "reCAPTCHA verification is required.")
-                logger.info(
-                    "Signup blocked: missing reCAPTCHA token for ip=%s", client_ip
-                )
+                logger.info("Signup blocked: missing reCAPTCHA token")
                 return self.form_invalid(form)
             rc = verify_recaptcha(token, client_ip, action="signup")
             if not rc.get("ok"):
                 form.add_error(None, "reCAPTCHA failed. Please retry.")
-                logger.info(
-                    "reCAPTCHA failed during signup | ip=%s | rc=%s", client_ip, rc
-                )
+                logger.info("reCAPTCHA failed during signup: %s", rc.get("error"))
                 return self.form_invalid(form)
 
         return super().form_valid(form)
@@ -824,11 +759,115 @@ def dashboard_view(request: HttpRequest) -> HttpResponse:
 # ============================================================
 # Profile view
 # ============================================================
+_FULL_NAME_MAX = 150
+_BIO_MAX = 1000
+_LOCATION_MAX = 100
+_PHONE_MAX = 20
+_PHONE_CODE_MAX = 5
+_PASSWORD_ATTEMPTS = 5
+_PASSWORD_WINDOW_SECONDS = 900
+
+
+def _update_profile_from_post(request: HttpRequest, user: Any) -> None:
+    """Validate and save the inline profile form; a bad field saves nothing."""
+    from django_countries import countries
+
+    full_name = (request.POST.get("full_name") or "").strip()
+    raw_phone = (request.POST.get("phone") or "").strip()
+    phone = re.sub(r"[^\d+]", "", raw_phone)
+    phone_code = (request.POST.get("phone_country_code") or "").strip()
+    country = (request.POST.get("country") or "").strip().upper()
+    bio = (request.POST.get("bio") or "").strip()
+    location = (request.POST.get("location") or "").strip()
+    try:
+        website = forms.URLField(required=False, assume_scheme="https").clean(
+            (request.POST.get("website") or "").strip()
+        )
+    except ValidationError:
+        messages.error(request, _("Enter a valid website address."))
+        return
+
+    problems = []
+    if len(full_name) > _FULL_NAME_MAX:
+        problems.append(_("That name is too long."))
+    if len(phone) > _PHONE_MAX or len(phone_code) > _PHONE_CODE_MAX:
+        problems.append(_("Enter a valid phone number."))
+    elif (
+        phone
+        and get_user_model().objects.filter(phone=phone).exclude(pk=user.pk).exists()
+    ):
+        problems.append(_("That phone number cannot be used."))
+    if len(bio) > _BIO_MAX or len(location) > _LOCATION_MAX:
+        problems.append(_("The bio or location is too long."))
+    if country and country not in {code for code, _name in countries}:
+        problems.append(_("Choose a valid country."))
+    if problems:
+        for problem in problems:
+            messages.error(request, problem)
+        return
+
+    update_fields: list[str] = []
+    for field, value in (
+        ("full_name", full_name),
+        ("phone", phone or None),
+        ("phone_country_code", phone_code),
+    ):
+        if value != getattr(user, field):
+            setattr(user, field, value)
+            update_fields.append(field)
+    if country and country != (user.country or ""):
+        user.country = country
+        update_fields.append("country")
+    with transaction.atomic():
+        if update_fields:
+            user.save(update_fields=update_fields)
+        Profile.objects.update_or_create(
+            user=user,
+            defaults={"bio": bio, "website": website, "location": location},
+        )
+    messages.success(request, _("Profile updated successfully."))
+
+
+def _change_password_from_post(request: HttpRequest, user: Any) -> None:
+    """Change the password after re-checking the current one (rate limited)."""
+    from allauth.account.signals import password_changed
+    from django.contrib.auth.password_validation import validate_password
+
+    if not allow_action(
+        f"users:password-change:{user.pk}",
+        max_attempts=_PASSWORD_ATTEMPTS,
+        window_seconds=_PASSWORD_WINDOW_SECONDS,
+        fail_open=False,
+    ):
+        messages.error(request, _("Too many attempts. Try again later."))
+        return
+    current_pw = request.POST.get("current_password", "")
+    new_pw1 = request.POST.get("new_password1", "")
+    new_pw2 = request.POST.get("new_password2", "")
+    if not user.check_password(current_pw):
+        messages.error(request, _("Current password is incorrect."))
+    elif new_pw1 != new_pw2:
+        messages.error(request, _("New passwords do not match."))
+    elif not new_pw1:
+        messages.error(request, _("New password cannot be empty."))
+    else:
+        try:
+            validate_password(new_pw1, user)
+        except ValidationError as exc:
+            messages.error(request, exc.messages[0])
+            return
+        user.set_password(new_pw1)
+        user.save(update_fields=["password"])
+        update_session_auth_hash(request, user)
+        # Same signal allauth's own flows send: revokes API tokens and notifies.
+        password_changed.send(sender=type(user), request=request, user=user)
+        reset_rate_limit(f"users:password-change:{user.pk}")
+        messages.success(request, _("Password changed successfully."))
+
+
 @login_required
 def profile_view(request: HttpRequest) -> HttpResponse:
     """Render the user profile overview page with inline updates."""
-    from django_countries import countries
-
     from apps.users.services import get_phone_code_for_country
 
     user = current_user(request)
@@ -837,65 +876,16 @@ def profile_view(request: HttpRequest) -> HttpResponse:
         action = request.POST.get("action")
         if action == "update_full_name":
             full_name = (request.POST.get("full_name") or "").strip()
-            user.full_name = full_name
-            user.save(update_fields=["full_name"])
-            messages.success(request, _("Full name updated."))
-        elif action == "update_profile":
-            # Inline editable profile fields
-            update_fields: list[str] = []
-            full_name = (request.POST.get("full_name") or "").strip()
-            if full_name != user.full_name:
-                user.full_name = full_name
-                update_fields.append("full_name")
-            phone = (request.POST.get("phone") or "").strip()
-            phone_code = (request.POST.get("phone_country_code") or "").strip()
-            if phone != (user.phone or ""):
-                user.phone = phone or None
-                update_fields.append("phone")
-            if phone_code != (user.phone_country_code or ""):
-                user.phone_country_code = phone_code
-                update_fields.append("phone_country_code")
-            country = (request.POST.get("country") or "").strip().upper()
-            if country:
-                valid_countries = {code for code, _name in countries}
-                if country in valid_countries and country != (user.country or ""):
-                    user.country = country
-                    update_fields.append("country")
-                elif country not in valid_countries:
-                    messages.error(request, _("Choose a valid country."))
-            if update_fields:
-                user.save(update_fields=update_fields)
-
-            # Profile model fields
-            bio = (request.POST.get("bio") or "").strip()
-            website = (request.POST.get("website") or "").strip()
-            location = (request.POST.get("location") or "").strip()
-            Profile.objects.update_or_create(
-                user=user,
-                defaults={"bio": bio, "website": website, "location": location},
-            )
-            messages.success(request, _("Profile updated successfully."))
-        elif action == "change_password":
-            from django.contrib.auth.password_validation import validate_password
-
-            current_pw = request.POST.get("current_password", "")
-            new_pw1 = request.POST.get("new_password1", "")
-            new_pw2 = request.POST.get("new_password2", "")
-            if not user.check_password(current_pw):
-                messages.error(request, _("Current password is incorrect."))
-            elif new_pw1 != new_pw2:
-                messages.error(request, _("New passwords do not match."))
-            elif not new_pw1:
-                messages.error(request, _("New password cannot be empty."))
+            if len(full_name) > _FULL_NAME_MAX:
+                messages.error(request, _("That name is too long."))
             else:
-                try:
-                    validate_password(new_pw1, user)
-                    user.set_password(new_pw1)
-                    user.save(update_fields=["password"])
-                    update_session_auth_hash(request, user)
-                    messages.success(request, _("Password changed successfully."))
-                except ValidationError as e:
-                    messages.error(request, e.messages[0])
+                user.full_name = full_name
+                user.save(update_fields=["full_name"])
+                messages.success(request, _("Full name updated."))
+        elif action == "update_profile":
+            _update_profile_from_post(request, user)
+        elif action == "change_password":
+            _change_password_from_post(request, user)
 
         return redirect("users:profile")
 

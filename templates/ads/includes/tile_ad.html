@@ -1,0 +1,30 @@
+{# A sponsored grid item. It reuses the sibling tile's own classes (`tile`), so size, padding, radius and elevation come from the same CSS as the neighbouring tiles; only `.card-ui--sponsored` / `.tag-card--sponsored` add a non-layout accent. Context: layout ("tile", "card" or "tag"), tile (the sibling's modifier classes), title, text, href (tracking redirect, may be empty), image, raw (validated creative markup for native/html creatives), test (staff test profile), placement, zone. #}
+{% if layout == "tag" %}
+<li class="tag-card tag-card--sponsored" data-ad-tile data-ad-zone="{{ zone }}"{% if test %} data-ad-test="{{ test }}"{% else %} data-placement="{{ placement }}"{% endif %}>
+  <span class="tag-card__icon" aria-hidden="true"><i data-lucide="megaphone" class="icon"></i></span>
+  <div class="tag-card__text">
+    {% if raw %}<div class="ad-tile__raw">{{ raw }}</div>{% else %}{% if href %}<a class="tag-card__link stretched-link" href="{{ href }}" target="_blank" rel="sponsored noopener nofollow">{{ title }}</a>{% else %}<span class="tag-card__link">{{ title }}</span>{% endif %}{% endif %}
+    <p class="tag-card__desc"><span class="ad-tile__label">Sponsored</span>{% if text %} · {{ text }}{% endif %}</p>
+  </div>
+</li>
+{% elif layout == "card" %}
+<article class="card-ui {{ tile }} card-ui--sponsored" data-ad-tile data-ad-zone="{{ zone }}"{% if test %} data-ad-test="{{ test }}"{% else %} data-placement="{{ placement }}"{% endif %} aria-label="Sponsored">
+  <div class="card-ui__body">
+    <span class="card-ui__eyebrow ad-tile__label">Sponsored</span>
+    {% if raw %}<div class="ad-tile__raw">{{ raw }}</div>{% else %}
+    <h3 class="card-ui__title">{% if href %}<a class="card-ui__link" href="{{ href }}" target="_blank" rel="sponsored noopener nofollow">{{ title }}</a>{% else %}{{ title }}{% endif %}</h3>
+    <p class="card-ui__text">{{ text }}</p>{% endif %}
+  </div>
+  <div class="card-ui__footer"><span class="cat-count">Advertisement</span></div>
+</article>
+{% else %}
+<article class="card-ui {{ tile }} card-ui--sponsored" data-ad-tile data-ad-zone="{{ zone }}"{% if test %} data-ad-test="{{ test }}"{% else %} data-placement="{{ placement }}"{% endif %} aria-label="Sponsored">
+  <span class="logo-tile" aria-hidden="true">{% if image %}<img src="{{ image }}" alt="" width="52" height="52" loading="lazy" decoding="async">{% else %}<i data-lucide="megaphone"></i>{% endif %}</span>
+  <div class="cat-tile__body">
+    {% if raw %}<span class="ad-tile__label">Sponsored</span><div class="ad-tile__raw">{{ raw }}</div>{% else %}
+    <h3 class="card-ui__title">{% if href %}<a class="card-ui__link" href="{{ href }}" target="_blank" rel="sponsored noopener nofollow">{{ title }}</a>{% else %}{{ title }}{% endif %}</h3>
+    <p class="card-ui__text"><span class="ad-tile__label">Sponsored</span>{% if text %} · {{ text }}{% endif %}</p>{% endif %}
+  </div>
+  <i class="icon cat-tile__go" data-lucide="chevron-right" aria-hidden="true"></i>
+</article>
+{% endif %}

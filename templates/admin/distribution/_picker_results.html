@@ -1,0 +1,52 @@
+{% load i18n staff_ui console_ui %}
+{% comment %}
+  The swappable region of the platform picker (the page includes it; the search box and the
+  category links reload only this region over HTMX). Context: q, cat, sections, connected,
+  menu, total, add_url.
+{% endcomment %}
+<div class="c-picker" id="dist-picker-results">
+  <nav class="c-picker__nav" aria-label="{% translate 'Platform categories' %}">
+    <input type="hidden" name="cat" value="{{ cat }}" id="dist-cat">
+    {% url 'admin:distribution_channel_platforms' as picker_url %}
+    <ul class="c-picker__menu">
+      <li><a class="c-picker__link" href="{{ picker_url }}?q={{ q|urlencode }}" hx-get="{{ picker_url }}?q={{ q|urlencode }}" hx-target="#dist-picker-results" hx-swap="outerHTML" hx-push-url="true"{% if cat == "all" %} aria-current="page"{% endif %}>{% console_icon "layers" %}<span>{% translate "All platforms" %}</span><span class="c-picker__count">{{ total }}</span></a></li>
+      {% for item in menu %}
+        <li><a class="c-picker__link" href="{{ picker_url }}?cat={{ item.category.key }}&amp;q={{ q|urlencode }}" hx-get="{{ picker_url }}?cat={{ item.category.key }}&amp;q={{ q|urlencode }}" hx-target="#dist-picker-results" hx-swap="outerHTML" hx-push-url="true"{% if item.current %} aria-current="page"{% endif %}>{% console_icon item.category.icon %}<span>{{ item.category.label }}</span><span class="c-picker__count">{{ item.count }}</span></a></li>
+      {% endfor %}
+    </ul>
+  </nav>
+  <div class="c-picker__main" aria-live="polite">
+    {% if connected %}
+      <section aria-labelledby="dist-connected">
+        <h2 class="c-picker__heading" id="dist-connected">{% console_icon "circle-check" %}<span>{% translate "Connected" %}</span></h2>
+        <ul class="c-picker__grid">
+          {% for card in connected %}{% include "admin/distribution/_platform_card.html" with section_key="connected" %}{% endfor %}
+        </ul>
+      </section>
+    {% endif %}
+    {% for section in sections %}
+      <section aria-labelledby="dist-cat-{{ section.category.key }}">
+        <h2 class="c-picker__heading" id="dist-cat-{{ section.category.key }}">{% console_icon section.category.icon %}<span>{{ section.category.label }}</span></h2>
+        <p class="u-muted u-text-sm">{{ section.category.blurb }}</p>
+        <ul class="c-picker__grid">
+          {% for card in section.cards %}{% include "admin/distribution/_platform_card.html" with section_key=section.category.key %}{% endfor %}
+        </ul>
+      </section>
+    {% endfor %}
+    {% if cat == "all" and not q or cat == "all" and "feed" in q or cat == "all" and "rss" in q or cat == "all" and "news" in q or cat == "all" and "google" in q %}
+      <section aria-labelledby="dist-cat-feeds">
+        <h2 class="c-picker__heading" id="dist-cat-feeds">{% console_icon "rss" %}<span>{% translate "Feeds & Google News" %}</span></h2>
+        <p class="u-muted u-text-sm">{% translate "Open syndication that readers pull from. Not an account to connect." %}</p>
+        <ul class="c-picker__grid">
+          <li class="c-platform">
+            <header class="c-platform__head"><span class="c-platform__icon" aria-hidden="true">{% console_icon "rss" %}</span><h3 class="c-platform__name">{% translate "RSS, Atom and JSON feeds" %}</h3></header>
+            <ul class="c-platform__tags"><li><span class="c-badge c-badge--success">{% translate "Automatic" %}</span></li><li><span class="c-badge c-badge--warning">{% translate "Google News: manual steps" %}</span></li></ul>
+            <p class="c-platform__summary">{% translate "Site-wide, per-section, per-brand, per-chipset and per-tag feeds, WebSub and IndexNow pings, and a Google News readiness checklist." %}</p>
+            <div class="c-platform__actions">{% url 'admin:distribution_channel_feeds' as feeds_url %}{% staff_button _("Manage feeds") href=feeds_url tone="primary" %}</div>
+          </li>
+        </ul>
+      </section>
+    {% endif %}
+    {% if not sections and q and cat == "all" and "feed" not in q and "rss" not in q and "news" not in q and "google" not in q %}{% staff_empty title=_("No platform matches") %}{% translate "Try another word, or choose All platforms." %}{% endstaff_empty %}{% elif not sections and q and cat != "all" %}{% staff_empty title=_("No platform matches") %}{% translate "Try another word, or choose All platforms." %}{% endstaff_empty %}{% endif %}
+  </div>
+</div>

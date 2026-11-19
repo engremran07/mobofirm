@@ -4,12 +4,13 @@ import logging
 from datetime import timedelta
 
 from celery import shared_task
-from django.contrib.contenttypes.models import ContentType
 from django.db import DatabaseError
 from django.utils import timezone
 
 from .catalog import PUBLIC_FIRMWARE_TYPES
+from .download_leases import release_expired
 from .download_service import expire_stale_tokens
+from .references import content_type_for
 from .tracking_models import (
     FirmwareDownloadAttempt,
     FirmwareRequest,
@@ -26,9 +27,7 @@ def aggregate_daily_firmware_stats():
     yesterday = (timezone.now() - timedelta(days=1)).date()
     aggregated = 0
     for _key, model_class in PUBLIC_FIRMWARE_TYPES:
-        content_type = ContentType.objects.get_for_model(
-            model_class, for_concrete_model=False
-        )
+        content_type = content_type_for(model_class)
         firmware_ids = set(
             FirmwareView.objects.filter(
                 content_type=content_type, viewed_at__date=yesterday
@@ -54,7 +53,9 @@ def cleanup_old_tracking_data(days_to_keep: int = 90):
     views_deleted = FirmwareView.objects.filter(viewed_at__lt=cutoff).delete()[0]
     downloads_deleted = FirmwareDownloadAttempt.objects.filter(
         initiated_at__lt=cutoff,
-        status__in=["ready", "downloading", "completed", "cancelled"],
+        status__in=[
+            status for status, _label in FirmwareDownloadAttempt.STATUS_CHOICES
+        ],
     ).delete()[0]
     return {
         "views_deleted": views_deleted,
@@ -65,9 +66,10 @@ def cleanup_old_tracking_data(days_to_keep: int = 90):
 
 @shared_task(soft_time_limit=60, time_limit=120)
 def expire_download_tokens():
-    """Mark download tokens past their expiry as expired."""
+    """Expire stale download tokens and release transfer leases that ran out."""
     expired = expire_stale_tokens()
-    return {"expired": expired}
+    released = release_expired()
+    return {"expired": expired, "leases_released": released}
 
 
 @shared_task(soft_time_limit=60, time_limit=120)
@@ -214,7 +216,11 @@ def catchup_missing_blog_posts(brand_slug: str | None = None):
     return {"status": "completed", **result}
 
 
-@shared_task(name="apps.firmwares.tasks.purge_package_history")
+@shared_task(
+    name="apps.firmwares.tasks.purge_package_history",
+    soft_time_limit=300,
+    time_limit=600,
+)
 def purge_package_history() -> dict[str, int]:
     """Purge download history of package periods a newer period has replaced."""
     from .package_history import purge_superseded_package_history

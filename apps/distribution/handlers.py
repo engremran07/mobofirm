@@ -6,11 +6,12 @@ import logging
 from typing import Any
 
 from django.apps import apps
+from django.db import transaction
 
 from apps.core.events.bus import event_bus
 from apps.core.signals import blog_post_published
 from apps.distribution import content as content_module
-from apps.distribution import services
+from apps.distribution import services, syndication, videos
 from apps.distribution.content import Content
 
 logger = logging.getLogger(__name__)
@@ -29,14 +30,23 @@ def firmware_content(payload: dict[str, Any]) -> Content | None:
     return content_module.firmware_content(firmware, firmware_type, firmware_id)
 
 
+def _announce_later(item: Content | None) -> None:
+    """Queue feed pings and a draft motion video once the publishing transaction committed."""
+    if item is not None:
+        transaction.on_commit(lambda: syndication.announce(item))
+        transaction.on_commit(lambda: videos.enlist(item))
+
+
 def on_firmware_approved(data: dict[str, Any]) -> None:
     item = firmware_content(data)
     if item is not None:
+        _announce_later(item)
         services.enqueue(item)
 
 
 def on_blog_post_published(post: Any, **kwargs: Any) -> None:
     """Share a post once, when it first becomes public (human-authored only)."""
+    _announce_later(content_module.post_content(post))
     if getattr(post, "is_ai_generated", False):
         return
     if apps.is_installed("apps.firmwares"):

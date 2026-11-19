@@ -1,4 +1,4 @@
-"""Bounty administration (Unfold): bounties with their claims, log and disputes."""
+"""Bounty administration: bounties with their claims, log and disputes."""
 
 from __future__ import annotations
 
@@ -9,8 +9,6 @@ from django.db.models import Count, QuerySet
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import redirect
 from django.utils.translation import gettext_lazy as _
-from unfold.contrib.filters.admin import ChoicesDropdownFilter, RangeDateTimeFilter
-from unfold.forms import BaseDialogForm
 
 from apps.bounty import services
 from apps.bounty.models import (
@@ -32,6 +30,8 @@ from apps.core.admin_base import (
     htmx_redirect,
     return_url,
 )
+from apps.core.admin_filters import ChoicesDropdownFilter, RangeDateTimeFilter
+from apps.core.admin_forms import BaseDialogForm
 from apps.users.request_user import current_user
 
 STATUS_BADGES = {

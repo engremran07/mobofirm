@@ -1,0 +1,15 @@
+{% comment %}
+  Autocomplete combobox (replaces select2) for ForeignKey / ManyToMany fields listed in autocomplete_fields.
+  Context: widget (name, attrs, optgroups = the selected options, required) and widget.combobox
+  {url, app_label, model_name, field_name, multiple, clearable} from ConsoleAutocompleteSelect(.Multiple).
+  Hooks for the combobox behaviour: [data-console-combobox] (root, data-url + the admin autocomplete parameters), the real <select> stays
+  the submitted value ([data-console-combobox-select], options = the selection), [data-console-combobox-input] is the search box and
+  the listbox <ul role="listbox"> is filled from the admin:autocomplete JSON endpoint (?term=&app_label=&model_name=&field_name=&page=).
+{% endcomment %}{% load i18n %}<div class="c-combobox" data-console-combobox data-url="{{ widget.combobox.url }}" data-app-label="{{ widget.combobox.app_label }}" data-model-name="{{ widget.combobox.model_name }}" data-field-name="{{ widget.combobox.field_name }}"{% if widget.combobox.multiple %} data-multiple{% endif %}{% if widget.combobox.clearable %} data-clearable{% endif %}>
+<div class="c-combobox__tokens"></div>
+<select name="{{ widget.name }}" class="form-select"{% if widget.attrs.id %} id="{{ widget.attrs.id }}"{% endif %}{% if widget.combobox.multiple %} multiple{% endif %}{% if widget.required %} required{% endif %}{% if widget.attrs.disabled %} disabled{% endif %}{% if widget.attrs.autofocus %} autofocus{% endif %} data-console-combobox-select{% if "aria-invalid" in widget.attrs %} aria-invalid="true"{% endif %}{% if "aria-describedby" in widget.attrs %} aria-describedby="{% for name, value in widget.attrs.items %}{% if name == 'aria-describedby' %}{{ value }}{% endif %}{% endfor %}"{% endif %}>
+{% for group_name, group_choices, group_index in widget.optgroups %}{% for option in group_choices %}<option value="{{ option.value|stringformat:'s' }}"{% if option.selected %} selected{% endif %}>{{ option.label }}</option>{% endfor %}{% endfor %}
+</select>
+<input type="search" class="c-combobox__input form-control" role="combobox" aria-autocomplete="list" aria-expanded="false"{% if widget.attrs.id %} aria-controls="{{ widget.attrs.id }}-list"{% endif %} autocomplete="off" spellcheck="false" placeholder="{% translate 'Type to search…' %}" aria-label="{% translate 'Search options' %}" data-console-combobox-input>
+<ul class="c-combobox__list" role="listbox"{% if widget.attrs.id %} id="{{ widget.attrs.id }}-list"{% endif %} hidden></ul>
+</div>

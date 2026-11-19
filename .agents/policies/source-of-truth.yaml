@@ -21,6 +21,7 @@ sources:
     canonical:
       - docs/03-architecture/architecture-overview.md
       - docs/04-backend/django-app-boundaries.md
+      - docs/05-frontend/admin-console.md
   engineering_governance:
     precedence: 4
     canonical:

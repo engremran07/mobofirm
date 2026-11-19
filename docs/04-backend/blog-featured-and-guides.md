@@ -9,9 +9,42 @@ as staff approves the proposed price (`price_approved_by/at`); a paid post canno
 without one, and a price set by staff in the admin is never overwritten. Setting a post
 back to `free` clears every price field.
 
-Who may *choose* featured or paid when writing (`apps.blog.access.can_set_premium_access`):
-staff, editors, users with the author role and approved marketplace sellers (reached only
-through `AppService.get("marketplace").is_active_seller`). Everyone else submits free.
+Who may *choose* featured or paid when writing in the editorial workspace
+(`apps.blog.access.can_set_premium_access`): staff, editors, users with the author role
+and approved marketplace sellers (reached only through
+`AppService.get("marketplace").is_active_seller`). Everyone else submits free there.
+
+## Contribute a blog post (`/blog/contribute/`)
+
+Verified members can contribute a post for review when the blog is on and
+`BlogSettings.allow_user_blog_posts` is set (staff always can). Code:
+`apps/blog/services/contributions.py`, `views_contribute.py`, `forms.ContributionForm`,
+templates `blog/contribute_form.html`.
+
+* **Flow.** `submit` creates a `Post` (`is_community_contribution=True`), records its first
+  revision and moves it to `PostStatus.IN_REVIEW` in one transaction; reviewers holding
+  `blog.change_post` are notified (and `blog.contribution_submitted` is published) after
+  commit. A member can never publish: only `workflow.publish` by a moderator does. The
+  author may edit or withdraw (`workflow.withdraw`) while it waits; a post sent back
+  returns to `DRAFT` with `review_note`, and saving it resubmits it.
+* **Idempotency and limits.** An identical title and body still in review returns the
+  existing post (no second post, notification or quota charge); a member can contribute
+  `BlogSettings.contributions_per_day` posts per rolling day.
+* **Editor.** Body uses the `blog_contribution` profile (no images, video or raw styles)
+  and is sanitised by the existing pipeline.
+* **Access type.** Free and Featured are open to every contributor; **Paid** is offered
+  only to approved marketplace sellers, who must propose a price above zero. A non-seller
+  never sees Paid (a "Become a seller" link is shown) and a forged value is rejected by the
+  form and again by `contributions.resolve_access`. Reviewers confirm the price on
+  publication (`workflow.publish`) and can lower Featured/Paid with a mandatory reason
+  through the console action **Lower access type** (`workflow.lower_access`, clears prices,
+  notifies the author). Rejecting a post (`workflow.reject`) also needs a reason.
+* **Rewards.** Publication rewards already exist (`rewards.grant_publication_rewards`,
+  events `blog.post_published*`) and are paid once per post after commit, never to the
+  publisher; contributions reuse them. The member sees the total on My contributions via
+  `wallet.api.rewards_earned`.
+* **Contract.** `apps.blog.api.contributions_of(user)` feeds **My contributions › Blog
+  contributions** (status, access, price note, edit and withdraw links).
 
 ## Who reads the full body
 
@@ -83,13 +116,13 @@ the requester, followers notified on fulfilment) or confirm *My request is diffe
 Pending requests of other members stay private and block only a same-device lookalike.
 
 **Who sees the context.** `tried`, the expected outcome and the related article are shown to
-the requester, staff reviewers (request page and the Unfold review queue) and, once the
+the requester, staff reviewers (request page and the console review queue) and, once the
 request is approved, to verified members acting as bounty hunters, so they can write their own
 solution. Anonymous visitors only see the public summary.
 
 * Create: login + verified email, `BlogSettings.allow_guide_requests`, throttled by
   `guide_requests_per_day` and `guide_requests_open_limit`, duplicate detection as above.
-* **Private until staff approve** (review-only Unfold queue *Content > Guide requests*,
+* **Private until staff approve** (review-only console queue *Content > Guide requests*,
   permission `blog.change_guiderequest`, showing the tried text, device codes, related
   article and followers); the requester is notified of every decision.
 * Approved requests are public (`/blog/requests/`, typo-tolerant search) and the only ones

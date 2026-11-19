@@ -35,7 +35,7 @@ class SeoAdminActionTestCase(TestCase):
         self.root = user_model.objects.create_superuser(
             username="seo-root", email="seo-root@example.test"
         )
-        self.client = Client()
+        self.client = Client(headers={"HX-Request": "true"})
         self.client.force_login(self.root)
 
     def limited_client(self, *codenames: str) -> Client:
@@ -45,7 +45,7 @@ class SeoAdminActionTestCase(TestCase):
             is_staff=True,
         )
         user.user_permissions.add(*Permission.objects.filter(codename__in=codenames))
-        client = Client()
+        client = Client(headers={"HX-Request": "true"})
         client.force_login(user)
         return client
 

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 import secrets
+from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from typing import Any
@@ -61,6 +62,7 @@ FLAG_ABANDONED = "abandoned_restart"
 __all__ = [
     "Analytics",
     "CompletionResult",
+    "RewardHandler",
     "RewardedAdError",
     "StartResult",
     "analytics",
@@ -71,6 +73,7 @@ __all__ = [
     "entitlement_modifier",
     "heartbeat",
     "is_available",
+    "register_reward_handler",
     "start",
     "unavailable_reason",
     "user_is_ad_free",
@@ -95,6 +98,28 @@ class RewardedAdError(Exception):
         self.status = status
         self.retry_after = retry_after
         self.remaining = remaining
+
+
+@dataclass(frozen=True)
+class RewardHandler:
+    """What an owning app plugs in to pay a reward that is not built in.
+
+    ``check(user, reference)`` runs before a watch can start and raises
+    :class:`RewardedAdError` when the owning app refuses it; ``grant(view)`` runs inside
+    the completion transaction (the view row is locked) and returns
+    ``(granted, note)``. ``grant`` must be idempotent per ``view.pk``.
+    """
+
+    check: Callable[[Any, str], None]
+    grant: Callable[[RewardedAdView], tuple[bool, str]]
+
+
+_handlers: dict[str, RewardHandler] = {}
+
+
+def register_reward_handler(reward_type: str, handler: RewardHandler) -> None:
+    """Plug in the payout of ``reward_type`` (idempotent: the last one wins)."""
+    _handlers[reward_type] = handler
 
 
 @dataclass(frozen=True)
@@ -165,6 +190,8 @@ def _reward_backend_missing(config: RewardedAdConfig) -> str:
         and not django_apps.is_installed("apps.devices")
     ):
         return "Device slot resets are not available on this site."
+    if kind == RewardedAdConfig.RewardType.DOWNLOAD_UNLOCK and kind not in _handlers:
+        return "File unlocks are not available on this site."
     return ""
 
 
@@ -272,9 +299,13 @@ def _record_refusal(
 
 
 def check_eligibility(
-    request: HttpRequest, user: Any, config: RewardedAdConfig
+    request: HttpRequest, user: Any, config: RewardedAdConfig, reference: str = ""
 ) -> None:
-    """Raise ``RewardedAdError`` unless ``user`` may start ``config`` right now."""
+    """Raise ``RewardedAdError`` unless ``user`` may start ``config`` right now.
+
+    A reward with an owning-app handler (file unlocks) also needs that app's approval of
+    ``reference`` (the unlock ticket the watch counts toward).
+    """
     reason = unavailable_reason(config)
     if reason:
         raise RewardedAdError("not_available", reason, status=409)
@@ -291,6 +322,9 @@ def check_eligibility(
             status=403,
         )
     _check_caps(user, config, timezone.now())
+    handler = _handlers.get(config.reward_type)
+    if handler is not None:
+        handler.check(user, reference)
 
 
 # --- start / heartbeat / complete ----------------------------------------------
@@ -308,8 +342,14 @@ def _flag(view: RewardedAdView, flag: str) -> None:
     view.is_flagged = True
 
 
-def start(request: HttpRequest, user: Any, config: RewardedAdConfig) -> StartResult:
-    """Begin a watch: one active view per user, a fresh single-use token."""
+def start(
+    request: HttpRequest, user: Any, config: RewardedAdConfig, reference: str = ""
+) -> StartResult:
+    """Begin a watch: one active view per user, a fresh single-use token.
+
+    ``reference`` names what the watch counts toward (a file unlock ticket); it is
+    stored on the view and judged by the reward's handler, never trusted blindly.
+    """
     if not allow_action(
         f"ads:rewarded:start:{user.pk}",
         max_attempts=STARTS_PER_HOUR,
@@ -319,7 +359,7 @@ def start(request: HttpRequest, user: Any, config: RewardedAdConfig) -> StartRes
             "rate_limited", "Too many attempts. Try again later.", status=429
         )
     try:
-        check_eligibility(request, user, config)
+        check_eligibility(request, user, config, reference)
     except RewardedAdError as error:
         if error.code in {"cooldown", "daily_cap", "monthly_cap"}:
             _record_refusal(request, user, config, FLAG_TOO_FREQUENT)
@@ -339,6 +379,7 @@ def start(request: HttpRequest, user: Any, config: RewardedAdConfig) -> StartRes
             view = RewardedAdView.objects.create(
                 user=user,
                 config=config,
+                reference=reference[:64],
                 token_digest=digest_token(token),
                 expires_at=now + timedelta(seconds=required + SESSION_GRACE_SECONDS),
                 ip_address=get_client_ip(request) or None,
@@ -558,6 +599,16 @@ def _grant(view: RewardedAdView, config: RewardedAdConfig) -> None:
         view.reward_granted = True
         view.reward_note = f"+{config.reward_amount} downloads for the next {config.valid_hours} hours."
         _forget_entitlements()
+    elif kind == RewardedAdConfig.RewardType.DOWNLOAD_UNLOCK:
+        handler = _handlers.get(kind)
+        granted, note = (
+            handler.grant(view)
+            if handler is not None
+            else (False, "File unlocks are not available on this site.")
+        )
+        view.reward_amount = 1 if granted else 0
+        view.reward_granted = granted
+        view.reward_note = note[:255]
     else:
         RewardedAdGrant.objects.create(
             user=user,

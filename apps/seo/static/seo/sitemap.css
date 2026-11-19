@@ -1,0 +1,63 @@
+/* Presentation of the sitemap XML, linked by an xml-stylesheet processing instruction.
+   A same-origin CSS file keeps the strict CSP intact: no inline styles, no scripts.
+   Elements are laid out as a table (url = row, loc/lastmod = cells). XSLT is not used:
+   browsers have deprecated it and Chromium injects a warning banner into any
+   XSLT-transformed page. Extension elements (images, alternates, news) are hidden.
+   Colours come from the shared design tokens (build/tokens.css, imported below): light theme only, because an XML
+   document runs no theme script and the public tokens resolve dark through data-bs-theme. */
+@import url("../build/tokens.css");
+
+urlset,
+sitemapindex {
+  display: table;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 1rem;
+  border-spacing: 0;
+  background: var(--mf-page);
+  color: var(--mf-text);
+  font: 15px/1.5 var(--mf-font-sans);
+}
+
+urlset::before {
+  display: table-caption;
+  padding: 0 0 0.75rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+  content: "XML sitemap: URL, then last modified (not a page for visitors)";
+}
+
+sitemapindex::before {
+  display: table-caption;
+  padding: 0 0 0.75rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+  content: "XML sitemap index: sitemap file, then last modified";
+}
+
+url,
+sitemap {
+  display: table-row;
+}
+
+loc,
+lastmod {
+  display: table-cell;
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid var(--mf-border);
+  overflow-wrap: anywhere;
+}
+
+lastmod {
+  width: 14rem;
+  color: var(--mf-text-muted);
+}
+
+image,
+link,
+news {
+  display: none;
+}
+
+   document runs no theme script and the public tokens resolve dark through data-bs-theme. */

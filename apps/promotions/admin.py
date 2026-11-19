@@ -1,9 +1,9 @@
-"""Unfold admin for promotions: one object page per campaign with tabs and lifecycle actions."""
+"""Staff console admin for promotions: one object page per campaign with tabs and lifecycle actions."""
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from typing import Any, ClassVar
+from collections.abc import Mapping, Sequence
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from django.contrib import messages
 from django.contrib.admin import register
@@ -11,11 +11,9 @@ from django.contrib.admin.utils import unquote
 from django.core.exceptions import ValidationError
 from django.http import Http404, HttpRequest, HttpResponse
 from django.urls import reverse
-from django.utils.functional import Promise
 from django.utils.html import format_html, format_html_join
 from django.utils.safestring import SafeString
 from django.utils.translation import gettext_lazy as _
-from unfold.forms import BaseDialogForm
 
 from apps.core.admin_base import (
     ModelAdmin,
@@ -28,6 +26,7 @@ from apps.core.admin_base import (
     htmx_redirect,
     return_url,
 )
+from apps.core.admin_forms import BaseDialogForm
 from apps.core.editor.admin import RichTextAdminMixin
 from apps.users.request_user import current_user
 
@@ -41,6 +40,9 @@ from .models import (
     PromotionProgress,
     PromotionStatus,
 )
+
+if TYPE_CHECKING:
+    from django_stubs_ext import StrOrPromise
 
 STATUS_BADGES = {
     "Draft": "info",
@@ -85,7 +87,7 @@ class PromotionAdmin(RichTextAdminMixin, ModelAdmin):
     list_filter = ("status", "kind", "audience")
     list_display_links = ("name",)
     search_fields = ("name", "slug", "headline", "description")
-    prepopulated_fields: ClassVar[dict[str, tuple[str, ...]]] = {"slug": ("name",)}
+    prepopulated_fields: ClassVar[dict[str, Sequence[str]]] = {"slug": ("name",)}
     readonly_fields = (
         "status",
         "offer_link",
@@ -258,7 +260,7 @@ class PromotionAdmin(RichTextAdminMixin, ModelAdmin):
         request: HttpRequest,
         object_id: str,
         change: Any,
-        done: str | Promise,
+        done: StrOrPromise,
     ) -> HttpResponse:
         promotion = self.get_object(request, unquote(object_id))
         if promotion is None:

@@ -283,7 +283,9 @@ class UploadApiTests(StorageTestCase):
             response = self.api.get(reverse(name), HTTP_ACCEPT="text/html")
 
             self.assertEqual(response.status_code, 302, name)
-            self.assertEqual(response["Location"], reverse("firmwares:upload"), name)
+            self.assertEqual(
+                response["Location"], reverse("firmwares:contribute"), name
+            )
 
     def test_api_clients_get_json_never_the_browsable_form(self):
         self.api.force_authenticate(self.user)

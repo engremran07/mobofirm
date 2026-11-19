@@ -5,15 +5,17 @@ Firmwares API — DRF viewsets merged from dissolved apps:
 
 from __future__ import annotations
 
-from typing import ClassVar
+from typing import Any, ClassVar
 
 from django.contrib.auth.models import AnonymousUser
 from django.core.exceptions import PermissionDenied
 from django.db.models import Q
+from django.http import HttpRequest
 from rest_framework import permissions, serializers, viewsets
 
 from apps.users.request_user import current_user
 
+from . import shortener
 from .models import (
     AdGateLog,
     ChangelogEntry,
@@ -274,3 +276,23 @@ class FirmwareDiffViewSet(viewsets.ReadOnlyModelViewSet):
     )
     serializer_class = FirmwareDiffSerializer
     permission_classes = (permissions.AllowAny,)
+
+
+# ---------------------------------------------------------------------------
+# Service contract for other apps (``AppService.export("firmwares", name)``)
+# ---------------------------------------------------------------------------
+
+
+def shorten_download_url(
+    firmware: Any, *, request: HttpRequest | None = None, user: Any = None
+) -> str:
+    """The link to share for ``firmware``'s external download.
+
+    First-party ``/d/<code>/`` and/or a provider short link when staff enabled them
+    (global, brand or firmware setting) and the viewer is routed through the shortener
+    (free tier or a package without the ``direct_links`` perk); otherwise the plain
+    download page URL. A provider failure falls back automatically, so the result is
+    always shareable. ``user`` defaults to ``request.user``. Callers (for example
+    distribution share text) must not store the answer as authoritative.
+    """
+    return shortener.shorten_download_url(firmware, request=request, user=user)

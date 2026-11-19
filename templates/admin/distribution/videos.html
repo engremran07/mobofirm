@@ -1,0 +1,38 @@
+{% extends "admin/staff_page.html" %}
+{% load i18n staff_ui %}
+{% block page_nav %}{% include "admin/distribution/_nav.html" %}{% endblock %}
+{% block page_body %}
+{% staff_notice tone="warning" %}<strong>{% translate "Nothing is posted without your approval." %}</strong> {% translate "Videos are drawn and encoded on this server with free local tools only. A draft is created for each published post and verified firmware; render it, watch it here, then approve it. Only approved videos are ever sent to TikTok, YouTube Shorts or Reels." %}{% endstaff_notice %}
+
+{% staff_section title=_("Rendering tools") ident="video-tools" intro=_("What this machine can do. Nothing here calls a paid or cloud service.") %}
+  {% staff_table label=_("Rendering capability report") %}
+    <thead><tr><th scope="col">{% translate "Tool" %}</th><th scope="col">{% translate "State" %}</th><th scope="col">{% translate "Details and how to install" %}</th></tr></thead>
+    <tbody>{% for cap in capabilities_report %}<tr>
+      <th scope="row">{{ cap.label }}{% if cap.required %} <span class="u-muted u-text-xs">({% translate "required" %})</span>{% endif %}</th>
+      <td><span class="c-badge c-badge--{% if cap.ok %}success{% elif cap.required %}danger{% else %}warning{% endif %}">{% if cap.ok %}{% translate "Ready" %}{% elif cap.required %}{% translate "Missing" %}{% else %}{% translate "Not installed" %}{% endif %}</span></td>
+      <td class="u-break">{{ cap.detail }}{% if cap.guidance %}<br><small class="u-muted">{{ cap.guidance }}</small>{% endif %}</td>
+    </tr>{% endfor %}</tbody>
+  {% endstaff_table %}
+  <p class="u-muted u-text-sm mb-0">{% blocktranslate with cap=settings.video_daily_cap left=budget timeout=settings.video_render_timeout %}Automatic drafts: {{ left }} left today (limit {{ cap }} a day). A render stops after {{ timeout }} seconds. Music is generated here (no third-party audio); voice-over needs an offline engine and is optional.{% endblocktranslate %}</p>
+{% endstaff_section %}
+
+{% if can_add %}
+{% staff_section title=_("Create a video") ident="video-new" %}
+  <form method="post" action="{% url 'admin:distribution_channel_video_create' %}" class="c-picker__tools">
+    {% csrf_token %}
+    {% staff_select "vn-kind" "kind" _("Content") %}{% for kind in kinds %}<option value="{{ kind }}">{{ kind|title }}</option>{% endfor %}{% endstaff_select %}
+    {% staff_input "vn-ref" "ref" _("Reference") placeholder="official:<id>, post:<id>, week:2026-W47, brand:acme" maxlength=120 required=True %}
+    {% staff_select "vn-template" "template" _("Template") %}<option value="">{% translate "Automatic" %}</option>{% for pack in pack_options %}<option value="{{ pack.slug }}">{{ pack.label }}</option>{% endfor %}{% endstaff_select %}
+    {% staff_select "vn-hook" "hook" _("Hook") %}<option value="A">{% translate "A: statement" %}</option><option value="B">{% translate "B: question" %}</option>{% endstaff_select %}
+    <div class="d-flex flex-wrap gap-2">
+      <button type="submit" class="btn btn-secondary">{% translate "Create draft" %}</button>
+      <button type="submit" class="btn btn-primary" name="render" value="1"{% if not can_render %} disabled aria-describedby="video-tools"{% endif %}>{% translate "Create and render" %}</button>
+    </div>
+  </form>
+{% endstaff_section %}
+{% endif %}
+
+{% staff_section title=_("Queue") ident="video-queue" %}
+  {% include "admin/distribution/_videos_live.html" %}
+{% endstaff_section %}
+{% endblock %}

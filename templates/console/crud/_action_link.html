@@ -1,0 +1,3 @@
+{% comment %}
+  A single action link. Params: action (title, icon, variant, attrs, dialog, path), menu (dropdown item?), size.
+{% endcomment %}{% load console_ui console_admin %}{% with tone=action.variant|console_action_variant %}<a href="{{ action.path }}" class="{% if menu %}dropdown-item{% if tone == 'danger' %} text-danger{% endif %}{% else %}btn btn-{{ size|default:'sm' }} {{ action.variant|console_button_class }}{% endif %}"{% if action.dialog %} hx-get="{{ action.path }}" hx-target="#console-dialog" hx-swap="innerHTML"{% endif %}{{ action.attrs|console_attrs }}>{% if action.icon %}{% console_icon action.icon %}{% endif %}<span>{{ action.title }}</span></a>{% endwith %}

@@ -72,7 +72,7 @@ class ModerationDialogTests(TestCase):
     def test_overlong_note_is_rejected_inside_the_dialog(self):
         response = self.client.post(self.url("reject"), {"reason": "x" * 1001}, **HTMX)
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "mf-ui-dialog__error")
+        self.assertContains(response, "invalid-feedback")
         self.comment.refresh_from_db()
         self.assertEqual(self.comment.status, Comment.Status.PENDING)
 

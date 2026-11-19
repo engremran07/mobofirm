@@ -30,16 +30,16 @@ SINK = "test.package"
 BOUNTY = "test.bounty"
 
 
-def fund(user: Any, credits: int, key: str = "fund") -> None:
-    services.credit(user, credits, reason=LedgerReason.TOPUP, key=key)
+def fund(user: Any, amount: int, key: str = "fund") -> None:
+    services.credit(user, amount, reason=LedgerReason.TOPUP, key=key)
 
 
-def test_price_of_reads_the_admin_price_times_quantity(db: Any) -> None:
+def test_price_of_reads_the_admin_price_times_quantity() -> None:
     assert services.price_of(SINK) == 40
     assert services.price_of(SINK, quantity=3) == 120
 
 
-def test_unknown_and_disabled_sinks_are_refused(db: Any) -> None:
+def test_unknown_and_disabled_sinks_are_refused() -> None:
     with pytest.raises(UnknownSink):
         services.price_of("nobody.sells")
 
@@ -84,15 +84,15 @@ def test_an_explicit_credit_amount_overrides_the_sink_price(user: Any) -> None:
 def test_price_modifiers_apply_a_discount(user: Any) -> None:
     fund(user, 100)
 
-    def half(_sink: str, credits: int, _qty: int, _ctx: Any) -> int:
-        return credits // 2
+    def half(_sink: str, amount: int, _qty: int, _ctx: Any) -> int:
+        return amount // 2
 
     registry.register_price_modifier(half)
     try:
         assert services.price_of(SINK) == 20
         entry = services.spend(user, SINK, key="shop:disc:1")
     finally:
-        registry._price_modifiers.remove(half)
+        registry.unregister_price_modifier(half)
 
     assert entry.amount == 20
 

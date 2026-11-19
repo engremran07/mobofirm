@@ -28,6 +28,7 @@ from .public_views import (
     universal_search,
 )
 from .user_views import (
+    legacy_upload,
     my_requests,
     my_uploads,
     request_brand,
@@ -50,7 +51,12 @@ from .views import (
     PendingFirmwareViewSet,
     VariantCreationRequestViewSet,
 )
-from .views_flashing import flashing_guides, flashing_tool_detail, flashing_tools
+from .views_flashing import (
+    flashing_category,
+    flashing_guides,
+    flashing_tool_detail,
+    flashing_tools,
+)
 
 app_name = "firmwares"
 
@@ -91,10 +97,13 @@ urlpatterns = [
     path("chipsets/<slug:slug>/", chipset_detail, name="chipset_detail"),
     # Flashing tools and guides hub
     path("tools/", flashing_tools, name="flashing_tools"),
+    path("tools/category/<slug:slug>/", flashing_category, name="flashing_category"),
     path("tools/<slug:slug>/", flashing_tool_detail, name="flashing_tool_detail"),
     path("guides/", flashing_guides, name="flashing_guides"),
     # Admin/upload endpoints
-    path("upload/", upload_page, name="upload"),
+    path("contribute/", upload_page, name="contribute"),
+    # Legacy addresses: GET redirects (301) to Contribute / My contributions.
+    path("upload/", legacy_upload, name="upload"),
     path("upload/mine/", my_uploads, name="my_uploads"),
     path("upload/variant-field/", upload_variant_field, name="upload_variant_field"),
     path("api/upload/", FirmwareUploadView.as_view(), name="firmware-upload"),

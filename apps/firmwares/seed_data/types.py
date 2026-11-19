@@ -132,6 +132,7 @@ SCHEME_TRANSSION = _scheme("transsion", F.SERVICE_PACKAGE, F.FULL_OTA)
 SCHEME_ZTE = _scheme("zte", F.FULL_OTA, F.FULL_OTA)
 SCHEME_NOTHING = _scheme("nothing", F.FASTBOOT_ROM, F.FULL_OTA)
 SCHEME_FAIRPHONE = _scheme("fairphone", F.FULL_OTA, F.FULL_OTA)
+SCHEME_APPLE = _scheme("apple", F.APPLE_IPSW, F.APPLE_OTA, ".ipsw", ".ipsw")
 
 PIXEL_PREFIX = {12: "SQ3A", 13: "TQ3A", 14: "UQ1A", 15: "AP3A", 16: "BP2A"}
 MOTOROLA_LETTER = {11: "R", 12: "S", 13: "T", 14: "U", 15: "V"}

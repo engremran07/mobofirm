@@ -1,19 +1,24 @@
 /* Summernote (lite) theme for Mobofirm: design tokens, light/dark, responsive, RTL-safe.
-   Loaded only on pages that contain an editor. Variables fall back to literal values so
-   the editor also works inside the Unfold admin, which does not load the public tokens. */
+   Loaded only on pages that contain an editor. The public site and the staff console emit
+   the same shared tokens, so there are no literal colour fallbacks. */
+
+.note-editor.note-frame,
+.note-modal,
+.note-dropdown-menu,
+.note-popover {
+  --mf-ed-bg: var(--mf-surface-raised);
+  --mf-ed-fg: var(--mf-text);
+  --mf-ed-muted: var(--mf-text-muted);
+  --mf-ed-border: var(--mf-border);
+  --mf-ed-soft: var(--mf-surface-soft);
+  --mf-ed-accent: var(--mf-accent);
+  --mf-ed-accent-ink: var(--mf-accent-ink);
+  --mf-ed-focus: var(--mf-focus);
+  --mf-ed-danger: var(--mf-danger);
+  --mf-ed-radius: var(--mf-radius-sm);
+}
 
 .note-editor.note-frame {
-  --mf-ed-bg: var(--mf-surface-raised, #ffffff);
-  --mf-ed-fg: var(--mf-text, #19272c);
-  --mf-ed-muted: var(--mf-text-muted, #52636a);
-  --mf-ed-border: var(--mf-border, #d9d2c7);
-  --mf-ed-soft: var(--mf-surface-soft, #ece7de);
-  --mf-ed-accent: var(--mf-accent, #0b7376);
-  --mf-ed-accent-ink: var(--mf-accent-ink, #ffffff);
-  --mf-ed-focus: var(--mf-focus, #07595d);
-  --mf-ed-danger: var(--mf-danger, #a43838);
-  --mf-ed-radius: var(--mf-radius-sm, 0.5rem);
-
   border: 1px solid var(--mf-ed-border);
   border-radius: var(--mf-ed-radius);
   background: var(--mf-ed-bg);
@@ -22,19 +27,11 @@
   font-family: inherit;
 }
 
-:root.dark .note-editor.note-frame,
-:root.dark .note-modal,
-:root.dark .note-dropdown-menu,
-:root.dark .note-popover {
-  --mf-ed-bg: #1d2730;
-  --mf-ed-fg: #edf4f1;
-  --mf-ed-muted: #adbbb8;
-  --mf-ed-border: #3a4a52;
-  --mf-ed-soft: #293740;
-  --mf-ed-accent: #72d9ce;
-  --mf-ed-accent-ink: #10201f;
-  --mf-ed-focus: #a8eee5;
-  --mf-ed-danger: #ff9292;
+:root[data-bs-theme="dark"] .note-editor.note-frame,
+:root[data-bs-theme="dark"] .note-modal,
+:root[data-bs-theme="dark"] .note-dropdown-menu,
+:root[data-bs-theme="dark"] .note-popover {
+  --mf-ed-bg: var(--mf-surface);
 }
 
 .note-editor.note-frame:focus-within {
@@ -168,11 +165,11 @@
 .note-dropdown-menu,
 .note-popover .popover-content,
 .note-popover .note-popover-content {
-  border: 1px solid var(--mf-ed-border, #d9d2c7);
-  border-radius: var(--mf-ed-radius, 0.5rem);
-  background: var(--mf-ed-bg, #ffffff);
-  color: var(--mf-ed-fg, #19272c);
-  box-shadow: var(--mf-shadow, 0 0.75rem 2rem rgb(0 0 0 / 18%));
+  border: 1px solid var(--mf-ed-border);
+  border-radius: var(--mf-ed-radius);
+  background: var(--mf-ed-bg);
+  color: var(--mf-ed-fg);
+  box-shadow: var(--mf-shadow);
 }
 
 .note-dropdown-menu {
@@ -181,11 +178,11 @@
 }
 
 .note-dropdown-item {
-  color: var(--mf-ed-fg, #19272c);
+  color: var(--mf-ed-fg);
 }
 
 .note-dropdown-item:hover {
-  background: var(--mf-ed-soft, #ece7de);
+  background: var(--mf-ed-soft);
 }
 
 .note-editor .note-dropdown-menu h2,
@@ -216,7 +213,7 @@
 }
 
 .mf-ed-colorA {
-  border-bottom: 3px solid var(--mf-c-red, #c62f2f);
+  border-bottom: 3px solid var(--mf-c-red);
   line-height: 1;
 }
 
@@ -235,19 +232,19 @@
 
 .mf-ed-choice:hover,
 .mf-ed-choice:focus-visible {
-  background: var(--mf-ed-soft, #ece7de);
+  background: var(--mf-ed-soft);
   outline: none;
 }
 
 .mf-ed-sep {
   height: 1px;
   margin: 0.25rem 0;
-  background: var(--mf-ed-border, #d9d2c7);
+  background: var(--mf-ed-border);
 }
 
 .mf-ed-label {
   padding: 0.25rem 0.4rem 0.1rem;
-  color: var(--mf-ed-muted, #52636a);
+  color: var(--mf-ed-muted);
   font-size: 0.75rem;
   letter-spacing: 0.02em;
   text-transform: uppercase;
@@ -263,27 +260,27 @@
 .mf-ed-swatch {
   width: 1.75rem;
   height: 1.75rem;
-  border: 2px solid var(--mf-ed-bg, #fff);
+  border: 2px solid var(--mf-ed-bg);
   border-radius: 50%;
-  box-shadow: 0 0 0 1px var(--mf-ed-border, #d9d2c7);
+  box-shadow: 0 0 0 1px var(--mf-ed-border);
   cursor: pointer;
 }
 
 .mf-ed-swatch:focus-visible {
-  outline: 2px solid var(--mf-ed-focus, #07595d);
+  outline: 2px solid var(--mf-ed-focus);
   outline-offset: 2px;
 }
 
-.mf-ed-sw-red { background: var(--mf-c-red, #c62f2f); }
-.mf-ed-sw-orange { background: var(--mf-c-orange, #c25e0a); }
-.mf-ed-sw-amber { background: var(--mf-c-amber, #8a6a00); }
-.mf-ed-sw-green { background: var(--mf-c-green, #23794a); }
-.mf-ed-sw-teal { background: var(--mf-c-teal, #0e7274); }
-.mf-ed-sw-blue { background: var(--mf-c-blue, #2158b4); }
-.mf-ed-sw-indigo { background: var(--mf-c-indigo, #4a4ab8); }
-.mf-ed-sw-purple { background: var(--mf-c-purple, #7b3796); }
-.mf-ed-sw-pink { background: var(--mf-c-pink, #b8286f); }
-.mf-ed-sw-gray { background: var(--mf-c-gray, #57626f); }
+.mf-ed-sw-red { background: var(--mf-c-red); }
+.mf-ed-sw-orange { background: var(--mf-c-orange); }
+.mf-ed-sw-amber { background: var(--mf-c-amber); }
+.mf-ed-sw-green { background: var(--mf-c-green); }
+.mf-ed-sw-teal { background: var(--mf-c-teal); }
+.mf-ed-sw-blue { background: var(--mf-c-blue); }
+.mf-ed-sw-indigo { background: var(--mf-c-indigo); }
+.mf-ed-sw-purple { background: var(--mf-c-purple); }
+.mf-ed-sw-pink { background: var(--mf-c-pink); }
+.mf-ed-sw-gray { background: var(--mf-c-gray); }
 
 .mf-ed-help {
   min-width: 16rem;
@@ -300,9 +297,9 @@
 
 .mf-ed-keys kbd {
   padding: 0.1rem 0.35rem;
-  border: 1px solid var(--mf-ed-border, #d9d2c7);
+  border: 1px solid var(--mf-ed-border);
   border-radius: 0.3rem;
-  background: var(--mf-ed-soft, #ece7de);
+  background: var(--mf-ed-soft);
   color: inherit;
   font-size: 0.75rem;
 }
@@ -325,47 +322,47 @@
 
 .mf-ed-emoji-item:hover,
 .mf-ed-emoji-item:focus-visible {
-  background: var(--mf-ed-soft, #ece7de);
+  background: var(--mf-ed-soft);
   outline: none;
 }
 
 /* Dialogs (link, image, video, help) */
 .note-modal {
-  color: var(--mf-ed-fg, #19272c);
+  color: var(--mf-ed-fg);
 }
 
 .note-modal .note-modal-content {
   max-width: calc(100vw - 1.5rem);
   max-height: calc(100dvh - 2rem);
   overflow: auto;
-  border: 1px solid var(--mf-ed-border, #d9d2c7);
-  border-radius: var(--mf-radius-md, 0.85rem);
-  background: var(--mf-ed-bg, #ffffff);
-  color: var(--mf-ed-fg, #19272c);
+  border: 1px solid var(--mf-ed-border);
+  border-radius: var(--mf-radius-md);
+  background: var(--mf-ed-bg);
+  color: var(--mf-ed-fg);
 }
 
 .note-modal .note-modal-header,
 .note-modal .note-modal-footer {
-  border-color: var(--mf-ed-border, #d9d2c7);
+  border-color: var(--mf-ed-border);
 }
 
 .note-modal .note-input,
 .note-modal input[type="text"],
 .note-modal input[type="url"] {
-  border: 1px solid var(--mf-ed-border, #d9d2c7);
+  border: 1px solid var(--mf-ed-border);
   border-radius: 0.4rem;
-  background: var(--mf-ed-bg, #fff);
-  color: var(--mf-ed-fg, #19272c);
+  background: var(--mf-ed-bg);
+  color: var(--mf-ed-fg);
 }
 
 .note-modal .note-btn-primary {
-  border-color: var(--mf-ed-accent, #0b7376);
-  background: var(--mf-ed-accent, #0b7376);
-  color: var(--mf-ed-accent-ink, #fff);
+  border-color: var(--mf-ed-accent);
+  background: var(--mf-ed-accent);
+  color: var(--mf-ed-accent-ink);
 }
 
 .note-modal-backdrop {
-  background: var(--mf-overlay, rgb(14 22 28 / 52%));
+  background: var(--mf-overlay);
 }
 
 /* The server removes these link options, so do not offer them. */
@@ -380,23 +377,14 @@
   justify-content: space-between;
   gap: 1rem;
   margin-block-start: 0.35rem;
-  color: var(--mf-text-muted, #52636a);
+  color: var(--mf-text-muted);
   font-size: 0.8125rem;
 }
 
 .mf-editor-status.is-error .mf-editor-message,
 .mf-editor-status.is-over .mf-editor-count {
-  color: var(--mf-danger, #a43838);
+  color: var(--mf-danger);
   font-weight: 600;
-}
-
-:root.dark .mf-editor-status {
-  color: #adbbb8;
-}
-
-:root.dark .mf-editor-status.is-error .mf-editor-message,
-:root.dark .mf-editor-status.is-over .mf-editor-count {
-  color: #ff9292;
 }
 
 .mf-editor-preview {

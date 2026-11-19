@@ -119,7 +119,7 @@ class GuideScreenTests(TestCase):
         self.assertContains(models, "Nova Atlas One")
         self.assertContains(models, "No guide")
         self.assertContains(chipsets, "MediaTek Helio G100")
-        self.assertContains(models, "mf-ui-header")
+        self.assertContains(models, "console-staff-page")
         missing = self.client.get(reverse("seo:guides"), {"missing": "1"})
         self.assertContains(missing, "Nova Atlas One")
 

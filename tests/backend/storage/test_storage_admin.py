@@ -26,7 +26,8 @@ class StorageAdminTests(TestCase):
         self.admin_user = get_user_model().objects.create_superuser(
             username="storage-admin", email="storage-admin@example.test"
         )
-        self.client = Client()
+        # Dialogs submit through HTMX, which is answered with an HX-Redirect header.
+        self.client = Client(headers={"HX-Request": "true"})
         self.client.force_login(self.admin_user)
         brand = Brand.objects.create(name="Admin Store", slug="admin-store")
         model = Model.objects.create(brand=brand, name="A1", slug="a1")

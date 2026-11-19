@@ -103,12 +103,20 @@ import {
   Settings,
   Eye,
   RefreshCw,
+  ArrowDownLeft,
+  ArrowUpRight,
+  Coins,
+  LayoutDashboard,
   createIcons,
 } from "lucide";
 
 // Every data-lucide name used in a template must be listed here; an unlisted name
 // renders an empty <i>. tests/backend/test_frontend_contract.py enforces this.
 const iconSet = {
+  ArrowDownLeft,
+  ArrowUpRight,
+  Coins,
+  LayoutDashboard,
   ArrowDown,
   ArrowLeft,
   ArrowRight,

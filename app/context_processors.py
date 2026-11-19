@@ -38,7 +38,8 @@ _NAV_NAMESPACES = {
     "pages": "pages",
     "shop": "shop",
     "marketplace": "marketplace",
-    "library": "files",
+    "library": "contributions",
+    "contributions": "contributions",
 }
 
 _NAV_SECTIONS = {

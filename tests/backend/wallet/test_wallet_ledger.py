@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any
 from unittest.mock import patch
 
@@ -165,9 +166,7 @@ def test_adjustments_need_the_permission_and_a_reason(
     )
 
 
-def test_to_credits_rounds_half_up_with_the_configured_rate(db: Any) -> None:
-    from decimal import Decimal
-
+def test_to_credits_rounds_half_up_with_the_configured_rate() -> None:
     assert services.credits_per_currency() == 10
     assert services.to_credits(Decimal(9)) == 90
     assert services.to_credits(Decimal("0.05")) == 1

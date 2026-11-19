@@ -1,4 +1,4 @@
-"""Data behind the My files pages: the library, uploads and quota panel.
+"""Data behind the My contributions pages: downloads, contributions and quota panel.
 
 Files served to a user are recorded once by ``apps.firmwares`` (``ServedDownload``);
 paid-file entitlements and quotas come from ``apps.shop.entitlements``. Both are read
@@ -268,18 +268,38 @@ class UploadEntry:
     published_url: str
 
 
-def _published_url(pending: Any) -> str:
-    if pending.admin_decision != "approved" or not pending.routed_object_id:
+def _live_targets(rows: list[Any]) -> set[tuple[Any, Any]]:
+    """``(category, id)`` of the approved submissions whose firmware is live now.
+
+    One query per firmware category for the whole page of rows (not one per row).
+    """
+    from apps.firmwares.catalog import get_firmware_model
+
+    ids_by_category: dict[Any, list[Any]] = {}
+    for pending in rows:
+        if pending.admin_decision == "approved" and pending.routed_object_id:
+            ids_by_category.setdefault(pending.routed_category, []).append(
+                pending.routed_object_id
+            )
+    live: set[tuple[Any, Any]] = set()
+    for category, ids in ids_by_category.items():
+        model_class = get_firmware_model(category)
+        if model_class is None:
+            continue
+        live_ids = model_class.objects.filter(
+            pk__in=ids, is_active=True, is_verified=True
+        ).values_list("pk", flat=True)
+        live.update((category, pk) for pk in live_ids)
+    return live
+
+
+def _published_url(pending: Any, live: set[tuple[Any, Any]]) -> str:
+    if (pending.routed_category, pending.routed_object_id) not in live:
         return ""
     from apps.firmwares.catalog import TYPE_KEY_BY_CLASS, get_firmware_model
 
     model_class = get_firmware_model(pending.routed_category)
-    if (
-        model_class is None
-        or not model_class.objects.filter(
-            pk=pending.routed_object_id, is_active=True, is_verified=True
-        ).exists()
-    ):
+    if model_class is None:
         return ""
     return reverse(
         "firmwares:firmware_detail",
@@ -318,8 +338,10 @@ def upload_entries(user: Any, status: str = "") -> list[UploadEntry]:
     if status in dict(UPLOAD_STATUSES):
         queryset = queryset.filter(admin_decision=status)
     labels = dict(UPLOAD_STATUSES)
+    pendings = list(queryset.order_by("-created_at")[:MAX_LIBRARY_ROWS])
+    live = _live_targets(pendings)
     entries: list[UploadEntry] = []
-    for pending in queryset.order_by("-created_at")[:MAX_LIBRARY_ROWS]:
+    for pending in pendings:
         entries.append(
             UploadEntry(
                 name=pending.original_file_name,
@@ -337,7 +359,7 @@ def upload_entries(user: Any, status: str = "") -> list[UploadEntry]:
                 reviewer_note=(
                     pending.admin_notes if pending.admin_decision == "rejected" else ""
                 ),
-                published_url=_published_url(pending),
+                published_url=_published_url(pending, live),
             )
         )
     return entries
@@ -383,3 +405,50 @@ def quota_panel(user: Any) -> QuotaPanel:
         devices_text=entitled.devices_text,
         offers=_offers(user),
     )
+
+
+# ---------------------------------------------------------------------------
+# Contributions: the blog posts a member wrote and the rewards earned for them
+# ---------------------------------------------------------------------------
+
+REWARD_EVENT_PREFIXES = ("firmware.", "blog.")
+
+
+def blog_contributions(user: Any) -> list[Any]:
+    """The member's blog posts with review status; empty when the blog app is off."""
+    contributions_of = AppService.export("blog", "contributions_of")
+    return list(contributions_of(user)) if callable(contributions_of) else []
+
+
+def blog_available() -> bool:
+    """Whether the blog contribution contract is installed and switched on."""
+    return callable(AppService.export("blog", "contributions_of"))
+
+
+def blog_contribute_url(user: Any) -> str:
+    """Where the member writes a post, or ``""`` when contributions are closed."""
+    is_open = AppService.export("blog", "contributions_open_for")
+    url = AppService.export("blog", "contribution_url")
+    if callable(is_open) and callable(url) and is_open(user):
+        return str(url())
+    return ""
+
+
+def reward_credits(user: Any) -> int | None:
+    """Credits paid for approved contributions, or ``None`` without the wallet."""
+    earned = AppService.export("wallet", "rewards_earned")
+    if not callable(earned) or not django_apps.is_installed("apps.wallet"):
+        return None
+    return int(earned(user, REWARD_EVENT_PREFIXES))
+
+
+def status_counts(rows: list[Any]) -> list[dict[str, Any]]:
+    """Status chips (code, label, count) in first-seen order; empty list for no rows."""
+    chips: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        chip = chips.setdefault(
+            row.status, {"code": row.status, "label": row.status_label, "count": 0}
+        )
+        chip["count"] += 1
+        chip["text"] = f"{chip['label']}: {chip['count']}"
+    return list(chips.values())

@@ -1,0 +1,14 @@
+{% load i18n %}
+<nav class="console-staff-breadcrumbs" aria-label="{% translate 'Breadcrumb' %}">
+  <ol class="c-breadcrumb">
+    {% if page_breadcrumbs %}
+      {% for label, url in page_breadcrumbs %}
+        {% if url %}<li class="c-breadcrumb__item"><a href="{{ url }}">{{ label }}</a></li>
+        {% else %}<li class="c-breadcrumb__item" aria-current="page">{{ label }}</li>{% endif %}
+      {% endfor %}
+    {% else %}
+      <li class="c-breadcrumb__item"><a href="{% url 'admin:index' %}">{% translate "Dashboard" %}</a></li>
+      <li class="c-breadcrumb__item" aria-current="page">{{ title }}</li>
+    {% endif %}
+  </ol>
+</nav>

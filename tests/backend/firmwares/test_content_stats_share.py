@@ -16,7 +16,7 @@ from apps.firmwares.models import Brand, Model, OfficialFirmware
 from apps.firmwares.tracking_models import FirmwareView
 
 SITE = "https://example.org"
-BROWSER = {"HTTP_USER_AGENT": "Mozilla/5.0 (X11; Linux x86_64) Firefox/130.0"}
+BROWSER_UA = "Mozilla/5.0 (X11; Linux x86_64) Firefox/130.0"
 
 
 @override_settings(SITE_URL=SITE)
@@ -45,7 +45,7 @@ class FirmwareStatsAndShareTests(TestCase):
         )
 
     def fetch(self, url=None, client=None):
-        return (client or self.client).get(url or self.url, **BROWSER)
+        return (client or self.client).get(url or self.url, HTTP_USER_AGENT=BROWSER_UA)
 
     # -- totals and last update -------------------------------------------------
     def test_detail_shows_the_stored_totals_and_the_last_update(self):
@@ -63,10 +63,8 @@ class FirmwareStatsAndShareTests(TestCase):
 
     def test_listing_cards_show_views_downloads_and_update(self):
         response = self.client.get(
-            reverse(
-                "firmwares:model_detail", args=[self.brand.slug, self.model.slug]
-            ),
-            **BROWSER,
+            reverse("firmwares:model_detail", args=[self.brand.slug, self.model.slug]),
+            HTTP_USER_AGENT=BROWSER_UA,
         )
 
         self.assertContains(response, 'title="1234 views"')
@@ -109,7 +107,10 @@ class FirmwareStatsAndShareTests(TestCase):
             if query["sql"].startswith('UPDATE "firmwares_officialfirmware"')
         ]
         self.assertEqual(len(updates), 1, updates)
-        self.assertRegex(updates[0], r'"view_count" = \("firmwares_officialfirmware"."view_count" \+ 1\)')
+        self.assertRegex(
+            updates[0],
+            r'"view_count" = \("firmwares_officialfirmware"."view_count" \+ 1\)',
+        )
 
     def test_counting_a_view_never_touches_the_update_time(self):
         before = self.firmware.updated_at
@@ -152,8 +153,12 @@ class FirmwareStatsAndShareTests(TestCase):
         self.assertIn(f'data-copy="{canonical}"', html)
         self.assertIn("Share this firmware", html)
         for network in ("X", "Facebook", "WhatsApp", "Telegram", "LinkedIn", "Email"):
-            self.assertRegex(html, rf'class="share__link"[^>]*>(?:<i[^>]*></i>){network}')
-        self.assertIn("x.com/intent/post?url=https%3A%2F%2Fexample.org%2Ffirmwares", html)
+            self.assertRegex(
+                html, rf'class="share__link"[^>]*>(?:<i[^>]*></i>){network}'
+            )
+        self.assertIn(
+            "x.com/intent/post?url=https%3A%2F%2Fexample.org%2Ffirmwares", html
+        )
         self.assertEqual(html.count('rel="noopener noreferrer"'), 5)
 
     def test_download_page_shares_the_detail_page_never_a_token_url(self):
@@ -164,7 +169,9 @@ class FirmwareStatsAndShareTests(TestCase):
         self.assertEqual(response.status_code, 200)
         html = response.content.decode()
         self.assertIn(f'data-share-url="{SITE}{self.url}"', html)
-        self.assertNotIn("token=", re.search(r'data-share-url="([^"]*)"', html).group(1))
+        shared = re.search(r'data-share-url="([^"]*)"', html)
+        self.assertIsNotNone(shared)
+        self.assertNotIn("token=", shared.group(1) if shared else "")
         self.assertContains(response, 'title="56 downloads"')
 
     def test_detail_head_has_open_graph_and_twitter_metadata(self):

@@ -10,16 +10,10 @@ from django.db.models import Q, QuerySet
 from django.http import Http404, HttpRequest, HttpResponse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from unfold.contrib.filters.admin import (
-    BooleanRadioFilter,
-    ChoicesDropdownFilter,
-    RangeDateTimeFilter,
-    RangeNumericFilter,
-)
-from unfold.enums import ActionVariant
-from unfold.forms import BaseDialogForm
 
 from apps.core.admin_base import (
+    ActionVariant,
+    BaseDialogForm,
     ConfirmForm,
     ModelAdmin,
     NoAddModelAdmin,
@@ -32,6 +26,12 @@ from apps.core.admin_base import (
     display,
     htmx_redirect,
     return_url,
+)
+from apps.core.admin_filters import (
+    BooleanRadioFilter,
+    ChoicesDropdownFilter,
+    RangeDateTimeFilter,
+    RangeNumericFilter,
 )
 from apps.devices import slots
 from apps.devices.dialogs import DeclineSlotRequestForm, ResetSlotsForm
@@ -393,12 +393,12 @@ class DeviceConfigAdmin(SingletonModelAdmin):
                 ),
                 "description": _(
                     "How many browsers an account may approve is part of its download "
-                    "package (Shop → Packages → Basic info → Limit devices), including "
+                    "package (Pricing → Packages → Basic info → Limit devices), including "
                     "staff overrides and campaign bonuses. Quotas here limit new "
                     "registrations per rolling 30 days / 365 days. The price of a paid "
                     "slot reset is under Credits economy → Credit prices (“Reset "
                     "registered-browser slots”); a package can override it "
-                    "(Shop → Packages → Basic info). Old "
+                    "(Pricing → Packages → Basic info). Old "
                     "machine-fingerprint records remain historical."
                 ),
             },
@@ -474,6 +474,7 @@ class DeviceEventAdmin(NoAddModelAdmin):
         "user_agent",
     )
     raw_id_fields = ("user", "device")
+    list_select_related = ("user", "device__user")
     readonly_fields = ("created_at",)
     date_hierarchy = "created_at"
 
@@ -677,6 +678,7 @@ class TrustScoreAdmin(ModelAdmin):
         "last_updated",
     )
     raw_id_fields = ("fingerprint",)
+    list_select_related = ("fingerprint",)
     readonly_fields = ("last_updated",)
 
 
@@ -689,6 +691,7 @@ class RegistryEventAdmin(ModelAdmin):
     )
     search_fields = ("fingerprint__fingerprint_hash", "ip")
     raw_id_fields = ("fingerprint", "user")
+    list_select_related = ("fingerprint", "user")
     readonly_fields = ("created_at",)
 
 
@@ -707,6 +710,7 @@ class BehaviorInsightAdmin(ModelAdmin):
     )
     search_fields = ("fingerprint__fingerprint_hash", "recommendation")
     raw_id_fields = ("fingerprint", "related_user")
+    list_select_related = ("fingerprint", "related_user")
     readonly_fields = ("created_at", "updated_at")
     actions = ("mark_resolved",)
 

@@ -1,0 +1,5 @@
+{% extends "console/error_page.html" %}{% load i18n %}
+{% block page_title %}{% translate "Form expired" %}{% endblock %}
+{% block code %}403{% endblock %}
+{% block error_title %}{% translate "This form is out of date" %}{% endblock %}
+{% block message %}{% translate "For your security the request was not accepted: the page was open too long or your session changed. Nothing was changed. Go back, reload the page and submit again." %}{% endblock %}

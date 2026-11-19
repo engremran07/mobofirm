@@ -5,7 +5,8 @@ from __future__ import annotations
 from typing import Any
 
 from django import forms
-from unfold.widgets import UnfoldAdminPasswordWidget
+
+from apps.core.admin_forms import ConsolePasswordWidget
 
 from .models import SECRET_NAMES, SecretName, SiteSettings
 
@@ -23,7 +24,7 @@ def _secret_input() -> forms.CharField:
         strip=False,
         max_length=SECRET_MAX_LENGTH,
         # render_value=False: a stored secret is never sent back to the browser.
-        widget=UnfoldAdminPasswordWidget(
+        widget=ConsolePasswordWidget(
             attrs={"autocomplete": "new-password"}, render_value=False
         ),
     )

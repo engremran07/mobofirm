@@ -1,0 +1,1 @@
+<a class="c-tabs__item" href="{{ url }}"{% if current %} aria-current="page"{% endif %}{% if hx_target %} hx-get="{{ url }}" hx-target="{{ hx_target }}" hx-swap="innerHTML" hx-push-url="true"{% endif %}>{{ label }}</a>

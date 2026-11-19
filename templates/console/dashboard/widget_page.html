@@ -1,0 +1,5 @@
+{% extends "admin/base_site.html" %}{% load i18n console_ui %}{# Direct visit of one dashboard panel (no JavaScript, or opened from <noscript>): the panel inside the full shell. #}
+{% block content %}
+{% url 'admin:index' as dashboard_url %}{% component "page_header" title=widget.title %}{% slot "actions" %}{% ui "button" label=_("Back to the dashboard") url=dashboard_url icon="arrow-left" variant="secondary" %}{% endslot %}{% endcomponent %}
+<div class="c-dashboard">{% include widget_template %}</div>
+{% endblock %}

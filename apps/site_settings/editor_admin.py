@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from django import forms
 from django.contrib import admin, messages
@@ -14,9 +13,9 @@ from django.http import HttpRequest
 from django.utils.html import format_html
 from django.utils.safestring import SafeString
 from django.utils.translation import gettext_lazy as _
-from unfold.widgets import UnfoldAdminCheckboxSelectMultipleWidget
 
 from apps.core.admin_base import ModelAdmin, action, display
+from apps.core.admin_forms import ConsoleCheckboxSelectMultipleWidget
 from apps.core.editor.features import feature_choices, normalize_features
 from apps.core.editor.spec import CONTEXT_LABELS
 from apps.core.editor.video import normalize_providers, provider_choices
@@ -24,6 +23,10 @@ from apps.core.editor.widgets import RichTextWidget
 
 from .editor_models import EditorImage, EditorProfile
 from .editor_store import clear_profile_cache
+
+if TYPE_CHECKING:
+    from django.contrib.admin.options import _FieldOpts
+    from django_stubs_ext import StrOrPromise
 
 audit_logger = logging.getLogger("apps.site_settings.audit")
 
@@ -39,7 +42,7 @@ class EditorProfileAdminForm(forms.ModelForm):
     features = forms.MultipleChoiceField(
         choices=feature_choices(),
         required=False,
-        widget=UnfoldAdminCheckboxSelectMultipleWidget,
+        widget=ConsoleCheckboxSelectMultipleWidget,
         help_text="Each checked feature appears in the toolbar and is allowed by "
         "the server-side sanitiser; unchecked features are removed from saved "
         "content.",
@@ -47,7 +50,7 @@ class EditorProfileAdminForm(forms.ModelForm):
     video_providers = forms.MultipleChoiceField(
         choices=provider_choices(),
         required=False,
-        widget=UnfoldAdminCheckboxSelectMultipleWidget,
+        widget=ConsoleCheckboxSelectMultipleWidget,
         help_text="Only audited providers can be embedded, always in their "
         "privacy-friendly player.",
     )
@@ -102,10 +105,10 @@ class EditorProfileAdmin(ModelAdmin):
 
     def get_fieldsets(
         self, request: HttpRequest, obj: EditorProfile | None = None
-    ) -> list[tuple[str | None, dict[str, Any]]]:
+    ) -> list[tuple[StrOrPromise | None, _FieldOpts]]:
         """Show the context selector when adding and the live preview afterwards."""
         head = ("context_label" if obj else "context", "enabled")
-        sets: list[tuple[str | None, dict[str, Any]]] = [
+        sets: list[tuple[StrOrPromise | None, _FieldOpts]] = [
             (None, {"fields": head}),
             (
                 "Toolbar and formatting features",
@@ -126,7 +129,7 @@ class EditorProfileAdmin(ModelAdmin):
 
     def get_readonly_fields(
         self, request: HttpRequest, obj: EditorProfile | None = None
-    ) -> Sequence[str]:
+    ) -> tuple[str, ...]:
         """The context cannot change after creation."""
         return ("context_label", "preview") if obj else ()
 

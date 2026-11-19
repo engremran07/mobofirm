@@ -18,6 +18,20 @@ logger = logging.getLogger(__name__)
 CACHE_ERRORS = (RedisError, OSError, TimeoutError)
 
 
+def _scope(key: str) -> str:
+    """The non-identifying head of a limiter key (``login:<ip>`` becomes ``login``).
+
+    Keys embed client IPs and account ids, which must not reach the logs: only the
+    leading purely alphabetic segments (``users:mfa:verify``) are kept.
+    """
+    head: list[str] = []
+    for part in key.split(":")[:4]:
+        if not part.replace("-", "").replace("_", "").isalpha():
+            break
+        head.append(part)
+    return ":".join(head) or "unknown"
+
+
 def allow_action(
     key: str,
     max_attempts: int = 5,
@@ -50,13 +64,13 @@ def allow_action(
             cache.set(key, 1, timeout=window_seconds)
             attempts = 1
     except CACHE_ERRORS:
-        logger.exception("Rate limiter backend failure for %s", key)
+        logger.exception("Rate limiter backend failure for %s", _scope(key))
         return fail_open
 
     if attempts > max_attempts:
         logger.info(
-            "Rate limit exceeded: key=%s, attempts=%d/%d, window=%ds",
-            key,
+            "Rate limit exceeded: scope=%s, attempts=%d/%d, window=%ds",
+            _scope(key),
             attempts,
             max_attempts,
             window_seconds,
@@ -70,7 +84,7 @@ def reset_rate_limit(key: str) -> None:
     try:
         cache.delete(key)
     except CACHE_ERRORS:
-        logger.warning("Failed to reset rate limit for %s", key, exc_info=True)
+        logger.warning("Failed to reset rate limit for %s", _scope(key), exc_info=True)
 
 
 def get_attempt_count(key: str, fail_open: bool = True) -> int:
@@ -82,7 +96,9 @@ def get_attempt_count(key: str, fail_open: bool = True) -> int:
     try:
         value = cache.get(key, 0)
     except CACHE_ERRORS:
-        logger.warning("Failed to read attempt count for %s", key, exc_info=True)
+        logger.warning(
+            "Failed to read attempt count for %s", _scope(key), exc_info=True
+        )
         if not fail_open:
             raise
         return 0

@@ -5,17 +5,20 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable, Mapping
+from datetime import timedelta
 from types import SimpleNamespace
 from typing import Any
 
 import pytest
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
+from django.core.cache import cache
 from django.test import Client
+from django.utils import timezone
 
 from apps.distribution import services
 from apps.distribution.content import Content
-from apps.distribution.models import Channel
+from apps.distribution.models import Channel, DistributionSettings
 from apps.seo.fetcher import FetchResult, SafeFetcher
 from apps.site_settings.models import SiteSettings
 
@@ -60,6 +63,7 @@ DEFAULT_VALUES: dict[str, dict[str, str]] = {
         "client_secret": "ysecret-1234",
         "refresh_token": "yrefresh-1234",
     },
+    "whatsapp_channel": {"channel_url": "https://whatsapp.com/channel/0029VaTest"},
     "whatsapp": {
         "phone_number_id": "777",
         "recipients": "+15551234567,+4915112345678",
@@ -232,3 +236,75 @@ def staff_client(db) -> Callable[..., Client]:
         return client
 
     return build
+
+
+HUB_URL = "https://hub.example.com/"
+
+
+@pytest.fixture(autouse=True)
+def fresh_feed_cache():
+    cache.clear()
+    yield
+    cache.clear()
+
+
+@pytest.fixture
+def make_post(django_user_model):
+    from apps.blog.models import Post, PostStatus
+
+    post_author = django_user_model.objects.create_user(
+        username="feed-writer", email="fw@example.com"
+    )
+
+    def build(title="A public journal post about flashing", **extra):
+        values = {
+            "title": title,
+            "body": "<p>FULL-BODY-TEXT</p>",
+            "summary": "Short public summary",
+            "author": post_author,
+            "status": PostStatus.PUBLISHED,
+            "publish_at": timezone.now() - timedelta(minutes=5),
+            "published_at": timezone.now() - timedelta(minutes=5),
+        }
+        values.update(extra)
+        return Post.objects.create(**values)
+
+    return build
+
+
+@pytest.fixture
+def make_firmware():
+    from apps.firmwares.models import Brand, Model, OfficialFirmware
+
+    def build(name="fw.zip", *, verified=True, brand="Northstar", model="Atlas One"):
+        brand_row, _ = Brand.objects.get_or_create(
+            name=brand, defaults={"slug": brand.lower()}
+        )
+        model_row, _ = Model.objects.get_or_create(
+            brand=brand_row,
+            name=model,
+            defaults={
+                "slug": model.lower().replace(" ", "-"),
+                "model_code": "NS-A1",
+                "codename": "atlas",
+            },
+        )
+        return OfficialFirmware.objects.create(
+            original_file_name=name,
+            stored_file_path=f"/firmware/{name}",
+            brand=brand_row,
+            model=model_row,
+            is_verified=verified,
+            build_number="BUILD.1",
+        )
+
+    return build
+
+
+@pytest.fixture
+def hub_on():
+    """Configure a WebSub hub (pings are queued only while one is set)."""
+    cfg = DistributionSettings.get_solo()
+    cfg.websub_hub_url = HUB_URL
+    cfg.save()
+    return HUB_URL

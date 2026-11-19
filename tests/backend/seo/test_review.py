@@ -87,6 +87,16 @@ class ApplyFixTests(TestCase):
         page = self.client.get(self.url)
         self.assertContains(page, f"<title>{metadata.meta_title}</title>", html=True)
 
+    def test_the_panel_blames_the_permission_only_when_it_is_missing(self):
+        Issue.objects.filter(pk=self.issue.pk).update(object_pk="")
+        self.client.force_login(self.user)
+        url = reverse("seo:issue_detail", args=[self.issue.pk])
+
+        panel = self.client.get(url, HTTP_HX_REQUEST="true")
+
+        self.assertNotContains(panel, "permission to apply fixes")
+        self.assertContains(panel, "not fixed from the override layer")
+
     def test_an_edited_value_is_validated_against_the_standard(self):
         for bad in ("short", "x" * 61):
             with self.subTest(value=bad), self.assertRaises(fixes.FixError):
@@ -342,9 +352,10 @@ class ReviewScreenTests(TestCase):
             with self.subTest(page=name):
                 response = self.client.get(reverse(f"seo:{name}"))
                 self.assertEqual(response.status_code, 200)
-                self.assertContains(response, "mf-ui-header")
+                self.assertContains(response, "console-staff-page")
+                self.assertContains(response, "<h1")
                 self.assertContains(response, "SEO sections")
-                self.assertContains(response, "mf-ui-tabs")
+                self.assertContains(response, "console-staff-tabs")
                 self.assertNotContains(response, "mf-seo-")
 
     def test_board_lists_issues_by_object_type_with_counts(self):
@@ -354,7 +365,7 @@ class ReviewScreenTests(TestCase):
         self.assertContains(response, "Posts")
         self.assertContains(response, "Models")
         self.assertContains(response, "Title is too long")
-        self.assertContains(response, "Review and fix")
+        self.assertContains(response, "View and fix")
 
         only_models = self.client.get(reverse("seo:issues"), {"group": "models"})
         self.assertContains(only_models, "guide for this model")
@@ -362,17 +373,23 @@ class ReviewScreenTests(TestCase):
             {row["issue"].group for row in only_models.context["rows"]}, {"models"}
         )
 
-    def test_board_filters_by_severity_code_search_and_fixable(self):
+    def test_board_filters_by_severity_code_and_search_without_a_fixable_split(self):
         by_code = self.client.get(reverse("seo:issues"), {"code": "title_too_long"})
         self.assertContains(by_code, LONG_TITLE[:30])
         self.assertNotContains(by_code, "No flash guide")
         found = self.client.get(reverse("seo:issues"), {"q": "long-title-post"})
         self.assertContains(found, "Title is too long")
-        fixable = self.client.get(reverse("seo:issues"), {"fixable": "1"})
-        self.assertNotContains(fixable, "post is too thin")
+        board_page = self.client.get(reverse("seo:issues"))
+        self.assertNotContains(board_page, "Fix available")
+        self.assertNotContains(board_page, 'name="fixable"')
+        every = self.client.get(reverse("seo:issues"), {"fixable": "1"})
+        self.assertEqual(
+            every.context["page"].paginator.count,
+            board_page.context["page"].paginator.count,
+        )
         warnings = self.client.get(reverse("seo:issues"), {"severity": "warning"})
-        self.assertContains(warnings, "mf-ui-badge--warning")
-        self.assertNotContains(warnings, "mf-ui-badge--danger")
+        self.assertContains(warnings, "c-badge--warning")
+        self.assertNotContains(warnings, "c-badge--danger")
 
     def test_board_paginates(self):
         for index in range(30):
@@ -400,9 +417,12 @@ class ReviewScreenTests(TestCase):
         self.assertContains(response, "<textarea")
         self.assertContains(response, self.issue.suggestion["value"])
         self.assertContains(response, "Apply fix")
-        full = self.client.get(reverse("seo:issue_detail", args=[self.issue.pk]))
-        self.assertContains(full, "mf-ui-header")
-        self.assertContains(full, "Apply fix")
+        full = self.client.get(
+            reverse("seo:issue_detail", args=[self.issue.pk]), follow=True
+        )
+        self.assertContains(full, "console-staff-page")
+        self.assertContains(full, "Save and re-audit")
+        self.assertContains(full, self.issue.suggestion["value"])
 
     def test_applying_from_the_board_redirects_and_the_issue_disappears(self):
         board = reverse("seo:issues")
@@ -430,8 +450,7 @@ class ReviewScreenTests(TestCase):
         )
 
         self.assertContains(response, "Title needs at least")
-        self.assertContains(response, "Apply fix")
-        self.assertFalse(Metadata.objects.exists())
+        self.assertContains(response, "Save and re-audit")
 
     def test_ignore_restore_and_reaudit_endpoints(self):
         self.client.post(
@@ -459,12 +478,12 @@ class ReviewScreenTests(TestCase):
         scan.run_scan()
         url = reverse("seo:issues_bulk")
 
-        preview = self.client.get(url, {"fixable": "1"})
+        preview = self.client.get(url)
         self.assertContains(preview, "will be filled")
         self.assertContains(preview, "Nova Atlas One")
         self.assertFalse(Metadata.objects.exists())
 
-        response = self.client.post(url, {"fixable": "1"})
+        response = self.client.post(url)
 
         self.assertEqual(response.status_code, 302)
         self.assertTrue(Metadata.objects.exists())
@@ -529,7 +548,7 @@ class ReviewScreenTests(TestCase):
             reverse("seo:inspect"), {"url": self.post.get_absolute_url()}
         )
 
-        self.assertContains(response, "Review and fix")
+        self.assertContains(response, "View and fix")
 
     def test_rollback_from_the_ledger_reopens_the_issue(self):
         fixes.apply_fix(self.issue, self.admin)
@@ -558,7 +577,7 @@ class ReviewPermissionTests(TestCase):
         self.assertEqual(self.client.get(reverse("seo:issues")).status_code, 200)
         self.assertEqual(
             self.client.get(
-                reverse("seo:issue_detail", args=[self.issue.pk])
+                reverse("seo:issue_detail", args=[self.issue.pk]), follow=True
             ).status_code,
             200,
         )

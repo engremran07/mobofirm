@@ -1,0 +1,34 @@
+// u-*: the only bespoke utilities. Layout/spacing/display/flex/text utilities come from Bootstrap
+// (curated list in _bootstrap.scss); these cover composition patterns and tokens Bootstrap lacks.
+@layer utilities {
+  .u-stack { display: flex; flex-direction: column; gap: var(--u-gap, var(--mf-space-4)); }
+  .u-cluster { display: flex; flex-wrap: wrap; align-items: center; gap: var(--u-gap, var(--mf-space-2)); }
+  .u-gap-1 { --u-gap: var(--mf-space-1); }
+  .u-gap-2 { --u-gap: var(--mf-space-2); }
+  .u-gap-3 { --u-gap: var(--mf-space-3); }
+  .u-gap-5 { --u-gap: var(--mf-space-5); }
+  .u-gap-6 { --u-gap: var(--mf-space-6); }
+  .u-spread { justify-content: space-between; }
+
+  .u-muted { color: var(--mf-text-muted); }
+  .u-display { font-family: var(--mf-font-display); }
+  .u-mono { font-family: var(--mf-font-mono); }
+  .u-tabular { font-variant-numeric: tabular-nums; }
+  .u-text-xs { font-size: var(--mf-fs-xs); }
+  .u-text-sm { font-size: var(--mf-fs-sm); }
+  .u-text-lg { font-size: var(--mf-fs-lg); }
+  .u-nowrap { white-space: nowrap; }
+  .u-truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .u-break { overflow-wrap: anywhere; }
+  .u-scroll-x { overflow-x: auto; max-inline-size: 100%; }
+
+  .u-surface { background: var(--mf-surface); border: 1px solid var(--mf-border); border-radius: var(--mf-radius-lg); }
+  .u-shadow-1 { box-shadow: var(--mf-elev-1); }
+  .u-shadow-2 { box-shadow: var(--mf-elev-2); }
+  .u-shadow-3 { box-shadow: var(--mf-elev-3); }
+
+  .u-sticky-top { position: sticky; inset-block-start: calc(var(--mf-header-h) + var(--mf-space-3)); z-index: 5; }
+
+  @media (max-width: 767.98px) { .u-hide-sm { display: none !important; } }
+  @media (min-width: 768px) { .u-show-sm-only { display: none !important; } }
+}

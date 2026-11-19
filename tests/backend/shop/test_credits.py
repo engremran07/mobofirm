@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from decimal import Decimal
 
@@ -387,7 +388,9 @@ class TestViews:
         wallet.balances[user.pk] = 800
         client.force_login(user)
 
-        response = client.post(package_credits_url(gold))
+        response = client.post(
+            package_credits_url(gold), {"request_id": credits.new_request_id()}
+        )
 
         order = Order.objects.get()
         assert response.status_code == 302
@@ -396,16 +399,61 @@ class TestViews:
         followed = client.get(response["Location"]).content.decode()
         assert "Paid with 500 credits" in followed
 
+    def test_the_confirm_page_carries_a_one_purchase_token(
+        self, client, user, wallet, gold
+    ):
+        wallet.balances[user.pk] = 800
+        client.force_login(user)
+
+        text = client.get(package_credits_url(gold)).content.decode()
+
+        match = re.search(r'name="request_id" value="([0-9a-f]{32})"', text)
+        assert match is not None
+
+    def test_a_repeated_post_charges_once_and_shows_the_same_order(
+        self, client, user, wallet, gold
+    ):
+        wallet.balances[user.pk] = 2000
+        client.force_login(user)
+        token = credits.new_request_id()
+
+        first = client.post(package_credits_url(gold), {"request_id": token})
+        second = client.post(package_credits_url(gold), {"request_id": token})
+
+        assert first["Location"] == second["Location"]
+        assert Order.objects.count() == 1
+        assert UserPackage.objects.filter(user=user, package=gold).count() == 1
+        assert wallet.balances[user.pk] == 1500
+        assert len(wallet.ledger) == 1
+
+    def test_a_post_without_a_valid_token_charges_nothing(
+        self, client, user, wallet, gold
+    ):
+        wallet.balances[user.pk] = 800
+        client.force_login(user)
+
+        missing = client.post(package_credits_url(gold), follow=True)
+        forged = client.post(
+            package_credits_url(gold), {"request_id": "../../x"}, follow=True
+        )
+
+        assert "confirmation expired" in missing.content.decode()
+        assert "confirmation expired" in forged.content.decode()
+        assert not Order.objects.exists()
+        assert wallet.balances[user.pk] == 800
+
     def test_posting_without_enough_credits_rerenders_the_dialog(
         self, client, user, wallet, gold
     ):
         wallet.balances[user.pk] = 10
         client.force_login(user)
+        token = credits.new_request_id()
 
-        response = client.post(package_credits_url(gold))
+        response = client.post(package_credits_url(gold), {"request_id": token})
 
         assert response.status_code == 402
         assert "500 credits needed, 10 available" in response.content.decode()
+        assert f'name="request_id" value="{token}"' in response.content.decode()
         assert not Order.objects.exists()
 
     def test_csrf_login_and_verification_are_enforced(
@@ -467,11 +515,18 @@ class TestViews:
         client.force_login(user)
 
         page = client.get(file_credits_url(firmware)).content.decode()
-        response = client.post(file_credits_url(firmware))
+        token = re.search(r'name="request_id" value="([0-9a-f]{32})"', page)
+        assert token is not None
+        response = client.post(
+            file_credits_url(firmware), {"request_id": token.group(1)}
+        )
+        replay = client.post(file_credits_url(firmware), {"request_id": token.group(1)})
 
         assert "Buy this file with credits" in page and "450 credits" in page
-        assert response.status_code == 302
+        assert response.status_code == 302 and replay.status_code == 302
         assert entitlements.has_purchased(user, firmware)
+        assert Order.objects.count() == 1 and len(wallet.ledger) == 1
+        assert wallet.balances[user.pk] == 0
 
     def test_the_firmware_page_offers_paying_with_credits(
         self, client, user, wallet, default_tier, make_firmware

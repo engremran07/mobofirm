@@ -3,13 +3,18 @@ Chipset-aware tool matching service.
 
 Central intelligence layer for recommending correct flashing tools
 based on device brand, chipset, and guide type. Prevents wrong
-recommendations like Odin for Alcatel or SP Flash Tool for Apple.
+recommendations like Odin for Alcatel, SP Flash Tool for a Qualcomm phone or any
+Android tool for an iPhone. Only smartphone and tablet SoC vendors (Apple included)
+are known here; the package formats and their tools live in
+:mod:`apps.firmwares.package_formats`.
 """
 
 from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING
+
+from .package_formats import APPLE_TOOLS
 
 if TYPE_CHECKING:
     from .models import FlashingTool
@@ -23,7 +28,6 @@ logger = logging.getLogger(__name__)
 KNOWN_CHIPSETS: dict[tuple[str, str], str] = {
     # Apple
     ("apple", "iphone 15 pro max"): "Apple A17 Pro",
-    # Xiaomi
     # Asus
     ("asus", "rog phone 9 fe"): "Qualcomm Snapdragon 8 Gen 3",
     # Alcatel
@@ -94,42 +98,42 @@ BRAND_RESTRICTED_TOOLS: dict[str, list[str]] = {
     "mi unlock tool": ["Xiaomi", "Redmi", "Poco"],
     "xiaomitool v2": ["Xiaomi", "Redmi", "Poco"],
 }
+for _apple_tool in APPLE_TOOLS:
+    BRAND_RESTRICTED_TOOLS[_apple_tool.name.lower()] = ["Apple"]
 
-# ── Non-Android platforms (no standard flashing tools apply) ────────
+# ── Brands that are not Android phone/tablet makers ─────────────────
+# iPhone and iPad are restored with Apple's own tools, never the Android ones.
 
 NON_ANDROID_BRANDS = {"Apple"}
+
+_FAMILY_BY_VENDOR = {
+    "Apple": "Apple",
+    "MediaTek": "MediaTek",
+    "Qualcomm": "Qualcomm",
+    "Samsung": "Samsung Exynos",
+    "Unisoc": "Unisoc",
+    "Rockchip": "Rockchip",
+    "Allwinner": "Allwinner",
+    "Google": "Google Tensor",
+    "HiSilicon": "Kirin",
+}
 
 
 def get_chipset_family(chipset: str) -> str:
     """Extract chipset family name from a full chipset string.
 
+    Only smartphone/tablet SoC vendors are recognised; anything else is ``""``.
+
     >>> get_chipset_family("MediaTek MT6739")
     'MediaTek'
     >>> get_chipset_family("Qualcomm Snapdragon 8 Gen 3")
     'Qualcomm'
-    >>> get_chipset_family("Apple A17 Pro")
-    'Apple'
+    >>> get_chipset_family("Allwinner A133")
+    'Allwinner'
     """
-    if not chipset:
-        return ""
-    low = chipset.lower()
-    if any(k in low for k in ("mediatek", "mt6", "mt8", "helio", "dimensity")):
-        return "MediaTek"
-    if any(k in low for k in ("qualcomm", "snapdragon", "msm8", "sdm", "sm8")):
-        return "Qualcomm"
-    if "exynos" in low:
-        return "Samsung Exynos"
-    if any(k in low for k in ("unisoc", "spreadtrum", "sc9")):
-        return "Unisoc"
-    if "apple" in low:
-        return "Apple"
-    if any(k in low for k in ("rockchip", "rk3")):
-        return "Rockchip"
-    if "tensor" in low:
-        return "Google Tensor"
-    if "kirin" in low:
-        return "Kirin"
-    return ""
+    from .chipsets import vendor_for
+
+    return _FAMILY_BY_VENDOR.get(vendor_for(chipset), "")
 
 
 def resolve_chipset(brand_name: str, model_name: str) -> str:
@@ -155,12 +159,10 @@ def is_tool_compatible(tool_name: str, brand_name: str) -> bool:
 
     # Check brand restriction
     restricted_brands = BRAND_RESTRICTED_TOOLS.get(tool_lower)
-    if restricted_brands and brand_name.lower() not in {
-        brand.lower() for brand in restricted_brands
-    }:
-        return False
+    if restricted_brands:
+        return brand_name.lower() in {brand.lower() for brand in restricted_brands}
 
-    # Apple devices don't use standard Android flashing tools
+    # Apple devices don't use the Android flashing tools
     return brand_name not in NON_ANDROID_BRANDS
 
 
@@ -177,9 +179,6 @@ def get_compatible_tools_from_db(
     """
     from .chipsets import vendor_for
     from .models import FlashingTool
-
-    if brand_name in NON_ANDROID_BRANDS:
-        return []
 
     qs = FlashingTool.objects.filter(is_active=True)
 
@@ -212,9 +211,6 @@ def filter_tools_for_brand(
 
     vendor = vendor_for(chipset)
 
-    if brand_name in NON_ANDROID_BRANDS:
-        return []
-
     result: list[FlashingTool] = []
     for tool in tools:
         if not is_tool_compatible(tool.name, brand_name):
@@ -237,9 +233,7 @@ def get_primary_flash_tool_name(brand_name: str, chipset: str) -> str:
     brand_lower = brand_name.lower()
 
     if brand_name in NON_ANDROID_BRANDS:
-        return "iTunes/Finder"
-
-    # Brand-specific primary tools
+        return APPLE_TOOLS[0].name
     if brand_lower == "samsung":
         return "Odin"
     if brand_lower in ("xiaomi", "redmi", "poco"):
@@ -252,6 +246,8 @@ def get_primary_flash_tool_name(brand_name: str, chipset: str) -> str:
         "Unisoc": "SPD Flash Tool",
         "Samsung Exynos": "Odin",
         "Rockchip": "RKDevTool",
+        "Allwinner": "PhoenixSuit",
+        "Kirin": "HiSuite",
     }
     return chipset_tools.get(family, "ADB & Fastboot")
 
@@ -266,9 +262,10 @@ def get_tool_list_text(brand_name: str, chipset: str) -> str:
     brand_lower = brand_name.lower()
 
     if brand_name in NON_ANDROID_BRANDS:
-        return "iTunes or Finder (standard Apple restore tools)"
-
-    # Build chipset-appropriate list
+        return (
+            "Finder or the Apple Devices app (iTunes on older Windows), "
+            "or Apple Configurator 2"
+        )
     if brand_lower == "samsung":
         return "Odin or Samsung Frija"
     if brand_lower in ("xiaomi", "redmi", "poco"):
@@ -280,6 +277,7 @@ def get_tool_list_text(brand_name: str, chipset: str) -> str:
         "Unisoc": "SPD Flash Tool or SPD Upgrade Tool",
         "Samsung Exynos": "Odin",
         "Rockchip": "RKDevTool or ADB & Fastboot",
+        "Allwinner": "PhoenixSuit or LiveSuit",
         "Google Tensor": "ADB & Fastboot",
         "Kirin": "HiSuite or ADB & Fastboot",
     }
@@ -300,9 +298,9 @@ def get_guide_tools_for_template(
     primary = get_primary_flash_tool_name(brand_name, chipset)
 
     if brand_name in NON_ANDROID_BRANDS:
-        return ["iTunes/Finder"]
-
-    # Base tools always needed
+        if guide_type in ("stock_flash", "downgrade", "repair", "recovery"):
+            return [tool.name for tool in APPLE_TOOLS[:3]]
+        return []
     base: list[str] = ["ADB & Fastboot"]
 
     if guide_type in ("stock_flash", "downgrade", "repair"):

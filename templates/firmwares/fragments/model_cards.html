@@ -1,4 +1,4 @@
-{# Device model cards for brand and chipset pages. Swapped into #model-results by HTMX. Context: models (page), brand or chipset, show_brand, search_* (list_search_context). #}
+{% load ad_tags %}{# Device model cards for brand and chipset pages. Swapped into #model-results by HTMX. Context: models (page), brand or chipset, show_brand, search_* (list_search_context). #}
 {% include "components/search_feedback.html" with noun="device" %}
 {% if models %}
   <div class="card-grid">
@@ -19,6 +19,7 @@
         {% if not show_brand and model.chipset_ref %}<a class="badge-ui" href="{% url 'firmwares:chipset_detail' slug=model.chipset_ref.slug %}"><i data-lucide="cpu" aria-hidden="true"></i>{{ model.chipset_ref.display_name }}</a>{% elif not show_brand %}<span class="small muted">{{ model.status|title }}</span>{% endif %}
       </div>
     </article>
+    {% ad_tile forloop.counter models|length layout="card" tile="card-ui--device" page=brand|yesno:"firmwares/brand_detail.html,firmwares/chipset_detail.html" %}
   {% endfor %}
   </div>
   {% include "components/pagination.html" with page_obj=models label="Device pages" hx_target="#model-results" %}

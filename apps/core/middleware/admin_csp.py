@@ -7,9 +7,11 @@ from django.http import HttpRequest, HttpResponseBase
 from django.urls import Resolver404, resolve
 from django.views.decorators.csp import csp_override
 
-# Pages rendered inside the Unfold shell but mounted outside the admin URL prefix:
-# whole URL namespaces, and individual views by "namespace:name". They need the admin
-# policy because Unfold's Alpine build compiles expressions with ``new Function``.
+from apps.core.middleware.security_headers import apply_security_headers
+
+# Pages rendered inside the staff console shell but mounted outside the admin URL
+# prefix: whole URL namespaces, and individual views by "namespace:name". They get the
+# strict console policy (no eval, same-origin scripts only).
 ADMIN_SHELL_NAMESPACES = frozenset({"admin", "seo"})
 ADMIN_SHELL_VIEWS = frozenset(
     {
@@ -28,12 +30,14 @@ ADMIN_SHELL_VIEWS = frozenset(
 
 
 class AdminContentSecurityPolicyMiddleware:
-    """Serve the Unfold shell under ``settings.SECURE_CSP_ADMIN`` and nothing else.
+    """Serve the console shell under ``settings.SECURE_CSP_ADMIN`` and nothing else.
 
     The public site keeps ``settings.SECURE_CSP``; only responses for the admin and the
     staff pages that extend its shell receive the dedicated policy, built centrally in
     ``app.settings.security``. Django's ``ContentSecurityPolicyMiddleware`` then
-    renders it (including the per-request nonce).
+    renders it (including the per-request nonce). Every response (public and console)
+    also gets ``Permissions-Policy`` and ``Cross-Origin-Resource-Policy`` from
+    ``apps.core.middleware.security_headers``; the CSP itself is not touched.
     """
 
     def __init__(self, get_response: Callable[[HttpRequest], HttpResponseBase]) -> None:
@@ -43,8 +47,10 @@ class AdminContentSecurityPolicyMiddleware:
         if self._uses_admin_shell(request):
             admin_policy = getattr(settings, "SECURE_CSP_ADMIN", settings.SECURE_CSP)
             handler = csp_override(admin_policy)(self.get_response)
-            return handler(request)
-        return self.get_response(request)
+            response = handler(request)
+        else:
+            response = self.get_response(request)
+        return apply_security_headers(response)
 
     @staticmethod
     def _uses_admin_shell(request: HttpRequest) -> bool:

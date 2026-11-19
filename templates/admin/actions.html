@@ -1,0 +1,7 @@
+{% load i18n %}<div class="c-bulkbar__actions">
+{% block actions %}
+{% block actions-form %}{% for field in action_form %}{{ field }}{% endfor %}{% endblock %}
+{% block actions-submit %}<button type="submit" class="btn btn-secondary btn-sm" name="index" value="{{ action_index|default:0 }}">{% translate "Run" %}</button>{% endblock %}
+{% block actions-counter %}{% if actions_selection_counter %}<span class="u-text-sm u-muted" aria-live="polite" aria-atomic="true">{{ selection_note }}</span>{% endif %}{% endblock %}
+{% endblock %}
+</div>

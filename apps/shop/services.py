@@ -23,6 +23,7 @@ from typing import Any
 
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 from django.utils.text import slugify
 
@@ -106,6 +107,11 @@ def activate_package(
     package's own duration (0 = lifetime).
     """
     lock_user(user)
+    if order is not None:
+        # Provisioning is keyed on the order: a repeated call returns its package.
+        provisioned = UserPackage.objects.filter(order=order, package=package).first()
+        if provisioned is not None:
+            return provisioned
     now = timezone.now()
     days = package.duration_days if duration_days is None else duration_days
     start = now
@@ -129,9 +135,19 @@ def activate_package(
         payment_reference=reference,
         order=order,
     )
-    payload = {"user_id": user.pk, "user_package_id": created.pk}
-    transaction.on_commit(lambda: event_bus.publish(PACKAGE_ACTIVATED_EVENT, payload))
+    announce_activation(created)
     return created
+
+
+def announce_activation(user_package: UserPackage) -> None:
+    """Publish ``shop.package_activated`` after commit and clear the entitlement memo.
+
+    Used by :func:`activate_package` and by the admin when staff create a package by
+    hand, so every new package period starts the same way (history purge included).
+    """
+    request_cache.invalidate()
+    payload = {"user_id": user_package.user_id, "user_package_id": user_package.pk}
+    transaction.on_commit(lambda: event_bus.publish(PACKAGE_ACTIVATED_EVENT, payload))
 
 
 @transaction.atomic
@@ -257,6 +273,7 @@ def refund_order(order_id: int, *, staff_user: Any, reason: str = "") -> Order:
         return order
     if order.status != Order.Status.PAID:
         raise OrderError("Only paid orders can be refunded.")
+    lock_user(order.user)
     now = timezone.now()
     order.status = Order.Status.REFUNDED
     order.processed_by = staff_user
@@ -270,12 +287,51 @@ def refund_order(order_id: int, *, staff_user: Any, reason: str = "") -> Order:
             )
         except wallet_gateway.CreditsUnavailable as error:
             raise OrderError(str(error)) from error
-    UserPackage.objects.filter(order=order, status=UserPackage.Status.ACTIVE).update(
-        status=UserPackage.Status.CANCELLED, cancelled_at=now
+    cancelled = list(
+        UserPackage.objects.select_for_update().filter(
+            order=order, status=UserPackage.Status.ACTIVE
+        )
     )
+    for held in cancelled:
+        held.status = UserPackage.Status.CANCELLED
+        held.cancelled_at = now
+        held.save(update_fields=["status", "cancelled_at"])
+    if cancelled:
+        _reinstate_superseded(order.user, before=min(c.started_at for c in cancelled))
     request_cache.invalidate()
     _publish_after_commit(ORDER_REFUNDED_EVENT, order)
     return order
+
+
+def _reinstate_superseded(user: Any, *, before: datetime) -> UserPackage | None:
+    """Give back the paid period a refunded order's package had replaced.
+
+    Activating a package ends the previous one early (``expired`` with its end still
+    ahead); refunding the order that did it must not leave the user without what they
+    paid for earlier. Time-expired and staff-cancelled periods never qualify, and
+    nothing is restored while the user holds a live package.
+    """
+    if _live_packages(user).exists():
+        return None
+    now = timezone.now()
+    candidate = (
+        UserPackage.objects.select_for_update()
+        .filter(
+            user=user,
+            is_baseline=False,
+            status=UserPackage.Status.EXPIRED,
+            started_at__lt=before,
+        )
+        .filter(Q(expires_at__isnull=True) | Q(expires_at__gt=now))
+        .exclude(order__status=Order.Status.REFUNDED)
+        .order_by("-started_at")
+        .first()
+    )
+    if candidate is None:
+        return None
+    candidate.status = UserPackage.Status.ACTIVE
+    candidate.save(update_fields=["status"])
+    return candidate
 
 
 def expire_overdue_packages() -> dict[str, int]:

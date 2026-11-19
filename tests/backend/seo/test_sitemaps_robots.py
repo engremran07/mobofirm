@@ -57,6 +57,7 @@ class SitemapReconciliationTests(TestCase):
                 "models",
                 "firmware",
                 "tools",
+                "tool-categories",
                 "tags",
             },
         )
@@ -101,7 +102,7 @@ class SitemapReconciliationTests(TestCase):
             self.assertIn(path, listed)
 
     def test_priority_and_changefreq_are_not_emitted_and_lastmod_is_real(self):
-        response = self.client.get("/sitemap-brands.xml")
+        response = self.client.get("/sitemap-brands-1.xml")
         document = ElementTree.fromstring(response.content)
 
         self.assertNotIn(b"<priority>", response.content)
@@ -113,23 +114,23 @@ class SitemapReconciliationTests(TestCase):
 
     def test_static_entries_carry_no_invented_lastmod(self):
         document = ElementTree.fromstring(
-            self.client.get("/sitemap-static.xml").content
+            self.client.get("/sitemap-static-1.xml").content
         )
 
         self.assertTrue(document.findall("sm:url", NS))
         self.assertEqual(document.findall("sm:url/sm:lastmod", NS), [])
 
-    def test_xml_uses_a_self_hosted_stylesheet_not_inline_style(self):
-        for path in ("/sitemap.xml", "/sitemap-brands.xml"):
+    def test_xml_uses_a_self_hosted_css_stylesheet_not_inline_style(self):
+        for path in ("/sitemap.xml", "/sitemap-brands-1.xml"):
             response = self.client.get(path)
             body = response.content.decode()
             self.assertTrue(body.startswith("<?xml"))
             self.assertIn(
-                '<?xml-stylesheet type="text/css" href="/static/build/seo-sitemap.css"?>',
+                '<?xml-stylesheet type="text/css" href="/static/seo/sitemap.css"?>',
                 body,
             )
             self.assertNotIn("<style", body)
-            self.assertEqual(response["Content-Type"], "application/xml")
+            self.assertEqual(response["Content-Type"], "application/xml; charset=utf-8")
 
     def test_thin_and_non_canonical_items_are_excluded(self):
         author = make_author("other")
@@ -207,6 +208,7 @@ class SitemapReconciliationTests(TestCase):
         row.save()
 
         self.assertEqual(self.client.get("/sitemap.xml").status_code, 404)
+        self.assertEqual(self.client.get("/sitemap-brands-1.xml").status_code, 404)
         self.assertEqual(self.client.get("/sitemap-brands.xml").status_code, 404)
         self.assertNotContains(self.client.get("/robots.txt"), "Sitemap:")
 
@@ -216,7 +218,8 @@ class RobotsTests(TestCase):
     def test_default_policy_blocks_private_areas_and_training_bots_only(self):
         body = self.client.get("/robots.txt").content.decode()
 
-        self.assertIn("User-agent: *\nDisallow: /admin/", body)
+        self.assertIn("User-agent: *\nUser-agent: Googlebot", body)
+        self.assertIn("Disallow: /admin/", body)
         self.assertIn("Disallow: /accounts/", body)
         self.assertIn(f"Sitemap: {SITE}/sitemap.xml", body)
         self.assertIn("User-agent: GPTBot", body)
@@ -245,8 +248,10 @@ class RobotsTests(TestCase):
         self.assertNotIn("Disallow: /firmwares/browse", body)
         self.assertNotIn("Disallow: /blog/search", body)
 
-    def test_robots_is_plain_text(self):
-        self.assertEqual(self.client.get("/robots.txt")["Content-Type"], "text/plain")
+    def test_robots_is_plain_text_utf8(self):
+        self.assertEqual(
+            self.client.get("/robots.txt")["Content-Type"], "text/plain; charset=utf-8"
+        )
 
 
 @override_settings(SITE_URL=SITE)

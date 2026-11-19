@@ -1,0 +1,28 @@
+{% extends "admin/staff_page.html" %}
+{% load i18n staff_ui mf_ui %}
+{% comment %}
+  Export page of a model admin (staff console). A GET form: download=1 streams the
+  file. Context: form (scope, export_format), filters, resource_doc, cancel_url, opts.
+{% endcomment %}
+{% block page_body %}
+<form method="get" class="d-flex flex-column gap-4" data-export-form novalidate>
+  <input type="hidden" name="download" value="1">
+  {% if filters %}<input type="hidden" name="filters" value="{{ filters }}">{% endif %}
+  {% staff_card title=_("Export") ident="export-title" %}
+    {% staff_notice tone="info" %}{% translate "Text that a spreadsheet could read as a formula is prefixed with an apostrophe; the importer removes it again." %}{% endstaff_notice %}
+    <div class="console-staff-field">
+      <label class="form-label" for="{{ form.scope.id_for_label }}">{{ form.scope.label }}</label>
+      {{ form.scope|mf_widget }}
+    </div>
+    <div class="console-staff-field">
+      <label class="form-label" for="{{ form.export_format.id_for_label }}">{{ form.export_format.label }}</label>
+      {{ form.export_format|mf_widget }}
+    </div>
+    {% staff_row %}
+      {% staff_button _("Download") tone="primary" %}
+      {% staff_button _("Cancel") href=cancel_url %}
+    {% endstaff_row %}
+  {% endstaff_card %}
+</form>
+{% include "console/import_export/_columns.html" %}
+{% endblock %}

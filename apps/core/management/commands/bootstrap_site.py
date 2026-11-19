@@ -16,6 +16,17 @@ from apps.site_settings.services import get_site_settings
 
 # Group name -> (app_label, permission codename) pairs. Permissions that do not
 # exist in the installed apps are reported, never silently ignored.
+
+# The staff SEO review screens: read the board, save SEO fixes (ledgered and
+# roll-back-able by an administrator), ignore a finding. Rolling back a change,
+# approving proposals, scanning and changing SEO settings stay administrator-only.
+SEO_REVIEW_PERMISSIONS: tuple[tuple[str, str], ...] = (
+    ("seo", "view_issue"),
+    ("seo", "change_issue"),
+    ("seo", "change_metadata"),
+    ("seo", "view_changeledger"),
+)
+
 GROUP_PERMISSIONS: dict[str, tuple[tuple[str, str], ...]] = {
     "Editors": (
         ("blog", "add_post"),
@@ -27,11 +38,13 @@ GROUP_PERMISSIONS: dict[str, tuple[tuple[str, str], ...]] = {
         ("tags", "add_tag"),
         ("tags", "change_tag"),
         ("tags", "view_tag"),
+        *SEO_REVIEW_PERMISSIONS,
     ),
     "Moderators": (
         ("comments", "view_comment"),
         ("comments", "change_comment"),
         ("comments", "delete_comment"),
+        *SEO_REVIEW_PERMISSIONS,
     ),
     "Firmware reviewers": (
         ("firmwares", "view_pendingfirmware"),

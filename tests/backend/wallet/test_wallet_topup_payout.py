@@ -7,7 +7,7 @@ from typing import Any
 from unittest.mock import patch
 
 import pytest
-from django.core.exceptions import PermissionDenied
+from django.core.exceptions import PermissionDenied, ValidationError
 
 from apps.wallet import services
 from apps.wallet.models import (
@@ -23,8 +23,8 @@ from apps.wallet.services import InsufficientCredits, PayoutError, TopUpError
 pytestmark = pytest.mark.django_db
 
 
-def earn(user: Any, credits: int, key: str = "sale:1") -> None:
-    services.credit(user, credits, reason=LedgerReason.EARNING, key=key)
+def earn(user: Any, amount: int, key: str = "sale:1") -> None:
+    services.credit(user, amount, reason=LedgerReason.EARNING, key=key)
 
 
 def test_a_topup_request_prices_credits_with_the_configured_rate(user: Any) -> None:
@@ -56,6 +56,18 @@ def test_topup_limits_and_switch_are_enforced(user: Any) -> None:
     cfg.save()
     with pytest.raises(TopUpError):
         services.request_topup(user, 100)
+
+
+def test_the_minimum_topup_cannot_exceed_the_maximum() -> None:
+    cfg = WalletSettings.get_solo()
+    cfg.min_topup_credits, cfg.max_topup_credits = 500, 100
+
+    with pytest.raises(ValidationError) as caught:
+        cfg.clean()
+
+    assert "min_topup_credits" in caught.value.message_dict
+    cfg.min_topup_credits = 50
+    cfg.clean()
 
 
 def test_staff_confirmation_grants_credits_exactly_once(user: Any, staff: Any) -> None:
@@ -113,7 +125,7 @@ def test_request_topup_asks_the_shop_for_an_order_when_it_offers_one(
     class ShopApi:
         @staticmethod
         def create_credit_topup_order(
-            user: Any, *, credit_amount: int, price: Decimal, reference: str
+            _user: Any, *, credit_amount: int, price: Decimal, reference: str
         ) -> int:
             assert (credit_amount, price) == (100, Decimal("10.00"))
             assert reference.startswith("wallet:topup:")

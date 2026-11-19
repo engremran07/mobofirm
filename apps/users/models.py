@@ -261,6 +261,13 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         help_text="Indicates whether the user has completed their onboarding/profile setup.",
     )
     date_joined = models.DateTimeField(auto_now_add=True)
+    anonymized_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        editable=False,
+        help_text="Set when the account was anonymised in place (account erasure).",
+    )
 
     # Manager / ID
     USERNAME_FIELD = "email"
@@ -277,6 +284,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
             models.Index(fields=["email"], name="user_email_idx"),
             models.Index(fields=["username"], name="user_username_idx"),
         )
+        permissions = (("anonymize_account", "Can anonymise (erase) a user account"),)
 
     def __str__(self) -> str:
         return self.email or (self.username or f"user-{self.pk}")
@@ -321,6 +329,8 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     @property
     def public_display_name(self) -> str:
         """Name for public pages (authors, commenters); never the email address."""
+        if self.anonymized_at:
+            return "Former member"
         return (
             self.full_name.strip()
             or (self.username or "").strip()
@@ -775,7 +785,15 @@ class MFADevice(models.Model):
             return None
 
     def verify_code(self, code: str) -> bool:
-        """Verify a TOTP code against this device."""
+        """Verify a TOTP code against this device; a code is accepted only once.
+
+        The matched RFC 6238 time step is stored (``last_used_counter``) and only a
+        strictly later step is accepted afterwards, so a code that was already used
+        (or an older one still inside the +/- 1 step window) is rejected. The store
+        is a single conditional UPDATE: two concurrent requests holding the same
+        code race on the row and exactly one of them wins, whatever the instance in
+        memory believed.
+        """
         from apps.users.mfa import TOTPService
 
         secret = self.get_secret()
@@ -783,15 +801,22 @@ class MFADevice(models.Model):
             return False
 
         matched_counter = TOTPService.matching_counter(secret, code)
-        if matched_counter is None or (
-            self.last_used_counter is not None
-            and matched_counter <= self.last_used_counter
-        ):
+        if matched_counter is None:
             return False
 
-        self.last_used_at = timezone.now()
+        now = timezone.now()
+        won = (
+            MFADevice.objects.filter(pk=self.pk)
+            .filter(
+                models.Q(last_used_counter__isnull=True)
+                | models.Q(last_used_counter__lt=matched_counter)
+            )
+            .update(last_used_at=now, last_used_counter=matched_counter)
+        )
+        if not won:
+            return False
+        self.last_used_at = now
         self.last_used_counter = matched_counter
-        self.save(update_fields=["last_used_at", "last_used_counter"])
         return True
 
     def generate_backup_codes(self, count: int = 10) -> list:
@@ -810,16 +835,29 @@ class MFADevice(models.Model):
         return codes
 
     def verify_backup_code(self, code: str) -> bool:
-        """Verify and consume a backup code."""
+        """Verify and consume a backup code; each code works exactly once.
+
+        The row is locked and re-read, so a second request with the same code (or a
+        stale instance) cannot spend it again.
+        """
         code = (code or "").strip().upper()
 
-        for i, hashed in enumerate(self.backup_codes_hash):
-            if check_password(code, hashed):
-                # Remove used code
-                self.backup_codes_hash.pop(i)
-                self.last_used_at = timezone.now()
-                self.save(update_fields=["backup_codes_hash", "last_used_at"])
-                return True
+        with transaction.atomic():
+            locked = MFADevice.objects.select_for_update().get(pk=self.pk)
+            for i, hashed in enumerate(locked.backup_codes_hash):
+                if check_password(code, hashed):
+                    remaining = [
+                        item
+                        for j, item in enumerate(locked.backup_codes_hash)
+                        if j != i
+                    ]
+                    now = timezone.now()
+                    locked.backup_codes_hash = remaining
+                    locked.last_used_at = now
+                    locked.save(update_fields=["backup_codes_hash", "last_used_at"])
+                    self.backup_codes_hash = remaining
+                    self.last_used_at = now
+                    return True
         return False
 
 
@@ -997,6 +1035,10 @@ class PushSubscription(models.Model):
         }
 
 
-for _sibling_models in ("apps.users.models_social", "apps.users.profile_models"):
+for _sibling_models in (
+    "apps.users.models_social",
+    "apps.users.profile_models",
+    "apps.users.models_erasure",
+):
     # Django only registers models whose module has been imported.
     import_module(_sibling_models)

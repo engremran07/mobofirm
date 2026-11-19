@@ -1,4 +1,9 @@
-"""My files at /files/: library, uploads, quota, filters, pagination and access control."""
+"""My contributions: downloads, firmware contributions, quota, filters, pagination and access control.
+
+The pages were "My files" at ``/files/``; the legacy names are covered in
+``test_my_contributions.py``. Here ``reverse`` maps the legacy names to the new pages so
+the original behaviour tests keep running against ``/contributions/``.
+"""
 
 from __future__ import annotations
 
@@ -9,7 +14,7 @@ from typing import Any
 
 import pytest
 from django.test import Client
-from django.urls import reverse
+from django.urls import reverse as _reverse
 from django.utils import timezone
 
 from apps.core.models import AppRegistry
@@ -27,14 +32,23 @@ from apps.shop.models import PackageTier, ShopSettings, WindowKind
 pytestmark = pytest.mark.django_db
 
 PASSWORD = "Pass-12345!"
+PAGES = {
+    "library:my_files": "contributions:downloads",
+    "library:my_uploads": "contributions:firmware",
+    "library:my_quota": "contributions:quota",
+}
+
+
+def reverse(name: str, *args: Any, **kwargs: Any) -> str:
+    return _reverse(PAGES.get(name, name), *args, **kwargs)
 
 
 def text(response: Any) -> str:
     return response.content.decode()
 
 
-@pytest.fixture
-def make_user(django_user_model: Any) -> Callable[..., Any]:
+@pytest.fixture(name="make_user")
+def make_user_fixture(django_user_model: Any) -> Callable[..., Any]:
     def build(username: str) -> Any:
         return django_user_model.objects.create_user(
             username=username,
@@ -46,25 +60,26 @@ def make_user(django_user_model: Any) -> Callable[..., Any]:
     return build
 
 
-@pytest.fixture
-def owner(make_user: Callable[..., Any]) -> Any:
+@pytest.fixture(name="owner")
+def owner_fixture(make_user: Callable[..., Any]) -> Any:
     return make_user("library_owner")
 
 
-@pytest.fixture
-def stranger(make_user: Callable[..., Any]) -> Any:
+@pytest.fixture(name="stranger")
+def stranger_fixture(make_user: Callable[..., Any]) -> Any:
     return make_user("library_stranger")
 
 
-@pytest.fixture
-def owner_client(owner: Any) -> Client:
+@pytest.fixture(name="owner_client")
+def owner_client_fixture(owner: Any) -> Client:
     client = Client()
     client.force_login(owner)
     return client
 
 
-@pytest.fixture
-def default_tier() -> PackageTier:
+@pytest.fixture(name="default_tier", autouse=True)
+def default_tier_fixture() -> PackageTier:
+    """The free package every library page resolves its quota from."""
     return PackageTier.objects.create(
         name="Free",
         slug="free",
@@ -77,8 +92,8 @@ def default_tier() -> PackageTier:
     )
 
 
-@pytest.fixture
-def make_device() -> Callable[..., tuple[Brand, Model, Variant]]:
+@pytest.fixture(name="make_device")
+def make_device_fixture() -> Callable[..., tuple[Brand, Model, Variant]]:
     def build(brand_name: str = "Acme") -> tuple[Brand, Model, Variant]:
         brand, _ = Brand.objects.get_or_create(
             slug=brand_name.lower(), defaults={"name": brand_name}
@@ -94,8 +109,8 @@ def make_device() -> Callable[..., tuple[Brand, Model, Variant]]:
     return build
 
 
-@pytest.fixture
-def make_served(
+@pytest.fixture(name="make_served")
+def make_served_fixture(
     make_device: Callable[..., tuple[Brand, Model, Variant]],
 ) -> Callable[..., OfficialFirmware]:
     """Create a firmware file and record it as served to ``user``."""
@@ -138,37 +153,42 @@ def make_served(
 
 
 class TestRoutes:
-    def test_urls_live_under_files(self):
-        assert reverse("library:my_files") == "/files/"
-        assert reverse("library:my_uploads") == "/files/uploads/"
-        assert reverse("library:my_quota") == "/files/quota/"
+    def test_urls_live_under_contributions(self):
+        assert _reverse("contributions:hub") == "/contributions/"
+        assert _reverse("contributions:firmware") == "/contributions/firmware/"
+        assert _reverse("contributions:blog") == "/contributions/blog/"
+        assert _reverse("contributions:downloads") == "/contributions/downloads/"
+        assert _reverse("contributions:quota") == "/contributions/quota/"
 
     def test_personal_storage_no_longer_exists(self, owner_client):
         for path in ("/files/storage/", "/files/s/abc/"):
             assert owner_client.get(path).status_code == 404, path
 
     def test_pages_require_login(self, client):
-        for name in ("my_files", "my_uploads", "my_quota"):
-            response = client.get(reverse(f"library:{name}"))
+        for name in ("hub", "firmware", "blog", "downloads", "quota"):
+            response = client.get(_reverse(f"contributions:{name}"))
             assert response.status_code == 302, name
 
-    def test_nav_labels_the_link_my_files(self, owner_client):
+    def test_nav_labels_the_link_my_contributions(self, owner_client):
         page = text(owner_client.get(reverse("library:my_files")))
 
-        assert 'href="/files/"' in page
-        assert ">My files</a>" in page
+        assert 'href="/contributions/"' in page
+        assert ">My contributions</a>" in page
+        assert ">My files<" not in page
 
-    def test_tabs_offer_library_uploads_and_quota_only(self, owner_client):
-        for name in ("my_files", "my_uploads", "my_quota"):
-            page = text(owner_client.get(reverse(f"library:{name}")))
+    def test_tabs_offer_every_contribution_section(self, owner_client):
+        for name in ("hub", "firmware", "blog", "downloads", "quota"):
+            page = text(owner_client.get(_reverse(f"contributions:{name}")))
             assert "Personal storage" not in page, name
             assert "/files/storage/" not in page, name
-            assert 'href="/files/quota/"' in page, name
+            assert 'href="/contributions/quota/"' in page, name
+            assert 'href="/contributions/blog/"' in page, name
+            assert "Firmware contributions" in page, name
 
 
 class TestLibrary:
     def test_lists_every_served_tier_with_badges(
-        self, owner, owner_client, default_tier, make_served
+        self, owner, owner_client, make_served
     ):
         gold = PackageTier.objects.create(
             name="Gold",
@@ -194,7 +214,7 @@ class TestLibrary:
         assert "USD 7.50" in page
 
     def test_redownload_goes_through_the_download_gate_never_a_file_url(
-        self, owner, owner_client, default_tier, make_served
+        self, owner, owner_client, make_served
     ):
         firmware = make_served(owner, tier="paid", price="7.50", charged=True)
 
@@ -209,7 +229,7 @@ class TestLibrary:
         assert firmware.stored_file_path not in page
 
     def test_unpublished_files_have_no_download_button(
-        self, owner, owner_client, default_tier, make_served
+        self, owner, owner_client, make_served
     ):
         make_served(owner, name="gone.zip", is_active=False)
 
@@ -219,13 +239,13 @@ class TestLibrary:
         assert "No longer available" in page
         assert "Download again" not in page
 
-    def test_empty_library_says_so(self, owner_client, default_tier):
+    def test_empty_library_says_so(self, owner_client):
         page = text(owner_client.get(reverse("library:my_files")))
 
         assert "Nothing in your library yet" in page
 
     def test_idor_other_users_files_never_appear(
-        self, owner, stranger, owner_client, default_tier, make_served
+        self, owner, stranger, owner_client, make_served
     ):
         make_served(stranger, name="strangers-secret.zip", tier="paid", price="9.00")
         make_served(owner, name="mine.zip")
@@ -239,7 +259,7 @@ class TestLibrary:
         assert "No files match" in filtered
 
     def test_filters_by_tier_brand_search_and_date(
-        self, owner, owner_client, default_tier, make_served
+        self, owner, owner_client, make_served
     ):
         ShopSettings.objects.update_or_create(
             pk=1, defaults={"free_redownload_window_days": 0}
@@ -277,9 +297,7 @@ class TestLibrary:
         assert "alpha-free.zip" in recent and "gamma-old.zip" not in recent
         assert "gamma-old.zip" in ancient and "alpha-free.zip" not in ancient
 
-    def test_invalid_filter_values_are_ignored(
-        self, owner, owner_client, default_tier, make_served
-    ):
+    def test_invalid_filter_values_are_ignored(self, owner, owner_client, make_served):
         make_served(owner, name="kept.zip")
 
         response = owner_client.get(
@@ -296,7 +314,7 @@ class TestLibrary:
         assert "<script>" not in text(response).replace("<script src", "")
 
     def test_htmx_requests_get_only_the_results_fragment(
-        self, owner, owner_client, default_tier, make_served
+        self, owner, owner_client, make_served
     ):
         make_served(owner, name="fragment.zip")
 
@@ -308,7 +326,7 @@ class TestLibrary:
         assert "HX-Request" in response["Vary"]
 
     def test_pagination_preserves_filters_and_uses_htmx(
-        self, owner, owner_client, default_tier, make_served
+        self, owner, owner_client, make_served
     ):
         for number in range(25):
             make_served(owner, name=f"bulk-{number:02d}.zip", tier="free")
@@ -338,7 +356,7 @@ class TestLibrary:
         assert "Page 2 of 2" in second
 
     def test_library_reads_the_single_served_record(
-        self, owner, owner_client, default_tier, make_served
+        self, owner, owner_client, make_served
     ):
         make_served(owner, name="one.zip")
         assert ServedDownload.objects.filter(user=owner).count() == 1
@@ -350,7 +368,7 @@ class TestLibrary:
 
 class TestQuotaPanel:
     def test_library_shows_the_meter_with_accessible_text_and_reset(
-        self, owner, owner_client, default_tier, make_served
+        self, owner, owner_client, make_served
     ):
         firmware = make_served(owner)
         entitlements.consume_quota(owner, firmware, reason="free")
@@ -365,7 +383,7 @@ class TestQuotaPanel:
         assert reverse("shop:pricing") in page
 
     def test_quota_page_shows_the_allowance_and_fair_usage_and_counts_paid_files(
-        self, owner, owner_client, default_tier, make_user, make_served
+        self, owner, owner_client, make_user, make_served
     ):
         staff = make_user("quota_staff")
         paid = make_served(owner, tier="paid", price="4.00", charged=True)
@@ -383,7 +401,7 @@ class TestQuotaPanel:
         assert "5 files per day" in page
 
     def test_purchased_but_unserved_files_are_listed_as_available(
-        self, owner, owner_client, default_tier, make_user, make_device
+        self, owner, owner_client, make_user, make_device
     ):
         staff = make_user("purchase_staff")
         brand, model, variant = make_device()
@@ -409,9 +427,7 @@ class TestQuotaPanel:
             assert "Purchased — download available" in page
             assert "waiting.zip" in page
 
-    def test_unlimited_package_is_described_as_unlimited(
-        self, owner, owner_client, default_tier
-    ):
+    def test_unlimited_package_is_described_as_unlimited(self, owner, owner_client):
         tier = PackageTier.objects.create(
             name="Pro", slug="pro", price=Decimal(9), bandwidth_enabled=False
         )
@@ -422,18 +438,14 @@ class TestQuotaPanel:
         assert "Pro" in page
         assert "Unlimited" in page
 
-    def test_quota_isolated_per_user(
-        self, owner, stranger, owner_client, default_tier, make_served
-    ):
+    def test_quota_isolated_per_user(self, stranger, owner_client, make_served):
         entitlements.consume_quota(stranger, make_served(stranger), reason="free")
 
         page = text(owner_client.get(reverse("library:my_quota")))
 
         assert "0 of 5 used today" in page
 
-    def test_quota_page_without_the_shop_says_unavailable(
-        self, owner_client, default_tier
-    ):
+    def test_quota_page_without_the_shop_says_unavailable(self, owner_client):
         registry = AppRegistry.get_solo()
         registry.shop_enabled = False
         registry.save()
@@ -445,7 +457,7 @@ class TestQuotaPanel:
         assert "<meter" not in text(response)
 
     def test_without_the_firmware_app_the_library_and_uploads_are_empty(
-        self, owner, owner_client, default_tier, make_served
+        self, owner, owner_client, make_served
     ):
         make_served(owner, name="hidden.zip")
         registry = AppRegistry.get_solo()
@@ -457,4 +469,4 @@ class TestQuotaPanel:
 
         assert "hidden.zip" not in library
         assert "Nothing in your library yet" in library
-        assert "You have not uploaded any firmware" in uploads
+        assert "You have not contributed any firmware" in uploads

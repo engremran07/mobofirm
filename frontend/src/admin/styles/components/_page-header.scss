@@ -1,0 +1,57 @@
+// c-page-header: title block above content.
+//   <header class="c-page-header"><div class="c-page-header__main">
+//     <p class="c-page-header__eyebrow">Firmware</p><h1 class="c-page-header__title">Approvals</h1>
+//     <p class="c-page-header__sub">Review what staff have queued.</p>
+//     <div class="c-page-header__meta"><span class="c-badge">..</span></div></div>
+//     <div class="c-page-header__actions"><a class="btn btn-primary">..</a></div></header>
+@layer components {
+  .c-page-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: var(--mf-space-3) var(--mf-space-5);
+    margin-block-end: var(--mf-space-5);
+  }
+
+  .c-page-header__main { flex: 1 1 18rem; min-inline-size: 0; }
+
+  .c-page-header__eyebrow {
+    margin: 0 0 var(--mf-space-1);
+    color: var(--mf-accent);
+    font-size: var(--mf-fs-xs);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .c-page-header__title {
+    margin: 0;
+    font-size: var(--mf-fs-3xl);
+    letter-spacing: -0.02em;
+  }
+
+  .c-page-header__sub,
+  .c-page-header__subtitle {
+    max-inline-size: 60ch;
+    margin: var(--mf-space-1) 0 0;
+    color: var(--mf-text-muted);
+    font-size: var(--mf-fs-base);
+  }
+
+  .c-page-header__tabs { flex: 1 1 100%; min-inline-size: 0; max-inline-size: 100%; margin-block-end: calc(var(--mf-space-5) * -1); }
+
+  .c-page-header__meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--mf-space-2);
+    margin-block-start: var(--mf-space-3);
+  }
+
+  .c-page-header__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--mf-space-2);
+  }
+}

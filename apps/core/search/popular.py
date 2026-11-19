@@ -18,6 +18,8 @@ from django.core.cache import cache
 from django.db import DatabaseError
 from django.db.models.signals import post_save
 
+from apps.core.utils.request_cache import forget, memoize
+
 from .registry import get_provider
 from .types import SearchHit
 from .vocabulary import popular_version
@@ -41,8 +43,10 @@ class PopularSettings:
     cache_minutes: int = DEFAULT_CACHE_MINUTES
 
 
-def popular_settings() -> PopularSettings:
-    """Staff-edited settings, or the defaults before the first save or migration."""
+_SETTINGS_MEMO_KEY: Final[str] = "core.popular_settings"
+
+
+def _load_popular_settings() -> PopularSettings:
     try:
         row = apps.get_model("core", "SearchSettings").objects.first()
     except DatabaseError:
@@ -58,8 +62,17 @@ def popular_settings() -> PopularSettings:
     )
 
 
+def popular_settings() -> PopularSettings:
+    """Staff-edited settings, or the defaults before the first save or migration.
+
+    Read once per request (several popular blocks render on one page).
+    """
+    return memoize(_SETTINGS_MEMO_KEY, _load_popular_settings)
+
+
 def invalidate_settings_cache(**_kwargs: object) -> None:
     """Forget every cached popular list (the settings changed)."""
+    forget(_SETTINGS_MEMO_KEY)
     try:
         cache.incr(SETTINGS_VERSION_KEY)
     except ValueError:

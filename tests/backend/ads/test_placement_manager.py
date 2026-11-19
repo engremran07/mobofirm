@@ -117,11 +117,11 @@ class ManagerPageTests(ManagerBase):
         html = response.content.decode()
 
         self.assertEqual(response.status_code, 200)
-        self.assertIn('class="mf-ui"', html)
-        self.assertIn("unfold", html.lower())
+        self.assertTemplateUsed(response, "admin/staff_page.html")
+        self.assertIn("console-staff-page", html)
+        self.assertIn("build/admin/", html)
         self.assertIn(PAGE, html)
         self.assertIn("Header banner", html)
-        self.assertNotIn("btn btn-", html)
 
     def test_declared_zones_and_open_state_filter(self):
         scan("pages/page.html")
@@ -170,7 +170,7 @@ class ManagerPageTests(ManagerBase):
 
         response = self.client.get(reverse("ads:placement_manager"))
 
-        self.assertContains(response, "No templates have been scanned yet")
+        self.assertContains(response, "No templates scanned yet")
 
 
 class PlaceAdTests(ManagerBase):
@@ -319,8 +319,8 @@ class PlacementActionTests(ManagerBase):
 
         response = self.client.get(url, HTTP_HX_REQUEST="true")
 
-        self.assertContains(response, "<dialog")
-        self.assertNotContains(response, 'class="mf-ui"')
+        self.assertContains(response, "data-console-dialog")
+        self.assertNotContains(response, 'class="console-staff-page')
 
     def test_other_staff_cannot_toggle_or_remove(self):
         self.client.force_login(make_user("nobody", staff=True))
@@ -390,7 +390,7 @@ class DiscoveryQueueTests(ManagerBase):
     def test_queue_lists_pending_suggestions_in_the_admin_shell(self):
         response = self.client.get(reverse("ads:discoveries"))
 
-        self.assertContains(response, 'class="mf-ui"')
+        self.assertContains(response, 'class="console-staff-page')
         self.assertContains(response, "Blog Post Detail Sidebar Top")
         self.assertContains(response, "Pending (3)")
 
@@ -461,11 +461,12 @@ class DiscoveryQueueTests(ManagerBase):
 
 
 class DashboardTests(ManagerBase):
-    def test_staff_screens_are_served_under_the_admin_shell_csp(self):
+    def test_staff_screens_are_served_under_the_strict_console_policy(self):
         for name in ("ads:placement_manager", "ads:discoveries", "ads:place_ad"):
             with self.subTest(name):
                 policy = self.client.get(reverse(name))["Content-Security-Policy"]
-                self.assertIn("'unsafe-eval'", policy)
+                self.assertNotIn("'unsafe-eval'", policy)
+                self.assertNotIn("'unsafe-inline'", policy.split("script-src")[1].split(";")[0])
 
     def test_public_pages_keep_the_strict_policy(self):
         policy = self.client.get("/")["Content-Security-Policy"]
@@ -476,7 +477,7 @@ class DashboardTests(ManagerBase):
         response = self.client.get(reverse("ads:dashboard"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'class="mf-ui"')
+        self.assertContains(response, 'class="console-staff-page')
         self.assertContains(response, "Why am I (not) seeing ads?")
         self.assertContains(response, "The master switch is off")
         self.assertContains(response, "Placement manager")

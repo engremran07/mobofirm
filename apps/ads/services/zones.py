@@ -15,7 +15,8 @@ from __future__ import annotations
 
 import re
 import time
-from dataclasses import dataclass
+from collections.abc import Collection
+from dataclasses import dataclass, field
 from typing import Any, Literal
 from weakref import WeakKeyDictionary
 
@@ -39,6 +40,7 @@ from apps.ads.zones import (
 )
 from apps.consent.constants import ADVERTISING
 from apps.consent.services import has_consent
+from apps.core.internal_request import is_internal_crawl
 from apps.core.utils.ip import get_client_ip
 from apps.users.services.consent import hash_ip, hash_ua
 
@@ -52,7 +54,14 @@ PREVIEW_TOKEN_MAX_AGE = 600
 # Pages that never carry ads, whatever a placement says (sign-in, errors, consent).
 NEVER_TEMPLATE_PREFIXES = ("account/", "allauth/", "errors/", "admin/", "consent/")
 # Account areas: a placement must name these templates explicitly, never "every page".
-SITE_WIDE_DENY_PREFIXES = ("users/", "wallet/", "referral/", "devices/", "shop/")
+SITE_WIDE_DENY_PREFIXES = (
+    "users/",
+    "wallet/",
+    "referral/",
+    "devices/",
+    "shop/",
+    "pricing/",
+)
 
 _MOBILE_UA = re.compile(
     r"Mobi|iPhone|iPod|Windows Phone|BlackBerry|Opera Mini", re.IGNORECASE
@@ -76,6 +85,15 @@ class ZoneRender:
 class _RequestZones:
     placements: list[AdPlacement]
     excluded: frozenset[str]
+    # Creatives already shown on this page (an automatic slot never repeats one) and the
+    # number of automatic slots rendered, against ``AdsSettings.max_ads_per_page``.
+    used_creatives: set[int] = field(default_factory=set)
+    auto_slots: int = 0
+    auto_zone_counts: dict[str, int] = field(default_factory=dict)
+    # ``auto_placement`` answers per (page, zone): a listing asks once per tile.
+    auto_gate: dict[tuple[str, str], tuple[bool, AdPlacement | None]] = field(
+        default_factory=dict
+    )
 
 
 _BY_REQUEST: WeakKeyDictionary[HttpRequest, _RequestZones] = WeakKeyDictionary()
@@ -213,13 +231,19 @@ def _fallback(placement: AdPlacement) -> AdCreative | None:
     return creative if campaign_within_caps(campaign) else None
 
 
-def _creative_for(placement: AdPlacement) -> AdCreative | None:
+def _creative_for(
+    placement: AdPlacement, exclude: Collection[int] = ()
+) -> AdCreative | None:
     context = {
         "consent_ads": True,
         "page_context": placement.context or placement.page_context,
         "tags": set(),
     }
-    return choose_creative(placement, context) or _fallback(placement)
+    chosen = choose_creative(placement, context, exclude=exclude)
+    if chosen is not None:
+        return chosen
+    fallback = _fallback(placement)
+    return fallback if fallback is not None and fallback.pk not in exclude else None
 
 
 def click_url(placement: AdPlacement, creative: AdCreative) -> str:
@@ -235,6 +259,8 @@ def click_url(placement: AdPlacement, creative: AdCreative) -> str:
 def _record_impression(
     request: HttpRequest, placement: AdPlacement, creative: AdCreative
 ) -> None:
+    if is_internal_crawl(request):
+        return
     user = getattr(request, "user", None)
     record_event(
         "impression",
@@ -264,29 +290,114 @@ def _preview(zone: Zone, placement: AdPlacement | None) -> ZoneRender:
     )
 
 
-def resolve_zone(
-    request: HttpRequest, template_name: str, zone_code: str
-) -> ZoneRender | None:
-    zone = ZONE_BY_CODE.get(zone_code)
-    if zone is None or template_name.startswith(NEVER_TEMPLATE_PREFIXES):
-        return None
-    state = _state(request)
-    if template_name in state.excluded:
-        return None
+def _placement(
+    state: _RequestZones, template_name: str, zone_code: str
+) -> AdPlacement | None:
+    """The placement for a zone on a page, after the site-wide account-area deny list."""
     placement = placement_for(state.placements, template_name, zone_code)
     if (
         placement is not None
         and not placement.template_reference
         and template_name.startswith(SITE_WIDE_DENY_PREFIXES)
     ):
-        placement = None
+        return None
+    return placement
+
+
+def zone_blocked(request: HttpRequest, template_name: str, zone_code: str) -> bool:
+    """True when a zone can never render on this page (unknown, error/account page,
+    excluded template)."""
+    if zone_code not in ZONE_BY_CODE or template_name.startswith(
+        NEVER_TEMPLATE_PREFIXES
+    ):
+        return True
+    return template_name in _state(request).excluded
+
+
+def auto_placement(
+    request: HttpRequest, template_name: str, zone_code: str
+) -> tuple[bool, AdPlacement | None]:
+    """``(serving, placement)`` for an automatic zone, cheap enough to ask per tile.
+
+    ``serving`` is False when nothing could render (blocked page, no live placement,
+    ads off for this visitor, device mismatch), so callers skip all further work.
+    Staff with the test profile always get ``True`` to see where slots would go. The
+    answer is computed once per request, page and zone.
+    """
+    state = _state(request)
+    key = (template_name, zone_code)
+    if key not in state.auto_gate:
+        state.auto_gate[key] = _auto_placement(request, template_name, zone_code)
+    return state.auto_gate[key]
+
+
+def _auto_placement(
+    request: HttpRequest, template_name: str, zone_code: str
+) -> tuple[bool, AdPlacement | None]:
+    """Uncached :func:`auto_placement`."""
+    if zone_blocked(request, template_name, zone_code):
+        return False, None
+    placement = _placement(_state(request), template_name, zone_code)
     if is_preview(request):
+        return True, placement
+    if placement is None or not (placement.is_enabled and placement.is_active):
+        return False, None
+    if not _site_allows(request) or not device_matches(placement, request):
+        return False, None
+    return True, placement
+
+
+def _count_auto(state: _RequestZones, zone_code: str) -> None:
+    state.auto_slots += 1
+    state.auto_zone_counts[zone_code] = state.auto_zone_counts.get(zone_code, 0) + 1
+
+
+def auto_used(request: HttpRequest, zone_code: str) -> int:
+    """Automatic slots of this zone already rendered on the page."""
+    return _state(request).auto_zone_counts.get(zone_code, 0)
+
+
+def auto_budget(request: HttpRequest) -> int:
+    """How many more automatic slots this page may carry (``max_ads_per_page``)."""
+    try:
+        limit = int(AdsSettings.get_solo().max_ads_per_page)
+    except DatabaseError:
+        limit = 0
+    return max(0, limit - _state(request).auto_slots)
+
+
+def min_words_between_ads() -> int:
+    try:
+        return int(AdsSettings.get_solo().min_content_between_ads)
+    except DatabaseError:
+        return 0
+
+
+def resolve_zone(
+    request: HttpRequest,
+    template_name: str,
+    zone_code: str,
+    *,
+    unique: bool = False,
+) -> ZoneRender | None:
+    """What a zone renders now. ``unique`` (automatic slots) never repeats a creative
+    already shown on this page and counts toward ``max_ads_per_page``."""
+    zone = ZONE_BY_CODE.get(zone_code)
+    if zone is None or template_name.startswith(NEVER_TEMPLATE_PREFIXES):
+        return None
+    state = _state(request)
+    if template_name in state.excluded:
+        return None
+    placement = _placement(state, template_name, zone_code)
+    if is_preview(request):
+        if unique:
+            _count_auto(state, zone_code)
         return _preview(zone, placement)
     if placement is None or not (placement.is_enabled and placement.is_active):
         return None
     if not _site_allows(request) or not device_matches(placement, request):
         return None
-    creative = _creative_for(placement)
+    creative = _creative_for(placement, state.used_creatives if unique else frozenset())
     if creative is None:
         return None
     href = click_url(placement, creative)
@@ -294,6 +405,9 @@ def resolve_zone(
     if not html:
         return None
     _record_impression(request, placement, creative)
+    if unique:
+        state.used_creatives.add(creative.pk)
+        _count_auto(state, zone_code)
     return ZoneRender(
         "live",
         zone,

@@ -18,7 +18,7 @@ class PageAdminTests(TestCase):
         self.admin_user = get_user_model().objects.create_superuser(
             username="pages-admin", email="pages-admin@example.test"
         )
-        self.client = Client()
+        self.client = Client(headers={"HX-Request": "true"})
         self.client.force_login(self.admin_user)
         self.page = Page.objects.create(
             slug="draft-page", title="Draft page", content="# Heading\n\nBody text."

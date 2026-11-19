@@ -14,6 +14,16 @@ from apps.users.mfa import TOTPService
 from apps.users.models import MFADevice
 from apps.users.services.rate_limit import get_attempt_count
 
+GATE_CONTRACT = "apps.users.services.device_gate.AppService.get"
+
+
+def device_contract(enforcement):
+    """The slice of the devices contract the sign-in gate consults."""
+    return SimpleNamespace(
+        DevicePolicyError=DevicePolicyError,
+        enforce_device_policy_for_login=enforcement,
+    )
+
 
 class UserDeviceLoginContractTests(TestCase):
     def setUp(self):
@@ -34,8 +44,8 @@ class UserDeviceLoginContractTests(TestCase):
     def test_device_policy_denial_does_not_create_an_authenticated_session(self):
         enforcement = Mock(side_effect=DevicePolicyError("blocked_device"))
         with patch(
-            "apps.users.views.AppService.get",
-            return_value=SimpleNamespace(enforce_device_policy_for_login=enforcement),
+            GATE_CONTRACT,
+            return_value=device_contract(enforcement),
         ):
             response = self.client.post(
                 reverse("users:account_login"),
@@ -49,8 +59,8 @@ class UserDeviceLoginContractTests(TestCase):
     def test_false_device_policy_result_does_not_create_an_authenticated_session(self):
         enforcement = Mock(return_value=(False, {}))
         with patch(
-            "apps.users.views.AppService.get",
-            return_value=SimpleNamespace(enforce_device_policy_for_login=enforcement),
+            GATE_CONTRACT,
+            return_value=device_contract(enforcement),
         ):
             response = self.client.post(
                 reverse("users:account_login"),
@@ -64,8 +74,8 @@ class UserDeviceLoginContractTests(TestCase):
     def test_successful_logins_do_not_consume_the_failed_attempt_budget(self):
         enforcement = Mock(return_value=(True, {}))
         with patch(
-            "apps.users.views.AppService.get",
-            return_value=SimpleNamespace(enforce_device_policy_for_login=enforcement),
+            GATE_CONTRACT,
+            return_value=device_contract(enforcement),
         ):
             for _ in range(6):
                 response = self.client.post(
@@ -104,10 +114,8 @@ class UserDeviceLoginContractTests(TestCase):
         self.assertEqual(get_attempt_count("login:127.0.0.1"), 1)
 
         with patch(
-            "apps.users.views.AppService.get",
-            return_value=SimpleNamespace(
-                enforce_device_policy_for_login=Mock(return_value=(True, {}))
-            ),
+            GATE_CONTRACT,
+            return_value=device_contract(Mock(return_value=(True, {}))),
         ):
             response = self.client.post(
                 login_url,
@@ -130,13 +138,7 @@ class UserDeviceLoginContractTests(TestCase):
         device.save(update_fields=["secret_encrypted"])
         enforcement = Mock(side_effect=DevicePolicyError("mfa_required"))
 
-        with patch(
-            "apps.users.views.AppService.get",
-            return_value=SimpleNamespace(
-                DevicePolicyError=DevicePolicyError,
-                enforce_device_policy_for_login=enforcement,
-            ),
-        ):
+        with patch(GATE_CONTRACT, return_value=device_contract(enforcement)):
             login_response = self.client.post(
                 reverse("users:account_login"),
                 {"login": self.user.email, "password": "test-password"},
@@ -192,10 +194,7 @@ class UserDeviceLoginContractTests(TestCase):
         device.save(update_fields=["secret_encrypted"])
         enforcement = Mock(return_value=(True, {}))
 
-        with patch(
-            "apps.users.views.AppService.get",
-            return_value=SimpleNamespace(enforce_device_policy_for_login=enforcement),
-        ):
+        with patch(GATE_CONTRACT, return_value=device_contract(enforcement)):
             login_response = self.client.post(
                 reverse("users:account_login"),
                 {"login": self.user.email, "password": "test-password"},

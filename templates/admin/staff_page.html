@@ -1,21 +1,27 @@
 {% extends "admin/base_site.html" %}
+{% load i18n %}
 {% comment %}
-  Base for staff tool pages (not model admins). Contract:
-  - render with apps.core.admin_pages.render_admin_page (gives sidebar and branding);
-  - override {% block mf_actions %} for header buttons and {% block mf_body %} for content;
-  - build the body from the mf-ui components in frontend/src/styles/admin-ui.css.
+  Base of every custom staff page (anything that is not a ModelAdmin CRUD view).
+  Render it with apps.core.admin_pages.render_admin_page. Contract:
+  - blocks: page_actions (header buttons), page_nav (section tabs), page_body (content);
+  - context: title (required), page_subtitle (optional lead),
+    page_breadcrumbs (optional list of (label, url or None); defaults to Dashboard > title);
+  - compose the body from {% staff_* %} tags and console/staff/* includes only: no page
+    markup of its own, no page CSS. Dialogs open into #console-dialog (staff_button dialog_url=).
 {% endcomment %}
-{% block breadcrumbs %}{% endblock %}
+{% block breadcrumbs %}{% include "console/staff/breadcrumbs.html" %}{% endblock %}
 {% block content %}
-<div class="mf-ui">
-  <header class="mf-ui-header">
-    <div>
-      <h1 class="mf-ui-title">{{ title }}</h1>
-      {% if mf_subtitle %}<p class="mf-ui-subtitle">{{ mf_subtitle }}</p>{% endif %}
+<div class="console-staff-page c-staff-page">
+  <header class="c-page-header console-staff-header">
+    <div class="c-page-header__main">
+      <h1 class="c-page-header__title">{{ title }}</h1>
+      {% if page_subtitle %}<p class="c-page-header__subtitle">{{ page_subtitle }}</p>{% endif %}
     </div>
-    <div class="mf-ui-actions">{% block mf_actions %}{% endblock %}</div>
+    <div class="c-page-header__actions">{% block page_actions %}{% endblock %}</div>
   </header>
-  {% block mf_nav %}{% endblock %}
-  {% block mf_body %}{% endblock %}
+  {% block page_nav %}{% endblock %}
+  <div class="c-staff-body">
+    {% block page_body %}{% endblock %}
+  </div>
 </div>
 {% endblock %}

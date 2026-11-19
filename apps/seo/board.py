@@ -35,7 +35,6 @@ class BoardFilter:
     severity: str = ""
     code: str = ""
     query: str = ""
-    fixable: bool = False
 
     def params(self, **overrides: Any) -> str:
         values = {
@@ -44,7 +43,6 @@ class BoardFilter:
             "severity": self.severity,
             "code": self.code,
             "q": self.query,
-            "fixable": "1" if self.fixable else "",
         }
         values.update({k: v for k, v in overrides.items()})
         return urlencode({k: v for k, v in values.items() if v})
@@ -60,7 +58,6 @@ def parse_filter(params: Any) -> BoardFilter:
         severity=severity if severity in Issue.Severity.values else "",
         code=str(params.get("code", ""))[:64],
         query=str(params.get("q", "")).strip()[:100],
-        fixable=params.get("fixable") == "1",
     )
 
 
@@ -72,8 +69,6 @@ def queryset(board: BoardFilter, *, with_group: bool = True) -> QuerySet[Issue]:
         issues = issues.filter(severity=board.severity)
     if board.code:
         issues = issues.filter(code=board.code)
-    if board.fixable:
-        issues = issues.filter(fixable=True)
     if board.query:
         issues = issues.filter(
             Q(url__icontains=board.query)

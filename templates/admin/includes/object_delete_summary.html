@@ -1,0 +1,7 @@
+{% load i18n console_ui %}
+<section aria-labelledby="delete-summary-title">
+<h2 class="c-fieldset__legend" id="delete-summary-title">{% translate "Summary" %}</h2>
+<div class="u-cluster u-gap-3">
+{% for model_name, object_count in model_count %}{% ui "stat_tile" label=model_name|capfirst value=object_count %}{% endfor %}
+</div>
+</section>

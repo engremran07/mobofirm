@@ -25,7 +25,7 @@ VERIFY_BATCH = 25
 
 def _location_row(location: FirmwareStorageLocation) -> dict[str, Any]:
     """A location with links to its firmware's public page and admin form."""
-    firmware = location.firmware
+    firmware = location.resolve_firmware()
     public_url = admin_url = ""
     label = f"Firmware {location.object_id[:8]} (record missing)"
     if firmware is not None:

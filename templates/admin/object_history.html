@@ -1,0 +1,46 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls admin_filters console_ui console_admin %}
+
+{% block bodyclass %}{{ block.super }} app-{{ opts.app_label }} model-{{ opts.model_name }} object-history{% endblock %}
+
+{% block content_title %}{% endblock %}
+{% block object-tools %}{% endblock %}
+
+{% block content %}
+{% url opts|admin_urlname:'change' object.pk|admin_urlquote as change_url %}
+{% blocktranslate with name=object|to_object_display_value|truncatewords:"18" asvar history_subtitle %}Everything that changed on “{{ name }}”.{% endblocktranslate %}
+{% translate "History" as history_title %}
+{% component "page_header" title=history_title subtitle=history_subtitle eyebrow=opts.verbose_name|capfirst %}
+{% slot "actions" %}<a class="btn btn-secondary" href="{{ change_url }}">{% console_icon "arrow-left" %}<span>{% translate "Back to the record" %}</span></a>{% endslot %}
+{% endcomponent %}
+<div class="c-history" id="change-history">
+{% if action_list %}
+<ol class="c-timeline">
+{% for action in action_list %}
+<li class="c-timeline__item{% if action.is_addition %} c-timeline__item--success{% elif action.is_deletion %} c-timeline__item--danger{% else %} c-timeline__item--accent{% endif %}">
+<span class="c-timeline__dot" aria-hidden="true"></span>
+<div class="c-timeline__main">
+<p class="c-timeline__title">{{ action.get_change_message|default:_("Changed") }}</p>
+<p class="c-timeline__meta"><time datetime="{{ action.action_time|date:'c' }}">{{ action.action_time|date:"DATETIME_FORMAT" }}</time> · {% if action.user %}{{ action.user.get_username }}{% if action.user.get_full_name %} ({{ action.user.get_full_name }}){% endif %}{% else %}{% translate "Unknown user" %}{% endif %}</p>
+</div>
+</li>
+{% endfor %}
+</ol>
+<nav class="c-pager" aria-label="{% blocktranslate with name=opts.verbose_name %}Pagination {{ name }} entries{% endblocktranslate %}">
+<p class="c-pager__summary c-pager__info">{{ action_list.paginator.count }} {% blocktranslate count counter=action_list.paginator.count %}entry{% plural %}entries{% endblocktranslate %}</p>
+{% if pagination_required %}
+<ul class="c-pager__list">
+{% for i in page_range %}
+{% if i == action_list.paginator.ELLIPSIS %}<li class="c-pager__item c-pager__gap" aria-hidden="true">&hellip;</li>
+{% else %}<li class="c-pager__item"><a class="c-pager__link" href="?{{ page_var }}={{ i }}"{% if i == action_list.number %} aria-current="page"{% endif %}>{{ i }}</a></li>{% endif %}
+{% endfor %}
+</ul>
+{% endif %}
+</nav>
+{% else %}
+{% translate "No history yet" as empty_title %}
+{% translate "This record doesn’t have a change history. It probably wasn’t added via this admin site." as empty_message %}
+{% ui "empty_state" icon="history" title=empty_title message=empty_message %}
+{% endif %}
+</div>
+{% endblock %}

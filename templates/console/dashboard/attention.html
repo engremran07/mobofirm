@@ -1,0 +1,17 @@
+{% extends "console/dashboard/_widget.html" %}{% load i18n console_ui %}{# Queues that hold work, most urgent first. Context: queues, total, unavailable, has_queues. #}
+{% block widget_body %}
+{% if queues %}
+<ul class="c-queue">
+{% for kpi in queues %}<li class="c-queue__item c-queue__item--{{ kpi.variant }}">
+<span class="c-queue__icon">{% console_icon kpi.icon "c-icon--sm" %}</span>
+<div class="c-queue__body"><a class="c-queue__title" id="kpi-{{ kpi.key }}" href="{{ kpi.url }}">{{ kpi.label }}</a><p class="c-queue__hint">{{ kpi.hint }}</p></div>
+<span class="c-queue__count">{{ kpi.value }}</span>
+</li>
+{% endfor %}</ul>
+{% elif has_queues %}
+{% ui "empty_state" title=_("All clear") message=_("Nothing is waiting for review right now. New work shows up here.") icon="circle-check" tone="compact" %}
+{% else %}
+{% ui "empty_state" title=_("No queues assigned to you") message=_("Use the sidebar to open the sections you can manage.") icon="inbox" tone="compact" %}
+{% endif %}
+{% if unavailable %}<p class="u-muted u-text-sm mb-0 mt-3">{% translate "We could not read these counts just now:" %} {% for kpi in unavailable %}{{ kpi.label }}{% if not forloop.last %}, {% endif %}{% endfor %}.</p>{% endif %}
+{% endblock %}

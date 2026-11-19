@@ -37,7 +37,8 @@ meant for your exact device before you download it.
 
 - **A device catalogue.** Brands, models, model codes and codenames, with the chipset
   that powers each device.
-- **Reviewed firmware records.** Files are described by category (official, engineering,
+- **Reviewed firmware records.** Files are described by category (official, service /
+  engineering,
   readback, modified or other) and appear publicly only after a staff member has
   approved them.
 - **Tools and guides.** A catalogue of flashing tools and step-by-step guides that link
@@ -267,13 +268,13 @@ Flashing firmware changes the software on a device. Read this page before you do
 Records are grouped by category:
 
 - **Official** firmware comes from the manufacturer or an official channel.
-- **Engineering** builds are pre-release or factory builds not meant for end users.
+- **Service / Engineering** builds are pre-release, factory or service-tool builds not meant for end users.
 - **Readback** files are dumps read from a device.
 - **Modified** files have been changed from the original.
 - **Other** files do not fit these groups.
 
-A category describes how we classify a file, not how safe it is. Modified, engineering
-and readback files carry extra risk.
+A category describes how we classify a file, not how safe it is. Modified, service /
+engineering and readback files carry extra risk.
 
 ## What staff check
 
@@ -351,7 +352,7 @@ Staff review each record before it appears publicly and can withdraw it later. S
 
 ## What do the categories mean?
 
-Official, engineering, readback, modified and other describe how a file is classified. The
+Official, service / engineering, readback, modified and other describe how a file is classified. The
 disclaimer page explains each one.
 
 ## My device is missing. What can I do?
@@ -361,7 +362,7 @@ code, and we will look at adding it.
 
 ## Can I buy a larger download allowance?
 
-The [shop](/shop/) lists download packages. Online payment is not available: you place an
+The [pricing page](/pricing/) lists download packages. Online payment is not available: you place an
 order request, our team contacts you with payment instructions, and the package is
 activated once payment is confirmed.
 

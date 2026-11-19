@@ -13,6 +13,7 @@ from . import (
     api_social,
     mfa_views,
     views_announcements,
+    views_erasure,
     views_notifications,
 )
 from .views import (
@@ -85,6 +86,12 @@ urlpatterns = [
     path("verify-email/required/", verify_email_required, name="verify_email_required"),
     path("tell-us-about-you/", tell_us_about_you, name="tell_us_about_you"),
     path("password-rules/", password_rules_check, name="password_rules"),
+    path("account/erasure/", views_erasure.account_erasure, name="account_erasure"),
+    path(
+        "account/erasure/confirm/<slug:token>/",
+        views_erasure.account_erasure_confirm,
+        name="account_erasure_confirm",
+    ),
     path("locale-hint/", locale_hint, name="locale_hint"),
     path(
         "accounts/resend-verification/", resend_verification, name="resend_verification"

@@ -87,6 +87,7 @@ class SitemapRegistryTests(TestCase):
                 "models",
                 "firmware",
                 "tools",
+                "tool-categories",
                 "tags",
             },
         )
@@ -109,22 +110,22 @@ class SitemapRegistryTests(TestCase):
         response = self.client.get("/sitemap.xml")
 
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response["Content-Type"], "application/xml")
+        self.assertEqual(response["Content-Type"], "application/xml; charset=utf-8")
         locations = [
             node.text
             for node in ElementTree.fromstring(response.content).findall(
                 "sm:sitemap/sm:loc", SITEMAP_NS
             )
         ]
-        self.assertIn("http://testserver/sitemap-blog.xml", locations)
-        self.assertIn("http://testserver/sitemap-pages.xml", locations)
-        self.assertNotIn("http://testserver/sitemap-firmware.xml", locations)
+        self.assertIn("http://testserver/sitemap-blog-1.xml", locations)
+        self.assertIn("http://testserver/sitemap-pages-1.xml", locations)
+        self.assertNotIn("http://testserver/sitemap-firmware-1.xml", locations)
 
     def test_section_sitemap_contains_published_content_only(self):
         Page.objects.create(slug="draft-page", title="Draft", content="x")
 
-        pages = self.client.get("/sitemap-pages.xml")
-        blog = self.client.get("/sitemap-blog.xml")
+        pages = self.client.get("/sitemap-pages-1.xml")
+        blog = self.client.get("/sitemap-blog-1.xml")
 
         self.assertContains(pages, "/pages/about/")
         self.assertNotContains(pages, "draft-page")
@@ -132,14 +133,20 @@ class SitemapRegistryTests(TestCase):
 
     def test_unknown_section_and_bad_page_are_404(self):
         self.assertEqual(self.client.get("/sitemap-nope.xml").status_code, 404)
-        self.assertEqual(self.client.get("/sitemap-blog.xml?p=99").status_code, 404)
+        self.assertEqual(self.client.get("/sitemap-nope-1.xml").status_code, 404)
+        self.assertEqual(self.client.get("/sitemap-blog-99.xml").status_code, 404)
+        self.assertEqual(self.client.get("/sitemap-blog-0.xml").status_code, 404)
+        self.assertEqual(
+            self.client.get("/sitemap-blog.xml", {"p": "99"}, follow=True).status_code,
+            404,
+        )
         self.assertEqual(self.client.get("/sitemap-blog.xml?p=abc").status_code, 404)
 
     @override_settings(SITE_URL="https://example.org")
     def test_site_url_setting_controls_the_origin(self):
         response = self.client.get("/sitemap.xml")
 
-        self.assertContains(response, "https://example.org/sitemap-blog.xml")
+        self.assertContains(response, "https://example.org/sitemap-blog-1.xml")
 
     def test_sitemap_is_disabled_by_seo_settings(self):
         row = SEOSettings.get_solo()
@@ -152,7 +159,7 @@ class SitemapRegistryTests(TestCase):
     def test_robots_txt_points_to_the_sitemap_and_blocks_private_areas(self):
         response = self.client.get("/robots.txt")
 
-        self.assertEqual(response["Content-Type"], "text/plain")
+        self.assertEqual(response["Content-Type"], "text/plain; charset=utf-8")
         body = response.content.decode()
         self.assertIn("Disallow: /admin/", body)
         self.assertIn("Sitemap: http://testserver/sitemap.xml", body)

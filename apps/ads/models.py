@@ -17,9 +17,9 @@ from .zones import DEVICE_ALL, DEVICE_CHOICES, ZONE_CHOICES
 
 logger = logging.getLogger(__name__)
 
-# Failures of apps.firmwares.crypto: missing/invalid FERNET_KEY, tampered or foreign
-# ciphertext, and ciphertext that does not decode to text.
-_ENCRYPT_ERRORS = (ImproperlyConfigured,)
+# Failures when reading credentials back through apps.firmwares.crypto: missing or
+# invalid FERNET_KEY, tampered or foreign ciphertext, and ciphertext that does not
+# decode to text. Writes do not use this: they raise ImproperlyConfigured.
 _DECRYPT_ERRORS = (ImproperlyConfigured, InvalidToken, ValueError)
 
 # ==================== AD NETWORK PROVIDERS ====================
@@ -80,19 +80,17 @@ class AdNetwork(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
     )
 
     def set_api_key(self, plaintext: str) -> None:
-        """Encrypt and store the API key."""
+        """Encrypt and store the API key.
+
+        Raises ``ImproperlyConfigured`` when ``FERNET_KEY`` is missing or invalid;
+        nothing is stored in that case, so a credential is never silently dropped.
+        """
         if not plaintext:
             self.api_key = ""
             return
-        try:
-            from apps.firmwares.crypto import encrypt_password
+        from apps.firmwares.crypto import encrypt_password
 
-            self.api_key = encrypt_password(plaintext)
-        except _ENCRYPT_ERRORS:
-            logger.warning(
-                "AdNetwork.set_api_key: encryption unavailable, storing blank"
-            )
-            self.api_key = ""
+        self.api_key = encrypt_password(plaintext)
 
     def get_api_key(self) -> str:
         """Decrypt and return the API key, or empty string on failure."""
@@ -107,19 +105,13 @@ class AdNetwork(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
             return ""
 
     def set_api_secret(self, plaintext: str) -> None:
-        """Encrypt and store the API secret."""
+        """Encrypt and store the API secret (raises like ``set_api_key``)."""
         if not plaintext:
             self.api_secret = ""
             return
-        try:
-            from apps.firmwares.crypto import encrypt_password
+        from apps.firmwares.crypto import encrypt_password
 
-            self.api_secret = encrypt_password(plaintext)
-        except _ENCRYPT_ERRORS:
-            logger.warning(
-                "AdNetwork.set_api_secret: encryption unavailable, storing blank"
-            )
-            self.api_secret = ""
+        self.api_secret = encrypt_password(plaintext)
 
     def get_api_secret(self) -> str:
         """Decrypt and return the API secret, or empty string on failure."""
@@ -267,6 +259,7 @@ class RewardedAdConfig(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
         DEVICE_RESET = "device_reset", "Device slot reset"
         DOWNLOAD_BONUS = "download_bonus", "Extra downloads"
         AD_FREE = "ad_free", "Ad-free period"
+        DOWNLOAD_UNLOCK = "download_unlock", "Download unlock (counts toward a file unlock)"
 
     name = models.CharField(max_length=100, unique=True)
     placement = models.ForeignKey(
@@ -390,8 +383,15 @@ class RewardedAdView(TimestampedModel):
     token_digest = models.CharField(
         max_length=64, blank=True, default="", db_index=True
     )
-
-    # View Details
+    reference = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        help_text=(
+            "What this watch counts toward, set by the app that owns the reward "
+            "(for example a file unlock ticket)."
+        ),
+    )
     started_at = models.DateTimeField(auto_now_add=True)
     expires_at = models.DateTimeField(null=True, blank=True)
     last_heartbeat_at = models.DateTimeField(null=True, blank=True)
@@ -755,17 +755,13 @@ class AffiliateProvider(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
     partner_id = models.CharField(max_length=100, blank=True, default="")
 
     def set_api_key(self, plaintext: str) -> None:
-        """Encrypt and store the API key."""
+        """Encrypt and store the API key (raises ``ImproperlyConfigured`` w/o key)."""
         if not plaintext:
             self.api_key = ""
             return
-        try:
-            from apps.firmwares.crypto import encrypt_password
+        from apps.firmwares.crypto import encrypt_password
 
-            self.api_key = encrypt_password(plaintext)
-        except _ENCRYPT_ERRORS:
-            logger.warning("AffiliateProvider.set_api_key: encryption unavailable")
-            self.api_key = ""
+        self.api_key = encrypt_password(plaintext)
 
     def get_api_key(self) -> str:
         """Decrypt and return the API key, or empty string on failure."""
@@ -782,17 +778,13 @@ class AffiliateProvider(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
             return ""
 
     def set_api_secret(self, plaintext: str) -> None:
-        """Encrypt and store the API secret."""
+        """Encrypt and store the API secret (raises like ``set_api_key``)."""
         if not plaintext:
             self.api_secret = ""
             return
-        try:
-            from apps.firmwares.crypto import encrypt_password
+        from apps.firmwares.crypto import encrypt_password
 
-            self.api_secret = encrypt_password(plaintext)
-        except _ENCRYPT_ERRORS:
-            logger.warning("AffiliateProvider.set_api_secret: encryption unavailable")
-            self.api_secret = ""
+        self.api_secret = encrypt_password(plaintext)
 
     def get_api_secret(self) -> str:
         """Decrypt and return the API secret, or empty string on failure."""
@@ -1275,6 +1267,28 @@ class AdPlacement(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
             "Empty = the zone collapses and takes no space."
         ),
     )
+    auto_first_after = models.PositiveSmallIntegerField(
+        default=0,
+        help_text=(
+            "Automatic zones only (in article, between items): the first ad comes "
+            "after this many paragraphs or tiles. 0 = the built-in default."
+        ),
+    )
+    auto_every = models.PositiveSmallIntegerField(
+        default=0,
+        help_text="Then repeat after this many more paragraphs or tiles. 0 = default.",
+    )
+    auto_max = models.PositiveSmallIntegerField(
+        default=0,
+        help_text="Most ads of this placement on one article or listing page. 0 = default.",
+    )
+    auto_min_items = models.PositiveSmallIntegerField(
+        default=0,
+        help_text=(
+            "Fewest paragraphs or tiles a page needs before any ad is inserted. "
+            "0 = default."
+        ),
+    )
     is_enabled = models.BooleanField(default=True)
     is_active = models.BooleanField(default=True)
     locked = models.BooleanField(
@@ -1490,6 +1504,18 @@ class AdCreative(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
     script_code = models.TextField(blank=True, default="")
     image_url = models.URLField(blank=True, default="")
     click_url = models.URLField(blank=True, default="")
+    headline = models.CharField(
+        max_length=80,
+        blank=True,
+        default="",
+        help_text="Short public title shown when this creative fills a sponsored tile.",
+    )
+    tagline = models.CharField(
+        max_length=140,
+        blank=True,
+        default="",
+        help_text="One line of public text under the headline of a sponsored tile.",
+    )
     tracking_params = models.JSONField(default=dict, blank=True)
     weight = models.PositiveIntegerField(default=1)
     is_enabled = models.BooleanField(default=True)

@@ -1,9 +1,10 @@
 """No browser-native dialogs anywhere: every dialog is app-owned (docs/05-frontend/dialogs.md).
 
-The single documented exception is the ``beforeunload`` listener in
-``frontend/src/modules/dialogs.js``: browsers do not allow custom UI when a tab
-closes or refreshes, so the generic prompt is requested only while a
-``data-unsaved-guard`` form has unsaved edits.
+The documented exception is one ``beforeunload`` listener per shell, because browsers
+do not allow custom UI when a tab closes or refreshes: the public site's is in
+``frontend/src/modules/dialogs.js`` and the staff console's in
+``frontend/src/admin/js/components/unsaved.js``. Each requests the generic prompt only
+while an unsaved-guard form has unsaved edits.
 """
 
 from __future__ import annotations
@@ -14,7 +15,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SKIPPED_PARTS = {"node_modules", "build", "__pycache__", "staticfiles", ".venv"}
-BEFOREUNLOAD_HOME = Path("frontend/src/modules/dialogs.js")
+BEFOREUNLOAD_HOMES = [
+    Path("frontend/src/admin/js/components/unsaved.js"),
+    Path("frontend/src/modules/dialogs.js"),
+]
+# This module replaces htmx's native confirm with the app dialog, so it must name
+# the attribute it intercepts.
+HX_CONFIRM_ROUTER = Path("frontend/src/admin/js/htmx-setup.js")
 
 NATIVE_CALL = re.compile(r"(?<![\w.$])(?:window\.)?(?:alert|confirm|prompt)\s*\(")
 WINDOW_CALL = re.compile(r"\bwindow\.(?:alert|confirm|prompt)\s*\(")
@@ -41,8 +48,8 @@ def source_files(*suffixes: str) -> Iterator[Path]:
                 yield path
 
 
-def violations_in(text: str, *, markup: bool) -> list[str]:
-    """Every forbidden native-dialog pattern in ``text``."""
+def violations_in(text: str, *, markup: bool, router: bool = False) -> list[str]:
+    """Every forbidden native-dialog pattern in ``text`` (``router``: it handles hx-confirm)."""
     found: list[str] = []
     if markup:
         scripts = " ".join(SCRIPT_BLOCK.findall(text))
@@ -52,7 +59,7 @@ def violations_in(text: str, *, markup: bool) -> list[str]:
             found.append("window.alert/confirm/prompt call")
     elif NATIVE_CALL.search(text):
         found.append("native alert/confirm/prompt call")
-    if HX_CONFIRM.search(text):
+    if HX_CONFIRM.search(text) and not router:
         found.append("hx-confirm (uses the browser's native confirm)")
     if DATA_CONFIRM.search(text):
         found.append(
@@ -69,7 +76,9 @@ def violations_in(text: str, *, markup: bool) -> list[str]:
 def scan() -> list[str]:
     offenders: list[str] = []
     for path in source_files(".js", ".mjs"):
-        for problem in violations_in(path.read_text(encoding="utf-8"), markup=False):
+        is_router = path.relative_to(ROOT) == HX_CONFIRM_ROUTER
+        text = path.read_text(encoding="utf-8")
+        for problem in violations_in(text, markup=False, router=is_router):
             offenders.append(f"{path.relative_to(ROOT)}: {problem}")
     for path in source_files(".html", ".htm"):
         for problem in violations_in(path.read_text(encoding="utf-8"), markup=True):
@@ -86,13 +95,13 @@ def test_no_native_dialogs_in_frontend_templates_or_apps():
     assert not offenders, "Native browser dialogs found:\n" + "\n".join(offenders)
 
 
-def test_exactly_one_documented_beforeunload_fallback():
-    listeners = [
+def test_one_documented_beforeunload_fallback_per_shell():
+    listeners = sorted(
         path.relative_to(ROOT)
         for path in source_files(".js", ".mjs", ".html", ".htm", ".py")
         if BEFOREUNLOAD_LISTENER.search(path.read_text(encoding="utf-8"))
-    ]
-    assert listeners == [BEFOREUNLOAD_HOME]
+    )
+    assert listeners == sorted(BEFOREUNLOAD_HOMES)
 
 
 def test_the_scanner_catches_each_forbidden_pattern():

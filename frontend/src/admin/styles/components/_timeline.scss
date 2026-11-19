@@ -1,0 +1,93 @@
+// History timeline, diffs and the cascade (delete confirmation) tree.
+//   <ol class="c-timeline"><li class="c-timeline__item [c-timeline__item--accent|--danger|--success]"><span class="c-timeline__dot"/>
+//     <div class="c-timeline__main"><p class="c-timeline__title">Changed <strong>status</strong></p><p class="c-timeline__meta"><time/> by Sam</p>
+//     <div class="c-diff"><div class="c-diff__row c-diff__row--del"><span class="c-diff__sign">-</span>old</div><div class="c-diff__row c-diff__row--add"><span class="c-diff__sign">+</span>new</div></div></div></li></ol>
+//   (.c-history is the wrapper/card around a timeline.)
+//   Cascade tree: <ul class="c-tree"><li><span class="c-tree__label">Firmware</span><ul><li>..</li></ul></li></ul>  (.c-delete wraps the confirmation page)
+@layer components {
+  .c-history,
+  .c-delete { display: grid; gap: var(--mf-space-4); min-inline-size: 0; }
+
+  .c-timeline {
+    position: relative;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .c-timeline__item {
+    --tl-tone: var(--mf-border-strong);
+
+    position: relative;
+    display: grid;
+    padding-inline-start: var(--mf-space-6);
+    padding-block-end: var(--mf-space-5);
+
+    // The rail
+    &::before {
+      content: "";
+      position: absolute;
+      inset-block: 1.25rem 0;
+      inset-inline-start: 0.5rem;
+      inline-size: 2px;
+      background: var(--mf-border);
+    }
+
+    &:last-child { padding-block-end: 0; }
+    &:last-child::before { display: none; }
+  }
+
+  .c-timeline__item--accent { --tl-tone: var(--mf-accent); }
+  .c-timeline__item--success { --tl-tone: var(--mf-success); }
+  .c-timeline__item--danger { --tl-tone: var(--mf-danger); }
+
+  .c-timeline__dot {
+    position: absolute;
+    inset-block-start: 0.375rem;
+    inset-inline-start: 0.125rem;
+    inline-size: 0.875rem;
+    block-size: 0.875rem;
+    background: var(--mf-surface);
+    border: 3px solid var(--tl-tone);
+    border-radius: 50%;
+  }
+
+  .c-timeline__main { min-inline-size: 0; }
+  .c-timeline__title { margin: 0; font-size: var(--mf-fs-sm); }
+  .c-timeline__meta { margin: 0.125rem 0 0; color: var(--mf-text-muted); font-size: var(--mf-fs-xs); }
+
+  .c-diff {
+    margin-block-start: var(--mf-space-2);
+    overflow-x: auto;
+    font-family: var(--mf-font-mono);
+    font-size: var(--mf-fs-xs);
+    border: 1px solid var(--mf-border);
+    border-radius: var(--mf-radius-md);
+  }
+
+  .c-diff__row {
+    display: flex;
+    gap: var(--mf-space-2);
+    padding: 0.25rem var(--mf-space-3);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .c-diff__sign { flex: none; inline-size: 1ch; user-select: none; }
+  .c-diff__row--add { color: var(--mf-success); background: var(--mf-success-soft); }
+  .c-diff__row--del { color: var(--mf-danger); background: var(--mf-danger-soft); }
+
+  // ---- Cascade tree ------------------------------------------------------------------------
+  .c-tree,
+  .c-tree ul {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .c-tree ul { margin-inline-start: 0.5rem; padding-inline-start: var(--mf-space-4); border-inline-start: 1px solid var(--mf-border); }
+
+  .c-tree li { padding-block: 0.2rem; font-size: var(--mf-fs-sm); }
+  .c-tree > li { padding-block: var(--mf-space-1); }
+  .c-tree__label { font-weight: 650; }
+}

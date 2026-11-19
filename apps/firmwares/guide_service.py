@@ -23,6 +23,7 @@ from .models import (
     GeneratedFlashingGuide,
     Model,
 )
+from .package_formats import APPLE_BRAND_SLUGS
 from .tool_matcher import filter_tools_for_brand, get_compatible_tools_from_db
 
 if TYPE_CHECKING:
@@ -70,13 +71,116 @@ def _format_tool_list(tools: list[FlashingTool]) -> str:
     return "\n".join(lines)
 
 
-def _build_standard_steps(
+APPLE_GUIDE_TYPES = frozenset(
+    {"stock_flash", "recovery", "downgrade", "repair", "general"}
+)
+
+APPLE_STEPS: dict[str, list[str]] = {
+    "stock_flash": [
+        "1. **Back up** the device: a restore erases everything on it",
+        (
+            "2. **Update** Finder (Mac) or install the Apple Devices app (Windows 10 and 11); "
+            "older Windows can use iTunes"
+        ),
+        "3. **Connect** the device with a good USB cable and unlock it, then tap **Trust**",
+        "4. **Select** the device in the Finder sidebar or the Apple Devices app",
+        (
+            "5. **Choose** Restore iPhone / iPad to install the newest signed version, "
+            "or Update to keep your data"
+        ),
+        (
+            "6. **Or load an IPSW:** Option-click Restore (Mac) or Shift-click Restore "
+            "(Windows), then pick an IPSW that Apple still signs for your exact model"
+        ),
+        "7. **Wait** until the device restarts; do not disconnect it",
+        "8. **Set up** the device and sign in with the Apple Account it already uses",
+    ],
+    "recovery": [
+        (
+            "1. **Connect** the device to the computer and open Finder or the Apple "
+            "Devices app"
+        ),
+        (
+            "2. **Enter recovery mode:** press and release Volume Up, press and release "
+            "Volume Down, then hold the side button until the recovery screen shows "
+            "(iPhone 8 and later, iPads without a Home button)"
+        ),
+        (
+            "3. **Older devices:** hold Home + Sleep/Wake (iPhone 7: Volume Down + "
+            "Sleep/Wake) until the recovery screen shows"
+        ),
+        "4. **Choose** Update first; it keeps your data when it succeeds",
+        "5. **Choose** Restore only if Update fails; it erases the device",
+        "6. **Wait** for the download and install to finish",
+    ],
+    "repair": [
+        "1. **Try** recovery mode first (see our recovery mode guide)",
+        (
+            "2. **Enter DFU mode** only if recovery mode fails. The key sequence depends "
+            "on the generation: iPhone 8 and later and iPads without a Home button use "
+            "the Volume Up, Volume Down, side button sequence; iPhone 7 uses Volume "
+            "Down + side button; iPhone 6s and earlier use Home + side button"
+        ),
+        (
+            "3. **Check** that the screen stays black; Finder or the Apple Devices app "
+            "reports a device in recovery mode"
+        ),
+        "4. **Restore** the device; this erases it and installs a signed version",
+        (
+            "5. **Revive instead of erase:** on a Mac, Apple Configurator 2 can *Revive* "
+            "a device that does not start, which keeps your data when possible, or "
+            "*Restore* it with an IPSW"
+        ),
+        "6. **If** the device still fails, contact Apple or an authorised service provider",
+    ],
+    "downgrade": [
+        (
+            "1. **Check** which versions Apple still signs for your exact model; only "
+            "signed IPSW files install"
+        ),
+        (
+            "2. **Back up** first. Data from a newer iOS or iPadOS may not restore to "
+            "an older one"
+        ),
+        "3. **Use** Finder or the Apple Devices app with an IPSW that Apple signs",
+        (
+            "4. **Do not** expect a downgrade to an unsigned version: the restore is "
+            "refused by Apple's servers, and tools such as futurerestore need "
+            "valid SHSH blobs saved earlier for that exact version"
+        ),
+        "5. **Keep** the device signed in with its own Apple Account throughout",
+    ],
+    "general": [
+        (
+            "1. **OTA update:** Settings > General > Software Update downloads only the "
+            "changes, keeps your data, and needs a Wi-Fi connection and free space"
+        ),
+        (
+            "2. **IPSW restore:** Finder or the Apple Devices app installs a complete "
+            "firmware image from your computer; use it when the device cannot update, "
+            "or to reinstall a clean copy of the signed version"
+        ),
+        (
+            "3. **Choose** OTA for everyday updates and IPSW for recovery, a clean "
+            "install or a computer-based update"
+        ),
+        (
+            "4. **Remember** that Apple controls which versions are signed; older IPSW "
+            "files stop installing once Apple stops signing them"
+        ),
+    ],
+}
+
+
+def build_standard_steps(
     guide_type: str,
     brand_name: str,
     model_name: str = "",
 ) -> str:
     """Build standard step-by-step instructions based on guide type."""
     device = f"{brand_name} {model_name}".strip()
+    if brand_name.lower() in APPLE_BRAND_SLUGS:
+        return "\n".join(APPLE_STEPS.get(guide_type, APPLE_STEPS["stock_flash"]))
 
     step_templates: dict[str, list[str]] = {
         "stock_flash": [
@@ -219,6 +323,14 @@ def generate_guide_for_brand_model(
     """
     from apps.blog.models import Post, PostStatus
 
+    if brand.slug in APPLE_BRAND_SLUGS and template.guide_type not in APPLE_GUIDE_TYPES:
+        # Apple devices are restored with Apple's own tools; bootloader, root, custom
+        # ROM and lock-bypass guides do not apply (and Activation Lock is never bypassed).
+        logger.info(
+            "flashing_guide.skipped_for_apple",
+            extra={"template": template.pk, "guide_type": template.guide_type},
+        )
+        return None
     template = FlashingGuideTemplate.objects.select_for_update().get(pk=template.pk)
     existing = GeneratedFlashingGuide.objects.filter(
         template=template,
@@ -240,7 +352,7 @@ def generate_guide_for_brand_model(
     # Build content
     tools = _get_recommended_tools(template, brand, chipset)
     tools_text = _format_tool_list(tools)
-    steps_text = _build_standard_steps(template.guide_type, brand_name, model_name)
+    steps_text = build_standard_steps(template.guide_type, brand_name, model_name)
 
     title = _render_template(
         template.title_template,

@@ -1,0 +1,63 @@
+{% extends "admin/staff_page.html" %}
+{% load i18n staff_ui %}
+{% block page_actions %}{% staff_button _("Open public feeds page") href=feeds_index target="_blank" %}{% endblock %}
+{% block page_nav %}{% include "admin/distribution/_nav.html" %}{% endblock %}
+{% block page_body %}
+{% staff_section title=_("What reaches readers and Android devices") ident="feeds-reach" intro=_("Automatic, manual and not enabled are shown separately. Nothing here promises placement on any Google surface.") %}
+  {% staff_table label=_("Reach and push status") %}
+    <thead><tr><th scope="col">{% translate "Channel" %}</th><th scope="col">{% translate "State" %}</th><th scope="col">{% translate "What it means" %}</th></tr></thead>
+    <tbody>{% for item in push %}<tr><th scope="row">{{ item.name }}</th><td><span class="c-badge c-badge--{% if item.state == 'on' %}success{% elif item.state == 'manual' %}warning{% else %}neutral{% endif %}">{% if item.state == 'on' %}{% translate "On" %}{% elif item.state == 'manual' %}{% translate "Manual" %}{% else %}{% translate "Not enabled" %}{% endif %}</span></td><td>{{ item.note }}</td></tr>{% endfor %}</tbody>
+  {% endstaff_table %}
+  <p class="u-muted u-text-sm mb-0">{% translate "On Android: readers find the feed from the site address (autodiscovery) or from the addresses below. Installing the site from Chrome adds a shortcut; it does not subscribe to feeds." %}</p>
+{% endstaff_section %}
+
+{% staff_section title=_("Feed settings") ident="feeds-settings" %}
+  <form method="post" action="{% url 'admin:distribution_channel_feeds_settings' %}" class="d-flex flex-column gap-3">
+    {% csrf_token %}
+    {% staff_check "fs-enabled" "feeds_enabled" _("Serve the public feeds") checked=form.feeds_enabled.value %}
+    {% staff_check "fs-dynamic" "feeds_dynamic_enabled" _("Also serve per-brand, per-chipset and per-tag feeds") checked=form.feeds_dynamic_enabled.value %}
+    {% staff_input "fs-limit" "feed_item_limit" _("Newest items per feed (1 to 100)") value=form.feed_item_limit.value input_type="number" %}
+    {% staff_input "fs-hub" "websub_hub_url" _("WebSub hub (https, optional)") value=form.websub_hub_url.value input_type="url" help_text=_("Empty = no pings and no hub link in the feeds. Example: https://pubsubhubbub.appspot.com/") %}
+    {% if can_edit %}<div>{% staff_button _("Save settings") tone="primary" %}</div>{% else %}<p class="u-muted u-text-sm mb-0">{% translate "You can view these settings but not change them." %}</p>{% endif %}
+  </form>
+{% endstaff_section %}
+
+{% include "admin/distribution/_feeds_live.html" %}
+
+{% staff_section title=_("Google News") ident="feeds-news" intro=_("Not automatic. Google decides what appears; this page prepares your side and tracks the manual steps.") %}
+  {% staff_card %}
+    {% staff_dl %}
+      {% staff_dd label=_("News sitemap (SEO setting)") %}{% if news.active %}<span class="c-badge c-badge--success">{% translate "On" %}</span>{% else %}<span class="c-badge c-badge--warning">{% translate "Off" %}</span> {% translate "Enable “Google News sitemap” in the SEO settings only if the site qualifies for Google News." %}{% endif %}{% endstaff_dd %}
+      {% staff_dd label=_("Posts eligible now (last 48 hours)") %}{{ news.eligible }}{% endstaff_dd %}
+      {% staff_dd label=_("News sitemap address") %}{% if news.sitemap_url %}<code class="u-break">{{ news.sitemap_url }}</code> <button type="button" class="btn btn-ghost btn-sm" data-console-copy="{{ news.sitemap_url }}">{% translate "Copy" %}</button>{% else %}—{% endif %}{% endstaff_dd %}
+      {% staff_dd label=_("Full-text news feed") %}{% if news.active %}<code class="u-break">{{ news.rss_url }}</code> <button type="button" class="btn btn-ghost btn-sm" data-console-copy="{{ news.rss_url }}">{% translate "Copy" %}</button>{% else %}{% translate "Available once the news sitemap is on." %}{% endif %}{% endstaff_dd %}
+    {% endstaff_dl %}
+  {% endstaff_card %}
+  <h3 class="h6 mb-0">{% translate "Setup checklist (your own notes)" %}</h3>
+  <ul class="list-unstyled d-flex flex-column gap-2 mb-0">
+    {% for step in news.steps %}
+      <li class="u-cluster">
+        <span class="c-badge c-badge--{% if step.done %}success{% else %}neutral{% endif %}">{% if step.done %}{% translate "Done" %}{% else %}{% translate "To do" %}{% endif %}</span>
+        <a href="{{ step.url }}" target="_blank" rel="noopener noreferrer">{{ step.label }}</a>
+        {% if can_edit %}<form method="post" action="{% url 'admin:distribution_channel_feeds_news_step' %}">{% csrf_token %}<input type="hidden" name="step" value="{{ step.key }}"><input type="hidden" name="done" value="{% if step.done %}0{% else %}1{% endif %}">{% if step.done %}{% staff_button _("Mark not done") size="sm" %}{% else %}{% staff_button _("Mark done") size="sm" %}{% endif %}</form>{% endif %}
+      </li>
+    {% endfor %}
+  </ul>
+  {% if news.registered %}{% staff_notice tone="success" %}{% translate "All steps are marked done. Google still decides whether and where articles appear." %}{% endstaff_notice %}{% endif %}
+{% endstaff_section %}
+
+{% staff_section title=_("Discover readiness") ident="feeds-discover" intro=_("A scan of the newest posts for what Discover and News look for. Passing it does not guarantee inclusion.") %}
+  {% if checks %}
+    {% staff_table label=_("Discover readiness by post") %}
+      <thead><tr><th scope="col">{% translate "Post" %}</th><th scope="col">{% translate "Result" %}</th><th scope="col">{% translate "Fix" %}</th></tr></thead>
+      <tbody>{% for check in checks %}<tr>
+        <td><a href="{{ check.url }}">{{ check.title }}</a></td>
+        <td>{% if check.ready %}<span class="c-badge c-badge--success">{% translate "Ready" %}</span>{% else %}<span class="c-badge c-badge--warning">{% translate "Needs work" %}</span>{% endif %}
+          <ul class="mb-0 u-text-sm">{% for problem in check.problems %}<li>{{ problem }}</li>{% endfor %}{% for note in check.notes %}<li class="u-muted">{{ note }}</li>{% endfor %}</ul></td>
+        <td>{% if check.edit_url %}<a href="{{ check.edit_url }}">{% translate "Edit post" %}</a>{% endif %}{% if seo_scan_url %} · <a href="{{ seo_scan_url }}">{% translate "SEO issues" %}</a>{% endif %}</td>
+      </tr>{% endfor %}</tbody>
+    {% endstaff_table %}
+    <p class="u-muted u-text-sm mb-0">{% translate "Also needed on articles: max-image-preview:large and NewsArticle structured data. Check both in the SEO scan." %}</p>
+  {% else %}{% staff_empty %}{% translate "No published posts to scan yet." %}{% endstaff_empty %}{% endif %}
+{% endstaff_section %}
+{% endblock %}

@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-
 import pytest
 from django.contrib import admin
-from django.contrib.auth import get_user_model
 from django.db import DatabaseError, models, transaction
 from django.test import Client, RequestFactory
 from django.urls import reverse
 
-from tests.backend.admin.admin_model_factory import CannotBuild, build
+from apps.core.utils.managers import default_manager
+from tests.backend.admin.admin_model_factory import (
+    CannotBuild,
+    admin_pk,
+    build,
+    build_row,
+    registered_admins,
+)
+from tests.backend.admin.theme_guard import mentions_removed_theme
 
 # Models whose rows cannot be created from field types alone. Each entry names the
 # concrete reason. The change-form test asserts the builder really fails for them, so
@@ -19,54 +24,21 @@ from tests.backend.admin.admin_model_factory import CannotBuild, build
 UNBUILDABLE: dict[str, str] = {}
 
 REGISTERED: list[type[models.Model]] = sorted(
-    admin.site._registry, key=lambda model: model._meta.label_lower
+    registered_admins(), key=lambda model: model._meta.label_lower
 )
 
 
-def _automated_blog_link() -> models.Model:
-    """The table's check constraint ties ``kind`` to exactly one target column."""
-    from apps.blog.models import Post
-    from apps.firmwares.models import AutomatedBlogLink, Brand
-
-    brand = build(Brand)
-    post = build(Post)
-    assert isinstance(brand, Brand)
-    assert isinstance(post, Post)
-    return AutomatedBlogLink.objects.create(
-        kind=AutomatedBlogLink.Kind.BRAND, brand=brand, post=post
-    )
-
-
-# Builders for models whose columns depend on each other (constraints), which the
-# generic field-type builder cannot satisfy.
-CUSTOM_BUILDERS: dict[str, Callable[[], models.Model]] = {
-    "firmwares.automatedbloglink": _automated_blog_link,
-}
-
-
-def _build_row(model: type[models.Model]) -> models.Model:
-    custom = CUSTOM_BUILDERS.get(model._meta.label_lower)
-    return custom() if custom else build(model)
-
-
-def _admin_pk(instance: models.Model) -> object:
-    """DRF's token admin addresses a token by its user's id, not by the key."""
-    if instance._meta.label_lower == "authtoken.token":
-        return getattr(instance, "user_id", instance.pk)
-    return instance.pk
-
-
-@pytest.fixture
-def superuser(db):
-    return get_user_model().objects.create_superuser(
+@pytest.fixture(name="superuser")
+def superuser_fixture(django_user_model):
+    return django_user_model.objects.create_superuser(
         username="all-models-admin",
         email="all-models-admin@example.test",
         password="x-test-password-123",
     )
 
 
-@pytest.fixture
-def client(superuser) -> Client:
+@pytest.fixture(name="client")
+def client_fixture(superuser) -> Client:
     test_client = Client()
     test_client.force_login(superuser)
     return test_client
@@ -91,11 +63,11 @@ def test_allow_list_only_names_registered_models():
 @pytest.mark.parametrize("model", REGISTERED, ids=lambda m: m._meta.label_lower)
 @pytest.mark.django_db
 def test_changelist_and_add_form_render(model, client, superuser):
-    model_admin = admin.site._registry[model]
+    model_admin = admin.site.get_model_admin(model)
     changelist = client.get(reverse(_url_name(model, "changelist")))
     # django-solo serves a singleton's change form at the changelist URL.
     assert changelist.status_code == 200, model._meta.label
-
+    assert not mentions_removed_theme(changelist.content), model._meta.label
     add_allowed = model_admin.has_add_permission(_request_for(superuser))
     add = client.get(reverse(_url_name(model, "add")))
     assert add.status_code == (200 if add_allowed else 403), model._meta.label
@@ -109,11 +81,32 @@ def test_change_form_renders_for_a_created_row(model, client, superuser):
         with pytest.raises((CannotBuild, DatabaseError)), transaction.atomic():
             build(model)
         return
-    instance = _build_row(model)
-    model_admin = admin.site._registry[model]
+    instance = build_row(model)
+    model_admin = admin.site.get_model_admin(model)
     visible = model_admin.get_queryset(_request_for(superuser)).filter(pk=instance.pk)
     assert visible.exists(), f"{label}: the admin queryset hides a freshly built row"
-    response = client.get(
-        reverse(_url_name(model, "change"), args=[_admin_pk(instance)])
-    )
+    response = client.get(reverse(_url_name(model, "change"), args=[admin_pk(instance)]))
     assert response.status_code == 200, label
+    assert not mentions_removed_theme(response.content), label
+
+
+@pytest.mark.parametrize("model", REGISTERED, ids=lambda m: m._meta.label_lower)
+@pytest.mark.django_db
+def test_history_and_delete_pages_render_for_a_created_row(model, client, superuser):
+    label = model._meta.label_lower
+    if label in UNBUILDABLE:
+        pytest.fail(f"{label}: listed as unbuildable, so history/delete are unverified")
+    instance = build_row(model)
+    model_admin = admin.site.get_model_admin(model)
+    request = _request_for(superuser)
+    pk = admin_pk(instance)
+
+    history = client.get(reverse(_url_name(model, "history"), args=[pk]))
+    assert history.status_code == 200, label
+
+    delete_allowed = model_admin.has_delete_permission(request, instance)
+    delete = client.get(reverse(_url_name(model, "delete"), args=[pk]))
+    assert delete.status_code == (200 if delete_allowed else 403), label
+    if delete_allowed:
+        # Rendering the confirmation never deletes anything.
+        assert default_manager(model).filter(pk=instance.pk).exists(), label

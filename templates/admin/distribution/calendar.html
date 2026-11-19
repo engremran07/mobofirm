@@ -1,48 +1,52 @@
 {% extends "admin/staff_page.html" %}
-{% block mf_nav %}{% include "admin/distribution/_nav.html" %}{% endblock %}
-{% block mf_body %}
+{% load i18n staff_ui %}
+{% block page_nav %}{% include "admin/distribution/_nav.html" %}{% endblock %}
+{% block page_body %}
+{% url 'admin:distribution_channel_calendar' as calendar_url %}
 {% if days %}
   {% for day in days %}
-  <section class="mf-ui-card" aria-labelledby="day-{{ day.date|date:'Ymd' }}">
-    <h2 class="mf-ui-card__title" id="day-{{ day.date|date:'Ymd' }}">{{ day.date|date:"l, j F Y" }}</h2>
-    <div class="mf-ui-table-wrap" role="region" aria-label="Posts on {{ day.date|date:'j F Y' }}" tabindex="0">
-      <table class="mf-ui-table">
-        <thead><tr><th scope="col">Time</th><th scope="col">Channel</th><th scope="col">Post</th><th scope="col">Status</th><th scope="col">Actions</th></tr></thead>
+    {% with day_key=day.date|date:"Ymd" %}
+    {% staff_section title=day.date|date:"l, j F Y" ident="day-"|add:day_key %}
+      {% blocktranslate with date=day.date|date:"j F Y" asvar day_label %}Posts on {{ date }}{% endblocktranslate %}
+      {% staff_table label=day_label %}
+        <thead><tr><th scope="col">{% translate "Time" %}</th><th scope="col">{% translate "Channel" %}</th><th scope="col">{% translate "Post" %}</th><th scope="col">{% translate "Status" %}</th><th scope="col">{% translate "Actions" %}</th></tr></thead>
         <tbody>
           {% for item in day.items %}{% with job=item.job %}
           <tr>
             <td>{{ item.time|date:"H:i" }}</td>
-            <td>{{ job.channel.name }}<br><span class="mf-ui-help">{{ job.channel.timezone }}</span></td>
-            <td><strong>{{ job.title }}</strong>{% if job.reshare_round %} <span class="mf-ui-badge mf-ui-badge--info">re-share</span>{% endif %}{% if job.trending %} <span class="mf-ui-badge mf-ui-badge--info">new launch</span>{% endif %}<div class="mf-ui-dist-post">{{ job.text }}</div></td>
+            <td>{{ job.channel.name }}<br><small class="text-body-secondary">{{ job.channel.timezone }}</small></td>
+            <td><strong>{{ job.title }}</strong>{% if job.reshare_round %} {% staff_badge _("re-share") "info" %}{% endif %}{% if job.trending %} {% staff_badge _("new launch") "info" %}{% endif %}<div class="small text-body-secondary text-break mt-1">{{ job.text }}</div></td>
             <td>
-              {% if job.status == "sent" %}<span class="mf-ui-badge mf-ui-badge--success">Sent</span>
-              {% elif job.status == "pending" %}<span class="mf-ui-badge mf-ui-badge--warning">Awaiting approval</span>
-              {% elif job.status == "needs_media" %}<span class="mf-ui-badge mf-ui-badge--warning">Needs media</span>
-              {% else %}<span class="mf-ui-badge mf-ui-badge--info">Scheduled</span>{% endif %}
-              {% if job.last_error %}<br><span class="mf-ui-help">{{ job.last_error }}</span>{% endif %}
+              {% if job.status == "sent" %}{% staff_badge _("Sent") "success" %}
+              {% elif job.status == "pending" %}{% staff_badge _("Awaiting approval") "warning" %}
+              {% elif job.status == "needs_media" %}{% staff_badge _("Needs media") "warning" %}
+              {% else %}{% staff_badge _("Scheduled") "info" %}{% endif %}
+              {% if job.last_error %}<br><small class="text-body-secondary">{{ job.last_error }}</small>{% endif %}
             </td>
             <td>
               {% if item.editable and can_change %}
-              <form method="post" action="{% url 'admin:distribution_channel_job_reschedule' job.pk %}" class="mf-ui-dist-actions">{% csrf_token %}
-                <input type="hidden" name="next" value="{% url 'admin:distribution_channel_calendar' %}">
-                <label class="mf-ui-dist-sr" for="when-{{ job.pk }}">New time for {{ job.title }}</label>
-                <input type="datetime-local" id="when-{{ job.pk }}" name="when" value="{{ item.input }}" required>
-                <button type="submit" class="mf-ui-btn mf-ui-btn--small">Reschedule</button>
-              </form>
-              <form method="post" action="{% url 'admin:distribution_channel_job_cancel' job.pk %}" class="mf-ui-dist-actions">{% csrf_token %}
-                <input type="hidden" name="next" value="{% url 'admin:distribution_channel_calendar' %}">
-                <button type="submit" class="mf-ui-btn mf-ui-btn--small mf-ui-btn--danger">Cancel</button>
-              </form>
-              {% else %}<span class="mf-ui-help">—</span>{% endif %}
+                {% staff_row %}
+                  <form method="post" action="{% url 'admin:distribution_channel_job_reschedule' job.pk %}" class="d-flex flex-wrap align-items-end gap-2">{% csrf_token %}
+                    <input type="hidden" name="next" value="{{ calendar_url }}">
+                    {% blocktranslate with title=job.title asvar when_label %}New time for {{ title }}{% endblocktranslate %}
+                    {% with job_key=job.pk|stringformat:"s" %}{% staff_input ident="when-"|add:job_key name="when" label=when_label input_type="datetime-local" value=item.input required=True hide_label=True %}{% endwith %}
+                    {% staff_button _("Reschedule") size="sm" %}
+                  </form>
+                  <form method="post" action="{% url 'admin:distribution_channel_job_cancel' job.pk %}">{% csrf_token %}
+                    <input type="hidden" name="next" value="{{ calendar_url }}">
+                    {% staff_button _("Cancel") tone="danger" size="sm" %}
+                  </form>
+                {% endstaff_row %}
+              {% else %}<span class="text-body-secondary">—</span>{% endif %}
             </td>
           </tr>
           {% endwith %}{% endfor %}
         </tbody>
-      </table>
-    </div>
-  </section>
+      {% endstaff_table %}
+    {% endstaff_section %}
+    {% endwith %}
   {% endfor %}
 {% else %}
-  <p class="mf-ui-empty">Nothing scheduled and nothing sent in the last few days. New firmware and posts appear here as soon as they are queued.</p>
+  {% staff_empty title=_("Nothing scheduled") %}{% translate "Nothing scheduled and nothing sent in the last few days. New firmware and posts appear here as soon as they are queued." %}{% endstaff_empty %}
 {% endif %}
 {% endblock %}

@@ -1,6 +1,6 @@
 # Central search engine
 
-Owner: `apps.core` (`apps/core/search/`). One engine answers the header search, the `/search/` results page, every type-ahead picker (country, calling code, brand → model → variant) **and every list page** (chipsets, brands, tools, guides, firmware browse, devices of a brand or chipset, topics, the journal, marketplace listings, the credit history and My files). Apps contribute providers; core never imports a domain app.
+Owner: `apps.core` (`apps/core/search/`). One engine answers the header search, the `/search/` results page, every type-ahead picker (country, calling code, brand → model → variant) **and every list page** (chipsets, brands, tools, guides, firmware browse, devices of a brand or chipset, topics, the journal, marketplace listings, the credit history and My contributions downloads). Apps contribute providers; core never imports a domain app.
 
 ## HTTP surface
 
@@ -41,7 +41,7 @@ Provider attributes: `kind`, `label`, `label_plural`, `noun` (lower-case name us
 
 ## Did you mean
 
-`did_you_mean(query, user=None, kinds=None, exclude_urls=())` returns the closest brand, model, variant, chipset, tool, tag, category or firmware type, labelled with its entity type (`Samsung (brand)`, `Engineering (firmware type)`). Only near misses are offered (never an exact name, never a different number); staff-only and unpublished rows are never suggested. Each provider publishes a bounded public vocabulary that is cached for 10 minutes and refreshed when a watched model changes (`vocabulary.py`).
+`did_you_mean(query, user=None, kinds=None, exclude_urls=())` returns the closest brand, model, variant, chipset, tool, tag, category or firmware type, labelled with its entity type (`Samsung (brand)`, `Service / Engineering (firmware type)`). Only near misses are offered (never an exact name, never a different number); staff-only and unpublished rows are never suggested. Each provider publishes a bounded public vocabulary that is cached for 10 minutes and refreshed when a watched model changes (`vocabulary.py`).
 
 It appears in the header combobox (as options in a "Did you mean" group), on `/search/`, and on every list page through `components/did_you_mean.html` when a list has fewer than three rows. The request-a-... buttons stay available in every empty state.
 
@@ -81,7 +81,7 @@ Templates: `components/search_box.html` (input + indicator, per keystroke HTMX w
 | Blog journal | `blog:post_list` | title, summary, category, brand/model and the **public** body only |
 | Marketplace | `listing_browse`, seller pickers | title, description, seller |
 | Credit history | `wallet:ledger` | note, reference, event key, reason label |
-| My files | `library:my_files` | file, brand, device, variant, classification |
+| My contributions › Downloads | `contributions:downloads` | file, brand, device, variant, classification |
 | Legacy JSON | `firmwares:api_search_autocomplete`, `tags:search`, blog similar posts | via the same engine |
 
 ## Popular blocks
@@ -109,4 +109,4 @@ Templates: `components/search_box.html` (input + indicator, per keystroke HTMX w
 
 ## Tests
 
-`tests/backend/core/test_search_engine.py` (registry, providers, permissions, ranking, XSS, endpoints), `test_search_text.py` (normalisation, synonyms, ranking, typo helpers), `test_search_listing.py` (chipset `?q=9200`, aliases, typos, did-you-mean, HTMX fragments, trigram query), `test_search_surfaces.py` (tags, journal, marketplace, ledger, My files), `test_search_suggest.py` (combobox partial), `test_search_popular.py` (analytics, window, scope, cache, safety), `tests/backend/firmwares/test_list_search.py` (every firmware list) and `tests/frontend/test_search_browser.py` (keystroke suggestions, live filtering, did-you-mean click, `/` shortcut, recent searches, console/CSP, responsive overflow).
+`tests/backend/core/test_search_engine.py` (registry, providers, permissions, ranking, XSS, endpoints), `test_search_text.py` (normalisation, synonyms, ranking, typo helpers), `test_search_listing.py` (chipset `?q=9200`, aliases, typos, did-you-mean, HTMX fragments, trigram query), `test_search_surfaces.py` (tags, journal, marketplace, ledger, My contributions downloads), `test_search_suggest.py` (combobox partial), `test_search_popular.py` (analytics, window, scope, cache, safety), `tests/backend/firmwares/test_list_search.py` (every firmware list) and `tests/frontend/test_search_browser.py` (keystroke suggestions, live filtering, did-you-mean click, `/` shortcut, recent searches, console/CSP, responsive overflow).

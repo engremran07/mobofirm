@@ -256,6 +256,29 @@ function initializeCopy() {
   });
 }
 
+// ---- Download text as a file -----------------------------------------------------
+// <button data-download-target="#codes" data-download-filename="codes.txt"> saves the
+// target's text locally; nothing is sent to the server.
+function initializeDownload() {
+  document.addEventListener("click", (event) => {
+    const button = event.target instanceof Element ? event.target.closest("[data-download-target]") : null;
+    if (!button) return;
+    const target = document.querySelector(button.dataset.downloadTarget);
+    const text = target instanceof HTMLTextAreaElement ? target.value : (target?.textContent?.trim() ?? "");
+    if (!text) return;
+    const url = URL.createObjectURL(new Blob([`${text}\n`], { type: "text/plain;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = button.dataset.downloadFilename ?? "download.txt";
+    link.hidden = true;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    showToast({ level: "success", message: button.dataset.downloadMessage ?? "File saved.", duration: 2500 });
+  });
+}
+
 // ---- View transitions (same-document, with a plain fallback) ---------------------
 // Opt in per swap with hx-swap="innerHTML transition:true", or call this helper.
 export function withViewTransition(update) {
@@ -335,6 +358,7 @@ export function initializeUi() {
   initializeReveal();
   initializeHeaderState();
   initializeCopy();
+  initializeDownload();
   initializeLoading();
   initializeOptimistic();
 }

@@ -1,0 +1,15 @@
+{% comment %}
+  card - a layered surface. Use as a block: {% component "card" title="Queue" icon="inbox" %}body{% endcomponent %}.
+  Context: title, subtitle, icon (Lucide), id (adds aria-labelledby to the title), tone (accent|tint|danger = card variants),
+  interactive (hover lift for a card that holds one stretched link), flush (body without padding, for tables/lists),
+  css_class (e.g. "c-widget c-widget--md"), heading_level (2-4; default 2), busy (aria-busy while it loads),
+  attrs (dict of extra attributes, e.g. {"hx-get": url, "hx-trigger": "console-refresh from:body", "hx-swap": "outerHTML"}).
+  Slots: "actions" (header buttons/menus), "footer". content = the card body.
+{% endcomment %}{% load console_ui %}<section class="c-card{% if flush %} c-card--flush{% endif %}{% if tone %} c-card--{{ tone }}{% endif %}{% if interactive %} c-card--interactive{% endif %}{% if css_class %} {{ css_class }}{% endif %}"{% if id %} id="{{ id }}"{% if title %} aria-labelledby="{{ id }}-title"{% endif %}{% endif %}{% if busy %} aria-busy="true"{% endif %}{{ attrs|console_attrs }}>
+{% if title or slots.actions %}<header class="c-card__header">
+<div>{% if title %}<h{{ heading_level|default:2 }} class="c-card__title"{% if id %} id="{{ id }}-title"{% endif %}>{% if icon %}{% console_icon icon "c-icon--sm" %} {% endif %}{{ title }}</h{{ heading_level|default:2 }}>{% endif %}{% if subtitle %}<p class="c-card__subtitle">{{ subtitle }}</p>{% endif %}</div>
+{% if slots.actions %}<div class="c-card__actions">{{ slots.actions }}</div>{% endif %}
+</header>{% endif %}
+<div class="c-card__body">{{ content }}</div>
+{% if slots.footer %}<footer class="c-card__footer">{{ slots.footer }}</footer>{% endif %}
+</section>

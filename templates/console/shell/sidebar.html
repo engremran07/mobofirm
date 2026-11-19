@@ -1,0 +1,42 @@
+{% load i18n console_ui %}{% comment %}
+  Sidebar of the console shell (included by console/layout.html).
+  Data: shell.sidebar_navigation / console_brand (apps.core.admin_shell). Groups come from apps.core.admin_nav_catalog, filtered per user.
+  Structure (AdminLTE shell + disclosure buttons; behaviour in js/components/sidebar.js):
+    aside.app-sidebar[data-console-sidebar][data-console-user] > .sidebar-brand + .c-nav-tools + .sidebar-wrapper > nav > ul.sidebar-menu
+      li.nav-header + li.nav-item > a.nav-link                    (a group that is always open: Overview)
+      li.nav-item.c-nav-group[data-console-nav-group] > button.c-nav-toggle[aria-expanded][aria-controls] + div.c-nav-panel[data-open] > .c-nav-panel__inner > ul.nav-treeview
+    Without JavaScript (html has no .js class) every group is expanded and the tools are hidden; the current page is
+    always visible. The current page has class "active" and aria-current="page" (exactly one link).
+    data-nav-label carries the text shown as the tooltip when the sidebar is collapsed to the icon rail.
+{% endcomment %}{% with brand=shell.console_brand %}<aside class="app-sidebar" id="console-sidebar" data-console-sidebar data-console-user="{{ request.user.pk }}" aria-label="{% translate 'Staff console' %}">
+<div class="sidebar-brand">
+<a class="brand-link" href="{% url 'admin:index' %}" data-nav-label="{{ brand.header }}"><span class="c-brand__mark" aria-hidden="true">{{ brand.header|slice:":1"|upper }}</span><span class="brand-text">{{ brand.header }}</span></a>
+</div>
+<div class="c-nav-tools" role="group" aria-label="{% translate 'Navigation tools' %}" data-console-nav-tools>
+<div class="c-nav-filter">{% console_icon "search" "c-icon--sm" %}<input class="c-nav-filter__input" type="search" id="console-nav-filter" data-console-nav-filter autocomplete="off" spellcheck="false" maxlength="60" placeholder="{% translate 'Filter…' %}" aria-label="{% translate 'Filter navigation' %}" aria-controls="console-nav-menu"></div>
+<button type="button" class="c-icon-btn c-icon-btn--sm" data-console-nav-all="collapse" aria-label="{% translate 'Collapse all groups' %}" data-nav-label="{% translate 'Collapse all groups' %}">{% console_icon "chevrons-up" "c-icon--sm" %}</button>
+<button type="button" class="c-icon-btn c-icon-btn--sm" data-console-nav-all="expand" aria-label="{% translate 'Expand all groups' %}" data-nav-label="{% translate 'Expand all groups' %}">{% console_icon "chevrons-up-down" "c-icon--sm" %}</button>
+<button type="button" class="c-icon-btn c-icon-btn--sm" data-console-nav-accordion aria-pressed="false" aria-label="{% translate 'Keep only one group open' %}" data-nav-label="{% translate 'Keep only one group open' %}">{% console_icon "layers" "c-icon--sm" %}</button>
+</div>
+<div class="sidebar-wrapper">
+<nav aria-label="{% translate 'Console sections' %}">
+<ul class="nav sidebar-menu flex-column" role="list" id="console-nav-menu">
+{% for group in shell.sidebar_navigation %}{% if group.collapsible %}<li class="nav-item c-nav-group{% if group.open %} menu-open{% endif %}" data-console-nav-group="{{ group.key }}">
+<button type="button" class="nav-link c-nav-toggle{% if group.active %} active{% endif %}" id="nav-toggle-{{ group.key }}" aria-expanded="{% if group.open %}true{% else %}false{% endif %}" aria-controls="nav-panel-{{ group.key }}" data-nav-label="{{ group.title }}">{% console_icon group.icon "nav-icon" %}<p>{{ group.title }}</p>{% if group.badge %}<span class="nav-badge">{{ group.badge }}<span class="visually-hidden"> {% translate "waiting" %}</span></span>{% endif %}{% console_icon "chevron-right" "nav-arrow" %}</button>
+<div class="c-nav-panel" id="nav-panel-{{ group.key }}" role="group" aria-labelledby="nav-toggle-{{ group.key }}"{% if group.open %} data-open{% endif %}>
+<div class="c-nav-panel__inner">
+<ul class="nav nav-treeview" role="list">
+{% for item in group.items %}<li class="nav-item"><a class="nav-link{% if item.active %} active{% endif %}" href="{{ item.link }}"{% if item.active %} aria-current="page"{% endif %} hx-preload="mouseenter, focusin">{% console_icon item.icon "nav-icon" %}<p>{{ item.title }}</p>{% if item.badge %}<span class="nav-badge">{{ item.badge }}<span class="visually-hidden"> {% translate "waiting" %}</span></span>{% endif %}</a></li>
+{% endfor %}</ul>
+</div>
+</div>
+</li>
+{% else %}<li class="nav-header">{{ group.title }}</li>
+{% for item in group.items %}<li class="nav-item"><a class="nav-link{% if item.active %} active{% endif %}" href="{{ item.link }}"{% if item.active %} aria-current="page"{% endif %} data-nav-label="{{ item.title }}" hx-preload="mouseenter, focusin">{% console_icon item.icon "nav-icon" %}<p>{{ item.title }}</p>{% if item.badge %}<span class="nav-badge">{{ item.badge }}<span class="visually-hidden"> {% translate "waiting" %}</span></span>{% endif %}</a></li>
+{% endfor %}{% endif %}{% endfor %}
+</ul>
+<p class="c-nav-empty" data-console-nav-empty role="status" hidden>{% translate "No pages match your filter." %}</p>
+</nav>
+</div>
+<div class="c-sidebar__foot" title="{% translate 'Application version' %}">{{ brand.version }}</div>
+</aside>{% endwith %}

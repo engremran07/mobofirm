@@ -10,7 +10,7 @@
         {% include "components/meter.html" with id=headline.dom_id label=headline.label percent=headline.percent text=headline.text %}
         <p class="small mb-0 mt-2">
           {% if headline.unlimited %}Unlimited new files.{% else %}<strong>{{ headline.remaining }}</strong> left of {{ headline.limit }}{% if headline.resets_at %} · resets {{ headline.resets_at|date:"j M Y, H:i" }}{% endif %}.{% endif %}
-          <a href="{% url 'library:my_quota' %}">Quota details</a> · <a href="{{ quota.plans_url }}">Compare plans</a>
+          <a href="{% url 'contributions:quota' %}">Quota details</a> · <a href="{{ quota.plans_url }}">Compare plans</a>
         </p>
       {% else %}
         <div class="row g-3">

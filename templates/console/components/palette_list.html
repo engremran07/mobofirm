@@ -1,0 +1,5 @@
+{% comment %}
+  palette_list - the "jump to" list of the command palette and of the search results: grouped links.
+  Context: items (list of {"title", "group", "icon", "url"}; consecutive items of one group are grouped under its heading).
+  Links are real anchors: it works without JavaScript and with the keyboard (Tab / Enter).
+{% endcomment %}{% load console_ui %}{% regroup items by group as groups %}<ul class="c-palette__list">{% for group in groups %}<li class="c-palette__group" role="presentation">{{ group.grouper }}</li>{% for item in group.list %}<li><a class="c-palette__item text-decoration-none" href="{{ item.url }}">{% if item.icon %}{% console_icon item.icon "c-icon--sm" %}{% endif %}<span>{{ item.title }}</span></a></li>{% endfor %}{% endfor %}</ul>

@@ -1,4 +1,4 @@
-"""Referral administration (Unfold): settings, codes and the invited-user ledger.
+"""Referral administration: settings, codes and the invited-user ledger.
 
 Reward amounts are not edited here: they are the wallet's ``referral.verified`` and
 ``referral.welcome`` reward rules (Credits economy > Reward rules).
@@ -12,7 +12,6 @@ from django.db.models import Model as DjangoModel
 from django.db.models import QuerySet
 from django.http import HttpRequest
 from django.utils.translation import gettext_lazy as _
-from unfold.contrib.filters.admin import ChoicesDropdownFilter, RangeDateTimeFilter
 
 from apps.core.admin_base import (
     ModelAdmin,
@@ -21,6 +20,7 @@ from apps.core.admin_base import (
     action,
     display,
 )
+from apps.core.admin_filters import ChoicesDropdownFilter, RangeDateTimeFilter
 
 from . import services
 from .models import Referral, ReferralCode, ReferralSettings

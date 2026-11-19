@@ -254,18 +254,16 @@ class SurfacesAgreeTests(TestCase):
         client = self._admin_client()
 
         production = client.get(reverse("admin:index"))
-        self.assertEqual(
-            tuple(production.context["environment"]), ("Production", "success")
-        )
-        self.assertContains(production, 'class="inline-block font-semibold')
+        self.assertContains(production, "c-env--success")
+        self.assertContains(production, ">Production</span>")
         with override_settings(DEBUG=True):
             development = client.get(reverse("admin:index"))
-        self.assertEqual(
-            tuple(development.context["environment"]), ("Development", "warning")
-        )
+        self.assertContains(development, "c-env--warning")
+        self.assertContains(development, ">Development</span>")
         with patch.dict("os.environ", {"APP_ENVIRONMENT": "staging"}):
             staging = client.get(reverse("admin:index"))
-        self.assertEqual(tuple(staging.context["environment"]), ("Staging", "info"))
+        self.assertContains(staging, "c-env--info")
+        self.assertContains(staging, ">Staging</span>")
 
     def test_footer_omits_build_details_when_unknown(self):
         with fake_checkout():

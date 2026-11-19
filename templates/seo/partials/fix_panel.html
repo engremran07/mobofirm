@@ -1,50 +1,50 @@
-<section class="mf-ui-seo-panel" aria-label="{{ rule.label }}">
-  <h3 class="mf-ui-card__title">{{ rule.label }}</h3>
-  {% if rule.standard %}<p class="mf-ui-help">Standard: {{ rule.standard }}</p>{% endif %}
-  <dl class="mf-ui-seo-dl">
-    <dt>Page</dt>
-    <dd>{% if issue.url %}<a href="{{ issue.url }}" rel="noopener">{{ issue.url }}</a>{% else %}Site-wide{% endif %}</dd>
-    {% if issue.object_title %}<dt>Object</dt><dd>{% if admin_url %}<a href="{{ admin_url }}">{{ issue.object_title }}</a>{% else %}{{ issue.object_title }}{% endif %}</dd>{% endif %}
-    {% if issue.measured %}<dt>Current</dt><dd>{{ issue.measured }}</dd>{% endif %}
-    {% if issue.expected %}<dt>Standard</dt><dd>{{ issue.expected }}</dd>{% endif %}
-    {% if proposal %}<dt>Proposal</dt><dd>{{ proposal }}{% if basis %} <span class="mf-ui-help">(from {{ basis }})</span>{% endif %}</dd>{% endif %}
-    {% if issue.status == 'resolved' %}<dt>Status</dt><dd>Resolved{% if issue.resolved_at %} {{ issue.resolved_at|timesince }} ago{% endif %}.</dd>{% endif %}
-  </dl>
+{% load i18n staff_ui %}
+<section class="d-flex flex-column gap-3" aria-label="{{ rule.label }}">
+  <h3 class="h6 mb-0">{{ rule.label }}</h3>
+  {% if rule.standard %}<p class="small text-body-secondary mb-0">{% translate "Standard:" %} {{ rule.standard }}</p>{% endif %}
+  {% staff_dl %}
+    {% staff_dd label=_("Page") %}{% if issue.url %}<a href="{{ issue.url }}" rel="noopener">{{ issue.url }}</a>{% else %}{% translate "Site-wide" %}{% endif %}{% endstaff_dd %}
+    {% if issue.object_title %}{% staff_dd label=_("Object") %}{% if admin_url %}<a href="{{ admin_url }}">{{ issue.object_title }}</a>{% else %}{{ issue.object_title }}{% endif %}{% endstaff_dd %}{% endif %}
+    {% if issue.measured %}{% staff_dd label=_("Current") %}{{ issue.measured }}{% endstaff_dd %}{% endif %}
+    {% if issue.expected %}{% staff_dd label=_("Standard") %}{{ issue.expected }}{% endstaff_dd %}{% endif %}
+    {% if proposal %}{% staff_dd label=_("Proposal") %}{{ proposal }}{% if basis %} <small class="text-body-secondary">({% translate "from" %} {{ basis }})</small>{% endif %}{% endstaff_dd %}{% endif %}
+    {% if issue.status == "resolved" %}{% staff_dd label=_("Status") %}{% translate "Resolved" %}{% if issue.resolved_at %} {{ issue.resolved_at|timesince }} {% translate "ago" %}{% endif %}.{% endstaff_dd %}{% endif %}
+  {% endstaff_dl %}
 
-  {% if can_fix and issue.status == 'open' %}
-    <form method="post" action="{% url 'seo:issue_apply' pk=issue.pk %}" class="mf-ui-form">
+  {% if can_fix and issue.status == "open" %}
+    <form method="post" action="{% url 'seo:issue_apply' pk=issue.pk %}" class="d-flex flex-column gap-3">
       {% csrf_token %}<input type="hidden" name="next" value="{{ next_url }}">
-      {% if issue.seo_field == 'noindex' %}
+      {% if issue.seo_field == "noindex" %}
         <input type="hidden" name="value" value="false">
-        <p>Applying removes the noindex override so the page can be indexed again.</p>
+        <p class="mb-0">{% translate "Applying removes the noindex override so the page can be indexed again." %}</p>
       {% else %}
-        <div class="mf-ui-field">
-          <label for="fix-value-{{ issue.pk }}">{{ field_label }} ({{ min_len }}-{{ max_len }} characters)</label>
-          <textarea id="fix-value-{{ issue.pk }}" name="value" rows="3" maxlength="{{ max_len }}" required>{{ proposal }}</textarea>
-          <p class="mf-ui-help">{% if proposal %}Prefilled from the object's own data; edit it if you know better.{% else %}No proposal could be built from the stored data: write one.{% endif %}</p>
-        </div>
+        {% blocktranslate with name=field_label low=min_len high=max_len asvar fix_label %}{{ name }} ({{ low }}-{{ high }} characters){% endblocktranslate %}
+        {% if proposal %}{% translate "Prefilled from the object's own data; edit it if you know better." as fix_help %}{% else %}{% translate "No proposal could be built from the stored data: write one." as fix_help %}{% endif %}
+        {% with issue_key=issue.pk|stringformat:"s" %}{% with fix_id="fix-value-"|add:issue_key %}{% staff_textarea ident=fix_id name="value" label=fix_label value=proposal rows=3 help_text=fix_help %}{% endwith %}{% endwith %}
       {% endif %}
-      <div class="mf-ui-row"><button type="submit" class="mf-ui-btn mf-ui-btn--primary">Apply fix</button></div>
+      <div>{% staff_button _("Apply fix") tone="primary" %}</div>
     </form>
-  {% elif issue.status == 'open' and issue.seo_field %}
-    <p class="mf-ui-note mf-ui-note--warning">You need the "change metadata" permission to apply fixes.</p>
-  {% elif issue.status == 'open' %}
-    <p class="mf-ui-help">This finding is not fixed from the override layer. {% if admin_url %}Edit the <a href="{{ admin_url }}">object</a> and re-audit.{% else %}Fix it at its source and re-audit.{% endif %}</p>
+  {% elif issue.status == "open" and issue.seo_field and lacks_fix_permission %}
+    {% staff_notice tone="warning" %}{% translate "You need the “change metadata” permission to apply fixes." %}{% endstaff_notice %}
+  {% elif issue.status == "open" %}
+    <p class="small text-body-secondary mb-0">{% translate "This finding is not fixed from the override layer." %} {% if admin_url %}{% translate "Edit the" %} <a href="{{ admin_url }}">{% translate "object" %}</a> {% translate "and re-audit." %}{% else %}{% translate "Fix it at its source and re-audit." %}{% endif %}</p>
   {% endif %}
 
-  {% if can_manage and issue.status == 'open' %}
-    <div class="mf-ui-seo-actions">
-      <form method="post" action="{% url 'seo:issue_reaudit' pk=issue.pk %}" class="mf-ui-seo-inline">
+  {% if can_manage and issue.status == "open" %}
+    {% staff_row %}
+      <form method="post" action="{% url 'seo:issue_reaudit' pk=issue.pk %}">
         {% csrf_token %}<input type="hidden" name="next" value="{{ next_url }}">
-        <button type="submit" class="mf-ui-btn mf-ui-btn--small">Re-audit this page</button>
+        {% staff_button _("Re-audit this page") size="sm" %}
       </form>
-      <form method="post" action="{% url 'seo:issue_ignore' pk=issue.pk %}" class="mf-ui-seo-inline">
+      <form method="post" action="{% url 'seo:issue_ignore' pk=issue.pk %}" class="d-flex flex-wrap align-items-end gap-2">
         {% csrf_token %}<input type="hidden" name="next" value="{{ next_url }}">
-        <label class="mf-ui-sr" for="ignore-reason-{{ issue.pk }}">Reason for ignoring</label>
-        <input type="text" id="ignore-reason-{{ issue.pk }}" name="reason" minlength="3" maxlength="255" placeholder="Reason for ignoring" required>
-        <button type="submit" class="mf-ui-btn mf-ui-btn--small">Ignore with reason</button>
+        {% with issue_key=issue.pk|stringformat:"s" %}{% with ignore_id="ignore-reason-"|add:issue_key %}{% staff_input ident=ignore_id name="reason" label=_("Reason for ignoring") placeholder=_("Reason for ignoring") maxlength=255 required=True hide_label=True %}{% endwith %}{% endwith %}
+        {% staff_button _("Ignore with reason") size="sm" %}
       </form>
-    </div>
+    {% endstaff_row %}
   {% endif %}
-  {% if fix_ledger %}<p class="mf-ui-help">Last fix: <a href="{% url 'seo:ledger' %}?status={{ fix_ledger.status }}">change {{ fix_ledger.pk }}</a> ({{ fix_ledger.get_status_display }}).</p>{% endif %}
+  {% if fix_ledger %}
+    {% url 'seo:ledger' as ledger_url %}
+    <p class="small text-body-secondary mb-0">{% translate "Last fix:" %} <a href="{{ ledger_url }}?status={{ fix_ledger.status }}">{% translate "change" %} {{ fix_ledger.pk }}</a> ({{ fix_ledger.get_status_display }}).</p>
+  {% endif %}
 </section>

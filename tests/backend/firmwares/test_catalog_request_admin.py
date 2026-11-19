@@ -31,8 +31,8 @@ DIALOG = {"_form_submitted": "on"}
 
 
 def staff_client(user):
-    """A test client signed in as ``user``."""
-    client = Client()
+    """A test client signed in as ``user`` that submits dialogs the way the console does."""
+    client = Client(headers={"HX-Request": "true"})
     client.force_login(user)
     return client
 
@@ -238,7 +238,10 @@ class TestApproveDialogs:
 
         flags = {
             (entry.content_type.model, entry.action_flag)
-            for entry in LogEntry.objects.filter(user=reviewer)
+            for entry in LogEntry.objects.filter(user=reviewer).select_related(
+                "content_type"
+            )
+            if entry.content_type is not None
         }
         assert ("brand", ADDITION) in flags
         assert ("brandcreationrequest", CHANGE) in flags

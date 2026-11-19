@@ -8,7 +8,8 @@ from django.urls import reverse
 from apps.site_settings.services import get_site_settings
 
 from .catalog import PUBLIC_FIRMWARE_TYPES, get_public_firmware_queryset, label_firmware
-from .models import Brand, Chipset, FlashingTool, Model
+from .models import Brand, Chipset, FlashingTool, FlashingToolCategory, Model
+from .tool_categories import CategoryIndex
 
 
 class _FirmwareSitemap(Sitemap):
@@ -63,6 +64,26 @@ class FirmwareToolsSitemap(_FirmwareSitemap):
 
     def location(self, item: FlashingTool) -> str:
         return reverse("firmwares:flashing_tool_detail", kwargs={"slug": item.slug})
+
+
+class FirmwareToolCategoriesSitemap(_FirmwareSitemap):
+    """Tool and guide categories that hold at least one active tool or guide.
+
+    Empty categories stay in the staff console only: the public category page 404s
+    for them, so they are never listed here.
+    """
+
+    changefreq = "weekly"
+    priority = 0.5
+
+    def items(self):
+        return CategoryIndex.build().listed()
+
+    def lastmod(self, obj: FlashingToolCategory):
+        return getattr(obj, "updated_at", None)
+
+    def location(self, item: FlashingToolCategory) -> str:
+        return reverse("firmwares:flashing_category", kwargs={"slug": item.slug})
 
 
 class FirmwareModelsSitemap(_FirmwareSitemap):

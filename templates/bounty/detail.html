@@ -49,7 +49,7 @@
       <section class="surface-card p-4 d-grid gap-2 bounty-actions" aria-labelledby="bounty-actions">
         <h2 class="h5" id="bounty-actions">Fulfil this bounty</h2>
         {% if bounty.status == "open" %}
-          <a class="btn btn-primary" href="{{ upload_url }}">{% if is_guide %}Submit a solution{% else %}Upload firmware{% endif %}</a>
+          <a class="btn btn-primary" href="{{ upload_url }}">{% if is_guide %}Submit a solution{% else %}Contribute a firmware{% endif %}</a>
           {% if user.is_authenticated and not is_owner and not has_claimed %}
             <form method="post" action="{% url 'bounty:claim' pk=bounty.pk %}">{% csrf_token %}<button class="btn btn-soft w-100" type="submit">I'm working on this</button></form>
           {% elif has_claimed %}<p class="small muted mb-0">You are listed as working on this.</p>

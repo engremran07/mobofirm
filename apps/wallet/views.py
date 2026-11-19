@@ -163,6 +163,7 @@ def topup(request: HttpRequest) -> HttpResponse:
 
 @login_required
 @require_app_enabled("wallet")
+@email_verification_required
 @require_POST
 def cancel_topup(request: HttpRequest, pk: int) -> HttpResponse:
     user = current_user(request)

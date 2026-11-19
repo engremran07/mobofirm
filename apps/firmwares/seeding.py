@@ -35,10 +35,12 @@ from .models import (
     Variant,
 )
 from .seed_data import (
+    APPLE_BRAND,
     BRANDS,
     CHIPSETS,
     CHIPSETS_BY_KEY,
     GUIDES,
+    PLATFORM_COVERAGE_KEYS,
     TOOL_CATEGORIES,
     TOOLS,
 )
@@ -53,6 +55,7 @@ from .seed_data.types import (
 )
 from .services import approve_pending_firmware, submit_external_firmware
 from .sources import allowed_external_hosts
+from .tool_categories import SyncReport, sync_reference_categories
 
 EXTERNAL_HOST = "downloads.example.invalid"
 OFFICIAL_CATEGORY = "official"
@@ -131,6 +134,9 @@ def chipset_text(key: str) -> str:
 
 
 def os_text(seed: ModelSeed) -> str:
+    if seed.android == 0:
+        # Not an Android device (Apple): the label alone names the OS.
+        return seed.os_label
     if seed.os_label:
         return f"{seed.os_label} (Android {seed.android})"
     return f"Android {seed.android}"
@@ -200,6 +206,66 @@ def seed_chipsets(
         chipsets[seed.key] = chipset
         report.record("chipsets", created=not existed)
     return report, chipsets
+
+
+def seed_reference_chipsets(
+    seeds: Sequence[ChipsetSeed] = CHIPSETS,
+) -> SeedReport:
+    """Create the missing chipset rows without publishing automated chipset posts.
+
+    ``seed_chipsets`` goes through ``resolve_chipset`` and the post-save automation, which
+    would publish one article for every chipset even when no device uses it yet. A
+    reference chipset instead gets its article the first time a model, variant or
+    firmware attaches to it (the existing automation). Existing rows are only enriched
+    with the seed's family, description and aliases, and never trigger a post refresh.
+    """
+    report = SeedReport()
+    existing = {chipset.slug: chipset for chipset in Chipset.objects.all()}
+    missing: list[Chipset] = []
+    for seed in seeds:
+        normalized = normalize_chipset(seed.display_name)
+        if normalized is None or (normalized.vendor, normalized.name) != (
+            seed.vendor,
+            seed.name,
+        ):
+            raise CommandError(
+                f"Chipset {seed.display_name!r} cannot be normalised to itself."
+            )
+        current = existing.get(normalized.slug)
+        if current is None:
+            missing.append(
+                Chipset(
+                    vendor=seed.vendor,
+                    family=seed.family or normalized.family,
+                    name=seed.name,
+                    slug=normalized.slug,
+                    aliases=list(seed.aliases),
+                    description=seed.description,
+                )
+            )
+            report.record("chipsets", created=True)
+            continue
+        aliases = [*current.aliases]
+        aliases += [alias for alias in seed.aliases if alias not in aliases]
+        changed = {
+            "family": seed.family or current.family,
+            "description": current.description or seed.description,
+            "aliases": aliases,
+        }
+        if any(getattr(current, field) != value for field, value in changed.items()):
+            Chipset.objects.filter(pk=current.pk).update(**changed)
+        report.record("chipsets", created=False)
+    Chipset.objects.bulk_create(missing)
+    _record_categories(report, sync_reference_categories(brands=False))
+    return report
+
+
+def _record_categories(report: SeedReport, sync: SyncReport) -> None:
+    """Fold a tool-category synchronisation into a seed report."""
+    for _ in range(sync.created):
+        report.record("tool categories", created=True)
+    for _ in range(sync.updated + sync.unchanged):
+        report.record("tool categories", created=False)
 
 
 def _find_brand(seed: BrandSeed) -> Brand | None:
@@ -374,6 +440,7 @@ def variant_chipset_key(seed: ModelSeed) -> str:
 def seed_tools() -> SeedReport:
     """Create tool categories, tools and their brand and chipset links."""
     report = SeedReport()
+    _record_categories(report, sync_reference_categories())
     categories: dict[str, FlashingToolCategory] = {}
     for category_seed in TOOL_CATEGORIES:
         category = FlashingToolCategory.objects.filter(
@@ -454,9 +521,9 @@ def seed_guides(*, publisher: AbstractBaseUser) -> SeedReport:
             brand=brand,
             chipset_filter=guide_seed.chipset_filter,
             defaults={
-                "body_template": GUIDE_BODIES[guide_seed.guide_type].replace(
-                    "{intro}", guide_seed.intro
-                ),
+                "body_template": (
+                    guide_seed.body or GUIDE_BODIES[guide_seed.guide_type]
+                ).replace("{intro}", guide_seed.intro),
                 "summary_template": (
                     "A practical {guide_type} guide for {brand} {model}, with the "
                     "tools and steps involved."
@@ -487,18 +554,25 @@ def seed_catalog(
 ) -> SeedReport:
     """Run every catalogue step in dependency order."""
     total = SeedReport()
+    # The full catalogue also carries the platform coverage (Apple, Rockchip,
+    # Allwinner and RDA chipsets) and the Apple brand; a partial seed stays minimal.
+    full = tuple(brands) == tuple(BRANDS)
+    device_brands = (*brands, APPLE_BRAND) if full else tuple(brands)
     used = {
         key
-        for brand in brands
+        for brand in device_brands
         for seed in brand.models
         for key in (seed.chipset, *(variant.chipset for variant in seed.variants))
         if key
     }
+    if full:
+        used |= set(PLATFORM_COVERAGE_KEYS)
     chipset_report, _ = seed_chipsets(
         [chipset for chipset in CHIPSETS if chipset.key in used]
     )
     total.merge(chipset_report)
-    total.merge(seed_brands_and_models(brands))
+    total.merge(seed_brands_and_models(device_brands))
+    # Apple has no seeded firmware: only reviewed uploads of signed IPSW files.
     total.merge(seed_firmware(brands, uploader=uploader, reviewer=reviewer))
     total.merge(seed_tools())
     total.merge(seed_guides(publisher=publisher))

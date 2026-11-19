@@ -1,97 +1,101 @@
 {% extends "admin/staff_page.html" %}
-{% block mf_actions %}
+{% load i18n staff_ui %}
+{% block page_actions %}
+  {% url 'admin:distribution_channel_platforms' as platforms_url %}
   {% if can_run %}
-    <form method="post" action="{% url 'admin:distribution_channel_run_queue' %}">{% csrf_token %}<button type="submit" class="mf-ui-btn mf-ui-btn--primary">Run queue now</button></form>
+    <form method="post" action="{% url 'admin:distribution_channel_run_queue' %}">{% csrf_token %}{% staff_button _("Run queue now") tone="primary" %}</form>
   {% endif %}
-  <a class="mf-ui-btn" href="{% url 'admin:distribution_channel_platforms' %}">Add channel</a>
+  {% staff_button _("Add channel") href=platforms_url %}
 {% endblock %}
-{% block mf_nav %}{% include "admin/distribution/_nav.html" %}{% endblock %}
-{% block mf_body %}
-<section aria-labelledby="dist-summary">
-  <h2 class="mf-ui-dist-heading" id="dist-summary">Last 7 days</h2>
-  <div class="mf-ui-grid">
-    <div class="mf-ui-card mf-ui-stat"><span class="mf-ui-stat__label">Queue depth</span><span class="mf-ui-stat__value">{{ queue_depth }}</span><span class="mf-ui-stat__hint">waiting to be posted</span></div>
-    <div class="mf-ui-card mf-ui-stat"><span class="mf-ui-stat__label">Awaiting approval</span><span class="mf-ui-stat__value">{{ awaiting_approval }}</span><span class="mf-ui-stat__hint">{% if awaiting_approval %}<a href="{% url 'admin:distribution_channel_review' %}">review now</a>{% else %}nothing to review{% endif %}</span></div>
-    <div class="mf-ui-card mf-ui-stat"><span class="mf-ui-stat__label">Sent</span><span class="mf-ui-stat__value">{{ sent_7d }}</span></div>
-    <div class="mf-ui-card mf-ui-stat"><span class="mf-ui-stat__label">Failed</span><span class="mf-ui-stat__value">{{ failed_7d }}</span></div>
-    <div class="mf-ui-card mf-ui-stat"><span class="mf-ui-stat__label">Link clicks</span><span class="mf-ui-stat__value">{{ clicks_7d }}</span><span class="mf-ui-stat__hint"><a href="{% url 'admin:distribution_channel_analytics' %}">analytics</a></span></div>
-  </div>
-</section>
+{% block page_nav %}{% include "admin/distribution/_nav.html" %}{% endblock %}
+{% block page_body %}
+{% staff_section title=_("Last 7 days") ident="dist-summary" %}
+  {% staff_grid %}
+    {% staff_stat label=_("Queue depth") value=queue_depth hint=_("waiting to be posted") %}
+    {% url 'admin:distribution_channel_review' as review_url %}
+    {% if awaiting_approval %}
+      {% staff_stat label=_("Awaiting approval") value=awaiting_approval hint_url=review_url hint_label=_("Review now") %}
+    {% else %}
+      {% staff_stat label=_("Awaiting approval") value=awaiting_approval hint=_("Nothing to review") %}
+    {% endif %}
+    {% staff_stat label=_("Sent") value=sent_7d %}
+    {% staff_stat label=_("Failed") value=failed_7d %}
+    {% url 'admin:distribution_channel_analytics' as analytics_url %}
+    {% staff_stat label=_("Link clicks") value=clicks_7d hint_url=analytics_url hint_label=_("Analytics") %}
+  {% endstaff_grid %}
+{% endstaff_section %}
 
-{% if not capabilities.cards %}<p class="mf-ui-note mf-ui-note--warning" role="status">Share cards are off: {{ capabilities.cards_note }}</p>{% endif %}
-{% if not capabilities.video %}<p class="mf-ui-note" role="status">Video platforms (YouTube Shorts, TikTok, Instagram Reels) wait for media: {{ capabilities.video_note }}</p>{% endif %}
+{% if not capabilities.cards %}{% staff_notice tone="warning" %}{% translate "Share cards are off:" %} {{ capabilities.cards_note }}{% endstaff_notice %}{% endif %}
+{% if not capabilities.video %}{% staff_notice %}{% translate "Video platforms (YouTube Shorts, TikTok, Instagram Reels) wait for media:" %} {{ capabilities.video_note }}{% endstaff_notice %}{% endif %}
 
-<section aria-labelledby="dist-channels">
-  <h2 class="mf-ui-dist-heading" id="dist-channels">Channels</h2>
+{% staff_section title=_("Channels") ident="dist-channels" %}
   {% if channels %}
-  <div class="mf-ui-table-wrap" role="region" aria-label="Channel health" tabindex="0">
-    <table class="mf-ui-table">
+    {% staff_table label=_("Channel health") %}
       <thead><tr>
-        <th scope="col">Channel</th><th scope="col">State</th><th scope="col">Circuit breaker</th><th scope="col">Last success</th>
-        <th scope="col" class="is-number">Sent</th><th scope="col" class="is-number">Failed</th><th scope="col" class="is-number">Queued</th><th scope="col" class="is-number">Clicks</th>
-        <th scope="col">Actions</th>
+        <th scope="col">{% translate "Channel" %}</th><th scope="col">{% translate "State" %}</th><th scope="col">{% translate "Circuit breaker" %}</th><th scope="col">{% translate "Last success" %}</th>
+        <th scope="col" class="text-end">{% translate "Sent" %}</th><th scope="col" class="text-end">{% translate "Failed" %}</th><th scope="col" class="text-end">{% translate "Queued" %}</th><th scope="col" class="text-end">{% translate "Clicks" %}</th>
+        <th scope="col">{% translate "Actions" %}</th>
       </tr></thead>
       <tbody>
         {% for row in channels %}{% with channel=row.channel %}
         <tr>
-          <td><a href="{% url 'admin:distribution_channel_change' channel.pk %}">{{ channel.name }}</a><br><span class="mf-ui-help">{{ channel.get_kind_display }} · {{ channel.get_approval_mode_display }}</span></td>
+          <td><a href="{% url 'admin:distribution_channel_change' channel.pk %}">{{ channel.name }}</a><br><small class="text-body-secondary">{{ channel.get_kind_display }} · {{ channel.get_approval_mode_display }}</small></td>
           <td>
-            {% if channel.state == "ready" %}<span class="mf-ui-badge mf-ui-badge--success">Ready</span>
-            {% elif channel.state == "off" %}<span class="mf-ui-badge mf-ui-badge--info">Off</span>
-            {% elif channel.state == "failing" %}<span class="mf-ui-badge mf-ui-badge--danger">Failing</span>
-            {% else %}<span class="mf-ui-badge mf-ui-badge--warning">Needs setup</span>{% endif %}
-            {% if channel.disabled_reason %}<br><span class="mf-ui-help">{{ channel.disabled_reason }}</span>{% endif %}
-            {% if channel.state == "misconfigured" %}<br><span class="mf-ui-help">{{ channel.configuration_problem }}</span>{% endif %}
+            {% if channel.state == "ready" %}{% staff_badge _("Ready") "success" %}
+            {% elif channel.state == "off" %}{% staff_badge _("Off") "info" %}
+            {% elif channel.state == "failing" %}{% staff_badge _("Failing") "danger" %}
+            {% else %}{% staff_badge _("Needs setup") "warning" %}{% endif %}
+            {% if channel.disabled_reason %}<br><small class="text-body-secondary">{{ channel.disabled_reason }}</small>{% endif %}
+            {% if channel.state == "misconfigured" %}<br><small class="text-body-secondary">{{ channel.configuration_problem }}</small>{% endif %}
           </td>
           <td>
-            {% if channel.consecutive_failures >= trip_after %}<span class="mf-ui-badge mf-ui-badge--danger">Tripped</span>
-            {% elif channel.consecutive_failures %}<span class="mf-ui-badge mf-ui-badge--warning">{{ channel.consecutive_failures }} / {{ trip_after }}</span>
-            {% else %}<span class="mf-ui-badge mf-ui-badge--success">Closed</span>{% endif %}
-            {% if channel.last_error %}<br><span class="mf-ui-help">{{ channel.last_error }}</span>{% endif %}
+            {% if channel.consecutive_failures >= trip_after %}{% staff_badge _("Tripped") "danger" %}
+            {% elif channel.consecutive_failures %}{% blocktranslate with failures=channel.consecutive_failures limit=trip_after asvar breaker %}{{ failures }} / {{ limit }}{% endblocktranslate %}{% staff_badge breaker "warning" %}
+            {% else %}{% staff_badge _("Closed") "success" %}{% endif %}
+            {% if channel.last_error %}<br><small class="text-body-secondary">{{ channel.last_error }}</small>{% endif %}
           </td>
           <td>{{ channel.last_success_at|date:"Y-m-d H:i"|default:"—" }}</td>
-          <td class="is-number">{{ channel.sent }}</td>
-          <td class="is-number">{{ channel.failed }}</td>
-          <td class="is-number">{{ channel.queued }}{% if channel.pending %} (+{{ channel.pending }} to approve){% endif %}</td>
-          <td class="is-number">{{ row.clicks }}</td>
+          <td class="text-end">{{ channel.sent }}</td>
+          <td class="text-end">{{ channel.failed }}</td>
+          <td class="text-end">{{ channel.queued }}{% if channel.pending %} (+{{ channel.pending }} {% translate "to approve" %}){% endif %}</td>
+          <td class="text-end">{{ row.clicks }}</td>
           <td>
-            <div class="mf-ui-dist-actions">
+            {% staff_row %}
               {% if can_run %}
-              <form method="post" action="{% url 'admin:distribution_channel_check' channel.pk %}">{% csrf_token %}<button type="submit" class="mf-ui-btn mf-ui-btn--small">Test connection</button></form>
-              <form method="post" action="{% url 'admin:distribution_channel_test_post' channel.pk %}">{% csrf_token %}<button type="submit" class="mf-ui-btn mf-ui-btn--small">Send test post</button></form>
+                <form method="post" action="{% url 'admin:distribution_channel_check' channel.pk %}">{% csrf_token %}{% staff_button _("Test connection") size="sm" %}</form>
+                <form method="post" action="{% url 'admin:distribution_channel_test_post' channel.pk %}">{% csrf_token %}{% staff_button _("Send test post") size="sm" %}</form>
               {% endif %}
-              <a class="mf-ui-btn mf-ui-btn--small" href="{% url 'admin:distribution_channel_preview' channel.pk %}">Preview</a>
-            </div>
-            {% if channel.connection_checked_at %}<span class="mf-ui-help">Connection: {% if channel.connection_ok %}OK{% elif channel.connection_ok is None %}not available{% else %}failed{% endif %}, {{ channel.connection_message }}</span>{% endif %}
+              {% url 'admin:distribution_channel_preview' channel.pk as preview_url %}
+              {% staff_button _("Preview") href=preview_url size="sm" %}
+            {% endstaff_row %}
+            {% if channel.connection_checked_at %}<small class="text-body-secondary">{% translate "Connection:" %} {% if channel.connection_ok %}{% translate "OK" %}{% elif channel.connection_ok is None %}{% translate "not available" %}{% else %}{% translate "failed" %}{% endif %}, {{ channel.connection_message }}</small>{% endif %}
           </td>
         </tr>
         {% endwith %}{% endfor %}
       </tbody>
-    </table>
-  </div>
+    {% endstaff_table %}
   {% else %}
-  <p class="mf-ui-empty">No channels yet. <a href="{% url 'admin:distribution_channel_platforms' %}">Add a platform</a> to start sharing new firmware and posts. Channels stay off until you enable them.</p>
+    {% url 'admin:distribution_channel_platforms' as platforms_url %}
+    {% staff_empty title=_("No channels yet") %}<a href="{{ platforms_url }}">{% translate "Add a platform" %}</a> {% translate "to start sharing new firmware and posts. Channels stay off until you enable them." %}{% endstaff_empty %}
   {% endif %}
-</section>
+{% endstaff_section %}
 
-<section aria-labelledby="dist-top">
-  <h2 class="mf-ui-dist-heading" id="dist-top">Top shared content (30 days)</h2>
+{% staff_section title=_("Top shared content (30 days)") ident="dist-top" %}
   {% if top_content %}
-  <div class="mf-ui-table-wrap" role="region" aria-label="Top shared content" tabindex="0">
-    <table class="mf-ui-table">
-      <thead><tr><th scope="col">Content</th><th scope="col">Type</th><th scope="col" class="is-number">Shares</th><th scope="col" class="is-number">Clicks</th></tr></thead>
-      <tbody>{% for row in top_content %}<tr><td>{{ row.title }}</td><td>{{ row.kind }}</td><td class="is-number">{{ row.shares }}</td><td class="is-number">{{ row.clicks }}</td></tr>{% endfor %}</tbody>
-    </table>
-  </div>
-  {% else %}<p class="mf-ui-empty">No tracked clicks yet.</p>{% endif %}
-</section>
+    {% staff_table label=_("Top shared content") %}
+      <thead><tr><th scope="col">{% translate "Content" %}</th><th scope="col">{% translate "Type" %}</th><th scope="col" class="text-end">{% translate "Shares" %}</th><th scope="col" class="text-end">{% translate "Clicks" %}</th></tr></thead>
+      <tbody>{% for row in top_content %}<tr><td>{{ row.title }}</td><td>{{ row.kind }}</td><td class="text-end">{{ row.shares }}</td><td class="text-end">{{ row.clicks }}</td></tr>{% endfor %}</tbody>
+    {% endstaff_table %}
+  {% else %}{% staff_empty %}{% translate "No tracked clicks yet." %}{% endstaff_empty %}{% endif %}
+{% endstaff_section %}
 
-<section aria-labelledby="dist-failures">
-  <h2 class="mf-ui-dist-heading" id="dist-failures">Recent failures</h2>
+{% staff_section title=_("Recent failures") ident="dist-failures" %}
   {% if recent_failures %}
-  <ul class="mf-ui-dist-list">
-    {% for job in recent_failures %}<li><strong>{{ job.channel }}</strong> · {{ job.title }} <span class="mf-ui-help">{{ job.last_error }}</span></li>{% endfor %}
-  </ul>
-  {% else %}<p class="mf-ui-empty">Nothing has failed.</p>{% endif %}
-</section>
+    {% staff_card %}
+      {% staff_list %}
+        {% for job in recent_failures %}{% staff_item %}<span><strong>{{ job.channel }}</strong> · {{ job.title }} <small class="text-body-secondary">{{ job.last_error }}</small></span>{% endstaff_item %}{% endfor %}
+      {% endstaff_list %}
+    {% endstaff_card %}
+  {% else %}{% staff_empty %}{% translate "Nothing has failed." %}{% endstaff_empty %}{% endif %}
+{% endstaff_section %}
 {% endblock %}

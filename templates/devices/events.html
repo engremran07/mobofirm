@@ -1,45 +1,45 @@
 {% extends "admin/staff_page.html" %}
-{% block mf_actions %}
-  <a class="mf-ui-btn" href="{% url 'admin:devices_deviceevent_changelist' %}">All events</a>
-  <a class="mf-ui-btn" href="{% url 'admin:devices_device_changelist' %}">Devices</a>
+{% load i18n staff_ui %}
+{% block page_actions %}
+  {% url 'admin:devices_deviceevent_changelist' as events_url %}{% url 'admin:devices_device_changelist' as devices_url %}
+  {% staff_button _("All events") href=events_url %}
+  {% staff_button _("Devices") href=devices_url %}
 {% endblock %}
-{% block mf_nav %}
-  <ul class="mf-ui-tabs" aria-label="Event type">
-    <li><a href="{% url 'devices:device_events' %}"{% if not selected %} aria-current="page"{% endif %}>All</a></li>
-    {% for key, label in kinds.items %}
-      <li><a href="?type={{ key }}"{% if key == selected %} aria-current="page"{% endif %}>{{ label }}</a></li>
-    {% endfor %}
-  </ul>
+{% block page_nav %}
+  {% url 'devices:device_events' as events_page_url %}
+  {% staff_tabs label=_("Event type") %}
+    {% if selected %}{% staff_tab events_page_url _("All") %}{% else %}{% staff_tab events_page_url _("All") current=True %}{% endif %}
+    {% for key, label in kinds.items %}{% staff_tab "?type=" label append=key active=selected %}{% endfor %}
+  {% endstaff_tabs %}
 {% endblock %}
-{% block mf_body %}
+{% block page_body %}
   {% if events %}
-    <div class="mf-ui-table-wrap" role="region" aria-label="Device events" tabindex="0">
-      <table class="mf-ui-table">
-        <thead>
+    {% staff_table label=_("Device events") %}
+      <thead>
+        <tr>
+          <th scope="col">{% translate "When" %}</th>
+          <th scope="col">{% translate "Event" %}</th>
+          <th scope="col">{% translate "Outcome" %}</th>
+          <th scope="col">{% translate "User" %}</th>
+          <th scope="col">{% translate "Device" %}</th>
+          <th scope="col">{% translate "Reason" %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for event in events %}
           <tr>
-            <th scope="col">When</th>
-            <th scope="col">Event</th>
-            <th scope="col">Outcome</th>
-            <th scope="col">User</th>
-            <th scope="col">Device</th>
-            <th scope="col">Reason</th>
+            <td><time datetime="{{ event.created_at|date:'c' }}">{{ event.created_at|date:"M j, Y H:i" }}</time></td>
+            <td>{{ event.get_event_type_display }}</td>
+            <td>{% if event.success %}{% staff_badge _("OK") "success" %}{% else %}{% staff_badge _("Failed") "danger" %}{% endif %}</td>
+            <td>{{ event.user|default:"—" }}</td>
+            <td>{{ event.device|default:"—" }}</td>
+            <td>{{ event.reason|default:"—" }}</td>
           </tr>
-        </thead>
-        <tbody>
-          {% for event in events %}
-            <tr>
-              <td><time datetime="{{ event.created_at|date:'c' }}">{{ event.created_at|date:"M j, Y H:i" }}</time></td>
-              <td>{{ event.get_event_type_display }}</td>
-              <td>{% if event.success %}<span class="mf-ui-badge mf-ui-badge--success">OK</span>{% else %}<span class="mf-ui-badge mf-ui-badge--danger">Failed</span>{% endif %}</td>
-              <td>{{ event.user|default:"—" }}</td>
-              <td>{{ event.device|default:"—" }}</td>
-              <td>{{ event.reason|default:"—" }}</td>
-            </tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+        {% endfor %}
+      </tbody>
+    {% endstaff_table %}
   {% else %}
-    <p class="mf-ui-empty">No device events{% if selected %} of this type{% endif %} are available.</p>
+    {% if selected %}{% translate "No device events of this type are available." as empty_text %}{% else %}{% translate "No device events are available." as empty_text %}{% endif %}
+    {% staff_empty title=_("No device events") %}{{ empty_text }}{% endstaff_empty %}
   {% endif %}
 {% endblock %}

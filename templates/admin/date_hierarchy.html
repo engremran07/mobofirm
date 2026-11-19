@@ -1,0 +1,9 @@
+{% load i18n console_ui %}{% if show %}
+<nav class="c-datehier" aria-label="{% blocktranslate %}Filter by {{ field_name }}{% endblocktranslate %}">
+<span class="u-muted u-text-sm">{% blocktranslate %}Filter by {{ field_name }}{% endblocktranslate %}</span>
+{% block date-hierarchy-toplinks %}
+{% block date-hierarchy-back %}{% if back %}<a href="{{ back.link }}" {% include "console/crud/_hx_list.html" with url=back.link %}>{% console_icon "chevron-left" "c-icon--xs" %} {{ back.title }}</a>{% endif %}{% endblock %}
+{% block date-hierarchy-choices %}{% for choice in choices %}{% if choice.link %}<a href="{{ choice.link }}" {% include "console/crud/_hx_list.html" with url=choice.link %}>{{ choice.title }}</a>{% else %}<a aria-current="true">{{ choice.title }}</a>{% endif %}{% endfor %}{% endblock %}
+{% endblock %}
+</nav>
+{% endif %}

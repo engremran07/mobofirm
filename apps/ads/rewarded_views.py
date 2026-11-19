@@ -59,6 +59,26 @@ def _token(request: HttpRequest) -> str:
     return str(request.POST.get("token", ""))[:MAX_TOKEN_LENGTH]
 
 
+REFERENCE_SESSION_KEY = "rewarded_ref"
+
+
+def _reference(request: HttpRequest, config: RewardedAdConfig) -> str:
+    """What this watch counts toward (a file unlock ticket), kept in the session.
+
+    The page URL carries ``?ref=...``; it is remembered per config so the start call
+    needs no extra client code. The owning app's handler still verifies it belongs to
+    the signed-in user, so a forged value is refused rather than trusted.
+    """
+    stored = request.session.get(REFERENCE_SESSION_KEY) or {}
+    if not isinstance(stored, dict):
+        stored = {}
+    candidate = request.GET.get("ref", "")[:64]
+    if candidate:
+        stored[str(config.pk)] = candidate
+        request.session[REFERENCE_SESSION_KEY] = stored
+    return str(stored.get(str(config.pk), ""))
+
+
 def _state(request: HttpRequest, config: RewardedAdConfig) -> dict[str, Any]:
     """Why the user cannot start (or that they can), as the page shows it."""
     unavailable = rewarded.unavailable_reason(config)
@@ -77,7 +97,9 @@ def _state(request: HttpRequest, config: RewardedAdConfig) -> dict[str, Any]:
             "notice_kind": "consent",
         }
     try:
-        rewarded.check_eligibility(request, request.user, config)
+        rewarded.check_eligibility(
+            request, request.user, config, _reference(request, config)
+        )
     except rewarded.RewardedAdError as error:
         return {"ready": False, "notice": error.message, "notice_kind": error.code}
     return {"ready": True, "notice": "", "notice_kind": ""}
@@ -128,7 +150,9 @@ def rewarded_start(request: HttpRequest, config_id: int) -> JsonResponse:
         is_deleted=False,
     )
     try:
-        result = rewarded.start(request, request.user, config)
+        result = rewarded.start(
+            request, request.user, config, _reference(request, config)
+        )
     except rewarded.RewardedAdError as error:
         return _error(error)
     return JsonResponse(

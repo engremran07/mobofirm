@@ -1,0 +1,89 @@
+// Dialog = Bootstrap modal markup, re-skinned (host: #console-dialog, content swapped by HTMX).
+//   <div class="modal-dialog modal-dialog-centered [modal-lg]" data-console-dialog-content><div class="modal-content [c-dialog--danger]">
+//     <div class="modal-header"><span class="c-dialog__icon">icon</span><h2 class="modal-title">..</h2><button class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div>
+//     <div class="modal-body">..</div><div class="modal-footer"><button class="btn btn-ghost">Cancel</button><button class="btn btn-primary">Save</button></div></div></div>
+// Danger confirmations: add .c-dialog--danger to .modal-content (danger icon tint + edge).
+@layer components {
+  .modal {
+    --bs-modal-bg: var(--mf-surface-raised);
+    --bs-modal-color: var(--mf-text);
+    --bs-modal-border-color: var(--mf-border);
+    --bs-modal-border-width: 1px;
+    --bs-modal-border-radius: var(--mf-radius-lg);
+    --bs-modal-inner-border-radius: calc(var(--mf-radius-lg) - 1px);
+    --bs-modal-box-shadow: var(--mf-elev-3);
+    --bs-modal-padding: var(--mf-space-5);
+    --bs-modal-header-padding: var(--mf-space-5) var(--mf-space-5) var(--mf-space-2);
+    --bs-modal-header-border-width: 0;
+    --bs-modal-footer-gap: var(--mf-space-2);
+    --bs-modal-footer-border-width: 0;
+    --bs-modal-title-line-height: 1.25;
+  }
+
+  // The modal host is a native <dialog class="modal"> (js/ui/modal.js): a full-viewport transparent
+  // box in the top layer; .modal-dialog is the visible, centred panel and ::backdrop is the scrim.
+  dialog.modal {
+    inline-size: 100%;
+    block-size: 100%;
+    max-inline-size: none;
+    max-block-size: none;
+    margin: 0;
+    padding: 0;
+    color: inherit;
+    background: transparent;
+    border: 0;
+    outline: 0;
+
+    &[open] { display: block; overflow-y: auto; }
+    &[open] .modal-dialog { animation: c-pop var(--mf-duration-base) var(--mf-ease-out); }
+
+    &::backdrop {
+      background: var(--mf-overlay);
+
+      @supports (backdrop-filter: blur(1px)) {
+        backdrop-filter: blur(3px);
+      }
+    }
+  }
+
+  body:has(dialog.modal[open]) { overflow: hidden; }
+  .modal-content { overflow: hidden; }
+
+  .modal-title {
+    flex: 1;
+    min-inline-size: 0;
+    font-family: var(--mf-font-display);
+    font-size: var(--mf-fs-xl);
+    font-weight: 600;
+  }
+
+  .modal-header { align-items: flex-start; gap: var(--mf-space-3); }
+  .modal-header .btn-close { margin: -0.25rem -0.5rem 0 auto; }
+
+  .modal-body { color: var(--mf-text-muted); font-size: var(--mf-fs-base); }
+  .modal-body > :last-child { margin-block-end: 0; }
+
+  .modal-footer {
+    justify-content: flex-end;
+    padding: var(--mf-space-3) var(--mf-space-5) var(--mf-space-5);
+  }
+
+  .c-dialog__icon {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: 2.5rem;
+    block-size: 2.5rem;
+    color: var(--mf-accent-strong);
+    background: var(--mf-accent-soft);
+    border-radius: 50%;
+  }
+
+  .c-dialog--danger { border-color: color-mix(in srgb, var(--mf-danger) 40%, var(--mf-border)); }
+  .c-dialog--danger .c-dialog__icon { color: var(--mf-danger); background: var(--mf-danger-soft); }
+
+  @media (max-width: 575.98px) {
+    .modal-footer { flex-direction: column-reverse; align-items: stretch; }
+    .modal-footer > .btn { inline-size: 100%; }
+  }
+}

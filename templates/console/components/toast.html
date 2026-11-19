@@ -1,0 +1,10 @@
+{% comment %}
+  toast - one transient notification inside #console-toasts (the behaviour layer arms the auto-dismiss timer).
+  Context: message (required), level (success|info|warning|danger; Django's "error" is mapped by the caller), title,
+  timeout (ms; 0 = stays until dismissed; default per level in the behaviour layer).
+  The same markup is rendered once inside <template data-console-toast-template> for toasts created by HX-Trigger.
+{% endcomment %}{% load i18n console_ui %}{% with tone=level|console_variant:"info" %}<div class="c-toast c-toast--{{ tone }}" role="{% if tone == 'danger' or tone == 'warning' %}alert{% else %}status{% endif %}" data-console-toast data-console-toast-level="{{ tone }}"{% if timeout is not None and timeout != "" %} data-console-toast-timeout="{{ timeout }}"{% endif %}>
+<span class="c-toast__icon" data-console-toast-icon>{% if tone == "success" %}{% console_icon "circle-check" %}{% elif tone == "danger" %}{% console_icon "circle-x" %}{% elif tone == "warning" %}{% console_icon "triangle-alert" %}{% else %}{% console_icon "info" %}{% endif %}</span>
+<div class="c-toast__body">{% if title %}<strong class="c-toast__title" data-console-toast-title>{{ title }}</strong>{% endif %}<span data-console-toast-message>{{ message }}</span></div>
+<button type="button" class="btn-close c-toast__close" data-console-toast-close aria-label="{% translate 'Dismiss notification' %}"></button>
+</div>{% endwith %}

@@ -1,4 +1,4 @@
-{# Context: tags (page of public tags with live_count), page_obj, q, tag_settings, search_* (list_search_context). #}
+{% load ad_tags %}{# Context: tags (page of public tags with live_count), page_obj, q, tag_settings, search_* (list_search_context). #}
 {% include "components/search_feedback.html" with noun="topic" %}
 {% if tags %}
   <h2 class="visually-hidden">All topics</h2>
@@ -12,6 +12,7 @@
           {% if tag_settings.show_tag_usage %}<p class="tag-card__count numeric">{{ tag.live_count }} article{{ tag.live_count|pluralize }}</p>{% endif %}
         </div>
       </li>
+      {% ad_tile forloop.counter tags|length layout="tag" page="tags/list.html" %}
     {% endfor %}
   </ul>
   {% include "components/pagination.html" with page_obj=page_obj label="Topic pages" hx_target="#tag-results" %}

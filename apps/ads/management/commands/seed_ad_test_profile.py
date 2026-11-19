@@ -28,6 +28,12 @@ TARGETS: tuple[tuple[str, str], ...] = (
     ("firmwares/firmware_detail.html", "in_content"),
     ("blog/post_list.html", "between_items"),
     ("firmwares/browse.html", "between_items"),
+    # Automatic slots: paragraphs of a post and tiles of the catalogue grids.
+    ("blog/post_detail.html", "in_article"),
+    ("firmwares/brand_list.html", "between_items"),
+    ("firmwares/chipset_list.html", "between_items"),
+    ("firmwares/brand_detail.html", "between_items"),
+    ("tags/list.html", "between_items"),
 )
 CREATIVES: dict[str, str] = {
     "728x90": '<div class="ad-zone__house">Mobofirm house ad &middot; 728x90</div>',

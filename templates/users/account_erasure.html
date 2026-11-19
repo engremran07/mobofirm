@@ -1,0 +1,54 @@
+{% extends "account/_auth_layout.html" %}
+{% block title %}Erase my account | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block auth_crumbs %}{% url 'users:profile' as account_url %}{% include "components/breadcrumbs.html" with current="Erase account" parent_label="Profile" parent_url=account_url %}{% endblock %}
+{% block auth_aside %}{% endblock %}
+{% block auth_icon %}user-x{% endblock %}
+{% block auth_eyebrow %}Privacy{% endblock %}
+{% block auth_title %}Erase my account{% endblock %}
+{% block auth_body %}
+<p class="auth-card__lead">Erasing removes your sign-in, profile, notifications, followers and saved devices, and anonymises what you published. This cannot be undone once it runs.</p>
+{% if erasure and erasure.status == "scheduled" %}
+  <div class="alert alert-warning" role="status" id="erasure-scheduled">
+    <strong>Erasure is scheduled</strong> for {{ erasure.scheduled_for|date:"j F Y, H:i" }}. Until then nothing has changed and you can cancel.
+  </div>
+  <form method="post" class="auth-form">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="cancel">
+    <button class="btn btn-primary btn-lg w-100" type="submit">Keep my account</button>
+  </form>
+{% elif erasure %}
+  <div class="alert alert-info" role="status" id="erasure-awaiting">
+    <strong>Check your email.</strong> We sent a confirmation link to your address; it expires in {{ confirmation_hours }} hours. Nothing is erased until you confirm it.
+  </div>
+  <form method="post" class="auth-form mb-3">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="request">
+    {% if needs_password %}
+      <label class="form-label" for="erasure-resend-password">Password</label>
+      <input class="form-control mb-3" id="erasure-resend-password" name="password" type="password" autocomplete="current-password" required>
+    {% endif %}
+    <button class="btn btn-outline-secondary w-100" type="submit">Send the link again</button>
+  </form>
+  <form method="post" class="auth-form">
+    {% csrf_token %}
+    <input type="hidden" name="action" value="cancel">
+    <button class="btn btn-primary btn-lg w-100" type="submit">Keep my account</button>
+  </form>
+{% elif blocked %}
+  <div class="alert alert-warning" role="status" id="erasure-blocked">{{ blocked }}</div>
+{% else %}
+  <p>After you confirm by email, the erasure runs {{ grace_days }} days later. You can cancel at any time before then.</p>
+  <div class="auth-danger-zone">
+    <h2 class="auth-danger-zone__title">Request erasure</h2>
+    <form method="post" class="auth-form">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="request">
+      {% if needs_password %}
+        <label class="form-label" for="erasure-password">Confirm your password</label>
+        <input class="form-control mb-3" id="erasure-password" name="password" type="password" autocomplete="current-password" required>
+      {% endif %}
+      <button class="btn btn-outline-danger" type="submit">Email me a confirmation link</button>
+    </form>
+  </div>
+{% endif %}
+{% endblock %}

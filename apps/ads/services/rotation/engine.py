@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import random
-from collections.abc import Iterable
+from collections.abc import Collection, Iterable
 
 from django.db import DatabaseError
 
@@ -35,11 +35,16 @@ def _aggressiveness_multiplier() -> int:
 
 
 def choose_creative(
-    placement: AdPlacement, context: dict | None = None
+    placement: AdPlacement,
+    context: dict | None = None,
+    *,
+    exclude: Collection[int] = (),
 ) -> AdCreative | None:
     """
     Weighted random selection among enabled assignments for a placement.
-    Aggressiveness controls how heavily weights are emphasized.
+    Aggressiveness controls how heavily weights are emphasized. ``exclude`` lists
+    creative ids that must not be chosen (automatic slots never repeat a creative on
+    one page).
     """
     if not feature_flags.ads_enabled():
         return None
@@ -82,6 +87,8 @@ def choose_creative(
     mult = _aggressiveness_multiplier()
     for a in qs:
         creative = a.creative
+        if creative.id in exclude:
+            continue
         if allowed_types and creative.creative_type not in allowed_types:
             continue
         campaign = creative.campaign

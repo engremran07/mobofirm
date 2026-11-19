@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="site-container py-4">
+  <h1 class="h2">Feeds</h1>
+  <p class="lead">Follow new firmware and posts in any feed reader. Paste a feed address into the reader, or let it find the feed from the site address.</p>
+  <ul class="list-unstyled d-flex flex-column gap-3">
+    {% for feed in feeds %}
+      <li>
+        <h2 class="h5 mb-1">{{ feed.title }}</h2>
+        <p class="mb-1">{{ feed.description }}</p>
+        <p class="mb-0">
+          {% for link in feed.links %}<a href="{{ link.url }}" type="{% if link.fmt == 'json' %}application/feed+json{% elif link.fmt == 'atom' %}application/atom+xml{% else %}application/rss+xml{% endif %}">{{ link.label }}</a>{% if not forloop.last %} · {% endif %}{% endfor %}
+        </p>
+      </li>
+    {% endfor %}
+  </ul>
+  {% if dynamic %}
+    <h2 class="h5">Narrower feeds</h2>
+    <p>Add a brand, chipset or tag to follow only that: <code>/feeds/brand/&lt;brand&gt;.rss</code>, <code>/feeds/chipset/&lt;chipset&gt;.atom</code> or <code>/feeds/tag/&lt;tag&gt;.json</code>.</p>
+  {% endif %}
+  <h2 class="h5">On Android</h2>
+  <p>Install a feed reader app and add a feed above. Installing the site from Chrome (Add to Home screen) gives you a shortcut; the feed itself is followed by the reader you choose.{% if hub %} Updates are pushed to readers that support WebSub.{% endif %}</p>
+</div>
+{% endblock %}

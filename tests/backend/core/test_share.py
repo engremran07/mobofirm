@@ -22,7 +22,7 @@ def by_label() -> dict[str, ShareLink]:
 def render(url: str, title: str = "A title", request=None, **options: str) -> str:
     extra = "".join(f' {key}="{value}"' for key, value in options.items())
     template = Template(
-        '{% load share_tags %}{% share_widget url title' + extra + " %}"
+        "{% load share_tags %}{% share_widget url title" + extra + " %}"
     )
     return template.render(Context({"url": url, "title": title, "request": request}))
 
@@ -92,7 +92,7 @@ def test_unusable_urls_yield_no_links() -> None:
         "https:///nohost",
         "https://user:secret@example.org/x",
     ):
-        assert share_links(bad, TITLE) == [], bad
+        assert not share_links(bad, TITLE), bad
         assert not is_shareable_url(bad)
 
 

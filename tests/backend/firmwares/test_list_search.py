@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from typing import Any
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -36,7 +37,7 @@ def _fresh_cache() -> None:
 
 
 @pytest.fixture(name="world")
-def _world() -> dict[str, object]:
+def _world() -> dict[str, Any]:
     """Two brands, two chipsets, devices, firmware, a tool and a guide."""
     samsung = Brand.objects.create(name="Samsung", slug="samsung")
     xiaomi = Brand.objects.create(name="Xiaomi", slug="xiaomi")
@@ -112,7 +113,7 @@ def _world() -> dict[str, object]:
     }
 
 
-def _publish_guide(world: dict[str, object], title: str, published: bool) -> None:
+def _publish_guide(world: dict[str, Any], title: str, published: bool) -> None:
     slug = title.lower().replace(" ", "-")
     author = get_user_model().objects.create_user(
         username=slug, email=f"{slug}@example.test"
@@ -257,7 +258,7 @@ def test_library_hub_brand_search_uses_the_engine() -> None:
     assert b"Xiaomi" in response.content
 
 
-def test_brand_detail_filters_its_models(world: dict[str, object]) -> None:
+def test_brand_detail_filters_its_models(world: dict[str, Any]) -> None:
     """Brand pages search only that brand's active models."""
     Model.objects.create(brand=world["samsung"], name="Galaxy A54", slug="galaxy-a54")
     page = _get("firmwares:brand_detail", {"q": "A54"}, kwargs={"slug": "samsung"})
@@ -276,7 +277,7 @@ def test_brand_detail_filters_its_models(world: dict[str, object]) -> None:
     assert b'data-request-cta="model"' in other.content
 
 
-def test_chipset_detail_filters_its_devices(world: dict[str, object]) -> None:
+def test_chipset_detail_filters_its_devices(world: dict[str, Any]) -> None:
     """Chipset pages search the devices that use the chipset."""
     chip = world["sd8"]
     page = _get("firmwares:chipset_detail", {"q": "galaxy"}, kwargs={"slug": chip.slug})
@@ -305,7 +306,7 @@ def test_tools_empty_search_keeps_request_button() -> None:
     assert b'data-request-cta="chipset"' in response.content
 
 
-def test_guides_search_hides_drafts(world: dict[str, object]) -> None:
+def test_guides_search_hides_drafts(world: dict[str, Any]) -> None:
     """Guide search lists published guides only."""
     _publish_guide(world, "Flash Galaxy S23 stock", published=True)
     _publish_guide(world, "Flash Galaxy S23 secret draft", published=False)

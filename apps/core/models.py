@@ -1,9 +1,17 @@
+from __future__ import annotations
+
+import copy
+
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from django.db.models.signals import post_delete, post_save
 from solo.models import SingletonModel
 
 from apps.core.metrics.collector import Metric
+from apps.core.utils.request_cache import forget, memoize
 from apps.users.models import AuditFieldsModel, SoftDeleteModel, TimestampedModel
+
+REGISTRY_MEMO_KEY = "core.app_registry"
 
 
 class AppRegistry(SingletonModel):
@@ -12,11 +20,21 @@ class AppRegistry(SingletonModel):
     ads_enabled = models.BooleanField(default=True)
     blog_enabled = models.BooleanField(default=True)
     comments_enabled = models.BooleanField(default=True)
-    devices_enabled = models.BooleanField(default=True)
+    devices_enabled = models.BooleanField(
+        default=True,
+        help_text=(
+            "Kept for completeness only: device registration and enforcement are "
+            "never switched off by this flag. Use 'device identity' to pause "
+            "automatic registration."
+        ),
+    )
     firmwares_enabled = models.BooleanField(default=True)
     tags_enabled = models.BooleanField(default=True)
     users_enabled = models.BooleanField(default=True)
-    device_identity_enabled = models.BooleanField(default=True)
+    device_identity_enabled = models.BooleanField(
+        default=True,
+        help_text="Register a device automatically when a signed-in visitor arrives.",
+    )
     storage_enabled = models.BooleanField(default=True)
     seo_enabled = models.BooleanField(default=True)
     pages_enabled = models.BooleanField(default=True)
@@ -35,6 +53,37 @@ class AppRegistry(SingletonModel):
 
     def __str__(self) -> str:
         return "Application Registry"
+
+    @classmethod
+    def get_solo(cls) -> AppRegistry:
+        """The registry row, read once per request (``apps.core.utils.request_cache``).
+
+        Every reader (``app_enabled``, ``AppService``, context processors, signal
+        receivers) shares one query per request. Callers get their own copy, so
+        editing the returned instance (an admin form) never leaks into other readers;
+        saving or deleting the row drops the memo. Outside a request every call reads
+        the database.
+        """
+        shared = memoize(REGISTRY_MEMO_KEY, super().get_solo)
+        return copy.copy(shared)
+
+
+def _forget_registry(**_kwargs: object) -> None:
+    forget(REGISTRY_MEMO_KEY)
+
+
+post_save.connect(
+    _forget_registry,
+    sender=AppRegistry,
+    weak=False,
+    dispatch_uid="core.app_registry.forget.save",
+)
+post_delete.connect(
+    _forget_registry,
+    sender=AppRegistry,
+    weak=False,
+    dispatch_uid="core.app_registry.forget.delete",
+)
 
 
 class SearchSettings(SingletonModel):

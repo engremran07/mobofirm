@@ -3,8 +3,8 @@
 {% block title %}Download packages{% endblock %}
 {% block content %}
 <div class="site-container cm-page py-4 py-lg-5">
-  {% include "components/breadcrumbs.html" with current="Shop" %}
-  {% include "components/page_header.html" with eyebrow="Shop" title="Download packages" lead="Compare download allowances and request the package that fits how you use the library." %}
+  {% include "components/breadcrumbs.html" with current="Pricing" %}
+  {% include "components/page_header.html" with eyebrow="Pricing" title="Download packages" lead="Compare download allowances and request the package that fits how you use the library." %}
   {% include "shop/_subnav.html" with shop_tab="packages" %}
   {% if not online_payments_enabled %}<div class="mb-4">{% include "shop/_payment_notice.html" %}</div>{% endif %}
 

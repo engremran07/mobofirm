@@ -124,7 +124,9 @@ class ContainerBuildContractTests(SimpleTestCase):
 
     def test_root_static_is_not_copied_from_the_context(self):
         """``static/`` only holds generated Vite output; the frontend stage supplies it."""
-        self.assertNotIn("static", {source for _stage, source in context_copy_sources()})
+        self.assertNotIn(
+            "static", {source for _stage, source in context_copy_sources()}
+        )
         text = DOCKERFILE.read_text(encoding="utf-8")
         self.assertIn("--from=frontend", text)
         self.assertIn("/build/static/build ./static/build", text)

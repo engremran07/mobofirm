@@ -1,4 +1,4 @@
-"""Staff tools for the access type of approved firmware (Unfold admin).
+"""Staff tools for the access type of approved firmware.
 
 * :class:`AccessChangeAdmin` is the base of the typed firmware admins: the access type
   and price are read-only on the form and change only through the **Change access
@@ -26,13 +26,6 @@ from django.http import Http404, HttpRequest, HttpResponse
 from django.utils.html import format_html, format_html_join
 from django.utils.safestring import SafeString
 from django.utils.translation import gettext_lazy as _
-from unfold.contrib.filters.admin import ChoicesDropdownFilter, RangeDateTimeFilter
-from unfold.forms import ActionForm, BaseDialogForm
-from unfold.widgets import (
-    UnfoldAdminSelectWidget,
-    UnfoldAdminTextareaWidget,
-    UnfoldAdminTextInputWidget,
-)
 
 from apps.core.admin_base import (
     BADGE_APPROVAL,
@@ -46,6 +39,14 @@ from apps.core.admin_base import (
     display,
     htmx_redirect,
     return_url,
+)
+from apps.core.admin_filters import ChoicesDropdownFilter, RangeDateTimeFilter
+from apps.core.admin_forms import (
+    ActionForm,
+    BaseDialogForm,
+    ConsoleSelectWidget,
+    ConsoleTextareaWidget,
+    ConsoleTextInputWidget,
 )
 
 from . import access_changes, access_requests, auto_feature
@@ -75,7 +76,7 @@ def _price_field(label: Any, help_text: Any = None) -> forms.DecimalField:
         min_value=0,
         max_digits=10,
         decimal_places=2,
-        widget=UnfoldAdminTextInputWidget,
+        widget=ConsoleTextInputWidget,
         help_text=help_text
         or _("USD. Only for paid files; the credits price follows the rate."),
     )
@@ -98,13 +99,13 @@ class AccessChangeFields(forms.Form):
         choices=AccessTier.choices,
         label=_("New access type"),
         help_text=DIALOG_HELP,
-        widget=UnfoldAdminSelectWidget,
+        widget=ConsoleSelectWidget,
     )
     approved_price = _price_field(_("Approved price (USD)"))
     reason = forms.CharField(
         label=_("Reason"),
         max_length=1000,
-        widget=UnfoldAdminTextareaWidget(attrs={"rows": 3}),
+        widget=ConsoleTextareaWidget(attrs={"rows": 3}),
     )
 
     def clean(self) -> dict[str, Any]:
@@ -124,14 +125,14 @@ class AccessChangeActionForm(ActionForm):
         choices=[("", "— new access type —"), *AccessTier.choices],
         required=False,
         label=_("Access type (for “Change access type”)"),
-        widget=UnfoldAdminSelectWidget,
+        widget=ConsoleSelectWidget,
     )
     approved_price = _price_field(_("Price (USD, paid only)"))
     reason = forms.CharField(
         required=False,
         max_length=1000,
         label=_("Reason (recorded in the history)"),
-        widget=UnfoldAdminTextareaWidget(attrs={"rows": 2}),
+        widget=ConsoleTextareaWidget(attrs={"rows": 2}),
     )
 
 
@@ -146,7 +147,7 @@ class ApproveRequestForm(BaseDialogForm):
         label=_("Note to the requester"),
         required=False,
         max_length=1000,
-        widget=UnfoldAdminTextareaWidget(attrs={"rows": 3}),
+        widget=ConsoleTextareaWidget(attrs={"rows": 3}),
     )
 
 
@@ -440,7 +441,9 @@ class AccessChangeLogAdmin(ReadOnlyModelAdmin):
     search_fields = ("firmware_label", "reason", "actor__email")
     list_select_related = ("actor",)
 
-    def has_revert_permission(self, request: HttpRequest) -> bool:
+    def has_revert_permission(
+        self, request: HttpRequest, _object_id: object | None = None
+    ) -> bool:
         """Staff who decide access change requests may also revert a change."""
         return bool(request.user.has_perm("firmwares.change_accesschangerequest"))
 

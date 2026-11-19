@@ -6,17 +6,25 @@ Collect and track application metrics.
 """
 
 import logging
+import time
 from typing import Any, ClassVar
 
-from django.db import DatabaseError, models
+from django.conf import settings
+from django.db import DatabaseError, models, transaction
 
 logger = logging.getLogger(__name__)
 
 
 class Metric(models.Model):
-    """Stored metric data"""
+    """Stored metric data.
 
-    name = models.CharField(max_length=200, db_index=True)
+    Tags must be low-cardinality and free of personal data (no user ids, e-mail
+    addresses or IPs). Rows older than the retention window are deleted by
+    ``cleanup_old_data`` (the ``timestamp`` index serves that range delete; the
+    composite index serves ``MetricsCollector.get_metrics``).
+    """
+
+    name = models.CharField(max_length=200)
     value = models.FloatField()
     tags = models.JSONField(default=dict, blank=True)
     timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
@@ -41,8 +49,6 @@ class MetricsCollector:
     """
 
     def __init__(self, backend: str | None = None):
-        from django.conf import settings
-
         self.backend = backend or getattr(settings, "METRICS_BACKEND", "database")
         self.enabled = getattr(settings, "METRICS_ENABLED", True)
 
@@ -62,7 +68,10 @@ class MetricsCollector:
 
         try:
             if self.backend == "database":
-                Metric.objects.create(name=metric_name, value=value, tags=tags)
+                # A savepoint keeps a failed insert from poisoning the caller's
+                # transaction (the error is swallowed below).
+                with transaction.atomic():
+                    Metric.objects.create(name=metric_name, value=value, tags=tags)
             else:
                 logger.warning(
                     "Metrics backend %r is not implemented; dropped %s",
@@ -162,7 +171,11 @@ class MetricsCollector:
 
         if tags:
             for key, value in tags.items():
-                qs = qs.filter(tags__contains={key: value})
+                if not key.isidentifier() or "__" in key:
+                    raise ValueError(f"Invalid metric tag name: {key!r}")
+                # Key lookups work on every database; JSON ``contains`` is
+                # PostgreSQL-only.
+                qs = qs.filter(**{f"tags__{key}": value})
 
         return qs
 
@@ -185,16 +198,12 @@ class Timer:
         self.start_time: float | None = None
 
     def __enter__(self):
-        import time
-
-        self.start_time = time.time()
+        self.start_time = time.perf_counter()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        import time
-
-        if self.start_time:
-            duration_ms = (time.time() - self.start_time) * 1000
+        if self.start_time is not None:
+            duration_ms = (time.perf_counter() - self.start_time) * 1000
             self.collector.timing(self.metric_name, duration_ms, self.tags)
 
 

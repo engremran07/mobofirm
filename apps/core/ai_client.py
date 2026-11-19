@@ -140,7 +140,7 @@ class AICircuitBreaker:
             self.record_success()
         else:
             self.record_failure()
-            return False  # Re-raise exception
+        return False  # never swallow the exception
 
 
 @dataclass

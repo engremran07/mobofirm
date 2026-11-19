@@ -1,10 +1,15 @@
-"""Branding callables for the Unfold admin (resolved per request via dotted paths)."""
+"""Branding of the staff console, resolved per request.
+
+``console_branding(request)`` is what ``MobofirmAdminSite.each_context`` publishes as
+``console_branding``; the individual callables stay public for reuse and tests.
+"""
 
 from __future__ import annotations
 
+from typing import Any
+
 from django.conf import settings
 from django.http import HttpRequest
-from django.templatetags.static import static
 from django.urls import reverse
 from django.utils.translation import gettext as _
 
@@ -12,14 +17,20 @@ from app.version import build_info, environment_name
 from apps.site_settings.services import get_site_settings
 
 
-def theme_styles(request: HttpRequest) -> str:
-    """Stylesheet of the header theme switcher (built by Vite)."""
-    return static("build/admin-theme-switch.css")
-
-
-def theme_scripts(request: HttpRequest) -> str:
-    """Classic head script that applies the stored theme before first paint."""
-    return static("build/admin-theme.js")
+def console_branding(request: HttpRequest) -> dict[str, Any]:
+    """Everything the shell needs to brand itself (one cached settings read)."""
+    label, tone = environment_label(request)
+    return {
+        "site_title": site_title(request),
+        "site_header": site_header(request),
+        "site_subheader": site_subheader(request),
+        "site_version": site_version(request),
+        "site_url": site_url(request),
+        "health_url": health_url(request),
+        "icon": site_icon(request),
+        "favicons": favicons(request),
+        "environment": {"label": label, "tone": tone},
+    }
 
 
 def site_title(request: HttpRequest) -> str:

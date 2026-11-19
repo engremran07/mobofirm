@@ -25,6 +25,8 @@
     <li><i class="icon" data-lucide="check" aria-hidden="true"></i><span>{{ package.devices_text|capfirst }}</span></li>
     <li{% if not package.applies_to_featured %} class="is-off"{% endif %}><i class="icon" data-lucide="{% if package.applies_to_featured %}check{% else %}x{% endif %}" aria-hidden="true"></i><span>Featured files{% if not package.applies_to_featured %} <span class="visually-hidden">not included</span>{% endif %}</span></li>
     {% for perk in package.perk_labels %}<li><i class="icon" data-lucide="check" aria-hidden="true"></i><span>{{ perk }}</span></li>{% endfor %}
+    <li data-plan-ads><i class="icon" data-lucide="check" aria-hidden="true"></i><span>{{ package.ads_text }}</span></li>
+    {% if package.unlock_offers_free or package.unlock_offers_featured %}<li data-plan-unlock><i class="icon" data-lucide="check" aria-hidden="true"></i><span>{{ package.unlock_text }}</span></li>{% endif %}
   </ul>
   <div class="plan-card__cta">
     {% if not package.is_default and package.price > 0 %}

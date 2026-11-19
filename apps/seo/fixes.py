@@ -20,6 +20,7 @@ from django.utils import timezone
 from . import autonomy, ledger
 from .models import ChangeLedger, CrawlRun, Issue, Metadata, SEOModel, SEOSettings
 from .proposals import DESCRIPTION_FIELD, TITLE_FIELD
+from .resolver import valid_robots
 from .rules import (
     DESCRIPTION_MAX,
     DESCRIPTION_MIN,
@@ -27,11 +28,70 @@ from .rules import (
     TITLE_MIN,
     rule_for,
 )
+from .siteurls import is_absolute_http
 
 NOINDEX_FIELD = "noindex"
-FIXABLE_FIELDS = frozenset({TITLE_FIELD, DESCRIPTION_FIELD, NOINDEX_FIELD})
+
+
+@dataclass(frozen=True)
+class OverrideSpec:
+    name: str
+    label: str
+    kind: str = "text"  # text | textarea | url | bool | robots
+    max_length: int = 0
+    help_text: str = ""
+
+
+# Every field of the SEO override layer (``seo.Metadata``) the screens may edit.
+OVERRIDE_SPECS: dict[str, OverrideSpec] = {
+    spec.name: spec
+    for spec in (
+        OverrideSpec(
+            TITLE_FIELD,
+            "Meta title",
+            "text",
+            TITLE_MAX,
+            f"{TITLE_MIN}-{TITLE_MAX} characters.",
+        ),
+        OverrideSpec(
+            DESCRIPTION_FIELD,
+            "Meta description",
+            "textarea",
+            DESCRIPTION_MAX,
+            f"{DESCRIPTION_MIN}-{DESCRIPTION_MAX} characters.",
+        ),
+        OverrideSpec(
+            "canonical_url",
+            "Canonical URL",
+            "url",
+            help_text="An absolute https:// URL. Empty uses the page's own URL.",
+        ),
+        OverrideSpec(
+            "robots_directives",
+            "Robots directives",
+            "robots",
+            255,
+            "Comma-separated, e.g. index, follow, max-image-preview:large.",
+        ),
+        OverrideSpec(NOINDEX_FIELD, "Keep out of search results (noindex)", "bool"),
+        OverrideSpec("nofollow", "Do not follow links (nofollow)", "bool"),
+        OverrideSpec("social_title", "Social card title", "text", 255),
+        OverrideSpec("social_description", "Social card description", "textarea", 320),
+        OverrideSpec(
+            "social_image",
+            "Social image URL",
+            "url",
+            help_text="An absolute https:// URL, at least 1200 px wide.",
+        ),
+    )
+}
+FIXABLE_FIELDS = frozenset(OVERRIDE_SPECS)
 ADD_CODES = frozenset({"title_missing", "description_missing"})
 KIND_ADD, KIND_REWRITE = "metadata_fix_add", "metadata_fix_rewrite"
+KIND_OBJECT = "object_fix"
+BOOL_FIELDS = frozenset({NOINDEX_FIELD, "nofollow"})
+# Only these are applied unattended by autopilot; every other field needs a person.
+AUTO_FIELDS = frozenset({TITLE_FIELD, DESCRIPTION_FIELD, NOINDEX_FIELD})
 
 
 class FixError(Exception):
@@ -50,12 +110,13 @@ def kind_for(issue: Issue) -> str:
 
 
 def can_edit(issue: Issue) -> bool:
-    """Whether a reviewer can set this issue's field (with or without a proposal)."""
+    """Whether a reviewer can fix this issue from the SEO screens.
+
+    Every open issue with an owner (a content object, or the route of a page without
+    one) can: the override layer accepts every public URL.
+    """
     return bool(
-        issue.status == Issue.Status.OPEN
-        and issue.seo_field in FIXABLE_FIELDS
-        and issue.object_label
-        and issue.object_pk
+        issue.status == Issue.Status.OPEN and issue.object_label and issue.object_pk
     )
 
 
@@ -76,15 +137,30 @@ def validate_value(seo_field: str, value: str) -> list[str]:
             return [
                 f"Description is {len(text)} characters; the limit is {DESCRIPTION_MAX}."
             ]
-    elif seo_field == NOINDEX_FIELD:
+    elif seo_field in BOOL_FIELDS:
         if value.strip().lower() not in {"true", "false"}:
             return ["Use true or false."]
+    elif seo_field == "canonical_url":
+        if text and not is_absolute_http(text):
+            return ["The canonical must be an absolute http(s) URL (or empty)."]
+    elif seo_field == "robots_directives":
+        if text and not valid_robots(text):
+            return ["Use known robots directives separated by commas."]
+    elif seo_field == "social_image":
+        if text and not is_absolute_http(text):
+            return ["The social image must be an absolute http(s) URL (or empty)."]
+    elif seo_field in {"social_title", "social_description"}:
+        limit = OVERRIDE_SPECS[seo_field].max_length
+        if len(text) > limit:
+            return [
+                f"{OVERRIDE_SPECS[seo_field].label} can have at most {limit} characters."
+            ]
     else:
         return [f"{seo_field or 'This field'} cannot be edited here."]
     return []
 
 
-def _container(label: str, pk: str) -> SEOModel:
+def container_for(label: str, pk: str) -> SEOModel:
     app_label, _, model = label.partition(".")
     try:
         content_type = ContentType.objects.get(app_label=app_label, model=model)
@@ -99,11 +175,11 @@ def _container(label: str, pk: str) -> SEOModel:
     return container
 
 
-def _typed(seo_field: str, value: str) -> Any:
-    return value.strip().lower() == "true" if seo_field == NOINDEX_FIELD else value
+def typed(seo_field: str, value: str) -> Any:
+    return value.strip().lower() == "true" if seo_field in BOOL_FIELDS else value
 
 
-def _check_mode() -> SEOSettings:
+def check_mode() -> SEOSettings:
     row = SEOSettings.get_solo()
     if not row.seo_enabled or row.autonomy_mode == SEOSettings.AutonomyMode.OFF:
         raise FixError("SEO automation is switched off.")
@@ -128,7 +204,7 @@ def apply_fix(
     reaudit: bool = True,
 ) -> ChangeLedger:
     """Write ``value`` (or the stored proposal) to the object's SEO override."""
-    row = _check_mode()
+    row = check_mode()
     issue.refresh_from_db()
     if not can_edit(issue):
         raise FixError("This issue cannot be fixed from the SEO screens.")
@@ -138,23 +214,23 @@ def apply_fix(
     problems = validate_value(issue.seo_field, final)
     if problems:
         raise FixError(" ".join(problems))
-    typed = _typed(issue.seo_field, final)
+    stored = typed(issue.seo_field, final)
     with transaction.atomic():
-        container = _container(issue.object_label, issue.object_pk)
+        container = container_for(issue.object_label, issue.object_pk)
         metadata = Metadata.objects.filter(seo=container).first()
         if metadata is not None:
             current = getattr(metadata, issue.seo_field)
-            if current == typed:
+            if current == stored:
                 raise FixError("The override already holds this value.")
             action = ChangeLedger.Action.UPDATE
             target_pk = str(metadata.pk)
             before = {issue.seo_field: current}
-            after = {issue.seo_field: typed}
+            after = {issue.seo_field: stored}
         else:
             action = ChangeLedger.Action.CREATE
             target_pk = ""
             before = {}
-            after = {"seo_id": container.pk, issue.seo_field: typed}
+            after = {"seo_id": container.pk, issue.seo_field: stored}
         digest = hashlib.sha256(final.encode()).hexdigest()[:12]
         attempts = ChangeLedger.objects.filter(
             idempotency_key__startswith=f"fix:{issue.pk}:{digest}:"
@@ -222,9 +298,7 @@ def safe_candidates(queryset: Any) -> list[Issue]:
     """Open issues whose proposal only fills a missing field (low risk)."""
     return [
         issue
-        for issue in queryset.filter(
-            status=Issue.Status.OPEN, fixable=True, code__in=ADD_CODES
-        )
+        for issue in queryset.filter(status=Issue.Status.OPEN, code__in=ADD_CODES)
         if can_edit(issue) and proposed_value(issue)
     ]
 
@@ -255,9 +329,11 @@ def auto_apply(run: CrawlRun) -> BulkResult:
     if not row.seo_enabled:
         return BulkResult()
     candidates: list[Issue] = []
-    queryset = Issue.objects.filter(status=Issue.Status.OPEN, fixable=True)
+    queryset = Issue.objects.filter(status=Issue.Status.OPEN).exclude(suggestion={})
     for issue in queryset:
         if not can_edit(issue) or not proposed_value(issue):
+            continue
+        if issue.seo_field not in AUTO_FIELDS:
             continue
         if autonomy.decide(kind_for(issue), mode).apply:
             candidates.append(issue)

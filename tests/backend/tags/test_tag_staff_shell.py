@@ -1,4 +1,4 @@
-"""Tag staff tool pages render inside the Unfold admin shell, not the public shell."""
+"""Tag staff tool pages render inside the staff console shell, not the public shell."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from apps.blog.models import Post, PostStatus
 from apps.tags.models import Tag
 from apps.tags.models_keyword import KeywordProvider, KeywordSuggestion
 
-PUBLIC_SHELL_MARKERS = ("site-container", "site-header", "bootstrap")
+PUBLIC_SHELL_MARKERS = ("site-container", "site-header", "build/site.")
 
 
 class TagStaffPageShellTests(TestCase):
@@ -61,20 +61,17 @@ class TagStaffPageShellTests(TestCase):
                 self.assertEqual(response.status_code, 200)
                 self.assertTemplateUsed(response, "admin/staff_page.html")
                 self.assertTemplateNotUsed(response, "base.html")
-                self.assertContains(response, 'class="mf-ui-title"')
+                self.assertContains(response, "console-staff-header")
                 self.assertContains(response, title)
-                self.assertContains(response, "unfold")
+                self.assertContains(response, "build/admin/")
                 self.assertContains(response, reverse("admin:index"))
                 html = response.content.decode()
                 for marker in PUBLIC_SHELL_MARKERS:
                     self.assertNotIn(marker, html)
-                self.assertNotRegex(
-                    html, r'class="(?:[^"]*\s)?(?:btn|card|d-flex)(?:\s[^"]*)?"'
-                )
 
     def test_manage_page_carries_the_dialog_slot_and_decision_forms(self):
         response = self.client.get(reverse("tags:manage"))
-        self.assertContains(response, 'id="dialog-slot"')
+        self.assertContains(response, 'id="console-dialog"')
         self.assertContains(response, "csrfmiddlewaretoken")
         self.assertContains(response, "Odd idea")
 

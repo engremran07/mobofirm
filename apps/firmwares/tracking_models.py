@@ -31,9 +31,11 @@ from django.contrib.contenttypes.models import ContentType
 from django.db import models
 from django.utils import timezone
 
+from .references import ref_kwargs
+
 FIRMWARE_REQUEST_TYPES: list[tuple[str, str]] = [
     ("official", "Official"),
-    ("engineering", "Engineering"),
+    ("engineering", "Service / Engineering"),
     ("readback", "Readback"),
     ("modified", "Modified"),
     ("other", "Other"),
@@ -83,10 +85,7 @@ class FirmwareView(models.Model):
     def log_view(cls, firmware, user=None, session_key=None, request=None):
         """Convenient method to log a view with optional request context"""
         data = {
-            "content_type": ContentType.objects.get_for_model(
-                firmware, for_concrete_model=False
-            ),
-            "object_id": firmware.id,
+            **ref_kwargs(firmware),
             "user": user,
             "session_key": session_key or "",
         }
@@ -120,6 +119,14 @@ class FirmwareDownloadAttempt(models.Model):
     # Storage integration (if using storage app)
     storage_session_id = models.UUIDField(
         null=True, blank=True, help_text="UserDownloadSession ID if applicable"
+    )
+    session = models.ForeignKey(
+        "firmwares.DownloadSession",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="attempts",
+        help_text="The download session (transfer lease) this attempt belongs to",
     )
 
     # Status tracking

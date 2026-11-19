@@ -72,11 +72,25 @@ def test_sitemaps_and_robots_render_without_csp_or_console_errors(live_server):
         browser = launch(playwright)
         page = browser.new_page()
         collect_errors(page, errors)
-        for path in ("/sitemap.xml", "/sitemap-brands.xml", "/robots.txt"):
+        for path in ("/sitemap.xml", "/sitemap-brands-1.xml", "/robots.txt"):
             response = page.goto(f"{live_server.url}{path}", wait_until="load")
             assert response is not None and response.status == 200, path
         page.goto(f"{live_server.url}/sitemap.xml", wait_until="load")
-        assert "sitemap-brands.xml" in page.content()
+        assert (
+            page.evaluate("getComputedStyle(document.documentElement).display")
+            == "table"
+        )
+        assert "sitemap-brands-1.xml" in page.evaluate(
+            "document.documentElement.textContent"
+        )
+        page.goto(f"{live_server.url}/sitemap-brands-1.xml", wait_until="load")
+        assert (
+            page.evaluate("getComputedStyle(document.documentElement).display")
+            == "table"
+        )
+        assert "/firmwares/nova/" in page.evaluate(
+            "document.documentElement.textContent"
+        )
         browser.close()
 
     assert errors == []
@@ -249,8 +263,8 @@ def test_seo_control_center_is_usable_responsive_and_error_free(live_server):
                 )
                 assert response is not None and response.status == 200, name
                 assert page.get_by_role("navigation", name="SEO sections").is_visible()
-                assert page.locator("h1.mf-ui-title").is_visible(), name
-                assert page.locator("#unfold-sidebar, nav[aria-label], aside").count()
+                assert page.locator(".console-staff-header h1").is_visible(), name
+                assert page.locator("aside[data-console-sidebar]").count()
                 dimensions = overflow(page)
                 assert dimensions["document"] <= dimensions["viewport"] + 1, (
                     f"{name} overflows at {width}px: {dimensions}"
@@ -325,7 +339,7 @@ def test_issues_board_review_and_inline_fix_flow(live_server, settings):
         assert page.get_by_text("Last content scan").is_visible()
         assert page.get_by_role("button", name="Run scan now").first.is_visible()
 
-        for width in (360, 768, 1365):
+        for width in (360, 768, 1280):
             page.set_viewport_size({"width": width, "height": 900})
             page.goto(
                 f"{live_server.url}{reverse('seo:issues')}?group=posts",
@@ -335,35 +349,53 @@ def test_issues_board_review_and_inline_fix_flow(live_server, settings):
             card = page.locator(f"#issue-{issue.pk}")
             assert card.is_visible(), width
             assert card.get_by_text("Title is too long").first.is_visible()
-            link = card.get_by_role("link", name=re.compile("Review and fix"))
+            link = card.get_by_role("link", name=re.compile("View and fix"))
             link.click()
-            panel = page.locator(f"#fix-{issue.pk} textarea")
-            panel.wait_for(state="visible")
-            assert panel.input_value().startswith("A very long post title")
+            page.wait_for_url(re.compile(r"/seo/fix/"))
+            ready(page)
+            assert page.get_by_role(
+                "heading", name="View and fix", level=1
+            ).is_visible()
+            field = page.locator("#fix-meta_title")
+            field.wait_for(state="visible")
+            assert field.input_value().startswith("A very long post title")
+            assert page.locator("#seo-serp-preview").is_visible()
+            assert page.get_by_text("Heading outline").is_visible()
             dimensions = overflow(page)
             assert dimensions["document"] <= dimensions["viewport"] + 1, (
-                f"board with panel overflows at {width}px: {dimensions}"
+                f"fix screen overflows at {width}px: {dimensions}"
             )
             page.evaluate("document.documentElement.classList.add('dark')")
             dimensions = overflow(page)
             assert dimensions["document"] <= dimensions["viewport"] + 1, (
-                f"dark board overflows at {width}px: {dimensions}"
+                f"dark fix screen overflows at {width}px: {dimensions}"
             )
             page.evaluate("document.documentElement.classList.remove('dark')")
 
-        page.set_viewport_size({"width": 1365, "height": 900})
+        page.set_viewport_size({"width": 1280, "height": 900})
         page.goto(
             f"{live_server.url}{reverse('seo:issues')}?group=posts", wait_until="load"
         )
         ready(page)
         card = page.locator(f"#issue-{issue.pk}")
-        card.get_by_role("link", name=re.compile("Review and fix")).click()
-        field = page.locator(f"#fix-{issue.pk} textarea")
+        card.get_by_role("link", name=re.compile("View and fix")).click()
+        page.wait_for_url(re.compile(r"/seo/fix/"))
+        field = page.locator("#fix-meta_title")
         field.wait_for(state="visible")
         field.fill("Flash the Atlas One safely, step by step")
-        page.locator(f"#fix-{issue.pk}").get_by_role("button", name="Apply fix").click()
-        page.wait_for_url(re.compile(r"/seo/issues/"))
-        assert page.get_by_text("Fixed: Title is too long").is_visible()
+        page.locator("#seo-serp-preview").get_by_text(
+            "Flash the Atlas One safely, step by step"
+        ).wait_for(state="visible")
+        page.get_by_role("button", name="Save and re-audit").click()
+        page.wait_for_url(re.compile(r"/seo/fix/"))
+        assert page.get_by_text(re.compile("Saved 1 change")).is_visible()
+        with page.expect_navigation() as reloaded:
+            page.reload()
+        assert reloaded.value is not None
+        assert reloaded.value.request.method == "GET"
+        page.goto(
+            f"{live_server.url}{reverse('seo:issues')}?group=posts", wait_until="load"
+        )
         assert page.locator(f"#issue-{issue.pk}").count() == 0
 
         page.goto(f"{live_server.url}{post.get_absolute_url()}", wait_until="load")

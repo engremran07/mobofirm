@@ -97,8 +97,11 @@ class UserAuthenticationApiTests(TestCase):
         enforcement = Mock(side_effect=DevicePolicyError("blocked_device"))
 
         with patch(
-            "apps.users.api_auth.AppService.get",
-            return_value=SimpleNamespace(enforce_device_policy_for_login=enforcement),
+            "apps.users.services.device_gate.AppService.get",
+            return_value=SimpleNamespace(
+                DevicePolicyError=DevicePolicyError,
+                enforce_device_policy_for_login=enforcement,
+            ),
         ):
             response = self.client.post(
                 reverse("users:api_login"),
@@ -149,7 +152,7 @@ class UserAuthenticationApiTests(TestCase):
 
         device_policy = Mock(return_value=(True, {}))
         with patch(
-            "apps.users.views.AppService.get",
+            "apps.users.services.device_gate.AppService.get",
             return_value=SimpleNamespace(enforce_device_policy_for_login=device_policy),
         ):
             response = self.client.post(
@@ -733,8 +736,6 @@ class SocialSignupOnboardingTests(TestCase):
         )
 
     def test_social_signup_trusts_only_matching_provider_verified_email(self):
-        from types import SimpleNamespace
-
         from apps.users.signals import handle_user_signed_up
 
         verified_user = get_user_model().objects.create_user(
@@ -792,8 +793,6 @@ class SocialSignupOnboardingTests(TestCase):
         self.assertIsNone(mismatched_user.email_verified_at)
 
     def test_social_signup_does_not_log_in_before_allauth_verification(self):
-        from types import SimpleNamespace
-
         from django.contrib.sessions.middleware import SessionMiddleware
 
         from apps.users.signals import handle_user_signed_up

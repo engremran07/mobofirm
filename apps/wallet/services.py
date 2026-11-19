@@ -5,17 +5,23 @@ Rules that hold for every function here:
 * Credits are whole numbers; amounts that are not positive ``int`` are rejected.
 * Each balance change runs in ``transaction.atomic()`` with the wallet row locked via
   ``select_for_update(of=("self",))`` and is idempotent on its globally unique ``key``:
-  repeating a call returns the original ``LedgerEntry`` and changes nothing.
+  repeating a call returns the original ``LedgerEntry`` and changes nothing, even when a
+  price or rule changed in between (the stored entry is the answer).
+* Lock order, everywhere: request/hold row first (top-up, payout, escrow), then wallet
+  rows in ascending primary key (:func:`lock_wallets`), then the reward rule row (only
+  for per-object rewards). No code path takes them in another order, so concurrent
+  releases, payouts and rewards cannot deadlock.
 * The ledger is append-only; ``Wallet.balance`` always equals credits minus debits
-  (see :func:`audit_wallet`).
+  (:func:`audit_wallet`, and ``apps.wallet.reconcile`` for every wallet at once).
 * Business refusals of a reward never raise: ``grant_reward`` returns ``None`` and
-  records a ``RewardRefusal``. Spending beyond the balance raises ``InsufficientCredits``.
+  records a ``RewardRefusal``. Spending beyond the balance raises
+  ``InsufficientCredits``.
 """
 
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import timedelta
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
@@ -44,6 +50,7 @@ from .models import (
     TopUpRequest,
     Wallet,
     WalletSettings,
+    ledger_posting,
 )
 
 logger = logging.getLogger(__name__)
@@ -127,17 +134,31 @@ def credits_per_currency() -> int:
     return int(get_settings().credits_per_currency)
 
 
+def _decimal(amount: object) -> Decimal:
+    """A finite ``Decimal`` from a Decimal, int or numeric string (floats via ``str``).
+
+    ``Decimal(0.1)`` carries binary noise; going through ``str`` keeps the value the
+    caller wrote. Anything non-numeric or non-finite is refused.
+    """
+    if isinstance(amount, bool) or not isinstance(amount, Decimal | int | float | str):
+        raise InvalidAmount("The amount is not a number.")
+    try:
+        value = Decimal(str(amount) if isinstance(amount, float) else amount)
+    except (InvalidOperation, ValueError) as error:
+        raise InvalidAmount("The amount is not a number.") from error
+    if not value.is_finite():
+        raise InvalidAmount("The amount is not a number.")
+    return value
+
+
 def to_credits_at(amount: Decimal, rate: int) -> int:
     """``amount × rate`` as whole credits (half up, at least 1 for a positive amount).
 
     The arithmetic behind :func:`to_credits`; separate so the admin can preview a rate
     before it is saved.
     """
-    try:
-        value = Decimal(amount)
-    except (InvalidOperation, TypeError, ValueError) as error:
-        raise InvalidAmount("The amount is not a number.") from error
-    if not value.is_finite() or value < 0:
+    value = _decimal(amount)
+    if value < 0:
         raise InvalidAmount("The amount must be zero or more.")
     whole = int((value * rate).to_integral_value(ROUND_HALF_UP))
     return max(whole, 1) if value > 0 else 0
@@ -154,13 +175,20 @@ def to_credits(amount: Decimal) -> int:
 
 
 CURRENCY_SYMBOLS = {"USD": "$", "EUR": "€", "GBP": "£"}
+CENT = Decimal("0.01")
 
 
 def format_currency(amount: Decimal) -> str:
-    """``$4.00``: the amount in the configured display currency."""
+    """``$4.00``: the amount in the configured display currency, rounded half up.
+
+    ``format(Decimal, ".2f")`` rounds half-even, which would disagree with the half-up
+    rule every conversion here uses, so the cents are quantised explicitly first.
+    """
     label = get_settings().currency_label
     symbol = CURRENCY_SYMBOLS.get(label, f"{label} ")
-    return f"{symbol}{Decimal(amount):.2f}"
+    value = _decimal(amount).quantize(CENT, ROUND_HALF_UP)
+    sign = "-" if value < 0 else ""
+    return f"{sign}{symbol}{abs(value):.2f}"
 
 
 def price_label(amount: Decimal) -> str:
@@ -171,7 +199,7 @@ def price_label(amount: Decimal) -> str:
 
 
 def to_currency(credit_amount: int) -> Decimal:
-    """Cash value of ``credit_amount`` credits in the display currency (two decimals)."""
+    """Cash value of ``credit_amount`` credits in the display currency (cents)."""
     return (Decimal(credit_amount) / Decimal(credits_per_currency())).quantize(
         Decimal("0.01"), ROUND_HALF_UP
     )
@@ -184,8 +212,12 @@ def get_wallet(user: AbstractBaseUser) -> Wallet:
     return wallet
 
 
-def _lock(*wallet_ids: int) -> dict[int, Wallet]:
-    """Lock wallet rows in primary-key order so concurrent transfers cannot deadlock."""
+def lock_wallets(*wallet_ids: int) -> dict[int, Wallet]:
+    """Lock wallet rows in primary-key order so concurrent transfers cannot deadlock.
+
+    The rows come back freshly read under the lock: balances read before the lock are
+    stale and must never be used for a decision.
+    """
     rows = (
         Wallet.objects.select_for_update(of=("self",))
         .filter(pk__in=sorted(set(wallet_ids)))
@@ -196,7 +228,7 @@ def _lock(*wallet_ids: int) -> dict[int, Wallet]:
 
 def _locked(user: AbstractBaseUser) -> Wallet:
     wallet = get_wallet(user)
-    return _lock(wallet.pk)[wallet.pk]
+    return lock_wallets(wallet.pk)[wallet.pk]
 
 
 def balance(user: AbstractBaseUser) -> int:
@@ -204,6 +236,28 @@ def balance(user: AbstractBaseUser) -> int:
     _require_user(user)
     wallet = Wallet.objects.filter(user_id=user.pk).first()
     return wallet.available if wallet else 0
+
+
+def rewards_earned(user: AbstractBaseUser, event_prefixes: tuple[str, ...]) -> int:
+    """Credits ever paid to ``user`` by reward events starting with a prefix.
+
+    Read-only and side-effect free (no wallet is created); ``("firmware.", "blog.")``
+    sums contribution rewards for the "My contributions" summary.
+    """
+    _require_user(user)
+    if not event_prefixes:
+        return 0
+    match = Q()
+    for prefix in event_prefixes:
+        match |= Q(event_key__startswith=prefix)
+    total = (
+        LedgerEntry.objects.filter(
+            wallet__user_id=user.pk, direction=CREDIT, reason=LedgerReason.REWARD
+        )
+        .filter(match)
+        .aggregate(total=Sum("amount"))["total"]
+    )
+    return int(total or 0)
 
 
 @dataclass(frozen=True)
@@ -242,12 +296,18 @@ def _notify(
 
 
 def _assert_same(
-    existing: LedgerEntry, wallet: Wallet, direction: str, amount: int | None
+    existing: LedgerEntry,
+    wallet: Wallet,
+    direction: str,
+    amount: int | None,
+    reason: str | None = None,
 ) -> None:
+    """A replayed key must describe the entry it already created."""
     if (
         existing.wallet_id != wallet.pk
         or existing.direction != direction
         or (amount is not None and existing.amount != amount)
+        or (reason is not None and existing.reason != reason)
     ):
         raise IdempotencyConflict(
             f"Key {existing.key!r} was already used for a different ledger entry."
@@ -269,12 +329,12 @@ def _post(
     enforce_freeze: bool = True,
     from_held: int = 0,
 ) -> tuple[LedgerEntry, bool]:
-    """Append one ledger row. ``wallet`` must be locked and fresh inside a transaction."""
+    """Append one ledger row; ``wallet`` must be locked and fresh in a transaction."""
     if not key or len(key) > 200:
         raise InvalidAmount("A ledger key of 1-200 characters is required.")
     existing = LedgerEntry.objects.filter(key=key).first()
     if existing is not None:
-        _assert_same(existing, wallet, direction, amount)
+        _assert_same(existing, wallet, direction, amount, reason)
         return existing, False
     if enforce_freeze and wallet.is_frozen:
         raise WalletFrozen("This wallet is frozen.")
@@ -288,7 +348,8 @@ def _post(
         wallet.balance -= amount
     else:
         wallet.balance += amount
-    wallet.save(update_fields=["balance", "held", "updated_at"])
+    with ledger_posting():
+        wallet.save(update_fields=["balance", "held", "updated_at"])
     try:
         with transaction.atomic():
             entry = LedgerEntry.objects.create(
@@ -380,7 +441,8 @@ def debit(
     return entry
 
 
-def _require_perm(actor: AbstractBaseUser | None, perm: str) -> AbstractBaseUser:
+def require_perm(actor: AbstractBaseUser | None, perm: str) -> AbstractBaseUser:
+    """The active staff user holding ``perm``; ``PermissionDenied`` otherwise."""
     if (
         not isinstance(actor, AbstractBaseUser)
         or not isinstance(actor, PermissionsMixin)
@@ -399,8 +461,8 @@ def adjust(
     reason_text: str,
     key: str,
 ) -> LedgerEntry:
-    """Staff correction: positive adds, negative removes. A written reason is required."""
-    _require_perm(actor, "wallet.adjust_wallet")
+    """Staff correction: positive adds, negative removes; a reason is required."""
+    require_perm(actor, "wallet.adjust_wallet")
     note = reason_text.strip()
     if not note:
         raise WalletError("A reason is required for an adjustment.")
@@ -434,7 +496,7 @@ def adjust(
 def set_frozen(
     user: AbstractBaseUser, frozen: bool, *, actor: AbstractBaseUser, reason_text: str
 ) -> Wallet:
-    _require_perm(actor, "wallet.adjust_wallet")
+    require_perm(actor, "wallet.adjust_wallet")
     note = reason_text.strip()
     if frozen and not note:
         raise WalletError("A reason is required to freeze a wallet.")
@@ -450,7 +512,7 @@ def set_frozen(
 
 
 def sync_registry() -> None:
-    """Create missing rule/price rows from the registered defaults (never overwrites)."""
+    """Create missing rule and price rows from registered defaults (no overwrite)."""
     for event in registry.reward_events().values():
         RewardRule.objects.get_or_create(
             event_key=event.key,
@@ -475,6 +537,26 @@ def sync_registry() -> None:
                 "credits": sink.default_credits,
             },
         )
+
+
+@dataclass(frozen=True)
+class RewardRuleView:
+    """Read-only copy of a reward rule for pages in other apps (no model leaks)."""
+
+    event_key: str
+    credits: int
+    enabled: bool
+    daily_cap: int
+
+
+def reward_rules(event_keys: Iterable[str]) -> dict[str, RewardRuleView]:
+    """The live rules for some event keys, keyed by event key (missing keys omitted)."""
+    return {
+        rule.event_key: RewardRuleView(
+            rule.event_key, rule.credits, rule.enabled, rule.daily_cap
+        )
+        for rule in RewardRule.objects.filter(event_key__in=list(event_keys))
+    }
 
 
 def _rule_for(event_key: str) -> RewardRule | None:
@@ -568,7 +650,9 @@ def _blocked_reason(
         )
         if last and now - last.created_at < timedelta(seconds=rule.cooldown_seconds):
             return "cooldown", f"Wait {rule.cooldown_seconds} seconds between rewards."
-    start_of_day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    start_of_day = timezone.localtime(now).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
     windows = (
         ("daily_cap", rule.daily_cap, start_of_day),
         ("monthly_cap", rule.monthly_cap, start_of_day.replace(day=1)),
@@ -578,6 +662,16 @@ def _blocked_reason(
         if cap and _earned_since(wallet, rule.event_key, since) + amount > cap:
             return name, f"Would exceed the {name.replace('_', ' ')} of {cap}."
     return None
+
+
+def lock_rule(rule: RewardRule) -> RewardRule:
+    """Serialise grants of one per-object event across wallets, and read the live rule.
+
+    ``per_object_once`` is a cross-wallet promise ("this firmware pays once"), which the
+    wallet row lock alone cannot keep: two different recipients could both pass the
+    check. The rule row is locked after the wallet (see the module lock order).
+    """
+    return RewardRule.objects.select_for_update(of=("self",)).get(pk=rule.pk)
 
 
 def grant_reward(
@@ -593,7 +687,8 @@ def grant_reward(
 
     Idempotent on ``key``. Returns ``None`` (and records a ``RewardRefusal``) when the
     rule, a cap or an anti-abuse check blocks it; never raises for those refusals.
-    ``amount_override`` replaces the rule amount (bounties, per-badge credits); caps apply.
+    ``amount_override`` replaces the rule amount (bounties, per-badge credits); caps
+    still apply.
     """
     _require_user(user)
     ctx: Mapping[str, Any] = context or {}
@@ -604,8 +699,10 @@ def grant_reward(
         wallet = _locked(user)
         existing = LedgerEntry.objects.filter(key=key).first()
         if existing is not None:
-            _assert_same(existing, wallet, CREDIT, None)
+            _assert_same(existing, wallet, CREDIT, None, LedgerReason.REWARD)
             return existing
+        if rule.per_object_once and reference:
+            rule = lock_rule(rule)
         base = amount_override if amount_override is not None else rule.credits
         if isinstance(base, bool) or not isinstance(base, int) or base < 0:
             raise InvalidAmount("A reward must be a whole number of credits.")
@@ -666,8 +763,8 @@ def price_of(
 ) -> int:
     """Credits to charge for ``quantity`` of a sink, after price modifiers.
 
-    ``price_override`` replaces the admin-editable sink price (a package override, a paid
-    file's price); the sink must still exist and be enabled, and modifiers still apply.
+    ``price_override`` replaces the admin-editable sink price (a package override, a
+    paid file's price); the sink must still exist and be enabled, and modifiers apply.
     """
     qty = _credits(quantity, "quantity")
     sink = registry.spend_sinks().get(sink_key)
@@ -702,15 +799,32 @@ def spend(
 ) -> LedgerEntry:
     """Charge credits for a registered sink. Atomic and idempotent on ``key``.
 
-    ``price_override`` replaces the sink price (a package ``credit_price``, a paid file's
-    price); price modifiers still apply. Raises ``InsufficientCredits``.
+    ``price_override`` replaces the sink price (a package ``credit_price``, a paid
+    file's price); price modifiers still apply. Raises ``InsufficientCredits``.
+
+    A repeated ``key`` returns the first charge unchanged, whatever the price, the
+    discounts or the sink's enabled flag are now: duplicate delivery of a purchase
+    never charges twice and never fails a buyer who already paid. Reusing the key for
+    another wallet, sink or reason raises ``IdempotencyConflict``.
     """
     _require_user(user)
-    amount = _credits(
-        price_of(sink_key, quantity=quantity, price_override=price_override), "price"
-    )
+    _credits(quantity, "quantity")
     with transaction.atomic():
         wallet = _locked(user)
+        existing = LedgerEntry.objects.filter(key=key).first()
+        if existing is not None:
+            # Duplicate delivery: the stored entry answers, even when the price, a
+            # discount or the sink's enabled flag changed since the first charge.
+            _assert_same(existing, wallet, DEBIT, None, LedgerReason.SPEND)
+            if existing.event_key != sink_key:
+                raise IdempotencyConflict(
+                    f"Key {key!r} was already used for a different ledger entry."
+                )
+            return existing
+        amount = _credits(
+            price_of(sink_key, quantity=quantity, price_override=price_override),
+            "price",
+        )
         entry, _ = _post(
             wallet,
             direction=DEBIT,
@@ -734,7 +848,7 @@ def refund(entry_key: str, *, reason: str) -> LedgerEntry:
         )
         if original is None:
             raise WalletError(f"No spend with key {entry_key!r} to refund.")
-        wallet = _lock(original.wallet_id)[original.wallet_id]
+        wallet = lock_wallets(original.wallet_id)[original.wallet_id]
         entry, created = _post(
             wallet,
             direction=CREDIT,
@@ -766,7 +880,7 @@ def lock_escrow(
     reason: str = "",
     reference: str = "",
 ) -> EscrowHold:
-    """Reserve credits (a bounty). Held credits cannot be spent. Idempotent on ``key``."""
+    """Reserve credits (a bounty); held credits cannot be spent. Idempotent on ``key``."""
     amount = _credits(credit_amount)
     with transaction.atomic():
         wallet = _locked(user)
@@ -780,7 +894,8 @@ def lock_escrow(
         if wallet.available < amount:
             raise InsufficientCredits(amount, wallet.available)
         wallet.held += amount
-        wallet.save(update_fields=["held", "updated_at"])
+        with ledger_posting():
+            wallet.save(update_fields=["held", "updated_at"])
         hold = EscrowHold.objects.create(
             wallet=wallet,
             credits=amount,
@@ -807,9 +922,10 @@ def cancel_escrow(hold: EscrowHold) -> EscrowHold:
             return locked
         if locked.status != EscrowHold.Status.HOLDING:
             raise EscrowError("This escrow was already released.")
-        wallet = _lock(locked.wallet_id)[locked.wallet_id]
-        wallet.held -= locked.credits
-        wallet.save(update_fields=["held", "updated_at"])
+        wallet = lock_wallets(locked.wallet_id)[locked.wallet_id]
+        with ledger_posting():
+            wallet.held -= locked.credits
+            wallet.save(update_fields=["held", "updated_at"])
         locked.status = EscrowHold.Status.CANCELLED
         locked.resolved_at = timezone.now()
         locked.save(update_fields=["status", "resolved_at"])
@@ -824,10 +940,11 @@ def release_escrow(
     event_key: str = "bounty.fulfilled",
     reference: str = "",
 ) -> LedgerEntry:
-    """Pay a held amount to another user through ``grant_reward`` (rule and abuse checks).
+    """Pay a held amount to another user through ``grant_reward`` (rule and checks).
 
     The holder is debited and the recipient rewarded in one transaction; a refused
-    reward (self-payment, disabled rule) rolls everything back and raises ``EscrowError``.
+    reward (self-payment, disabled rule) rolls everything back and raises
+    ``EscrowError``.
     """
     _require_user(to_user)
     with transaction.atomic():
@@ -841,7 +958,7 @@ def release_escrow(
         if locked.status != EscrowHold.Status.HOLDING:
             raise EscrowError("This escrow was cancelled.")
         recipient_wallet = get_wallet(to_user)
-        wallets = _lock(holder_wallet.pk, recipient_wallet.pk)
+        wallets = lock_wallets(holder_wallet.pk, recipient_wallet.pk)
         holder = wallets[holder_wallet.pk]
         _post(
             holder,
@@ -885,7 +1002,8 @@ def request_topup(user: AbstractBaseUser, credit_amount: int) -> TopUpRequest:
         raise TopUpError("Top-ups are switched off.")
     if amount < cfg.min_topup_credits or amount > cfg.max_topup_credits:
         raise TopUpError(
-            f"Top up between {cfg.min_topup_credits} and {cfg.max_topup_credits} credits."
+            f"Top up between {cfg.min_topup_credits} and "
+            f"{cfg.max_topup_credits} credits."
         )
     with transaction.atomic():
         wallet = _locked(user)
@@ -931,7 +1049,7 @@ def confirm_topup(
 ) -> TopUpRequest:
     """Staff (or the shop's paid-order event) confirm payment; credits granted once."""
     if staff_user is not None:
-        _require_perm(staff_user, "wallet.change_topuprequest")
+        require_perm(staff_user, "wallet.change_topuprequest")
     with transaction.atomic():
         request = TopUpRequest.objects.select_for_update(of=("self",)).get(
             pk=request_id
@@ -991,7 +1109,7 @@ def cancel_topup(
     if user is None and staff_user is None:
         raise PermissionDenied("Someone must cancel the top-up.")
     if staff_user is not None:
-        _require_perm(staff_user, "wallet.change_topuprequest")
+        require_perm(staff_user, "wallet.change_topuprequest")
     with transaction.atomic():
         request = TopUpRequest.objects.select_for_update(of=("self",)).get(
             pk=request_id
@@ -1026,7 +1144,7 @@ def handle_shop_order_paid(data: Any) -> None:
 
 
 def _withdrawable(wallet: Wallet) -> int:
-    """Earned credits (sales, bounties) not yet paid out, capped by what is spendable."""
+    """Earned credits (sales, bounties) not yet paid out, capped by the spendable."""
     sums = LedgerEntry.objects.filter(wallet=wallet).aggregate(
         earned=Sum(
             "amount", filter=Q(direction=CREDIT, reason__in=WITHDRAWABLE_REASONS)
@@ -1108,7 +1226,7 @@ def _payout_for_update(payout_id: int) -> PayoutRequest:
 
 
 def approve_payout(payout_id: int, *, staff_user: AbstractBaseUser) -> PayoutRequest:
-    _require_perm(staff_user, "wallet.change_payoutrequest")
+    require_perm(staff_user, "wallet.change_payoutrequest")
     with transaction.atomic():
         payout = _payout_for_update(payout_id)
         if payout.status == PayoutRequest.Status.APPROVED:
@@ -1126,7 +1244,7 @@ def approve_payout(payout_id: int, *, staff_user: AbstractBaseUser) -> PayoutReq
 def mark_payout_paid(
     payout_id: int, *, staff_user: AbstractBaseUser, reference: str = ""
 ) -> PayoutRequest:
-    _require_perm(staff_user, "wallet.change_payoutrequest")
+    require_perm(staff_user, "wallet.change_payoutrequest")
     with transaction.atomic():
         payout = _payout_for_update(payout_id)
         if payout.status == PayoutRequest.Status.PAID:
@@ -1145,7 +1263,7 @@ def reject_payout(
     payout_id: int, *, staff_user: AbstractBaseUser, reason_text: str
 ) -> PayoutRequest:
     """Reject a pending or approved payout and give the held credits back."""
-    _require_perm(staff_user, "wallet.change_payoutrequest")
+    require_perm(staff_user, "wallet.change_payoutrequest")
     note = reason_text.strip()
     if not note:
         raise PayoutError("A reason is required to reject a payout.")
@@ -1158,7 +1276,7 @@ def reject_payout(
             PayoutRequest.Status.APPROVED,
         ):
             raise PayoutError("A paid payout cannot be rejected.")
-        wallet = _lock(payout.wallet_id)[payout.wallet_id]
+        wallet = lock_wallets(payout.wallet_id)[payout.wallet_id]
         _post(
             wallet,
             direction=CREDIT,

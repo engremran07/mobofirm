@@ -13,6 +13,7 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 from django.views.decorators.vary import vary_on_headers
 
 from apps.core.decorators import require_app_enabled
+from apps.core.internal_request import is_internal_crawl
 from apps.core.search import list_search_context, search_queryset
 from apps.firmwares.catalog import get_public_firmware_queryset
 from apps.firmwares.models import OfficialFirmware
@@ -150,7 +151,12 @@ def listing_detail(request: HttpRequest, pk: int) -> HttpResponse:
     if not (listing.is_public or own):
         raise Http404
     viewed = request.session.get(VIEWED_SESSION_KEY, [])
-    if listing.is_public and not own and listing.pk not in viewed:
+    if (
+        listing.is_public
+        and not own
+        and listing.pk not in viewed
+        and not is_internal_crawl(request)
+    ):
         services.record_view(listing.pk)
         request.session[VIEWED_SESSION_KEY] = [*viewed, listing.pk][-100:]
     related = (

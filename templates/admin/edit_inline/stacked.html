@@ -1,0 +1,17 @@
+{% comment %}
+  Stacked inline: one card per related record. Hooks for formset.js: [data-console-formset] root with the management form,
+  [data-console-formset-rows] (rows + the blank-row <template>), [data-console-formset-row], [data-console-formset-add],
+  [data-console-formset-remove], [data-console-formset-empty]. Existing rows are deleted by ticking their DELETE checkbox, which the
+  remove button toggles (the checkbox itself stays hidden); blank rows are simply dropped.
+{% endcomment %}{% load i18n admin_urls console_ui console_admin %}{% console_inline_rows inline_admin_formset as inline %}
+<section class="c-inline" id="{{ inline_admin_formset.formset.prefix }}-group" data-console-formset data-inline-type="stacked" aria-labelledby="{{ inline_admin_formset.formset.prefix }}-heading">
+{% include "console/crud/_inline_header.html" %}
+{{ inline_admin_formset.formset.management_form }}
+{{ inline_admin_formset.formset.non_form_errors }}
+<div class="u-stack u-gap-2" data-console-formset-rows>
+{% for iform in inline.rows %}{% include "console/crud/_inline_stacked_row.html" with prefix_index=forloop.counter0 %}{% endfor %}
+{% if inline.blank %}<template data-console-formset-template>{% include "console/crud/_inline_stacked_row.html" with iform=inline.blank prefix_index="__prefix__" is_blank=True %}</template>{% endif %}
+</div>
+<p class="u-muted u-text-sm mb-0" data-console-formset-empty{% if inline.rows %} hidden{% endif %}>{% translate "Nothing here yet." %}</p>
+{% include "console/crud/_inline_footer.html" %}
+</section>

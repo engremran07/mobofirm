@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
+from urllib.parse import urlsplit
 
 from django import template
 from django.http import HttpRequest
+from django.template.loader import render_to_string
 from django.utils.html import escape, format_html
 from django.utils.safestring import SafeString, mark_safe
 
 from apps.ads.models import AdPlacement, AdsSettings
+from apps.ads.services import auto_slots
 from apps.ads.services import zones as zone_service
 from apps.ads.services.markup import (
     render_creative,
@@ -27,7 +31,14 @@ from apps.consent.services import has_consent
 register = template.Library()
 logger = logging.getLogger(__name__)
 
-__all__ = ["_safe_click_url", "_validate_ad_creative_code", "ad_zone", "render_ad_slot"]
+__all__ = [
+    "_safe_click_url",
+    "_validate_ad_creative_code",
+    "ad_article_body",
+    "ad_tile",
+    "ad_zone",
+    "render_ad_slot",
+]
 
 _MODE_LABELS = {
     "test": "TEST AD",
@@ -98,6 +109,151 @@ def ad_zone(
     if render is None:
         return mark_safe("")
     return mark_safe(_zone_markup(render, css_class))
+
+
+@register.simple_tag(takes_context=True)
+def ad_article_body(context: template.Context, html: Any) -> SafeString:
+    """The article body with automatic in-article ad slots between paragraphs.
+
+    Usage: ``{% ad_article_body article.html %}`` instead of ``{{ article.html }}``.
+    The (already sanitised, possibly cached) article HTML is left untouched: slots are
+    spliced in per request, after every K-th/N-th text paragraph, never inside lists,
+    tables, figures, quotes or code and never next to a heading. Without a live
+    ``in_article`` placement, consent or an ad-eligible visitor the body is returned as is.
+    """
+    body = str(html)
+    request = context.get("request")
+    if not isinstance(request, HttpRequest) or not body:
+        return mark_safe(body)
+    page = _template_name(context)
+    serving, placement = zone_service.auto_placement(
+        request, page, auto_slots.IN_ARTICLE
+    )
+    if not serving:
+        return mark_safe(body)
+    rule = auto_slots.rule_for(placement, auto_slots.IN_ARTICLE)
+
+    def slot() -> str:
+        render = zone_service.resolve_zone(
+            request, page, auto_slots.IN_ARTICLE, unique=True
+        )
+        return _zone_markup(render, "ad-zone--inline") if render else ""
+
+    cap = min(
+        zone_service.auto_budget(request),
+        rule.max_slots - zone_service.auto_used(request, auto_slots.IN_ARTICLE),
+    )
+    return mark_safe(
+        auto_slots.inject_slots(
+            body,
+            rule,
+            slot,
+            min_words_between=zone_service.min_words_between_ads(),
+            cap=cap,
+        )
+    )
+
+
+def _tile_context(
+    render: zone_service.ZoneRender, layout: str, tile: str
+) -> dict[str, Any]:
+    """Public text and image of a sponsored tile (never internal creative names)."""
+    zone = render.zone
+    context: dict[str, Any] = {
+        "layout": layout,
+        "tile": tile,
+        "zone": zone.code,
+        "placement": render.placement.slug if render.placement else "",
+        "title": "",
+        "text": "",
+        "href": "",
+        "image": "",
+        "raw": "",
+        "test": "",
+    }
+    if render.mode != "live":
+        context.update(
+            title="Test ad",
+            text=f"{_MODE_LABELS[render.mode].title()} · zone {zone.code}",
+            test=render.mode,
+        )
+        return context
+    creative = render.creative
+    placement = render.placement
+    if creative is None or placement is None:
+        return context
+    href = zone_service.click_url(placement, creative)
+    if creative.creative_type == "banner":
+        host = urlsplit(creative.click_url).hostname or ""
+        context.update(
+            title=creative.headline or (f"Visit {host}" if host else "Sponsored"),
+            text=creative.tagline,
+            href=href,
+            image=creative.image_url
+            if creative.image_url.startswith("https://")
+            else "",
+        )
+    else:
+        context["raw"] = mark_safe(render.html)
+    return context
+
+
+@register.simple_tag(takes_context=True)
+def ad_tile(
+    context: template.Context,
+    position: Any,
+    total: Any,
+    layout: str = "tile",
+    tile: str = "",
+    page: str = "",
+) -> SafeString:
+    """A sponsored grid item after the ``position``-th of ``total`` tiles, if due.
+
+    Usage inside the tile loop, right after the tile::
+
+        {% for brand in brands %}{% include "…/brand_tile.html" %}{% ad_tile forloop.counter brands|length tile="card-ui--tile card-ui--brand-tile" page="firmwares/brand_list.html" %}{% endfor %}
+
+    ``tile`` repeats the sibling's modifier classes (so the ad has exactly the same size,
+    radius and elevation); ``layout`` is ``tile`` (logo row), ``card`` (body + footer) or
+    ``tag`` (a ``<li>``); ``page`` is the page template the placement is keyed on, so a
+    full page and its HTMX fragment resolve alike. Which positions get an ad is detected
+    from the count of tiles (``AdPlacement.auto_*``): never fewer than the minimum, never
+    the last tile of the page, never above the placement's maximum.
+    """
+    request = context.get("request")
+    if not isinstance(request, HttpRequest):
+        return mark_safe("")
+    try:
+        index, count = int(position), int(total)
+    except (TypeError, ValueError):
+        return mark_safe("")
+    page_name = page or _template_name(context)
+    serving, placement = zone_service.auto_placement(
+        request, page_name, auto_slots.BETWEEN_ITEMS
+    )
+    if not serving:
+        return mark_safe("")
+    rule = auto_slots.rule_for(placement, auto_slots.BETWEEN_ITEMS)
+    # Positions come from this grid alone; the page budget and the placement maximum
+    # (across every grid of the page) only decide whether this one is still allowed.
+    if index not in auto_slots.tile_slots(count, rule):
+        return mark_safe("")
+    if (
+        zone_service.auto_budget(request) <= 0
+        or zone_service.auto_used(request, auto_slots.BETWEEN_ITEMS) >= rule.max_slots
+    ):
+        return mark_safe("")
+    render = zone_service.resolve_zone(
+        request, page_name, auto_slots.BETWEEN_ITEMS, unique=True
+    )
+    if render is None:
+        return mark_safe("")
+    layout = layout if layout in {"tile", "card", "tag"} else "tile"
+    return mark_safe(
+        render_to_string(
+            "ads/includes/tile_ad.html", _tile_context(render, layout, tile)
+        )
+    )
 
 
 @register.simple_tag(takes_context=True)

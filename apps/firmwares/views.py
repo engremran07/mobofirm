@@ -77,7 +77,7 @@ def _resolve_hierarchy(data) -> tuple[Brand | None, Model | None, Variant | None
 class _SubmissionEndpoint(views.APIView):
     """Machine endpoint for submissions: JSON only, with a pointer for browsers.
 
-    People submit firmware on the HTML page (``firmwares:upload``). A browser that
+    People submit firmware on the HTML page (``firmwares:contribute``). A browser that
     opens this address is sent there instead of seeing a bare API form.
     """
 
@@ -91,7 +91,7 @@ class _SubmissionEndpoint(views.APIView):
 
     def get(self, request):
         if "text/html" in request.headers.get("Accept", ""):
-            return HttpResponseRedirect(reverse("firmwares:upload"))
+            return HttpResponseRedirect(reverse("firmwares:contribute"))
         return Response(
             {"detail": "Send a POST request to submit firmware."},
             status=status.HTTP_405_METHOD_NOT_ALLOWED,

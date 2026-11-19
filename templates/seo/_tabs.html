@@ -1,7 +1,2 @@
-<nav class="mf-ui-seo-tabs" aria-label="SEO sections">
-  <ul class="mf-ui-tabs">
-    {% for tab in seo_tabs %}
-      <li><a href="{{ tab.url }}"{% if tab.current %} aria-current="page"{% endif %}>{{ tab.label }}</a></li>
-    {% endfor %}
-  </ul>
-</nav>
+{% load i18n staff_ui %}
+{% staff_tabs label=_("SEO sections") %}{% for tab in seo_tabs %}{% staff_tab tab.url tab.label tab.current %}{% endfor %}{% endstaff_tabs %}

@@ -1,7 +1,7 @@
 """Device-owned dialogs: freeing a browser slot (core only provides the dialog shell).
 
 User dialogs (``DialogView``): ask staff, pay credits, use a rewarded-ad reset. Staff
-forms (Unfold action dialogs) are at the bottom.
+forms (console action dialogs) are at the bottom.
 """
 
 from __future__ import annotations
@@ -12,9 +12,8 @@ from typing import Any
 
 from django import forms
 from django.utils.translation import gettext_lazy as _
-from unfold.forms import BaseDialogForm
-from unfold.widgets import UnfoldAdminTextareaWidget
 
+from apps.core.admin_forms import BaseDialogForm, ConsoleTextareaWidget
 from apps.core.dialogs import DialogError, DialogForm, DialogView
 from apps.devices import slots
 from apps.devices.credits import CreditsUnavailable, InsufficientCreditsError
@@ -198,7 +197,7 @@ class UseRewardedResetDialog(SlotDialog):
             raise DialogError(error.message) from error
 
 
-# --- staff (Unfold action dialogs) --------------------------------------------
+# --- staff (console action dialogs) -------------------------------------------
 
 
 class ResetSlotsForm(BaseDialogForm):
@@ -207,7 +206,7 @@ class ResetSlotsForm(BaseDialogForm):
     reason = forms.CharField(
         label=_("Reason"),
         max_length=255,
-        widget=UnfoldAdminTextareaWidget(attrs={"rows": 3}),
+        widget=ConsoleTextareaWidget(attrs={"rows": 3}),
     )
 
 
@@ -215,5 +214,5 @@ class DeclineSlotRequestForm(BaseDialogForm):
     reason = forms.CharField(
         label=_("Answer for the user"),
         max_length=255,
-        widget=UnfoldAdminTextareaWidget(attrs={"rows": 3}),
+        widget=ConsoleTextareaWidget(attrs={"rows": 3}),
     )

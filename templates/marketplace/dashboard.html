@@ -3,13 +3,13 @@
 {% block title %}Seller dashboard · Mobofirm{% endblock %}
 {% block content %}
 {% url 'marketplace:listing_browse' as market_url %}
-{% url 'firmwares:upload' as upload_url %}
+{% url 'firmwares:contribute' as upload_url %}
 <div class="site-container py-4 py-lg-5">
   {% include "components/breadcrumbs.html" with current="Seller dashboard" parent_label="Marketplace" parent_url=market_url %}
   {% include "components/page_header.html" with eyebrow="Seller dashboard" title=seller.display_name lead="Your uploads, their review state and the access rules for paid and featured files." %}
 
   <div class="d-flex flex-wrap gap-2 mb-4">
-    <a class="btn btn-primary" href="{{ upload_url }}"><i class="icon" data-lucide="upload" aria-hidden="true"></i> Upload firmware</a>
+    <a class="btn btn-primary" href="{{ upload_url }}"><i class="icon" data-lucide="upload" aria-hidden="true"></i> Contribute a firmware</a>
     <a class="btn btn-outline-secondary" href="{% url 'marketplace:my_listings' %}">Manage showcase listings</a>
     <a class="btn btn-outline-secondary" href="{{ seller.get_absolute_url }}">View public profile</a>
   </div>
@@ -105,7 +105,7 @@
     </table>
     {% endtable_scroll %}
   {% else %}
-    {% include "components/empty_state.html" with title="You have not uploaded any firmware yet" message="Pick the brand, model and variant, then upload your file for review." action_label="Upload firmware" action_url=upload_url %}
+    {% include "components/empty_state.html" with title="You have not contributed any firmware yet" message="Pick the brand, model and variant, then add your file for review." action_label="Contribute a firmware" action_url=upload_url %}
       {% endif %}
       {% if earnings.wallet_enabled %}{% include "marketplace/dialogs/payout_request.html" %}{% endif %}
 </div>

@@ -115,7 +115,8 @@ def test_template_filter_resanitises_and_keeps_stored_content_valid() -> None:
     )
     out = template.render(Context({"html": html}))
     assert "<strong>b</strong>" in out
-    assert '<img src="/media/editor/a.png">' in out
+    # Every kept image gets an alt (empty marks it decorative): see sanitizer._HAS_ALT.
+    assert '<img src="/media/editor/a.png" alt="">' in out
     assert "<table>" in out
     assert "<script" not in out
     assert "onerror" not in out

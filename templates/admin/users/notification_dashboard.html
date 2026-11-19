@@ -1,92 +1,55 @@
-{% extends "admin/base_site.html" %}
+{% extends "admin/staff_page.html" %}
+{% load i18n staff_ui %}
+{% block page_body %}
+{% staff_grid %}
+  {% blocktranslate with count=user_stats.with_preferences percent=user_stats.prefs_percentage asvar users_hint %}{{ count }} with preferences ({{ percent }}%){% endblocktranslate %}
+  {% staff_stat label=_("Active users") value=user_stats.total hint=users_hint %}
+  {% blocktranslate with unread=notification_stats.unread rate=notification_stats.read_rate asvar notif_hint %}{{ unread }} unread · {{ rate }}% read rate{% endblocktranslate %}
+  {% staff_stat label=_("Notifications") value=notification_stats.total hint=notif_hint %}
+  {% blocktranslate with week=notification_stats.last_7d month=notification_stats.last_30d asvar volume_hint %}last 24 hours · {{ week }} / 7d · {{ month }} / 30d{% endblocktranslate %}
+  {% staff_stat label=_("Volume") value=notification_stats.last_24h hint=volume_hint %}
+  {% blocktranslate with total=push_stats.total new=push_stats.new_24h asvar push_hint %}{{ total }} total · {{ new }} new in 24h{% endblocktranslate %}
+  {% staff_stat label=_("Push subscriptions") value=push_stats.active hint=push_hint %}
+{% endstaff_grid %}
 
-{% load i18n %}
+{% staff_section title=_("Delivery health") ident="notif-health" %}
+  {% staff_card %}
+    {% staff_list %}
+      {% for check in health_checks %}
+        {% staff_item %}
+          {% if check.ok %}{% staff_badge _("OK") "success" %}{% else %}{% staff_badge _("Attention") "danger" %}{% endif %}
+          <span class="fw-medium">{{ check.name }}</span>
+          <span class="text-body-secondary">{{ check.message }}</span>
+        {% endstaff_item %}
+      {% endfor %}
+    {% endstaff_list %}
+  {% endstaff_card %}
+{% endstaff_section %}
 
-{% block title %}{{ title }} | {{ site_title }}{% endblock %}
-
-{% block content %}
-    <div class="flex flex-col gap-6">
-        <section aria-labelledby="notif-users" class="gap-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
-            <div class="bg-white border border-base-200 p-6 rounded-default shadow-xs dark:bg-base-900 dark:border-base-800">
-                <h2 id="notif-users" class="font-semibold text-important text-sm">{% trans "Active users" %}</h2>
-                <p class="font-semibold mt-3 text-3xl text-important tabular-nums">{{ user_stats.total }}</p>
-                <p class="mt-1 text-subtle text-xs">{{ user_stats.with_preferences }} {% trans "with preferences" %} ({{ user_stats.prefs_percentage }}%)</p>
-            </div>
-            <div class="bg-white border border-base-200 p-6 rounded-default shadow-xs dark:bg-base-900 dark:border-base-800">
-                <h2 class="font-semibold text-important text-sm">{% trans "Notifications" %}</h2>
-                <p class="font-semibold mt-3 text-3xl text-important tabular-nums">{{ notification_stats.total }}</p>
-                <p class="mt-1 text-subtle text-xs">{{ notification_stats.unread }} {% trans "unread" %} &middot; {{ notification_stats.read_rate }}% {% trans "read rate" %}</p>
-            </div>
-            <div class="bg-white border border-base-200 p-6 rounded-default shadow-xs dark:bg-base-900 dark:border-base-800">
-                <h2 class="font-semibold text-important text-sm">{% trans "Volume" %}</h2>
-                <p class="font-semibold mt-3 text-3xl text-important tabular-nums">{{ notification_stats.last_24h }}</p>
-                <p class="mt-1 text-subtle text-xs">{% trans "last 24 hours" %} &middot; {{ notification_stats.last_7d }} / 7d &middot; {{ notification_stats.last_30d }} / 30d</p>
-            </div>
-            <div class="bg-white border border-base-200 p-6 rounded-default shadow-xs dark:bg-base-900 dark:border-base-800">
-                <h2 class="font-semibold text-important text-sm">{% trans "Push subscriptions" %}</h2>
-                <p class="font-semibold mt-3 text-3xl text-important tabular-nums">{{ push_stats.active }}</p>
-                <p class="mt-1 text-subtle text-xs">{{ push_stats.total }} {% trans "total" %} &middot; {{ push_stats.new_24h }} {% trans "new in 24h" %}</p>
-            </div>
-        </section>
-
-        <section aria-labelledby="notif-health" class="bg-white border border-base-200 p-6 rounded-default shadow-xs dark:bg-base-900 dark:border-base-800">
-            <h2 id="notif-health" class="font-semibold mb-3 text-important text-sm">{% trans "Delivery health" %}</h2>
-            <ul class="flex flex-col gap-2">
-                {% for check in health_checks %}
-                    <li class="flex flex-row gap-3 items-center">
-                        {% if check.ok %}
-                            {% include "unfold/helpers/label.html" with variant="success" text=_("OK") %}
-                        {% else %}
-                            {% include "unfold/helpers/label.html" with variant="danger" text=_("Attention") %}
-                        {% endif %}
-                        <span class="font-medium text-important">{{ check.name }}</span>
-                        <span class="text-subtle">{{ check.message }}</span>
-                    </li>
-                {% endfor %}
-            </ul>
-        </section>
-
-        <div class="gap-6 grid grid-cols-1 lg:grid-cols-2">
-            <section aria-labelledby="notif-types" class="bg-white border border-base-200 p-6 rounded-default shadow-xs dark:bg-base-900 dark:border-base-800">
-                <h2 id="notif-types" class="font-semibold mb-3 text-important text-sm">{% trans "Notification types" %}</h2>
-                <ul class="flex flex-col gap-2">
-                    {% for item in type_distribution %}
-                        <li class="flex flex-row justify-between"><span>{{ item.action_type }}</span><span class="tabular-nums">{{ item.count }}</span></li>
-                    {% empty %}
-                        <li class="text-subtle">{% trans "No notifications have been sent yet." %}</li>
-                    {% endfor %}
-                </ul>
-            </section>
-            <section aria-labelledby="notif-browsers" class="bg-white border border-base-200 p-6 rounded-default shadow-xs dark:bg-base-900 dark:border-base-800">
-                <h2 id="notif-browsers" class="font-semibold mb-3 text-important text-sm">{% trans "Push browsers" %}</h2>
-                <ul class="flex flex-col gap-2">
-                    {% for item in push_stats.browsers %}
-                        <li class="flex flex-row justify-between"><span>{{ item.name }}</span><span class="tabular-nums">{{ item.count }} ({{ item.percentage }}%)</span></li>
-                    {% empty %}
-                        <li class="text-subtle">{% trans "No active push subscriptions." %}</li>
-                    {% endfor %}
-                </ul>
-            </section>
-            <section aria-labelledby="notif-top" class="bg-white border border-base-200 p-6 rounded-default shadow-xs dark:bg-base-900 dark:border-base-800">
-                <h2 id="notif-top" class="font-semibold mb-3 text-important text-sm">{% trans "Top recipients" %}</h2>
-                <ul class="flex flex-col gap-2">
-                    {% for item in top_recipients %}
-                        <li class="flex flex-row gap-3 justify-between"><span class="min-w-0 truncate">{{ item.recipient__email|default:item.recipient__username }}</span><span class="tabular-nums">{{ item.total }} ({{ item.unread }} {% trans "unread" %})</span></li>
-                    {% empty %}
-                        <li class="text-subtle">{% trans "No recipients yet." %}</li>
-                    {% endfor %}
-                </ul>
-            </section>
-            <section aria-labelledby="notif-recent" class="bg-white border border-base-200 p-6 rounded-default shadow-xs dark:bg-base-900 dark:border-base-800">
-                <h2 id="notif-recent" class="font-semibold mb-3 text-important text-sm">{% trans "Recent notifications" %}</h2>
-                <ul class="flex flex-col gap-2">
-                    {% for item in recent_notifications %}
-                        <li class="flex flex-row gap-3 justify-between"><span class="min-w-0 truncate">{{ item.title }}</span><span class="text-subtle text-xs whitespace-nowrap">{{ item.created_at|timesince }} {% trans "ago" %}</span></li>
-                    {% empty %}
-                        <li class="text-subtle">{% trans "Nothing sent yet." %}</li>
-                    {% endfor %}
-                </ul>
-            </section>
-        </div>
-    </div>
+{% staff_grid wide=True %}
+  {% staff_card title=_("Notification types") ident="notif-types" cell=True %}
+    {% staff_list %}
+      {% for item in type_distribution %}{% staff_item split=True %}<span>{{ item.action_type }}</span><span>{{ item.count }}</span>{% endstaff_item %}
+      {% empty %}{% staff_item %}<span class="text-body-secondary">{% translate "No notifications have been sent yet." %}</span>{% endstaff_item %}{% endfor %}
+    {% endstaff_list %}
+  {% endstaff_card %}
+  {% staff_card title=_("Push browsers") ident="notif-browsers" cell=True %}
+    {% staff_list %}
+      {% for item in push_stats.browsers %}{% staff_item split=True %}<span>{{ item.name }}</span><span>{{ item.count }} ({{ item.percentage }}%)</span>{% endstaff_item %}
+      {% empty %}{% staff_item %}<span class="text-body-secondary">{% translate "No active push subscriptions." %}</span>{% endstaff_item %}{% endfor %}
+    {% endstaff_list %}
+  {% endstaff_card %}
+  {% staff_card title=_("Top recipients") ident="notif-top" cell=True %}
+    {% staff_list %}
+      {% for item in top_recipients %}{% staff_item split=True %}<span class="text-truncate">{{ item.recipient__email|default:item.recipient__username }}</span><span>{{ item.total }} ({{ item.unread }} {% translate "unread" %})</span>{% endstaff_item %}
+      {% empty %}{% staff_item %}<span class="text-body-secondary">{% translate "No recipients yet." %}</span>{% endstaff_item %}{% endfor %}
+    {% endstaff_list %}
+  {% endstaff_card %}
+  {% staff_card title=_("Recent notifications") ident="notif-recent" cell=True %}
+    {% staff_list %}
+      {% for item in recent_notifications %}{% staff_item split=True %}<span class="text-truncate">{{ item.title }}</span><small class="text-body-secondary text-nowrap">{{ item.created_at|timesince }} {% translate "ago" %}</small>{% endstaff_item %}
+      {% empty %}{% staff_item %}<span class="text-body-secondary">{% translate "Nothing sent yet." %}</span>{% endstaff_item %}{% endfor %}
+    {% endstaff_list %}
+  {% endstaff_card %}
+{% endstaff_grid %}
 {% endblock %}

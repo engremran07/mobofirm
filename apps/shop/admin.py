@@ -1,4 +1,4 @@
-"""Shop administration (Unfold): packages, user packages and offline orders.
+"""Shop administration: packages, user packages and offline orders.
 
 A package is edited on ONE form with tabs (Basic, Bandwidth, Item types, Extra, Fair
 usage, Perks, Preview); lists and the preview show the same human ``summary()`` the
@@ -9,6 +9,7 @@ are confirmed by staff after offline payment. State changes always go through
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from decimal import Decimal, InvalidOperation
 from typing import Any, ClassVar
 
@@ -23,12 +24,6 @@ from django.urls import URLPattern, path, reverse
 from django.utils.html import escape, format_html, format_html_join
 from django.utils.safestring import SafeString
 from django.utils.translation import gettext_lazy as _
-from unfold.contrib.filters.admin import (
-    ChoicesDropdownFilter,
-    RangeDateTimeFilter,
-    RelatedDropdownFilter,
-)
-from unfold.forms import BaseDialogForm
 
 from apps.core.admin_base import (
     ModelAdmin,
@@ -43,8 +38,14 @@ from apps.core.admin_base import (
     htmx_redirect,
     return_url,
 )
+from apps.core.admin_filters import (
+    ChoicesDropdownFilter,
+    RangeDateTimeFilter,
+    RelatedDropdownFilter,
+)
+from apps.core.admin_forms import BaseDialogForm
 
-from . import overrides, services, wallet_gateway
+from . import ad_unlock, overrides, request_cache, services, wallet_gateway
 from .dialogs import (
     ArchivePackageForm,
     CancelOrderForm,
@@ -65,6 +66,7 @@ from .models import (
     UserPackage,
     UserQuotaOverride,
 )
+from .unlock_models import AdUnlockTicket
 
 MAX_PRICE = Decimal("99999999.99")
 
@@ -76,6 +78,9 @@ STATUS_BADGES = {
     "active": "success",
     "expired": "warning",
     "suspended": "danger",
+    "open": "info",
+    "ready": "success",
+    "redeemed": "success",
 }
 PACKAGE_STATE_BADGES = {
     "Inactive": "danger",
@@ -124,7 +129,7 @@ class PackageTierAdmin(ModelAdmin):
     )
     list_editable = ("sort_order",)
     list_display_links = ("name",)
-    prepopulated_fields: ClassVar[dict[str, tuple[str, ...]]] = {"slug": ("name",)}
+    prepopulated_fields: ClassVar[dict[str, Sequence[str]]] = {"slug": ("name",)}
     search_fields = ("name", "slug", "description")
     readonly_fields = (
         "credits_equivalent",
@@ -208,6 +213,24 @@ class PackageTierAdmin(ModelAdmin):
                     "resume_support",
                     "direct_links",
                     "early_access",
+                ),
+                "classes": ["tab"],
+            },
+        ),
+        (
+            _("Ads & unlocks"),
+            {
+                "description": _(
+                    "How this package treats ads. Over their allowance, accounts on a "
+                    "package with unlocks on can watch rewarded ads to unlock one file. "
+                    "“Ad-free” hides every ad gate and every offer; “Direct links” "
+                    "(under Perks) removes the URL shortener."
+                ),
+                "fields": (
+                    ("unlock_by_ads_free", "unlock_ads_free"),
+                    ("unlock_by_ads_featured", "unlock_ads_featured"),
+                    "unlock_cooldown_seconds",
+                    "unlock_daily_cap",
                 ),
                 "classes": ["tab"],
             },
@@ -298,6 +321,15 @@ class PackageTierAdmin(ModelAdmin):
     def holders(self, obj: Any) -> int:
         return int(getattr(obj, "live_holders", 0))
 
+    def has_delete_permission(
+        self, request: HttpRequest, obj: PackageTier | None = None
+    ) -> bool:
+        """The default package can never be deleted; packages with holders or orders
+        are protected by the database, so retire those with Archive instead."""
+        if obj is not None and obj.is_default:
+            return False
+        return super().has_delete_permission(request, obj)
+
     @display(description=_("How it reads"))
     def summary_preview(self, obj: PackageTier | None) -> SafeString | str:
         if obj is None or obj.pk is None:
@@ -306,11 +338,21 @@ class PackageTierAdmin(ModelAdmin):
             (_("Summary"), obj.summary()),
             (_("Quota"), obj.quota_text),
             (_("Extra"), obj.extra_text or "—"),
+            (_("Fair use"), obj.fair_text or "—"),
+            (_("Simultaneous downloads"), obj.concurrency_text),
+            (_("Wait between files"), obj.cooldown_text),
             (_("Item types"), obj.types_text),
+            (_("Paid files"), obj.paid_files_text),
+            (_("Featured blog articles"), obj.blog_text),
             (_("Devices"), obj.devices_text),
+            (_("Device slot reset"), obj.slot_reset_text),
             (_("Duration"), obj.duration_text),
-            (_("Price"), obj.price_text),
+            (_("Price"), obj.price_with_credits),
+            (_("Description"), obj.description or "—"),
+            (_("Highlight"), _("Popular choice") if obj.is_popular else "—"),
             (_("Perks"), ", ".join(obj.perk_labels) or "—"),
+            (_("Ads"), obj.ads_text),
+            (_("Ad unlocks"), obj.unlock_text),
         ]
         return format_html_join(
             "",
@@ -450,13 +492,39 @@ class UserPackageAdmin(ModelAdmin):
         self, request: HttpRequest, form: Any, formset: Any, change: bool
     ) -> None:
         instances = formset.save(commit=False)
+        created_ids = {id(obj) for obj in formset.new_objects}
         for obj in instances:
-            if isinstance(obj, PackageQuotaOverride) and obj.granted_by_id is None:
+            if not isinstance(obj, PackageQuotaOverride):
+                obj.save()
+                continue
+            if obj.granted_by_id is None:
                 obj.granted_by_id = request.user.pk
             obj.save()
+            overrides.audit_package_override(
+                (
+                    QuotaOverrideAudit.Action.GRANTED
+                    if id(obj) in created_ids
+                    else QuotaOverrideAudit.Action.CHANGED
+                ),
+                obj,
+                actor=request.user,
+            )
         formset.save_m2m()
         for obj in formset.deleted_objects:
+            if isinstance(obj, PackageQuotaOverride):
+                overrides.audit_package_override(
+                    QuotaOverrideAudit.Action.DELETED, obj, actor=request.user
+                )
             obj.delete()
+
+    def save_model(
+        self, request: HttpRequest, obj: UserPackage, form: Any, change: bool
+    ) -> None:
+        super().save_model(request, obj, form, change)
+        if not change and obj.status == UserPackage.Status.ACTIVE:
+            services.announce_activation(obj)
+        else:
+            request_cache.invalidate()
 
     @display(description=_("Status"), ordering="status", label=STATUS_BADGES)
     def status_badge(self, obj: UserPackage) -> str:
@@ -517,6 +585,11 @@ class PackageQuotaOverrideAdmin(ModelAdmin):
     )
     raw_id_fields = ("user_package", "granted_by")
     readonly_fields = ("created_at",)
+    list_select_related = (
+        "user_package__user",
+        "user_package__package",
+        "granted_by",
+    )
 
     def save_model(
         self, request: HttpRequest, obj: PackageQuotaOverride, form: Any, change: bool
@@ -524,6 +597,31 @@ class PackageQuotaOverrideAdmin(ModelAdmin):
         if not change:
             obj.granted_by_id = request.user.pk
         super().save_model(request, obj, form, change)
+        overrides.audit_package_override(
+            (
+                QuotaOverrideAudit.Action.CHANGED
+                if change
+                else QuotaOverrideAudit.Action.GRANTED
+            ),
+            obj,
+            actor=request.user,
+        )
+
+    def delete_model(self, request: HttpRequest, obj: PackageQuotaOverride) -> None:
+        overrides.audit_package_override(
+            QuotaOverrideAudit.Action.DELETED, obj, actor=request.user
+        )
+        super().delete_model(request, obj)
+
+    def delete_queryset(
+        self, request: HttpRequest, queryset: QuerySet[PackageQuotaOverride]
+    ) -> None:
+        """Bulk delete keeps the audit: one DELETED row per override."""
+        for obj in queryset.select_related("user_package"):
+            overrides.audit_package_override(
+                QuotaOverrideAudit.Action.DELETED, obj, actor=request.user
+            )
+        super().delete_queryset(request, queryset)
 
 
 @register(ShopSettings)
@@ -666,6 +764,21 @@ class UserQuotaOverrideAdmin(ModelAdmin):
         overrides.audit_deleted(obj, actor=request.user)
         super().delete_model(request, obj)
 
+    def delete_queryset(
+        self, request: HttpRequest, queryset: QuerySet[UserQuotaOverride]
+    ) -> None:
+        """The bulk "delete selected" action audits every override, like a single one."""
+        for obj in queryset:
+            overrides.audit_deleted(obj, actor=request.user)
+        super().delete_queryset(request, queryset)
+
+    def get_readonly_fields(
+        self, request: HttpRequest, obj: UserQuotaOverride | None = None
+    ) -> Sequence[str]:
+        """The account of an existing override is fixed: change it by granting anew."""
+        fields = tuple(super().get_readonly_fields(request, obj))
+        return (*fields, "user") if obj is not None else fields
+
     @action(description=_("Revoke selected overrides"), permissions=["change"])
     def revoke_selected(
         self, request: HttpRequest, queryset: QuerySet[UserQuotaOverride]
@@ -742,7 +855,7 @@ class OrderAdmin(NoAddModelAdmin):
     actions_detail = ("mark_order_paid", "cancel_order", "refund_paid_order")
 
     def get_queryset(self, request: HttpRequest) -> QuerySet[Order]:
-        return super().get_queryset(request).prefetch_related("items")
+        return super().get_queryset(request).prefetch_related("items__package")
 
     @display(description=_("Items"))
     def items_summary(self, obj: Order) -> SafeString | str:
@@ -876,7 +989,8 @@ class QuotaConsumptionAdmin(ReadOnlyModelAdmin):
         ("reason", ChoicesDropdownFilter),
         ("consumed_at", RangeDateTimeFilter),
     )
-    list_select_related = ("user",)
+    search_fields = ("user__email", "user__username", "object_id")
+    list_select_related = ("user", "user_package__user", "user_package__package")
 
 
 @register(FeaturedBlogPurchase)
@@ -887,3 +1001,49 @@ class FeaturedBlogPurchaseAdmin(ReadOnlyModelAdmin):
     list_filter = (("created_at", RangeDateTimeFilter),)
     search_fields = ("user__email", "user__username", "key")
     list_select_related = ("user",)
+
+
+@register(AdUnlockTicket)
+class AdUnlockTicketAdmin(ReadOnlyModelAdmin):
+    """Files unlocked by rewarded ads: read-only audit of every ticket and its progress.
+
+    The watches themselves are listed under Rewarded ad views (Ads); the ``view_id`` of
+    each step ties the two together.
+    """
+
+    list_display = (
+        "user",
+        "kind",
+        "status_badge",
+        "progress_text",
+        "package",
+        "cycle",
+        "created_at",
+        "unlocked_at",
+        "redeemed_at",
+    )
+    list_filter = (
+        ("status", ChoicesDropdownFilter),
+        ("kind", ChoicesDropdownFilter),
+        ("package", RelatedDropdownFilter),
+        ("created_at", RangeDateTimeFilter),
+    )
+    search_fields = ("user__email", "user__username", "object_id")
+    list_select_related = ("user", "package")
+    date_hierarchy = "created_at"
+
+    @display(description=_("Status"), ordering="status", label=STATUS_BADGES)
+    def status_badge(self, obj: AdUnlockTicket) -> str:
+        return obj.status
+
+    @display(description=_("Ads watched"))
+    def progress_text(self, obj: AdUnlockTicket) -> str:
+        return f"{obj.progress} / {obj.required}"
+
+    def changelist_view(
+        self, request: HttpRequest, extra_context: dict[str, Any] | None = None
+    ) -> HttpResponse:
+        """Show the unlock funnel (unlock rate, ads per unlock) above the list."""
+        if request.method == "GET" and not request.headers.get("HX-Request"):
+            self.message_user(request, ad_unlock.analytics().summary(), messages.INFO)
+        return super().changelist_view(request, extra_context)

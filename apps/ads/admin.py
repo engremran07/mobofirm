@@ -7,22 +7,17 @@ from typing import Any, ClassVar
 
 from django import forms
 from django.contrib import admin, messages
+from django.core.exceptions import ImproperlyConfigured
 from django.db.models import Count, Q, QuerySet
 from django.forms import ModelForm
 from django.http import Http404, HttpRequest, HttpResponse
 from django.utils.translation import gettext_lazy as _
-from unfold.contrib.filters.admin import (
-    BooleanRadioFilter,
-    ChoicesDropdownFilter,
-    RangeDateTimeFilter,
-    RelatedDropdownFilter,
-)
-from unfold.enums import ActionVariant
 
 from apps.ads import rewarded
 from apps.ads.services import markup, placement_manager, scanner
 from apps.core.admin_base import (
     BADGE_APPROVAL,
+    ActionVariant,
     ConfirmForm,
     ModelAdmin,
     NoAddModelAdmin,
@@ -35,6 +30,12 @@ from apps.core.admin_base import (
     display,
     htmx_redirect,
     return_url,
+)
+from apps.core.admin_filters import (
+    BooleanRadioFilter,
+    ChoicesDropdownFilter,
+    RangeDateTimeFilter,
+    RelatedDropdownFilter,
 )
 
 from .models import (
@@ -213,6 +214,30 @@ class AdPlacementAdmin(AuditedModelAdmin):
             },
         ),
         (
+            _("Automatic spacing"),
+            {
+                "classes": ("tab",),
+                "description": _(
+                    "For the automatic zones: “In article (between paragraphs)” inserts "
+                    "ads between the paragraphs of a blog post, and “Between list items” "
+                    "inserts a Sponsored tile of the same size into brand, model, chipset, "
+                    "tag and firmware grids. Positions are detected from the content; "
+                    "these numbers only tune them (0 = built-in default: article first "
+                    "after paragraph 3, then every 4, at most 3, needs 5 paragraphs; grid "
+                    "after tile 8, then every 8, at most 2, needs 9 tiles). An ad is never "
+                    "in the first paragraph, next to a heading, inside lists, tables, "
+                    "figures or code, or the last tile. Switch the placement off to turn "
+                    "the automatic ads off for that page."
+                ),
+                "fields": (
+                    "auto_first_after",
+                    "auto_every",
+                    "auto_max",
+                    "auto_min_items",
+                ),
+            },
+        ),
+        (
             _("Content"),
             {
                 "classes": ("tab",),
@@ -388,6 +413,7 @@ class AdCreativeAdmin(AuditedModelAdmin):
         ("campaign", RelatedDropdownFilter),
     )
     search_fields = ("name", "campaign__name")
+    list_select_related = ("campaign",)
     raw_id_fields = ("campaign",)
     fieldsets = (
         (
@@ -407,6 +433,19 @@ class AdCreativeAdmin(AuditedModelAdmin):
             {
                 "classes": ("tab",),
                 "fields": ("image_url", "click_url", "tracking_params"),
+            },
+        ),
+        (
+            _("Sponsored tile text"),
+            {
+                "classes": ("tab",),
+                "description": _(
+                    "In listings the ad appears as a labelled “Sponsored” tile the size of "
+                    "its neighbours. A banner creative then shows its image, this headline "
+                    "and tagline (no internal name is ever shown). HTML, native and script "
+                    "creatives are shown inside the tile, clipped to its size."
+                ),
+                "fields": ("headline", "tagline"),
             },
         ),
         (
@@ -477,6 +516,7 @@ class AffiliateLinkAdmin(AuditedModelAdmin):
         ("locked", BooleanRadioFilter),
     )
     search_fields = ("name", "affiliate_url", "target_url", "source__name")
+    list_select_related = ("source",)
     raw_id_fields = ("source",)
 
 
@@ -509,6 +549,7 @@ class AdEventAdmin(ReadOnlyModelAdmin):
         "created_at",
     )
     date_hierarchy = "created_at"
+    list_select_related = ("campaign", "placement", "creative")
 
 
 # --------------------------------------------------------------------------
@@ -528,8 +569,67 @@ class AdUnitInline(TabularInline):
     exclude = SOFT_DELETE_FIELDS
 
 
+class WriteOnlyCredentialsForm(forms.ModelForm):
+    """Ad-network and affiliate credentials: write-only, always encrypted.
+
+    The ``api_key``/``api_secret`` model fields hold Fernet ciphertext, so they are
+    never edited directly. The ``new_*`` fields go through the model setters; when
+    ``FERNET_KEY`` is missing the form shows an error and nothing is saved.
+    """
+
+    new_api_key = forms.CharField(
+        label=_("API key"),
+        required=False,
+        strip=False,
+        widget=forms.PasswordInput(
+            render_value=False, attrs={"autocomplete": "new-password"}
+        ),
+    )
+    new_api_secret = forms.CharField(
+        label=_("API secret"),
+        required=False,
+        strip=False,
+        widget=forms.PasswordInput(
+            render_value=False, attrs={"autocomplete": "new-password"}
+        ),
+    )
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        for stored, field in (
+            ("api_key", "new_api_key"),
+            ("api_secret", "new_api_secret"),
+        ):
+            if getattr(self.instance, stored, ""):
+                self.fields[field].help_text = _(
+                    "A value is stored (encrypted). Leave blank to keep it."
+                )
+
+    def clean(self) -> dict[str, Any]:
+        cleaned: dict[str, Any] = super().clean() or {}
+        for field, setter in (
+            ("new_api_key", self.instance.set_api_key),
+            ("new_api_secret", self.instance.set_api_secret),
+        ):
+            value = cleaned.get(field)
+            if not value:
+                continue
+            try:
+                setter(value)
+            except ImproperlyConfigured:
+                self.add_error(
+                    field,
+                    _(
+                        "Credentials cannot be encrypted because FERNET_KEY is not "
+                        "configured on the server. Nothing was saved."
+                    ),
+                )
+        return cleaned
+
+
 @admin.register(AdNetwork)
 class AdNetworkAdmin(AuditedModelAdmin):
+    form = WriteOnlyCredentialsForm
     list_display = (
         "name",
         "network_type",
@@ -554,7 +654,10 @@ class AdNetworkAdmin(AuditedModelAdmin):
         (None, {"fields": ("name", "network_type", "is_enabled", "priority")}),
         (
             _("Authentication"),
-            {"classes": ("tab",), "fields": ("publisher_id", "api_key", "api_secret")},
+            {
+                "classes": ("tab",),
+                "fields": ("publisher_id", "new_api_key", "new_api_secret"),
+            },
         ),
         (
             _("Scripts"),
@@ -604,6 +707,7 @@ class AdUnitAdmin(AuditedModelAdmin):
         ("is_enabled", BooleanRadioFilter),
     )
     search_fields = ("name", "unit_id", "network__name")
+    list_select_related = ("network",)
     raw_id_fields = ("network",)
 
 
@@ -799,6 +903,7 @@ class ScanDiscoveryAdmin(ModelAdmin):
     )
     list_filter = (("status", ChoicesDropdownFilter), "zone")
     search_fields = ("placement_code", "placement_name", "description")
+    list_select_related = ("reviewed_by",)
     readonly_fields = (
         "scan_result",
         "status",
@@ -924,6 +1029,7 @@ class TemplateAdExclusionAdmin(ModelAdmin):
 # --------------------------------------------------------------------------
 @admin.register(AffiliateProvider)
 class AffiliateProviderAdmin(AuditedModelAdmin):
+    form = WriteOnlyCredentialsForm
     list_display = ("name", "provider_type", "is_enabled", "priority", "products_count")
     list_filter = (
         ("provider_type", ChoicesDropdownFilter),
@@ -943,7 +1049,12 @@ class AffiliateProviderAdmin(AuditedModelAdmin):
             _("API credentials"),
             {
                 "classes": ("tab",),
-                "fields": ("api_key", "api_secret", "associate_tag", "partner_id"),
+                "fields": (
+                    "new_api_key",
+                    "new_api_secret",
+                    "associate_tag",
+                    "partner_id",
+                ),
             },
         ),
         (
@@ -981,6 +1092,7 @@ class AffiliateProductCategoryAdmin(ModelAdmin):
     search_fields = ("name", "slug", "device_keywords")
     prepopulated_fields: ClassVar[dict[str, tuple[str, ...]]] = {"slug": ("name",)}
     raw_id_fields = ("parent",)
+    list_select_related = ("parent",)
     fieldsets = (
         (None, {"fields": ("name", "slug", "parent", "is_active")}),
         (_("Targeting"), {"fields": ("device_keywords", "brand_match", "icon")}),
@@ -1035,6 +1147,7 @@ class AffiliateProductAdmin(AuditedModelAdmin):
         "revenue",
     )
     raw_id_fields = ("provider", "category")
+    list_select_related = ("provider",)
     inlines = (AffiliateProductMatchInline,)
     filter_horizontal = ("target_brands", "target_models")
     prepopulated_fields: ClassVar[dict[str, tuple[str, ...]]] = {"slug": ("name",)}
@@ -1140,6 +1253,7 @@ class AffiliateProductMatchAdmin(ModelAdmin):
     )
     search_fields = ("product__name", "brand__name", "model__name")
     raw_id_fields = ("product", "brand", "model", "variant", "blog_post")
+    list_select_related = ("product", "brand", "model", "variant", "blog_post")
 
     @display(description=_("Target"))
     def target_display(self, obj: AffiliateProductMatch) -> str:
@@ -1174,6 +1288,7 @@ class AffiliateClickAdmin(ReadOnlyModelAdmin):
         "created_at",
     )
     date_hierarchy = "created_at"
+    list_select_related = ("product", "provider", "user")
 
 
 # --------------------------------------------------------------------------

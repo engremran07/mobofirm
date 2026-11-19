@@ -63,6 +63,11 @@
       <button class="btn btn-primary" type="submit">Update password</button>
     </form>
   </section>
+  <section class="surface-card p-4 mb-4" aria-labelledby="profile-erase-title">
+    <h2 id="profile-erase-title" class="h4">Erase my account</h2>
+    <p class="muted">Remove your sign-in and personal data. You confirm by email and can cancel during a grace period.</p>
+    <a class="btn btn-outline-danger" href="{% url 'users:account_erasure' %}">Erase my account</a>
+  </section>
   {% if download_stats %}<section aria-labelledby="download-history-title"><h2 id="download-history-title" class="h4">Download activity</h2><p>{{ download_stats.completed }} completed of {{ download_stats.total }} sessions.</p>{% for session in download_sessions %}<p class="small">{{ session.token.firmware.original_file_name|default:"Firmware download" }} · {{ session.status }}</p>{% empty %}<p class="muted">No download sessions yet.</p>{% endfor %}</section>{% endif %}
   {% if notifications %}<section class="mt-4" aria-labelledby="profile-notifications-title"><h2 id="profile-notifications-title" class="h4">Notifications</h2>{% for notification in notifications %}<p>{{ notification.title }} — {{ notification.message }}</p>{% endfor %}</section>{% endif %}
 </div>

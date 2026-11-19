@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import pytest
 from allauth.socialaccount.models import SocialApp
+from django.conf import settings
 from django.contrib.sites.models import Site
-from django.test import override_settings
+from django.test import Client, override_settings
 from playwright.sync_api import Page
 
 from tests.frontend.browser_support import (
@@ -288,6 +289,51 @@ def test_server_errors_use_the_same_container_and_clear_on_edit(live_server):
             "id_username",
             "id_full_name",
         }
+        context.close()
+
+    assert not failures, "\n".join(failures)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_recovery_codes_can_be_copied_and_downloaded_as_text(live_server, tmp_path):
+    user = make_user("recovery_codes_user")
+    codes = [f"ABCD-{index:04d}" for index in range(10)]
+    client = Client()
+    client.force_login(user)
+    session = client.session
+    session.pop("device_registration_prompt", None)
+    session["mfa_backup_codes_once"] = codes
+    session.save()
+    cookies = {
+        settings.SESSION_COOKIE_NAME: client.cookies[settings.SESSION_COOKIE_NAME].value
+    }
+    failures: list[str] = []
+
+    with chromium() as browser:
+        context = session_context(browser, live_server, cookies)
+        context.grant_permissions(["clipboard-read", "clipboard-write"])
+        page = context.new_page()
+        watch(page, failures)
+        _open(page, live_server, "/users/mfa/backup-codes/")
+
+        copy_button = page.get_by_role("button", name="Copy all")
+        download_button = page.get_by_role("button", name="Download .txt")
+        assert copy_button.is_visible()
+        assert download_button.is_visible()
+
+        copy_button.click()
+        page.get_by_text("Recovery codes copied.").wait_for(state="visible")
+        copied = page.evaluate("navigator.clipboard.readText()")
+        assert copied.split() == codes
+
+        with page.expect_download() as download_info:
+            download_button.click()
+        download = download_info.value
+        assert download.suggested_filename == "mobofirm-recovery-codes.txt"
+        saved = tmp_path / download.suggested_filename
+        download.save_as(saved)
+        assert saved.read_text(encoding="utf-8").split() == codes
+        assert overflow(page)["document"] <= overflow(page)["viewport"]
         context.close()
 
     assert not failures, "\n".join(failures)

@@ -1,0 +1,85 @@
+// Login / 403 / 404 / 500 pages (standalone shell: <body class="c-auth-body">).
+//   <main class="c-auth"><section class="c-auth__panel"><a class="c-auth__brand"><span class="c-brand__mark">M</span>Mobofirm</a>
+//     <h1 class="c-auth__title">Welcome back</h1><p class="c-auth__sub">Sign in to the staff console.</p><form class="c-form">..</form>
+//     <p class="c-auth__foot">Need access? Ask an administrator.</p></section>
+//     <aside class="c-auth__aside" aria-hidden="true"><p class="c-auth__quote">..</p></aside></main>
+//   Error pages: <main class="c-error"><p class="c-error__code">404</p><h1 class="c-error__title">..</h1><p class="c-error__text">..</p><div class="c-error__actions">..</div></main>
+@layer components {
+  .c-auth {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    min-block-size: 100dvh;
+  }
+
+  .c-auth__panel {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    inline-size: min(100%, 28rem);
+    margin-inline: auto;
+    padding: var(--mf-space-6) var(--mf-space-5);
+  }
+
+  .c-auth__brand {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--mf-space-3);
+    margin-block-end: var(--mf-space-6);
+    color: var(--mf-text);
+    font-family: var(--mf-font-display);
+    font-size: var(--mf-fs-xl);
+    font-weight: 650;
+    text-decoration: none;
+  }
+
+  .c-auth__title { font-size: var(--mf-fs-3xl); letter-spacing: -0.02em; }
+  .c-auth__sub { margin-block-end: var(--mf-space-5); color: var(--mf-text-muted); }
+  .c-auth__foot { margin: var(--mf-space-5) 0 0; color: var(--mf-text-muted); font-size: var(--mf-fs-sm); }
+
+  .c-auth__aside {
+    display: none;
+    align-content: end;
+    padding: var(--mf-space-8) var(--mf-space-7);
+    color: var(--mf-accent-ink);
+    background: var(--mf-accent-strong);
+  }
+
+  .c-auth__quote {
+    max-inline-size: 22ch;
+    margin: 0;
+    font-family: var(--mf-font-display);
+    font-size: var(--mf-fs-2xl);
+    line-height: 1.25;
+  }
+
+  @media (min-width: 992px) {
+    .c-auth { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+    .c-auth__aside { display: grid; }
+  }
+
+  // Error pages
+  .c-error {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--mf-space-2);
+    min-block-size: min(100dvh, 40rem);
+    padding: var(--mf-space-7) var(--mf-space-5);
+    text-align: center;
+  }
+
+  .c-error__code {
+    margin: 0;
+    color: color-mix(in srgb, var(--mf-accent) 55%, var(--mf-surface));
+    font-family: var(--mf-font-display);
+    font-size: clamp(5rem, 4rem + 8vw, 9rem);
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.04em;
+  }
+
+  .c-error__title { margin: 0; font-size: var(--mf-fs-2xl); }
+  .c-error__text { max-inline-size: 42ch; margin: 0; color: var(--mf-text-muted); }
+  .c-error__actions { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--mf-space-2); margin-block-start: var(--mf-space-4); }
+}

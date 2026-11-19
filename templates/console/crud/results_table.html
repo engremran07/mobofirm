@@ -1,0 +1,47 @@
+{% comment %}
+  The changelist table (inclusion template of {% console_result_list cl %}).
+  Context: cl, opts, result_headers, rows ({obj, pk, cells, form, urls}), has_checkbox, actions_row, has_row_actions,
+  column_count, num_sorted_fields, result_hidden_fields, action_checkbox_name.
+  The scroll container #c-cl-box keeps the header row sticky; the page itself never scrolls sideways.
+{% endcomment %}{% load i18n admin_urls console_ui console_admin %}
+{% if result_hidden_fields %}<div hidden>{% for item in result_hidden_fields %}{{ item }}{% endfor %}</div>{% endif %}
+<div id="c-cl-box" class="c-cl-results" role="region" aria-label="{{ opts.verbose_name_plural|capfirst }}" tabindex="0">
+<table id="result_list" class="c-table">
+<caption class="visually-hidden">{{ opts.verbose_name_plural|capfirst }}</caption>
+<thead>
+<tr>
+{% for header in result_headers %}{% if header.is_checkbox %}<th scope="col" class="action-checkbox-column"><input type="checkbox" class="form-check-input" data-console-select-all aria-label="{% translate 'Select all rows on this page' %}"></th>
+{% else %}<th scope="col"{{ header.class_attrib }}{% if header.sorted %} aria-sort="{{ header.ascending|yesno:'ascending,descending' }}"{% endif %}>
+{% if header.sortable %}<a class="c-table__sort" href="{{ header.url_primary }}"{% if not cl.formset %} {% include "console/crud/_hx_list.html" with url=header.url_primary %}{% endif %}>{{ header.text|capfirst }}</a>
+{% if header.sort_priority > 0 %}{% if num_sorted_fields > 1 %}<span class="c-badge c-badge--sm" title="{% blocktranslate with priority_number=header.sort_priority %}Sorting priority: {{ priority_number }}{% endblocktranslate %}">{{ header.sort_priority }}</span>{% endif %}
+<a class="c-chip__remove" href="{{ header.url_remove }}"{% if not cl.formset %} {% include "console/crud/_hx_list.html" with url=header.url_remove %}{% endif %} aria-label="{% translate 'Remove from sorting' %}">{% console_icon "x" "c-icon--xs" %}</a>{% endif %}
+{% else %}<span>{{ header.text|capfirst }}</span>{% endif %}
+</th>
+{% endif %}{% endfor %}
+{% if has_row_actions %}<th scope="col" class="c-table__actions"><span class="visually-hidden">{% translate "Actions" %}</span></th>{% endif %}
+</tr>
+</thead>
+<tbody>
+{% for row in rows %}
+{% if row.form and row.form.non_field_errors %}<tr><td colspan="{{ column_count }}">{{ row.form.non_field_errors }}</td></tr>{% endif %}
+<tr>
+{% if has_checkbox %}<td class="action-checkbox"><input type="checkbox" class="form-check-input action-select" name="{{ action_checkbox_name }}" value="{{ row.pk }}" data-console-row-select aria-label="{% blocktranslate with name=row.obj %}Select {{ name }}{% endblocktranslate %}"></td>
+{% endif %}{% for cell in row.cells %}{{ cell }}{% endfor %}
+{% if has_row_actions %}<td class="c-table__actions"><div class="c-row-actions">
+{% for item in actions_row %}{% if not item.display_in_dropdown %}{% url item.raw_path row.pk as item_url %}<a class="btn btn-sm {{ item.variant|console_button_class }}" href="{{ item_url }}"{% if item.dialog %} hx-get="{{ item_url }}" hx-target="#console-dialog" hx-swap="innerHTML"{% endif %}{{ item.attrs|console_attrs }}>{% if item.icon %}{% console_icon item.icon %}{% endif %}<span>{{ item.title }}</span></a>{% endif %}{% endfor %}
+{% if row.urls.change %}<div class="dropdown" data-ui-popover>
+<button type="button" class="c-kebab" data-ui-trigger aria-haspopup="menu" aria-expanded="false" aria-label="{% blocktranslate with name=row.obj %}Actions for {{ name }}{% endblocktranslate %}">{% console_icon "ellipsis-vertical" %}</button>
+<ul class="dropdown-menu dropdown-menu-end" data-ui-panel data-ui-fixed role="menu" hidden>
+<li><a class="dropdown-item" href="{{ row.urls.change }}">{% if row.urls.can_change %}{% console_icon "pencil" "c-icon--sm c-menu__icon" %}{% translate "Edit" %}{% else %}{% console_icon "eye" "c-icon--sm c-menu__icon" %}{% translate "View" %}{% endif %}</a></li>
+<li><a class="dropdown-item" href="{{ row.urls.history }}">{% console_icon "history" "c-icon--sm c-menu__icon" %}{% translate "History" %}</a></li>
+{% for item in actions_row %}{% if item.display_in_dropdown %}{% url item.raw_path row.pk as item_url %}<li><a class="dropdown-item{% if item.variant|console_action_variant == 'danger' %} is-danger{% endif %}" href="{{ item_url }}"{% if item.dialog %} hx-get="{{ item_url }}" hx-target="#console-dialog" hx-swap="innerHTML"{% endif %}{{ item.attrs|console_attrs }}>{% if item.icon %}{% console_icon item.icon "c-icon--sm c-menu__icon" %}{% endif %}{{ item.title }}</a></li>{% endif %}{% endfor %}
+{% if row.urls.can_delete %}<li><hr class="dropdown-divider"></li>
+<li><a class="dropdown-item is-danger" href="{{ row.urls.delete }}">{% console_icon "trash-2" "c-icon--sm c-menu__icon" %}{% translate "Delete" %}</a></li>{% endif %}
+</ul>
+</div>{% endif %}
+</div></td>{% endif %}
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</div>

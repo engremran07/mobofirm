@@ -13,11 +13,16 @@ import datetime
 import decimal
 import itertools
 import uuid
+from collections.abc import Callable
 from typing import Any
 
+from django.apps import apps as django_apps
+from django.contrib import admin
 from django.core.files.base import ContentFile
 from django.db import models
 from django.utils import timezone
+
+from apps.core.utils.managers import default_manager
 
 _counter = itertools.count(1)
 
@@ -136,4 +141,89 @@ def build(model: type[models.Model], depth: int = 0) -> models.Model:
         ):
             raise CannotBuild(f"{field.name} is a required self-reference")
         values[field.name] = _value_for(field, depth)
-    return concrete._default_manager.create(**values)
+    return default_manager(concrete).create(**values)
+
+
+def registered_admins() -> dict[type[models.Model], Any]:
+    """Every model registered on the admin site mapped to its ModelAdmin (public API)."""
+    return {
+        model: admin.site.get_model_admin(model)
+        for model in django_apps.get_models()
+        if admin.site.is_registered(model)
+    }
+
+
+def _automated_blog_link() -> models.Model:
+    """The table's check constraint ties ``kind`` to exactly one target column.
+
+    Creating the brand already makes the automation own its post (one per brand), so the
+    existing link is the row to use; a manual link would violate the unique brand key.
+    """
+    from apps.blog.models import Post
+    from apps.firmwares.models import AutomatedBlogLink, Brand
+
+    brand = build(Brand)
+    assert isinstance(brand, Brand)
+    existing = AutomatedBlogLink.objects.filter(
+        kind=AutomatedBlogLink.Kind.BRAND, brand=brand
+    ).first()
+    if existing is not None:
+        return existing
+    post = build(Post)
+    assert isinstance(post, Post)
+    return AutomatedBlogLink.objects.create(
+        kind=AutomatedBlogLink.Kind.BRAND, brand=brand, post=post
+    )
+
+
+def _firmware_shortener_override() -> models.Model:
+    """The override names a real firmware by type and id, which ``clean`` verifies."""
+    from apps.firmwares.catalog import PUBLIC_FIRMWARE_TYPES
+    from apps.firmwares.models import OfficialFirmware
+    from apps.firmwares.shortener_models import FirmwareShortenerOverride
+
+    firmware = build(OfficialFirmware)
+    assert isinstance(firmware, OfficialFirmware)
+    firmware_type = next(
+        key for key, model in PUBLIC_FIRMWARE_TYPES if model is OfficialFirmware
+    )
+    return FirmwareShortenerOverride.objects.create(
+        firmware_type=firmware_type, firmware_id=firmware.pk
+    )
+
+
+def _editor_profile() -> models.Model:
+    """One profile per context is a unique key, and the data migration seeds them all.
+
+    Reuse the seeded row when migrations ran; seed once when they did not.
+    """
+    from apps.site_settings.editor_models import EditorProfile
+
+    row = EditorProfile.objects.order_by("pk").first()
+    if row is None:
+        EditorProfile.seed()
+        row = EditorProfile.objects.order_by("pk").first()
+    assert row is not None
+    return row
+
+
+# Builders for models whose columns depend on each other (constraints), which the
+# generic field-type builder cannot satisfy.
+CUSTOM_BUILDERS: dict[str, Callable[[], models.Model]] = {
+    "firmwares.automatedbloglink": _automated_blog_link,
+    "firmwares.firmwareshorteneroverride": _firmware_shortener_override,
+    "site_settings.editorprofile": _editor_profile,
+}
+
+
+def build_row(model: type[models.Model]) -> models.Model:
+    """Create one row, using the model's custom builder when it has one."""
+    custom = CUSTOM_BUILDERS.get(model._meta.label_lower)
+    return custom() if custom else build(model)
+
+
+def admin_pk(instance: models.Model) -> object:
+    """DRF's token admin addresses a token by its user's id, not by the key."""
+    if instance._meta.label_lower == "authtoken.token":
+        return getattr(instance, "user_id", instance.pk)
+    return instance.pk

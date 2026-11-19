@@ -1,0 +1,88 @@
+/* =============================================================================
+   Mobofirm staff console - design system entry (imported by the console Vite entry).
+
+   Pipeline
+     styles/_tokens.scss      CSS custom properties (--mf-*), light + dark + prefers-color-scheme, Bootstrap --bs-* bridge
+     styles/_bootstrap.scss   the ONLY Bootstrap seam (5.3.8 selective partials; documents the 6.0 swap)
+     styles/_adminlte.scss    selective AdminLTE 4.10 shell (wrapper/header/sidebar/footer), re-skinned via tokens
+     styles/_base.scss        element defaults, focus, reduced motion
+     styles/_layout.scss      shell: sticky header, sidebar (expanded / mini rail / mobile off-canvas), content widths
+     styles/components/*      one partial per component
+     styles/_utilities.scss   u-* helpers      styles/_print.scss   print + forced colours
+   Cascade layers (lowest to highest): reset, vendor, tokens, base, layout, components, utilities, overrides.
+   No data: URIs, no remote fonts/images, no inline-style hooks. Unlayered third-party CSS would beat all layers.
+
+   Naming
+     c-*       Mobofirm components, BEM-ish:  c-block, c-block__element, c-block--modifier.  State: .is-*, [aria-*], [data-*].
+     u-*       utilities (plus Bootstrap's curated utilities: d-*, flex-*, gap-*, m*, p*, text-*, fw-*, rounded-*, ...).
+     app-*, sidebar-*, nav-treeview, menu-open   AdminLTE shell classes (state classes on <body>:
+               layout-fixed sidebar-expand-lg sidebar-mini [sidebar-collapse] [sidebar-open] [sidebar-without-hover] fixed-header).
+     Bootstrap structural classes appear ONLY in shared components: btn*, dropdown*, modal*, offcanvas*, form-*, input-group,
+               nav (sidebar), spinner-border, visually-hidden, hstack/vstack, row/col-*, container*.
+
+   Component class contract (full markup in each partial's header comment)
+     Shell      body.layout-fixed.sidebar-expand-lg.sidebar-mini.fixed-header > .app-wrapper > header.app-header
+                (.c-header__start/.c-header__end/.c-header__title/.c-header__search/.c-icon-btn/.c-avatar/.c-env)
+                + aside.app-sidebar(.sidebar-brand>.brand-link>.c-brand__mark+.brand-text, .sidebar-wrapper>nav>ul.sidebar-menu
+                [li.nav-header, li.nav-item>a.nav-link.active>svg.nav-icon+p+.nav-badge, li.nav-item.c-nav-group>details>summary.nav-link+ul.nav-treeview],
+                .c-sidebar__foot) + .sidebar-overlay + main.app-main>(.app-content-header + .app-content[.app-content--narrow|--reading|--full]) + footer.app-footer; a.skip-link.
+     Page       .c-page-header(__main __eyebrow __title __subtitle|__sub __meta __actions __tabs)  .c-breadcrumb(__item)  .c-tabs(__list __tab|__item __badge __panel)
+     Surfaces   .c-card(__header __title __subtitle __actions __body __footer; --flush --tint|--accent --danger --interactive; .is-collapsed)
+                .c-stat(__icon __label __value __meta|__hint __delta--up|--down; --success --warning --danger --info --neutral --link)
+                .c-badge(--success --warning --danger --info --accent|--primary --neutral --dot --sm; __dot)  .c-status-dot(--success --warning --danger)
+                .c-alert(--success --warning --danger; __icon __body __title __close) in ul.c-messages   .c-empty(--compact --error; __icon __title __text __actions)
+                .c-skeleton(--text --title --tile --row --circle --block) in .c-skeleton-group  .c-loadbar  .c-spinner  .htmx-indicator
+     Overlays   Bootstrap .modal/.modal-dialog/.modal-content/.modal-header/.modal-title/.modal-body/.modal-footer (+ .c-dialog__icon, .c-dialog--danger)
+                .dropdown-menu/.dropdown-item(.is-danger)/.dropdown-header/.dropdown-divider, .c-kebab, .c-menu__icon
+                .c-toast-region > .c-toast(--success --warning --danger --info; __icon __body __title __close __action; .is-leaving)
+                #console-palette .c-palette(__search __input __list __group __item __empty __foot) + .c-kbd
+     Data       .c-changelist[data-density](--filters) .c-cl-toolbar .c-cl-search(__icon __clear) .c-cl-chips .c-chip(--add __remove) .c-cl-results|.c-table-wrap(--flow)
+                table.c-table(--compact; th.sorted.ascending|descending, .c-table__sort, .c-table__num, .c-table__actions, .c-table__empty)
+                .c-row-actions .c-bulkbar(__count __actions) .c-pager(__summary|__info __list __item __link __gap) .c-fbar(__head __title __controls) .c-fctl(__btn __title __value __link) .c-fpanel(--form __list __actions)
+                .c-filter(__title __choices __count __range) .c-datehier
+     Forms      .form-control/.form-select/.form-check/.form-switch/.input-group, .c-form .c-fieldset(__legend __desc) .c-form-grid(--wide)
+                .c-field(--invalid|--error --inline --wide; __label __required __control __help __errors|__error __value) .errorlist
+                .c-savebar(--top; __meta __actions) .c-inline(__header __row __fields __handle __tools __add) .c-combobox(__tokens __input __list __option)
+                .c-related(__link) .c-popup .c-disclosure
+     Pages      .c-auth(__panel __brand __title __sub __foot __aside __quote) .c-error(__code __title __text __actions)
+                .c-dashboard(__stats __grid) .c-greeting .c-widget(--sm --md --lg --full; __head) .c-kv .c-activity .c-queue .c-progress .c-quick .c-section-nav
+                .c-history/.c-delete .c-timeline(__item--accent|--success|--danger __dot __main __title __meta) .c-diff(__row--add|--del __sign) .c-tree
+   ============================================================================= */
+
+@layer reset, vendor, tokens, base, layout, components, utilities, overrides;
+
+@import "styles/tokens";
+@import "styles/bootstrap";
+@import "styles/adminlte";
+@import "styles/base";
+@import "styles/layout";
+
+@import "styles/components/icon";
+@import "styles/components/button";
+@import "styles/components/badge";
+@import "styles/components/card";
+@import "styles/components/stat-tile";
+@import "styles/components/empty-state";
+@import "styles/components/alert";
+@import "styles/components/page-header";
+@import "styles/components/breadcrumb";
+@import "styles/components/tabs";
+@import "styles/components/pagination";
+@import "styles/components/dropdown";
+@import "styles/components/dialog";
+@import "styles/components/toast";
+@import "styles/components/data-table";
+@import "styles/components/filter";
+@import "styles/components/filter-bar";
+@import "styles/components/controls";
+@import "styles/components/form-field";
+@import "styles/components/skeleton";
+@import "styles/components/command-palette";
+@import "styles/components/dashboard";
+@import "styles/components/timeline";
+@import "styles/components/auth";
+@import "styles/components/staff";
+@import "styles/components/distribution";
+
+@import "styles/utilities";
+@import "styles/print";

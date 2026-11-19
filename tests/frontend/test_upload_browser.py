@@ -113,12 +113,9 @@ def test_a_file_upload_becomes_a_pending_free_submission(live_server):
         access = page.locator("select[name='access_tier']")
         assert access.input_value() == "free"
         assert access.locator("option[value='paid']").is_disabled()
-        assert access.locator("option[value='featured']").is_disabled()
+        assert access.locator("option[value='featured']").is_enabled()
         note = page.locator("[data-upload-access-note]")
-        assert (
-            "Only approved sellers can offer paid or featured files"
-            in note.inner_text()
-        )
+        assert "Only approved sellers can offer paid files" in note.inner_text()
         assert (
             note.get_by_role("link", name="Become a seller").get_attribute("href")
             == "/marketplace/sell/"
@@ -142,7 +139,7 @@ def test_a_file_upload_becomes_a_pending_free_submission(live_server):
         )
         page.fill("#id_build_number", "BUILD.7")
         page.get_by_role("button", name="Submit for review").click()
-        page.wait_for_url("**/firmwares/upload/mine/")
+        page.wait_for_url("**/contributions/firmware/")
         assert page.get_by_text("acme-one.zip").count() >= 1
         context.close()
 
@@ -215,7 +212,7 @@ def test_upload_pages_fit_every_viewport(live_server):
         visit_all(
             page,
             live_server,
-            ["/firmwares/upload/", "/firmwares/upload/mine/"],
+            ["/firmwares/contribute/", "/contributions/firmware/"],
             failures,
             widths=WIDTHS,
         )

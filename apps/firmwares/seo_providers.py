@@ -29,6 +29,7 @@ from apps.seo.siteurls import same_site_image
 
 from . import catalog
 from .models import Brand, Chipset, FlashingTool, Model
+from .tool_categories import resolve_category
 
 ITEM_LIMIT = 20
 HOME = ("Home", "/")
@@ -460,6 +461,28 @@ def tool_detail(ctx: ProviderContext) -> PageSEO | None:
         )
     )
     return page
+
+
+@register_provider("firmwares:flashing_category")
+def tool_category(ctx: ProviderContext) -> PageSEO | None:
+    category, _renamed = resolve_category(ctx.kwargs.get("slug", ""))
+    if category is None:
+        return None
+    path = reverse("firmwares:flashing_category", kwargs={"slug": category.slug})
+    return PageSEO(
+        page_type="tool_category",
+        title=f"{category.name} flashing tools and guides",
+        description=ctx.describe(
+            clean_text(category.description),
+            f"Flashing tools and step-by-step guides for {category.name}.",
+        ),
+        path=path,
+        crumbs=_crumbs(
+            HOME,
+            ("Flashing tools", reverse("firmwares:flashing_tools")),
+            (category.name, path),
+        ),
+    )
 
 
 @register_provider("firmwares:flashing_guides")

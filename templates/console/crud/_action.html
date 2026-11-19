@@ -1,0 +1,9 @@
+{% comment %}
+  One admin action (actions_list / actions_detail entry) as a button or a dropdown group.
+  Params: action (dict: title, icon, variant, attrs, dialog, path | items), size (default sm).
+  An action with `dialog` opens its confirmation form in the app dialog (#console-dialog); without JavaScript the
+  link opens the same dialog as a full page. GET never changes data: writes happen on the dialog's CSRF-protected POST.
+{% endcomment %}{% load console_ui console_admin %}{% if action.items %}<div class="dropdown" data-ui-popover>
+<button type="button" class="btn btn-{{ size|default:'sm' }} {{ action.variant|console_button_class }} dropdown-toggle" data-ui-trigger aria-haspopup="menu" aria-expanded="false">{% if action.icon %}{% console_icon action.icon %}{% endif %}<span>{{ action.title }}</span></button>
+<ul class="dropdown-menu dropdown-menu-end" data-ui-panel data-ui-fixed role="menu" hidden>{% for item in action.items %}<li>{% include "console/crud/_action_link.html" with action=item menu=True %}</li>{% endfor %}</ul>
+</div>{% else %}{% include "console/crud/_action_link.html" with action=action menu=False size=size %}{% endif %}

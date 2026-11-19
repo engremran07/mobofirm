@@ -1,7 +1,7 @@
-{# Brand tiles. Included by the home page; context: brands, search_query. #}
+{% load ad_tags %}{# Brand tiles. Included by the home page; context: brands, search_query. #}
 {% if brands %}
   <div class="card-grid card-grid--tiles">
-    {% for brand in brands %}{% include "firmwares/includes/brand_tile.html" with brand=brand %}{% endfor %}
+    {% for brand in brands %}{% include "firmwares/includes/brand_tile.html" with brand=brand %}{% ad_tile forloop.counter brands|length tile="card-ui--tile card-ui--brand-tile" page="firmwares/library_hub.html" %}{% endfor %}
   </div>
 {% else %}
   <div class="empty-ui empty-state" role="status">

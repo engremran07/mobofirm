@@ -1,0 +1,4 @@
+{% comment %}
+  breadcrumb - the trail above a page title.
+  Context: items (required; list of {"label", "url"}; the last item, or any item without url, is the current page), label (default "Breadcrumb").
+{% endcomment %}{% load i18n %}{% if items %}<nav aria-label="{{ label|default:_('Breadcrumb') }}"><ol class="c-breadcrumb">{% for item in items %}{% if forloop.last or not item.url %}<li class="c-breadcrumb__item" aria-current="page">{{ item.label }}</li>{% else %}<li class="c-breadcrumb__item"><a href="{{ item.url }}">{{ item.label }}</a></li>{% endif %}{% endfor %}</ol></nav>{% endif %}

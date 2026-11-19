@@ -6,7 +6,7 @@ Offer pages live under `/offers/` (`promotions:index`, `promotions:offer`, `prom
 
 ## Model
 
-`Promotion` has tabs in the Unfold admin (Offer, Schedule & banner, Package & price, Bonus & rewards, Earn rules, Caps & budget, Analytics + audit log).
+`Promotion` has tabs in the staff console (Offer, Schedule & banner, Package & price, Bonus & rewards, Earn rules, Caps & budget, Analytics + audit log).
 
 | Kind | What it gives | Taken by |
 | --- | --- | --- |
@@ -49,9 +49,9 @@ While a promotion is active with `announce=True` its announcement (`users.Announ
 * **Wallet** – `effects.reward_modifier` is registered with `apps.wallet.api.register_reward_modifier`. The best multiplier applies (multipliers never stack), flat bonuses add up, each promotion's budget is respected and the change is recorded in the ledger row snapshot. It is a pure function; the analytics counters are settled from `wallet.credited` once the credit really happened.
 * **Prices** – `api.effective_price(user, package)` returns a `PriceQuote`; `api.redeem_price(user, package, reference=...)` records the redemption once per order. `apps/shop/promotion_gateway.py` is the shop's seam (used by `create_order`, `pay_package_with_credits`, the pricing page and package detail).
 * **Ads** – `ads.Campaign.promotion` (nullable) links a creative campaign to an offer; a linked campaign only serves while the offer is running and exposes `offer_url`.
-* **Panels** – `api.offers_for_user(user)` feeds the My files quota panel and the wallet "Ways to earn" page (read through `AppService.get("promotions")`).
+* **Panels** – `api.offers_for_user(user)` feeds the My contributions quota panel and the wallet "Ways to earn" page (read through `AppService.get("promotions")`).
 * **Search** – `search_providers.OfferProvider` (kind `offer`, running and recently ended public offers).
-* **Dashboard** – the "Campaigns running" KPI on the Unfold index.
+* **Dashboard** – the "Campaigns running" KPI on the console dashboard.
 
 ## Earn-by-contributing
 

@@ -1,4 +1,4 @@
-"""Staff pages of the distribution engine, rendered in the Unfold admin shell.
+"""Staff pages of the distribution engine, rendered in the staff console shell.
 
 Every page checks the model permission it needs; every state change is a CSRF-protected
 POST that redirects back (no native confirm dialogs, no inline scripts).
@@ -6,12 +6,18 @@ POST that redirects back (no native confirm dialogs, no inline scripts).
 
 from __future__ import annotations
 
+import re
 from collections import defaultdict
 from datetime import datetime, timedelta
+from importlib.util import find_spec
 from typing import Any
 
+from django.conf import settings
 from django.contrib import messages
+from django.core.cache import cache
 from django.core.exceptions import PermissionDenied
+from django.core.files.storage import default_storage
+from django.db.models import Count, Sum
 from django.http import (
     Http404,
     HttpRequest,
@@ -19,23 +25,51 @@ from django.http import (
     HttpResponseRedirect,
     StreamingHttpResponse,
 )
-from django.shortcuts import get_object_or_404, redirect
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 from django.views.decorators.http import require_POST
 
 from apps.core.admin_pages import render_admin_page
-from apps.distribution import analytics, channels, media, services
+from apps.distribution import (
+    analytics,
+    catalog,
+    channels,
+    feeds,
+    media,
+    news,
+    services,
+    syndication,
+    videos,
+)
 from apps.distribution import content as content_module
-from apps.distribution.models import Channel, ShareJob
+from apps.distribution.constants import KIND_INSTAGRAM, KIND_TIKTOK, KIND_YOUTUBE
+from apps.distribution.feed_views import ENABLED_CACHE_KEY
+from apps.distribution.forms import FeedSettingsForm
+from apps.distribution.models import (
+    Channel,
+    DistributionSettings,
+    FeedConfig,
+    FeedStat,
+    PingOutbox,
+    ShareJob,
+    VideoJob,
+)
+from apps.distribution.video import capabilities as video_capabilities
+from apps.distribution.video import packs, sources
 
 PERM = "distribution.{}_{}"
+EPOCH = feeds.EPOCH
+VIDEO_CHANNEL_KINDS = (KIND_TIKTOK, KIND_YOUTUBE, KIND_INSTAGRAM)
 TABS = (
     ("dashboard", "Dashboard", "admin:distribution_channel_dashboard"),
     ("channels", "Channels", "admin:distribution_channel_changelist"),
+    ("videos", "Videos", "admin:distribution_channel_videos"),
     ("calendar", "Calendar", "admin:distribution_channel_calendar"),
     ("review", "Approvals", "admin:distribution_channel_review"),
+    ("handoff", "Hand-off", "admin:distribution_channel_handoff"),
+    ("feeds", "Feeds & Google News", "admin:distribution_channel_feeds"),
     ("queue", "Share queue", "admin:distribution_sharejob_changelist"),
     ("analytics", "Link analytics", "admin:distribution_channel_analytics"),
     ("log", "Log", "admin:distribution_sharelog_changelist"),
@@ -119,6 +153,11 @@ def channel_test(request: HttpRequest, pk: int) -> HttpResponse:
     job = services.send_test(channel)
     if job.status == ShareJob.Status.SENT:
         messages.success(request, f"Test post delivered to {channel.name}.")
+    elif job.status == ShareJob.Status.HANDOFF:
+        messages.info(
+            request,
+            f"Test post prepared for {channel.name}. It is not sent: post it by hand from Hand-off.",
+        )
     else:
         messages.error(request, f"Test post to {channel.name} failed: {job.last_error}")
     return _back("admin:distribution_channel_dashboard")
@@ -184,6 +223,7 @@ def _job_action_target(request: HttpRequest) -> str:
     allowed = {
         reverse("admin:distribution_channel_calendar"),
         reverse("admin:distribution_channel_review"),
+        reverse("admin:distribution_channel_handoff"),
     }
     return nxt if nxt in allowed else reverse("admin:distribution_channel_calendar")
 
@@ -315,31 +355,615 @@ def analytics_export(request: HttpRequest) -> StreamingHttpResponse:
     return response
 
 
+# ------------------------------------------------------------ feeds & news ----
+
+
+def _push_status() -> list[dict[str, str]]:
+    """What reaches readers and Android devices, automatic or manual, honestly."""
+    cfg = DistributionSettings.get_solo()
+    hub = syndication.hub_url()
+    rows = [
+        {
+            "name": "RSS, Atom and JSON feeds",
+            "state": "on" if cfg.feeds_enabled else "off",
+            "note": "Automatic once a reader subscribes. Readers poll; Android reaches them through a feed-reader app.",
+        },
+        {
+            "name": "WebSub push",
+            "state": "on" if hub else "off",
+            "note": "Automatic pings to your hub on every publish, so subscribed readers hear sooner."
+            if hub
+            else "Not enabled: set a WebSub hub (https) in the settings below.",
+        },
+        {
+            "name": "IndexNow (Bing, Yandex)",
+            "state": "on" if syndication.indexnow_active() else "off",
+            "note": "Automatic pings through the SEO settings."
+            if syndication.indexnow_active()
+            else "Not enabled: turn on IndexNow and set its key in the SEO settings. Google does not use IndexNow.",
+        },
+    ]
+    push_ready = bool(
+        getattr(settings, "VAPID_PUBLIC_KEY", "")
+        and getattr(settings, "VAPID_PRIVATE_KEY", "")
+        and find_spec("pywebpush") is not None
+    )
+    rows.append(
+        {
+            "name": "Web Push (Android Chrome)",
+            "state": "on" if push_ready else "off",
+            "note": "Account notifications only (owned by Users); feeds do not send browser push."
+            if push_ready
+            else "Not enabled: needs VAPID keys and the pywebpush package, which this site does not have installed.",
+        }
+    )
+    rows.append(
+        {
+            "name": "Google News and Discover",
+            "state": "manual",
+            "note": "Not automatic. Google decides after you register in Publisher Center and verify Search Console.",
+        }
+    )
+    return rows
+
+
+def _feed_rows() -> list[dict[str, Any]]:
+    configs = {row.key: row for row in FeedConfig.objects.all()}
+    news_ok = feeds.news_available()
+    rows: list[dict[str, Any]] = []
+    for key, title, description in feeds.FIXED:
+        config = configs.get(key)
+        rows.append(
+            {
+                "key": key,
+                "title": title,
+                "description": description,
+                "config": config,
+                "enabled": config.enabled if config else True,
+                "available": news_ok or key != feeds.NEWS_KEY,
+                "urls": [
+                    {"fmt": fmt, "label": label, "url": feeds.feed_url(key, fmt)}
+                    for fmt, (_mime, label) in feeds.FORMATS.items()
+                ],
+                "dynamic": False,
+            }
+        )
+    dynamic = [
+        row
+        for row in configs.values()
+        if row.key.split("/", 1)[0] in {"brand", "chipset", "tag"}
+    ]
+    dynamic.sort(key=lambda row: row.last_fetched_at or EPOCH, reverse=True)
+    for config in dynamic[:15]:
+        rows.append(
+            {
+                "key": config.key,
+                "title": config.key.replace("/", ": "),
+                "description": "On demand",
+                "config": config,
+                "enabled": config.enabled,
+                "available": True,
+                "urls": [
+                    {"fmt": fmt, "label": label, "url": feeds.feed_url(config.key, fmt)}
+                    for fmt, (_mime, label) in feeds.FORMATS.items()
+                ],
+                "dynamic": True,
+            }
+        )
+    return rows
+
+
+def _feeds_context() -> dict[str, Any]:
+    cfg = DistributionSettings.get_solo()
+    since = timezone.now() - timedelta(hours=24)
+    totals = FeedStat.objects.filter(bucket__gte=since).aggregate(
+        fetches=Sum("fetches"), not_modified=Sum("not_modified")
+    )
+    return {
+        "settings": cfg,
+        "rows": _feed_rows(),
+        "recent": FeedStat.objects.all()[:12],
+        "fetches_24h": totals["fetches"] or 0,
+        "not_modified_24h": totals["not_modified"] or 0,
+        "pings": PingOutbox.objects.all()[:15],
+        "ping_summary": syndication.summary(),
+    }
+
+
+def feeds_page(request: HttpRequest) -> HttpResponse:
+    _need(request, "view", "channel")
+    context = _feeds_context()
+    if (
+        request.headers.get("HX-Request")
+        and request.headers.get("HX-Target") == "dist-feeds-live"
+    ):
+        return render(
+            request,
+            "admin/distribution/_feeds_live.html",
+            {
+                **context,
+                "can_edit": request.user.has_perm(
+                    PERM.format("change", "distributionsettings")
+                ),
+                "can_change": request.user.has_perm("distribution.change_sharejob"),
+            },
+        )
+    return _page(
+        request,
+        "admin/distribution/feeds.html",
+        title="Feeds & Google News",
+        subtitle="Public RSS, Atom and JSON feeds, push pings and Google News readiness.",
+        section="feeds",
+        context={
+            **context,
+            "news": news.status(),
+            "checks": news.discover_scan(),
+            "seo_scan_url": news.seo_scan_url(),
+            "push": _push_status(),
+            "form": FeedSettingsForm(instance=context["settings"]),
+            "can_edit": request.user.has_perm(
+                PERM.format("change", "distributionsettings")
+            ),
+            "feeds_index": reverse("feeds:index"),
+        },
+    )
+
+
+def _feeds_back() -> HttpResponseRedirect:
+    return redirect("admin:distribution_channel_feeds")
+
+
+@require_POST
+def feeds_settings(request: HttpRequest) -> HttpResponse:
+    _need(request, "change", "distributionsettings")
+    form = FeedSettingsForm(request.POST, instance=DistributionSettings.get_solo())
+    if form.is_valid():
+        form.save()
+        cache.delete(ENABLED_CACHE_KEY)
+        messages.success(request, "Feed settings saved.")
+    else:
+        for errors in form.errors.values():
+            messages.error(request, "; ".join(errors))
+    return _feeds_back()
+
+
+@require_POST
+def feeds_toggle(request: HttpRequest) -> HttpResponse:
+    _need(request, "change", "distributionsettings")
+    key = request.POST.get("key", "")
+    if feeds.spec_for(key) is None:
+        raise Http404
+    config, _created = FeedConfig.objects.get_or_create(key=key)
+    config.enabled = not config.enabled
+    config.save(update_fields=["enabled"])
+    messages.success(request, f"Feed {key} is now {'on' if config.enabled else 'off'}.")
+    return _feeds_back()
+
+
+@require_POST
+def feeds_validate(request: HttpRequest) -> HttpResponse:
+    """Build the feed in all three formats and check what readers require."""
+    _need(request, "view", "channel")
+    key = request.POST.get("key", "")
+    spec = feeds.spec_for(key)
+    if spec is None:
+        raise Http404
+    problems: list[str] = []
+    for fmt in feeds.FORMATS:
+        built = feeds.build(spec, fmt)
+        problems.extend(f"{fmt}: {p}" for p in feeds.validate(built.body, fmt))
+    summary = (
+        "Valid in RSS, Atom and JSON." if not problems else "; ".join(problems)[:300]
+    )
+    if request.user.has_perm(PERM.format("change", "distributionsettings")):
+        config, _created = FeedConfig.objects.get_or_create(key=key)
+        config.last_validation = summary
+        config.last_validated_at = timezone.now()
+        config.save(update_fields=["last_validation", "last_validated_at"])
+    (messages.success if not problems else messages.warning)(
+        request, f"{key}: {summary}"
+    )
+    return _feeds_back()
+
+
+@require_POST
+def feeds_news_step(request: HttpRequest) -> HttpResponse:
+    _need(request, "change", "distributionsettings")
+    step = request.POST.get("step", "")
+    if not news.set_step(step, request.POST.get("done") == "1"):
+        raise Http404
+    messages.success(
+        request,
+        "Google News checklist updated. This is your own note: Google confirms nothing.",
+    )
+    return _feeds_back()
+
+
+@require_POST
+def feeds_ping(request: HttpRequest, pk: int, action: str) -> HttpResponse:
+    _need(request, "change", "distributionsettings")
+    ping = get_object_or_404(PingOutbox, pk=pk)
+    done = {"retry": syndication.retry, "cancel": syndication.cancel}.get(action)
+    if done is None:
+        raise Http404
+    if done(ping):
+        messages.success(request, f"Ping {action} done.")
+    else:
+        messages.warning(request, "That ping can no longer change.")
+    return _feeds_back()
+
+
+@require_POST
+def feeds_ping_run(request: HttpRequest) -> HttpResponse:
+    _need(request, "change", "distributionsettings")
+    counts = syndication.process_due()
+    messages.success(
+        request,
+        f"Pings: {counts['sent']} sent, {counts['retried']} to retry, {counts['failed']} failed.",
+    )
+    return _feeds_back()
+
+
+# ----------------------------------------------------------- motion videos ----
+
+VIDEO_PAGE_SIZE = 24
+RANGE_RE = re.compile(r"^bytes=(\d*)-(\d*)$")
+
+
+def _video_filters(request: HttpRequest) -> dict[str, Any]:
+    status = request.GET.get("status", "")
+    if status not in {s.value for s in VideoJob.Status}:
+        status = ""
+    kind = request.GET.get("kind", "")
+    if kind not in sources.VIDEO_KINDS:
+        kind = ""
+    return {"status": status, "kind": kind, "q": request.GET.get("q", "").strip()[:80]}
+
+
+def _videos_context(request: HttpRequest) -> dict[str, Any]:
+    filters = _video_filters(request)
+    rows = VideoJob.objects.all()
+    if filters["status"]:
+        rows = rows.filter(status=filters["status"])
+    if filters["kind"]:
+        rows = rows.filter(content_kind=filters["kind"])
+    if filters["q"]:
+        rows = rows.filter(title__icontains=filters["q"])
+    jobs = list(rows[:VIDEO_PAGE_SIZE])
+    counts = {
+        row["status"]: row["n"]
+        for row in VideoJob.objects.values("status").annotate(n=Count("id"))
+    }
+    return {
+        "jobs": [
+            {
+                "job": job,
+                "packs": packs.packs_for(job.content_kind),
+                "pack_label": packs.PACKS[job.template].label
+                if job.template in packs.PACKS
+                else job.template,
+            }
+            for job in jobs
+        ],
+        "filters": filters,
+        "counts": counts,
+        "statuses": VideoJob.Status.choices,
+        "kinds": sources.VIDEO_KINDS,
+        "busy": any(j.status == VideoJob.Status.RENDERING for j in jobs),
+        "channels": Channel.objects.filter(
+            enabled=True, kind__in=VIDEO_CHANNEL_KINDS
+        ).order_by("name"),
+        "can_edit": request.user.has_perm("distribution.change_videojob"),
+        "can_add": request.user.has_perm("distribution.add_videojob"),
+        "budget": videos.auto_budget(),
+        "settings": DistributionSettings.get_solo(),
+    }
+
+
+def videos_page(request: HttpRequest) -> HttpResponse:
+    _need(request, "view", "videojob")
+    context = _videos_context(request)
+    if (
+        request.headers.get("HX-Request")
+        and request.headers.get("HX-Target") == "dist-videos-live"
+    ):
+        return render(request, "admin/distribution/_videos_live.html", context)
+    report = video_capabilities.report()
+    return _page(
+        request,
+        "admin/distribution/videos.html",
+        title="Videos",
+        subtitle="Motion videos for TikTok, YouTube Shorts and Reels. Nothing is posted until you approve it.",
+        section="videos",
+        context={
+            **context,
+            "capabilities_report": report,
+            "can_render": all(c.ok for c in report if c.required),
+            "pack_options": packs.USER_PACKS,
+        },
+    )
+
+
+def _videos_back() -> HttpResponseRedirect:
+    return redirect("admin:distribution_channel_videos")
+
+
+def _video(pk: int) -> VideoJob:
+    return get_object_or_404(VideoJob, pk=pk)
+
+
+@require_POST
+def video_create(request: HttpRequest) -> HttpResponse:
+    _need(request, "add", "videojob")
+    kind = request.POST.get("kind", "")
+    ref = request.POST.get("ref", "").strip()[:120]
+    hook = request.POST.get("hook", "A")
+    job, reason = videos.create(
+        kind, ref, pack_slug=request.POST.get("template", ""), hook=hook
+    )
+    if job is None:
+        messages.error(request, reason)
+    elif request.POST.get("render") == "1" and videos.request_render(job):
+        messages.success(
+            request, f"Rendering “{job.title}”. It appears here when ready."
+        )
+    else:
+        messages.success(request, reason or f"Draft created for “{job.title}”.")
+    return _videos_back()
+
+
+@require_POST
+def video_render(request: HttpRequest, pk: int) -> HttpResponse:
+    _need(request, "change", "videojob")
+    job = _video(pk)
+    target, reason = videos.rerender(
+        job,
+        request.user,
+        pack_slug=request.POST.get("template", ""),
+        hook=request.POST.get("hook", ""),
+    )
+    if target is None or reason:
+        messages.warning(request, reason or "Nothing to render.")
+    else:
+        messages.success(request, f"Rendering “{target.title}” again.")
+    return _videos_back()
+
+
+@require_POST
+def video_decide(request: HttpRequest, pk: int, decision: str) -> HttpResponse:
+    _need(request, "change", "videojob")
+    job = _video(pk)
+    if decision == "approve":
+        done = videos.approve(job, request.user)
+        verb = "Approved"
+    elif decision == "reject":
+        done = videos.reject(job, request.user, request.POST.get("note", ""))
+        verb = "Rejected"
+    else:
+        raise Http404
+    if done:
+        messages.success(request, f"{verb} “{job.title}”.")
+    else:
+        messages.warning(request, "That video is not waiting for a decision.")
+    return _videos_back()
+
+
+@require_POST
+def video_schedule(request: HttpRequest, pk: int) -> HttpResponse:
+    _need(request, "change", "videojob")
+    job = _video(pk)
+    ids = [int(v) for v in request.POST.getlist("channels") if v.isdigit()]
+    count = videos.schedule(job, ids)
+    if count:
+        messages.success(
+            request,
+            f"Queued {count} post(s) for “{job.title}”; they follow each channel's schedule.",
+        )
+    else:
+        messages.warning(
+            request,
+            "Nothing was queued: the video must be approved and a channel chosen.",
+        )
+    return _videos_back()
+
+
+@require_POST
+def video_bulk(request: HttpRequest) -> HttpResponse:
+    _need(request, "change", "videojob")
+    action = request.POST.get("action", "")
+    picked = VideoJob.objects.filter(
+        pk__in=[int(v) for v in request.POST.getlist("selected") if v.isdigit()]
+    )
+    done = 0
+    for job in picked:
+        if action == "approve":
+            done += videos.approve(job, request.user)
+        elif action == "reject":
+            done += videos.reject(job, request.user, "Bulk rejected")
+        elif action == "render":
+            target, reason = videos.rerender(job, request.user)
+            done += int(target is not None and not reason)
+        else:
+            raise Http404
+    messages.success(request, f"{done} video(s) updated.")
+    return _videos_back()
+
+
+def video_media(request: HttpRequest, pk: int, part: str) -> HttpResponse:
+    """Staff-only stream of a video or its poster (never a public address), with ranges."""
+    _need(request, "view", "videojob")
+    job = _video(pk)
+    name = {"video": job.video_name, "poster": job.poster_name}.get(part, "")
+    if not name or not default_storage.exists(name):
+        raise Http404
+    mime = "video/mp4" if part == "video" else "image/jpeg"
+    size = default_storage.size(name)
+    start, end = 0, size - 1
+    status = 200
+    match = RANGE_RE.match(request.headers.get("Range", ""))
+    if match and (match.group(1) or match.group(2)):
+        if match.group(1):
+            start = int(match.group(1))
+            end = int(match.group(2)) if match.group(2) else size - 1
+        else:
+            start = max(0, size - int(match.group(2)))
+        end = min(end, size - 1)
+        if start > end or start >= size:
+            response = HttpResponse(status=416)
+            response["Content-Range"] = f"bytes */{size}"
+            return response
+        status = 206
+    with default_storage.open(name, "rb") as handle:
+        handle.seek(start)
+        body = handle.read(end - start + 1)
+    response = HttpResponse(body, status=status, content_type=mime)
+    response["Accept-Ranges"] = "bytes"
+    response["Content-Length"] = str(len(body))
+    response["Cache-Control"] = "private, no-store"
+    response["X-Content-Type-Options"] = "nosniff"
+    if status == 206:
+        response["Content-Range"] = f"bytes {start}-{end}/{size}"
+    return response
+
+
 # ---------------------------------------------------------------- platforms ----
+
+
+def _existing_by_kind() -> dict[str, list[dict[str, str]]]:
+    found: dict[str, list[dict[str, str]]] = defaultdict(list)
+    for channel in Channel.objects.order_by("name"):
+        label, tone = catalog.STATE_LABELS[channel.state]
+        found[channel.kind].append(
+            {
+                "name": channel.name,
+                "url": reverse("admin:distribution_channel_change", args=[channel.pk]),
+                "state": label,
+                "tone": tone,
+            }
+        )
+    return found
+
+
+def _picker_context(request: HttpRequest) -> dict[str, Any]:
+    query = request.GET.get("q", "").strip()[:80]
+    category = request.GET.get("cat", "all")
+    if category != "all" and category not in catalog.CATEGORY_BY_KEY:
+        category = "all"
+    existing = _existing_by_kind()
+    cards = [
+        catalog.card_for(kind, adapter, existing.get(kind, []))
+        for kind, adapter in channels.adapters().items()
+    ]
+    visible = [card for card in cards if catalog.matches(card, query)]
+    sections = [
+        section
+        for section in catalog.group(visible)
+        if section.cards and category in ("all", section.category.key)
+    ]
+    connected = sorted(
+        (
+            c
+            for c in visible
+            if c.connected and (category == "all" or category in c.categories)
+        ),
+        key=lambda c: c.adapter.label,
+    )
+    return {
+        "q": query,
+        "cat": category,
+        "sections": sections,
+        "connected": connected,
+        "menu": [
+            {
+                "category": section.category,
+                "count": section.count,
+                "current": section.category.key == category,
+            }
+            for section in catalog.group(visible)
+        ],
+        "total": len({c.kind for c in visible}),
+        "add_url": reverse("admin:distribution_channel_add"),
+    }
 
 
 def platforms(request: HttpRequest) -> HttpResponse:
     _need(request, "add", "channel")
-    cards = []
-    for kind, adapter in sorted(
-        channels.adapters().items(), key=lambda pair: pair[1].label
+    context = {**_picker_context(request), "capabilities": media.capabilities()}
+    if (
+        request.headers.get("HX-Request")
+        and request.headers.get("HX-Target") == "dist-picker-results"
     ):
-        cards.append(
-            {
-                "kind": kind,
-                "adapter": adapter,
-                "url": f"{reverse('admin:distribution_channel_add')}?kind={kind}",
-                "fields": adapter.fields,
-            }
-        )
+        return render(request, "admin/distribution/_picker_results.html", context)
     return _page(
         request,
         "admin/distribution/platforms.html",
         title="Add a channel",
-        subtitle="Pick a platform. Channels stay off until you enable them.",
+        subtitle="Choose where new firmware and posts should go. Channels stay off until you enable them.",
         section="channels",
-        context={"cards": cards, "capabilities": media.capabilities()},
+        context=context,
     )
+
+
+def requirements(request: HttpRequest, kind: str) -> HttpResponse:
+    """What a platform needs and how to get it (a dialog over HTMX, a page otherwise)."""
+    _need(request, "add", "channel")
+    adapter = channels.get_adapter(kind)
+    if adapter is None:
+        raise Http404
+    card = catalog.card_for(kind, adapter, _existing_by_kind().get(kind, []))
+    context = {
+        "card": card,
+        "adapter": adapter,
+        "info": card.info,
+        "fields": adapter.fields,
+        "connect_url": f"{reverse('admin:distribution_channel_add')}?kind={kind}",
+    }
+    if request.headers.get("HX-Request"):
+        return render(request, "admin/distribution/_requirements.html", context)
+    return _page(
+        request,
+        "admin/distribution/requirements.html",
+        title=adapter.label,
+        subtitle="What you need and how to get it.",
+        section="channels",
+        context=context,
+    )
+
+
+# ----------------------------------------------------------------- hand-off ----
+
+
+def handoff(request: HttpRequest) -> HttpResponse:
+    """Posts for assisted platforms (no API): copy-ready text, then "Mark as posted"."""
+    _need(request, "view", "sharejob")
+    jobs = (
+        ShareJob.objects.filter(status=ShareJob.Status.HANDOFF)
+        .select_related("channel")
+        .order_by("created_at", "id")[:100]
+    )
+    rows = []
+    for job in jobs:
+        values = services.stored_values(job.channel)
+        rows.append({"job": job, "link": values.get("channel_url", "")})
+    return _page(
+        request,
+        "admin/distribution/handoff.html",
+        title="Hand-off",
+        subtitle="Posts for platforms without a posting API. Paste each one, then mark it posted.",
+        section="handoff",
+        context={"rows": rows},
+    )
+
+
+@require_POST
+def job_posted(request: HttpRequest, pk: int) -> HttpResponse:
+    _need(request, "change", "sharejob")
+    job = get_object_or_404(ShareJob.objects.select_related("channel"), pk=pk)
+    if services.mark_posted(job, request.user):
+        messages.success(request, f"“{job.title}” marked as posted.")
+    else:
+        messages.warning(request, "That post was already handled.")
+    return redirect("admin:distribution_channel_handoff")
 
 
 # ------------------------------------------------------------------ preview ----

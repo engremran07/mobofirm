@@ -288,18 +288,6 @@
 }
 
 /* ---- Shop ---- */
-.eco-tier {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  padding: 1.25rem;
-}
-
-.eco-tier--featured {
-  border-color: var(--mf-accent);
-  box-shadow: var(--mf-shadow);
-}
-
 .eco-price {
   margin: 0;
   font-size: 1.75rem;
@@ -312,34 +300,6 @@
   font-size: 0.85rem;
   font-weight: 500;
   letter-spacing: 0;
-}
-
-.eco-feature-list {
-  display: grid;
-  gap: 0.4rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.eco-feature-list li {
-  display: flex;
-  gap: 0.5rem;
-  align-items: flex-start;
-}
-
-.eco-feature-list .icon {
-  flex: none;
-  margin-top: 0.2rem;
-  color: var(--mf-success);
-}
-
-.eco-feature-list .is-off {
-  color: var(--mf-text-muted);
-}
-
-.eco-feature-list .is-off .icon {
-  color: var(--mf-text-muted);
 }
 
 /* ---- Marketplace ---- */
@@ -365,12 +325,6 @@
 }
 
 /* ---- Storage status ---- */
-.eco-health-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
-  gap: 1rem;
-}
-
 /* ---- My files library ---- */
 .library-file-name {
   overflow-wrap: anywhere;

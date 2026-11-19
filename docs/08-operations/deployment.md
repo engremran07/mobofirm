@@ -13,6 +13,7 @@ Copy `.env.example` to `.env`. With `DJANGO_SETTINGS_MODULE=app.settings.product
 | `DB_PASSWORD` (+ `DB_NAME/USER/HOST/PORT`) | explicit |
 | `MFA_ENCRYPTION_KEY` | separate from the secret key (rotating `DJANGO_SECRET_KEY` must not lock out MFA users) |
 | `SOCIAL_CREDENTIAL_ENCRYPTION_KEY` | a Fernet key |
+| `FERNET_KEY` | a Fernet key; encrypts ad-network/affiliate API credentials and firmware archive passwords (without it, saving them fails instead of storing blanks) |
 | `CACHE_URL` | shared Redis cache; rate limits and MFA throttles are only effective across workers with it |
 | `CELERY_BROKER_URL` | explicit |
 | `EMAIL_HOST` (or Gmail) and `DEFAULT_FROM_EMAIL` | console/locmem mail is rejected |

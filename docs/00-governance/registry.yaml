@@ -2,7 +2,12 @@ schema_version: 1
 project: mobofirm
 status: active_engineering_baseline
 product_status: draft_unapproved
-frontend_status: design_not_approved_implementation_prohibited
+frontend_status: foundation_approved_visual_calibration_open
+approved_frontend_stack:
+  public: django_templates_bootstrap_htmx_2.0.11_alpine_csp_lucide_vite
+  staff_console: adminlte_4.10.2_bootstrap_5.3.8_htmx_4.0.2_alpinejs_csp_3.17.5_lucide_vite
+  legacy_editor: summernote_0.9.1_jquery_3.7.1
+  decision_record: .agents/policies/approval-matrix.yaml
 owners:
   product: product_owner
   engineering: engineering_owner
@@ -19,11 +24,23 @@ installed_apps:
   - core
   - ads
   - devices
-  - governance
   - blog
   - comments
   - firmwares
   - tags
+  - storage
+  - seo
+  - pages
+  - shop
+  - marketplace
+  - wallet
+  - referral
+  - consent
+  - gamification
+  - bounty
+  - distribution
+  - promotions
+  - site_settings
 release_blockers:
   - unresolved_required_test_or_migration_check
   - unresolved_problems_panel_diagnostics

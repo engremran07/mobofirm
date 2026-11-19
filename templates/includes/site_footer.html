@@ -18,9 +18,9 @@
           <li><a href="{% url 'firmwares:flashing_tools' %}">Tools &amp; Guides</a></li>
           <li><a href="{% url 'blog:post_list' %}">Blog</a></li>
           <li><a href="{% url 'tags:list' %}">Topics</a></li>
-          {% if ecosystem.shop %}<li><a href="{% url 'shop:pricing' %}">Shop</a></li>{% endif %}
+          {% if ecosystem.shop %}<li><a href="{% url 'shop:pricing' %}">Pricing</a></li>{% endif %}
           {% if ecosystem.marketplace %}<li><a href="{% url 'marketplace:listing_browse' %}">Marketplace</a></li>{% endif %}
-          {% if user.is_authenticated %}<li><a href="{% url 'library:my_files' %}">My files</a></li>{% endif %}
+          {% if user.is_authenticated %}<li><a href="{% url 'contributions:hub' %}">My contributions</a></li>{% endif %}
         </ul>
       </nav>
       <nav aria-label="Footer legal navigation">

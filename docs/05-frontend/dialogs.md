@@ -9,7 +9,7 @@ The site never uses the browser's native `alert()`, `confirm()` or `prompt()`, t
 | **core** (shell) | native `<dialog>` markup, the Alpine `appDialog` component, `#dialog-slot`, focus/scroll/Esc/backdrop behaviour, CSS, the `DialogView`/`DialogForm` helpers, the JavaScript `Dialogs` API, the unsaved-changes guard | `templates/components/dialog*.html`, `templates/components/confirm_dialog.html`, `frontend/src/modules/dialogs.js`, `frontend/src/styles/components/_dialog.scss`, `apps/core/dialogs.py` |
 | **app** (content) | the copy, form, view, permission rule and side effect of one dialog | `templates/<app>/dialogs/*.html`, `apps/<app>/dialogs.py` (or `forms.py`) |
 
-Core never imports a domain app for dialogs. An app subclasses `DialogView`, extends `components/dialog.html` and registers a URL in its own `urls.py`. Staff dialogs in the Unfold admin keep using Unfold's own action dialog (`apps/core/admin_base.py`: `confirm_dialog`, `BaseDialogForm`); they are not affected by this shell.
+Core never imports a domain app for dialogs. An app subclasses `DialogView`, extends `components/dialog.html` and registers a URL in its own `urls.py`. Staff dialogs in the console use the console's own accessible modal (`templates/console/components/dialog.html`, loaded by htmx 4 into `#console-dialog`) through `apps/core/admin_base.py` (`confirm_dialog`, `ConfirmForm`, `ReasonForm`, `BaseDialogForm`) and `apps/core/admin_dialogs.py` (`StaffDialogView`); they are not affected by this shell. See `admin-console.md`.
 
 Converted so far: blog (publish, schedule, archive), comments (reject, mark as spam with a note), tags (reject suggestion, merge), promotions (claim an offer). Shop, marketplace, firmwares and users add their dialogs the same way.
 

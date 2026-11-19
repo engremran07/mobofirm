@@ -37,7 +37,9 @@ from apps.site_settings.services import SiteSettingsSnapshot, get_site_settings
 CACHE_PREFIX = "mobofirm-static-"
 MANIFEST_CONTENT_TYPE = "application/manifest+json"
 WORKER_SOURCE = Path(__file__).resolve().parent / "assets" / "service_worker.js"
-KILL_SWITCH_SOURCE = Path(__file__).resolve().parent / "assets" / "service_worker_off.js"
+KILL_SWITCH_SOURCE = (
+    Path(__file__).resolve().parent / "assets" / "service_worker_off.js"
+)
 
 # Same-origin static paths the worker may store (generated build output and icons).
 STATIC_BUILD_PREFIX = "build/"
@@ -54,8 +56,10 @@ NEVER_HANDLE_PREFIXES = (
     "/users/",
     "/devices/",
     "/files/",
+    "/contributions/",
     "/wallet/",
     "/shop/",
+    "/pricing/",
     "/marketplace/",
     "/storage/",
     "/seo/",

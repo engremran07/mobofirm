@@ -13,6 +13,19 @@ def mfa_required_globally() -> bool:
     )
 
 
+def is_privileged(user) -> bool:
+    """Staff and superusers hold the admin plane, so MFA is never optional for them."""
+    return bool(
+        getattr(settings, "STAFF_MFA_REQUIRED", True)
+        and (getattr(user, "is_staff", False) or getattr(user, "is_superuser", False))
+    )
+
+
+def mfa_required_for_user(user) -> bool:
+    """MFA is mandatory for privileged accounts, and for everyone when enforced globally."""
+    return is_privileged(user) or mfa_required_globally()
+
+
 def has_active_totp(user) -> bool:
     return MFADevice.objects.filter(
         user=user,

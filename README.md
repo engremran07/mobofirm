@@ -2,7 +2,7 @@
 
 Mobofirm is a Django project with a PostgreSQL-backed runtime and installed domain/support applications. The codebase includes user and profile management, device identity, firmware management (catalogue, chipsets, gated downloads, external download sources), advertising, blog and comments, tagging, and app-owned moderation workflows.
 
-The user has approved an initial hybrid frontend foundation: Django templates with Bootstrap, HTMX, CSP-safe Alpine, Lucide, and Vite. Public and Django admin experiences have distinct shells: the public site uses the Vite-built token/static-asset source, and the admin is django-unfold themed from the same brand tokens. The implementation is functional but the final visual identity and detailed design calibration remain open for review.
+The user has approved an initial hybrid frontend foundation: Django templates with Bootstrap, HTMX, CSP-safe Alpine, Lucide, and Vite. Public and Django admin experiences have distinct shells: the public site uses the Vite-built token/static-asset source, and the staff console is a separate, hand-built shell (`django.contrib.admin` engine, AdminLTE 4 + Bootstrap 5.3 + htmx 4 + CSP-safe Alpine, vendored offline) themed from the same brand tokens. The implementation is functional but the final visual identity and detailed design calibration remain open for review.
 
 ## Repository layout
 
@@ -81,7 +81,7 @@ Install the JavaScript dependencies declared in `package.json` with `npm ci`, th
 npm run build
 ```
 
-The Vite build writes Django static assets under `static/build/`; generated output is not committed. The full pytest suite includes a Chromium check that loads every named Django URL and fails on server errors, broken same-origin assets, JavaScript exceptions, or browser console errors. Install its browser once with:
+`npm run build` runs two Vite builds: `build:public` (public site, stable file names, htmx 2) writes `static/build/*`, and `build:admin` (staff console, hashed file names plus `static/build/admin/.vite/manifest.json`, htmx 4) writes `static/build/admin/`. `npm run check` builds both and then `npm run check:offline` verifies that the console output contains no remote URLs and matches its manifest. The console templates fail loudly (`ConsoleAssetsError`) when the admin build is missing. Generated output is not committed. The full pytest suite includes a Chromium check that loads every named Django URL and fails on server errors, broken same-origin assets, JavaScript exceptions, or browser console errors. Install its browser once with:
 
 ```powershell
 python -m playwright install chromium
@@ -91,7 +91,7 @@ CI installs Chromium, builds the frontend, and runs this browser sweep automatic
 
 ## URLs and health checks
 
-The root URL configuration mounts the Unfold admin (`/admin/`: sidebar, dashboard, filters, actions and tabs configured in `app/settings/unfold.py`, `apps/core/admin_base.py` and `apps/core/admin_navigation.py`; its own nonce-based CSP applies to the admin shell pages only), allauth accounts, and the `users`, `devices`, `firmwares`, `tags`, `ads`, `blog`, and `comments` routes (plus the integrated storage, SEO, pages, shop, marketplace and file-manager routes). Liveness is exposed at `/health/live/`; readiness checks the configured database at `/health/ready/`.
+The root URL configuration mounts the staff console (`/admin/`: Django admin engine with the AdminLTE-based shell; sidebar, dashboard, filters, actions and tabs come from `apps/core/admin_base.py`, `apps/core/admin_navigation.py` and `templates/console/`; its own strict `ADMIN_CSP` applies to the admin shell pages only, see `docs/05-frontend/admin-console.md`), allauth accounts, and the `users`, `devices`, `firmwares`, `tags`, `ads`, `blog`, and `comments` routes (plus the integrated storage, SEO, pages, shop, marketplace and file-manager routes). Liveness is exposed at `/health/live/`; readiness checks the configured database at `/health/ready/`.
 
 ## Governance
 

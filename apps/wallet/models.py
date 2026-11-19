@@ -3,18 +3,53 @@
 Credits are non-negative whole numbers (no fractions, no external currency). Every
 balance change is a ``LedgerEntry``; ``Wallet.balance`` is the running total and is
 only ever written by ``apps.wallet.services`` under a row lock.
+
+Integrity layers, from the code outwards:
+
+* ``LedgerEntry`` refuses ``save`` on an existing row, ``delete``, and queryset
+  ``update``/``delete``/``bulk_*``; ``Wallet`` refuses writes to ``balance``/``held``
+  outside :func:`ledger_posting` (the window the services open while they post).
+* Migration ``0003`` adds a PostgreSQL trigger that rejects any UPDATE of a money
+  column and any DELETE of a ledger row, and CHECK constraints on the ledger.
+* ``apps.wallet.reconcile`` recomputes every balance from the ledger and reports drift.
 """
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from decimal import Decimal
+from itertools import pairwise
 from typing import Any, ClassVar, NoReturn
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
-from django.db import models
+from django.db import connections, models, transaction
 from django.db.models import F, Q, QuerySet
 from solo.models import SingletonModel
+
+_POSTING_WINDOW: ContextVar[bool] = ContextVar("wallet_posting_window", default=False)
+BALANCE_FIELDS = frozenset({"balance", "held"})
+APPEND_ONLY_MESSAGE = "Ledger entries are append-only."
+# Transaction-local database setting that lets the ledger trigger accept a note change.
+SCRUB_SETTING = "wallet.ledger_scrub"
+
+
+@contextmanager
+def ledger_posting() -> Iterator[None]:
+    """The only window in which ``Wallet.balance``/``held`` may be written.
+
+    Opened by ``apps.wallet.services`` around a posting (ledger row + counter update)
+    and by the audited repair. Anything else that writes the counters raises
+    ``TypeError``.
+    """
+    token = _POSTING_WINDOW.set(True)
+    try:
+        yield
+    finally:
+        _POSTING_WINDOW.reset(token)
 
 
 class LedgerReason(models.TextChoices):
@@ -95,6 +130,40 @@ class WalletSettings(SingletonModel):
     def __str__(self) -> str:
         return "Wallet settings"
 
+    def clean(self) -> None:
+        super().clean()
+        if self.min_topup_credits > self.max_topup_credits:
+            raise ValidationError(
+                {"min_topup_credits": "The minimum top-up cannot exceed the maximum."}
+            )
+
+
+class WalletQuerySet(QuerySet["Wallet"]):
+    """Refuses bulk writes to the balance counters outside :func:`ledger_posting`."""
+
+    def update(self, **kwargs: Any) -> int:
+        _refuse_counter_write(BALANCE_FIELDS & kwargs.keys())
+        return super().update(**kwargs)
+
+    def bulk_update(
+        self,
+        objs: Iterable[Any],
+        fields: Iterable[str],
+        batch_size: int | None = None,
+    ) -> int:
+        chosen = list(fields)
+        _refuse_counter_write(BALANCE_FIELDS & set(chosen))
+        return super().bulk_update(objs, chosen, batch_size)
+
+
+def _refuse_counter_write(fields: Iterable[str]) -> None:
+    touched = sorted(fields)
+    if touched and not _POSTING_WINDOW.get():
+        raise TypeError(
+            f"Wallet {', '.join(touched)} change only through apps.wallet.services "
+            "(every change needs a ledger entry)."
+        )
+
 
 class Wallet(models.Model):
     """One wallet per user. ``held`` credits are reserved by escrow and unspendable."""
@@ -109,6 +178,8 @@ class Wallet(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
+    objects = WalletQuerySet.as_manager()
+
     class Meta:
         verbose_name = "Wallet"
         permissions = (("adjust_wallet", "Can adjust and freeze wallets"),)
@@ -121,20 +192,68 @@ class Wallet(models.Model):
     def __str__(self) -> str:
         return f"Wallet of {self.user_id}: {self.balance} credits"
 
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        """Write the wallet; the counters only inside :func:`ledger_posting`.
+
+        A full ``save()`` of an existing wallet would write a possibly stale
+        ``balance``/``held`` back, so it needs ``update_fields`` without the counters.
+        """
+        if self._state.adding:
+            _refuse_counter_write(
+                name for name in BALANCE_FIELDS if getattr(self, name)
+            )
+        else:
+            fields = kwargs.get("update_fields")
+            _refuse_counter_write(
+                BALANCE_FIELDS if fields is None else BALANCE_FIELDS & set(fields)
+            )
+        super().save(*args, **kwargs)
+
     @property
     def available(self) -> int:
+        """Spendable credits: the balance minus what escrow holds."""
         return int(self.balance) - int(self.held)
 
 
-class AppendOnlyQuerySet(QuerySet["LedgerEntry"]):
+class AppendOnlyMixin:
+    """Queryset methods that would rewrite or remove rows are refused."""
+
     def update(self, **kwargs: Any) -> NoReturn:
-        raise TypeError("Ledger entries are append-only.")
+        """Refused: rows are never rewritten in bulk."""
+        raise TypeError(APPEND_ONLY_MESSAGE)
 
     def delete(self) -> NoReturn:
-        raise TypeError("Ledger entries are append-only.")
+        """Refused: rows are never removed in bulk."""
+        raise TypeError(APPEND_ONLY_MESSAGE)
 
-    def bulk_update(self, objs: Any, fields: Any, batch_size: Any = None) -> NoReturn:
-        raise TypeError("Ledger entries are append-only.")
+    def bulk_update(self, *args: Any, **kwargs: Any) -> NoReturn:
+        """Refused: rows are never rewritten in bulk."""
+        raise TypeError(APPEND_ONLY_MESSAGE)
+
+    def bulk_create(self, *args: Any, **kwargs: Any) -> NoReturn:
+        """Refused: rows are written one at a time through the wallet services."""
+        raise TypeError("Rows are written one at a time through the wallet services.")
+
+
+class AppendOnlyQuerySet(AppendOnlyMixin, QuerySet["LedgerEntry"]):
+    """Ledger queryset: only :meth:`redact` may change stored rows (account erasure)."""
+
+    REDACTABLE: ClassVar[frozenset[str]] = frozenset({"note", "actor"})
+
+    def redact(self, **fields: Any) -> int:
+        """Blank personal data on existing rows; money columns can never be touched.
+
+        On PostgreSQL the ledger trigger only lets ``note`` change inside a transaction
+        that opened the scrub window, so the window and the update share one.
+        """
+        unknown = set(fields) - self.REDACTABLE
+        if unknown:
+            raise TypeError(f"Ledger columns {sorted(unknown)} cannot be redacted.")
+        with transaction.atomic(using=self.db):
+            if connections[self.db].vendor == "postgresql":
+                with connections[self.db].cursor() as cursor:
+                    cursor.execute("SELECT set_config(%s, 'on', true)", [SCRUB_SETTING])
+            return QuerySet.update(self, **fields)
 
 
 class LedgerEntry(models.Model):
@@ -182,11 +301,22 @@ class LedgerEntry(models.Model):
         verbose_name_plural = "Ledger entries"
         ordering = ("-id",)
         indexes: ClassVar[list[models.Index]] = [
-            models.Index(fields=["wallet", "-id"], name="wallet_ledger_wallet_idx")
+            models.Index(fields=["wallet", "-id"], name="wallet_ledger_wallet_idx"),
+            models.Index(
+                fields=["wallet", "event_key", "created_at"],
+                name="wallet_ledger_event_idx",
+            ),
         ]
         constraints: ClassVar[list[models.BaseConstraint]] = [
             models.CheckConstraint(
                 condition=Q(amount__gt=0), name="wallet_ledger_amount_positive"
+            ),
+            models.CheckConstraint(
+                condition=Q(direction__in=("credit", "debit")),
+                name="wallet_ledger_direction_valid",
+            ),
+            models.CheckConstraint(
+                condition=~Q(key=""), name="wallet_ledger_key_not_empty"
             ),
         ]
 
@@ -195,8 +325,10 @@ class LedgerEntry(models.Model):
         return f"{sign}{self.amount} ({self.reason}) → {self.balance_after}"
 
     def save(self, *args: Any, **kwargs: Any) -> None:
+        """Insert only: a second ``save``, or one reusing a primary key, is refused."""
         if not self._state.adding:
-            raise TypeError("Ledger entries are append-only.")
+            raise TypeError(APPEND_ONLY_MESSAGE)
+        kwargs["force_insert"] = True
         super().save(*args, **kwargs)
 
     def delete(self, *args: Any, **kwargs: Any) -> NoReturn:
@@ -242,6 +374,26 @@ class RewardRule(models.Model):
 
     def __str__(self) -> str:
         return f"{self.event_key} → {self.credits}"
+
+    def clean(self) -> None:
+        """A shorter window cannot allow more than a longer one (0 means no cap)."""
+        super().clean()
+        windows = (
+            ("daily_cap", self.daily_cap),
+            ("monthly_cap", self.monthly_cap),
+            ("lifetime_cap", self.lifetime_cap),
+        )
+        capped = [(name, cap) for name, cap in windows if cap]
+        for (short_name, short_cap), (long_name, long_cap) in pairwise(capped):
+            if short_cap > long_cap:
+                raise ValidationError(
+                    {
+                        short_name: (
+                            f"The {short_name.replace('_', ' ')} cannot exceed the "
+                            f"{long_name.replace('_', ' ')}."
+                        )
+                    }
+                )
 
 
 class CreditPrice(models.Model):
@@ -312,6 +464,9 @@ class EscrowHold(models.Model):
     class Meta:
         verbose_name = "Escrow hold"
         ordering = ("-id",)
+        indexes: ClassVar[list[models.Index]] = [
+            models.Index(fields=["wallet", "status"], name="wallet_escrow_wstatus_idx"),
+        ]
         constraints: ClassVar[list[models.BaseConstraint]] = [
             models.CheckConstraint(
                 condition=Q(credits__gt=0), name="wallet_escrow_credits_positive"
@@ -360,9 +515,17 @@ class TopUpRequest(models.Model):
     class Meta:
         verbose_name = "Top-up request"
         ordering = ("-id",)
+        indexes: ClassVar[list[models.Index]] = [
+            models.Index(
+                fields=["user", "status"], name="wallet_topup_user_status_idx"
+            ),
+        ]
         constraints: ClassVar[list[models.BaseConstraint]] = [
             models.CheckConstraint(
                 condition=Q(credits__gt=0), name="wallet_topup_credits_positive"
+            ),
+            models.CheckConstraint(
+                condition=Q(price__gte=0), name="wallet_topup_price_non_negative"
             ),
         ]
 
@@ -416,7 +579,73 @@ class PayoutRequest(models.Model):
             models.CheckConstraint(
                 condition=Q(credits__gt=0), name="wallet_payout_credits_positive"
             ),
+            models.CheckConstraint(
+                condition=Q(payout_amount__gte=0),
+                name="wallet_payout_amount_non_negative",
+            ),
+            models.CheckConstraint(
+                condition=Q(fee_percent__gte=0, fee_percent__lte=100),
+                name="wallet_payout_fee_percent_range",
+            ),
         ]
 
     def __str__(self) -> str:
         return f"Payout #{self.pk}: {self.credits} credits [{self.status}]"
+
+
+class WalletRepairQuerySet(AppendOnlyMixin, QuerySet["WalletRepair"]):
+    """Repair records are never rewritten or removed."""
+
+
+class WalletRepair(models.Model):
+    """Audit record of one explicit repair of a wallet's counters from its ledger.
+
+    The ledger is the source of truth; a repair rewrites ``balance``/``held`` to what
+    the ledger and the open escrow holds say, never the other way round.
+    """
+
+    wallet = models.ForeignKey(Wallet, on_delete=models.PROTECT, related_name="repairs")
+    previous_balance = models.PositiveBigIntegerField()
+    repaired_balance = models.PositiveBigIntegerField()
+    previous_held = models.PositiveBigIntegerField()
+    repaired_held = models.PositiveBigIntegerField()
+    reason = models.CharField(max_length=255)
+    key = models.CharField(
+        max_length=200, unique=True, help_text="Idempotency key of the repair."
+    )
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="+",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    objects = WalletRepairQuerySet.as_manager()
+
+    class Meta:
+        verbose_name = "Wallet repair"
+        ordering = ("-id",)
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.CheckConstraint(
+                condition=~Q(previous_balance=F("repaired_balance"))
+                | ~Q(previous_held=F("repaired_held")),
+                name="wallet_repair_changes_something",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return (
+            f"Repair of wallet {self.wallet_id}: "
+            f"{self.previous_balance}→{self.repaired_balance}"
+        )
+
+    def save(self, *args: Any, **kwargs: Any) -> None:
+        if not self._state.adding:
+            raise TypeError("Repair records are append-only.")
+        kwargs["force_insert"] = True
+        super().save(*args, **kwargs)
+
+    def delete(self, *args: Any, **kwargs: Any) -> NoReturn:
+        raise TypeError("Repair records are append-only.")

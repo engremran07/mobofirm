@@ -35,6 +35,11 @@ class ProfileSerializer(serializers.ModelSerializer):
         )
         read_only_fields = ("id", "user", "updated_at")
 
+    def validate_social_links(self, value):
+        if not isinstance(value, dict):
+            raise serializers.ValidationError("Social links must be an object.")
+        return value
+
     def validate(self, attrs):
         if (
             self.instance is None
@@ -53,7 +58,12 @@ class ProfileViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         profiles = Profile.objects.select_related("user")
-        if self.request.user.is_staff:
+        # Staff may read every profile with the model permission, but only ever
+        # change their own: ``is_staff`` alone is not write access to other people.
+        if (
+            self.request.method in permissions.SAFE_METHODS
+            and self.request.user.has_perm("users.view_profile")
+        ):
             return profiles
         return profiles.filter(user=current_user(self.request))
 
@@ -135,7 +145,7 @@ def notification_stats(request: HttpRequest) -> JsonResponse:
     """
     Quick notification statistics for admin dashboard widget.
     """
-    if not getattr(request.user, "is_staff", False):
+    if not request.user.has_perm("users.view_notification"):
         return JsonResponse({"error": "Unauthorized"}, status=403)
 
     from apps.users.models import CustomUser, PushSubscription

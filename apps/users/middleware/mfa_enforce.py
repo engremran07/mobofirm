@@ -11,6 +11,7 @@ from django.shortcuts import redirect
 from django.urls import Resolver404, resolve
 
 from apps.users.models import MFADevice, UsersSettings
+from apps.users.services.mfa import is_privileged
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +63,8 @@ class EnforceMfaMiddleware:
 
         try:
             require_mfa = bool(
-                getattr(settings, "REQUIRE_MFA", False)
+                is_privileged(user)
+                or getattr(settings, "REQUIRE_MFA", False)
                 or UsersSettings.get_solo().require_mfa
             )
             has_totp = MFADevice.objects.filter(

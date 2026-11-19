@@ -436,17 +436,17 @@ def test_the_banner_link_must_be_a_local_path_or_https() -> None:
 # ---------------------------------------------------------------- panels
 
 
-def test_my_files_quota_panel_lists_running_offers_and_the_quota_source(
+def test_my_contributions_quota_panel_lists_running_offers_and_the_quota_source(
     make_promotion: Any, client: Client, user: Any
 ) -> None:
     promotion = make_promotion(name="Launch bonus", headline="x")
     client.force_login(user)
 
-    before = client.get(reverse("library:my_quota")).content.decode()
+    before = client.get(reverse("contributions:quota")).content.decode()
     assert "Active offers" in before and "Launch bonus" in before
 
     claim(user, promotion)
-    after = client.get(reverse("library:my_quota")).content.decode()
+    after = client.get(reverse("contributions:quota")).content.decode()
     assert "Campaign &quot;Launch bonus&quot; +10 files until" in after
     assert "Active offers" not in after
 
@@ -474,7 +474,7 @@ def test_panels_render_nothing_when_the_app_is_disabled(
     assert "Active offers" not in client.get(reverse("wallet:earn")).content.decode()
     assert (
         "Hidden when off"
-        not in client.get(reverse("library:my_quota")).content.decode()
+        not in client.get(reverse("contributions:quota")).content.decode()
     )
     assert client.get(reverse("promotions:index")).status_code == 404
 

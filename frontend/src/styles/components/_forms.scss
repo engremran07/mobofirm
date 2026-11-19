@@ -1,16 +1,13 @@
 @use "../abstracts" as *;
+@use "../../shared/components/shared";
 
 // Form controls: radius, depth and focus glow on top of Bootstrap's .form-control.
 .form-control,
 .form-select {
   --bs-border-radius: var(--mf-radius-md);
   min-height: 2.75rem;
-  border-radius: var(--mf-radius-md);
   box-shadow: var(--mf-elev-1);
-  transition:
-    border-color var(--mf-duration-fast) linear,
-    box-shadow var(--mf-duration-base) var(--mf-ease-out),
-    background-color var(--mf-duration-fast) linear;
+  @include shared.control-base;
 
   &:hover:not(:disabled):not(:focus) {
     border-color: color-mix(in srgb, var(--mf-text-muted) 45%, var(--mf-border));
@@ -22,7 +19,6 @@
 
   &:disabled,
   &[readonly] {
-    background-color: var(--mf-surface-soft);
     opacity: 0.8;
   }
 }

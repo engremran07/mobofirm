@@ -17,7 +17,7 @@
     <h2 id="services-title" class="h5">Your services</h2>
     <div class="row g-3">
       <div class="col-12 col-sm-6 col-lg-4">{% shop_dashboard_tile %}</div>
-      <div class="col-12 col-sm-6 col-lg-4">{% url 'library:my_files' as my_files_url %}{% include "components/dashboard_tile.html" with url=my_files_url label="My files" value=download_count icon="download" hint="Everything served to you, your uploads and quota" %}</div>
+      <div class="col-12 col-sm-6 col-lg-4">{% url 'contributions:hub' as my_files_url %}{% include "components/dashboard_tile.html" with url=my_files_url label="My contributions" value=download_count icon="download" hint="Your firmware and blog contributions, downloads and quota" %}</div>
       <div class="col-12 col-sm-6 col-lg-4">{% marketplace_dashboard_tile %}</div>
     </div>
   </section>

@@ -103,6 +103,12 @@ class MfaSetupPageTests(TestCase):
         codes = codes_page.context["backup_codes"]
         self.assertEqual(len(codes), 10)
         self.assertContains(codes_page, codes[0])
+        self.assertContains(codes_page, 'data-copy-target="#recovery-codes-text"')
+        self.assertContains(codes_page, 'data-download-target="#recovery-codes-text"')
+        self.assertContains(codes_page, 'id="recovery-codes-text"', count=1)
+        self.assertEqual(
+            codes_page.content.decode().count(f"{codes[-1]}\n"), 1, "one code per line"
+        )
         self.assertRedirects(
             self.client.get(reverse("users:mfa_backup_codes")),
             reverse("users:dashboard"),

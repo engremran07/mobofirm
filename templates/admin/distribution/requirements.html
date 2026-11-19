@@ -1,0 +1,7 @@
+{% extends "admin/staff_page.html" %}
+{% load i18n staff_ui %}
+{% block page_actions %}{% url 'admin:distribution_channel_platforms' as picker_url %}{% staff_button _("Back to platforms") href=picker_url %}{% staff_button _("Connect") href=connect_url tone="primary" %}{% endblock %}
+{% block page_nav %}{% include "admin/distribution/_nav.html" %}{% endblock %}
+{% block page_body %}
+{% staff_card %}{% include "admin/distribution/_requirements_body.html" %}{% endstaff_card %}
+{% endblock %}

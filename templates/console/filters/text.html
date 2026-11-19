@@ -1,0 +1,21 @@
+{% comment %}
+  Free-text filter as a popover form in the filter bar. Context: spec (parameter_name, value()), choices[0] ("hidden", "query_string" clears), title, uid, active, path.
+{% endcomment %}{% load i18n console_ui %}
+<div class="c-fctl" id="{{ uid }}" data-ui-popover{% if active %} data-active{% endif %}>
+<button type="button" class="c-fctl__btn" data-ui-trigger aria-haspopup="dialog" aria-expanded="false" aria-controls="{{ uid }}-panel">
+<span class="c-fctl__title">{{ title }}</span>{% if active %}<span class="c-fctl__value">{{ spec.value|default_if_none:'' }}</span>{% endif %}
+{% console_icon "chevron-down" "c-icon--xs c-fctl__caret" %}</button>
+<div class="c-fpanel c-fpanel--form" id="{{ uid }}-panel" data-ui-panel role="dialog" aria-label="{{ title }}" hidden>
+{% with all=choices.0 %}
+<form method="get" action="{{ path }}" {% include "console/crud/_hx_list.html" with url=path %}>
+{% for name, value in all.hidden %}<input type="hidden" name="{{ name }}" value="{{ value }}">{% endfor %}
+<label class="visually-hidden" for="{{ uid }}-text">{{ title }}</label>
+<input class="form-control" id="{{ uid }}-text" type="search" name="{{ spec.parameter_name }}" value="{{ spec.value|default_if_none:'' }}" autocomplete="off">
+<div class="c-fpanel__actions">
+<button type="submit" class="btn btn-primary btn-sm">{% translate "Apply" %}</button>
+{% if active %}<a class="btn btn-ghost btn-sm" href="{{ all.query_string }}" {% include "console/crud/_hx_list.html" with url=all.query_string %}>{% translate "Clear" %}</a>{% endif %}
+</div>
+</form>
+{% endwith %}
+</div>
+</div>

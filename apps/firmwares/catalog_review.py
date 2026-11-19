@@ -14,7 +14,6 @@ from dataclasses import dataclass, fields
 from typing import Any
 
 from django.contrib.admin.models import ADDITION, CHANGE, LogEntry
-from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.db.models import Model as DjangoModel
@@ -43,6 +42,7 @@ from .models import (
     VariantCreationRequest,
 )
 from .notifications import notify_users
+from .references import content_type_for
 from .tracking_models import FirmwareRequest
 from .variant_rules import clean_text, normalize_variant_code, parse_memory
 
@@ -517,7 +517,7 @@ def fulfil_matching_requests(firmware: Any, category: str, reviewer: Any) -> lis
         firmware_type=category,
         status__in=("open", "in_progress"),
     )
-    content_type = ContentType.objects.get_for_model(firmware, for_concrete_model=False)
+    content_type = content_type_for(firmware)
     now = timezone.now()
     fulfilled: list[int] = []
     for match in matches:

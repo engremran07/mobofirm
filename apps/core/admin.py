@@ -1,7 +1,7 @@
-"""Core admin: application registry and Unfold versions of third-party admins.
+"""Core admin: application registry and console versions of third-party admins.
 
 Models owned by Django, allauth and DRF ship with plain ``admin.ModelAdmin`` classes;
-they are re-registered here on the shared Unfold base so the whole console renders
+they are re-registered here on the shared console base so the whole console renders
 and behaves the same. Their own options (forms, actions, search) are inherited
 unchanged. This module is imported after those apps' admin modules (INSTALLED_APPS
 order), so every model is registered exactly once.

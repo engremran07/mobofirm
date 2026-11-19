@@ -1,0 +1,47 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls admin_filters console_ui console_admin %}
+
+{% block extrahead %}{{ block.super }}
+{% console_media media %}
+{% endblock %}
+
+{% block bodyclass %}{{ block.super }} app-{{ opts.app_label }} model-{{ opts.model_name }} delete-confirmation{% endblock %}
+
+{% block content_title %}{% endblock %}
+{% block object-tools %}{% endblock %}
+
+{% block content %}
+{% console_dialog_request as in_dialog %}
+{% url opts|admin_urlname:'change' object.pk|admin_urlquote as change_url %}
+{% if in_dialog %}
+<div class="modal-dialog" data-console-dialog-content data-console-dialog-static>
+<form method="post" class="modal-content c-dialog--danger">{% csrf_token %}
+<div class="modal-header"><span class="c-dialog__icon">{% console_icon "trash-2" %}</span><h2 class="modal-title">{% blocktranslate with name=object_name %}Delete this {{ name }}?{% endblocktranslate %}</h2></div>
+<div class="modal-body">
+{% include "console/crud/_delete_body.html" %}
+</div>
+<div class="modal-footer">
+<button type="button" class="btn btn-ghost" data-console-dialog-close>{% translate "Keep it" %}</button>
+{% if not perms_lacking and not protected %}<input type="hidden" name="post" value="yes">{% if is_popup %}<input type="hidden" name="{{ is_popup_var }}" value="1">{% endif %}{% if to_field %}<input type="hidden" name="{{ to_field_var }}" value="{{ to_field }}">{% endif %}<button type="submit" class="btn btn-danger">{% console_icon "trash-2" %}<span>{% translate "Yes, delete" %}</span></button>{% endif %}
+</div>
+</form>
+</div>
+{% else %}
+{% component "page_header" title=title subtitle=subtitle eyebrow=opts.app_config.verbose_name %}{% endcomponent %}
+<div class="c-delete">
+{% block delete_page %}
+<form method="post">{% csrf_token %}
+{% include "console/crud/_delete_body.html" %}
+<div class="c-savebar">
+<div class="c-savebar__meta">{% if not perms_lacking and not protected %}{% translate "This cannot be undone." %}{% endif %}</div>
+<div class="c-savebar__actions">
+{% if not perms_lacking and not protected %}<input type="hidden" name="post" value="yes">{% if is_popup %}<input type="hidden" name="{{ is_popup_var }}" value="1">{% endif %}{% if to_field %}<input type="hidden" name="{{ to_field_var }}" value="{{ to_field }}">{% endif %}{% endif %}
+<a class="btn btn-secondary" href="{{ change_url }}">{% translate "No, take me back" %}</a>
+{% if not perms_lacking and not protected %}<button type="submit" class="btn btn-danger">{% console_icon "trash-2" %}<span>{% translate "Yes, I’m sure" %}</span></button>{% endif %}
+</div>
+</div>
+</form>
+{% endblock %}
+</div>
+{% endif %}
+{% endblock %}

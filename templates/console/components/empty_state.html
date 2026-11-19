@@ -1,0 +1,10 @@
+{% comment %}
+  empty_state - an empty or error state for any data region. Always say what happened and what to do next.
+  Context: title (required), message, icon (Lucide; default inbox), tone (error|compact), action_label + action_url (primary action),
+  secondary_label + secondary_url. Slot "actions" replaces the built-in actions.
+{% endcomment %}{% load console_ui %}<div class="c-empty{% if tone == 'compact' %} c-empty--compact{% elif tone == 'error' %} c-empty--error{% endif %}{% if css_class %} {{ css_class }}{% endif %}" role="status">
+<span class="c-empty__icon">{% console_icon icon|default:"inbox" "c-icon--lg" %}</span>
+<h3 class="c-empty__title">{{ title }}</h3>
+{% if message %}<p class="c-empty__text">{{ message }}</p>{% endif %}
+{% if slots.actions %}<div class="c-empty__actions">{{ slots.actions }}</div>{% elif action_label and action_url %}<div class="c-empty__actions"><a class="btn btn-primary" href="{{ action_url }}">{{ action_label }}</a>{% if secondary_label and secondary_url %}<a class="btn btn-ghost" href="{{ secondary_url }}">{{ secondary_label }}</a>{% endif %}</div>{% endif %}
+</div>

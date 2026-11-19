@@ -683,15 +683,18 @@ class TestAdmin:
         )
 
     def post_request(self, who, reason: str):
+        # The console's dialogs submit through HTMX, which is answered with HX-Redirect.
         request = RequestFactory().post(
-            "/admin/", {"reason": reason, "_form_submitted": "True"}
+            "/admin/",
+            {"reason": reason, "_form_submitted": "True"},
+            headers={"HX-Request": "true"},
         )
         request.user = who
         return request
 
     @staticmethod
     def run_action(model_admin, name: str, request, **kwargs):
-        """Invoke an admin action by name, as Unfold's dispatcher does."""
+        """Invoke an admin action by name, as the console's action dispatcher does."""
         return getattr(model_admin, name)(request, **kwargs)
 
     def test_staff_reset_action_on_a_device(self, staff, user, full_account):

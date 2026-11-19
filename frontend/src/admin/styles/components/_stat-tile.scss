@@ -1,0 +1,83 @@
+// c-stat: KPI tile. <a|div class="c-stat [c-stat--link] [c-stat--warning|danger|success]">
+//   <span class="c-stat__icon"><svg class="c-icon">..</svg></span>
+//   <span class="c-stat__label">Pending firmware</span>
+//   <span class="c-stat__value">128</span>
+//   <span class="c-stat__meta"><span class="c-stat__delta c-stat__delta--up">+12</span> since yesterday</span></a>
+@layer components {
+  .c-stat {
+    --stat-tone: var(--mf-accent-strong);
+    --stat-soft: var(--mf-accent-soft);
+
+    position: relative;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-content: start;
+    gap: var(--mf-space-1) var(--mf-space-3);
+    min-inline-size: 0;
+    padding: var(--mf-space-4) var(--mf-space-5);
+    color: var(--mf-text);
+    text-decoration: none;
+    background: var(--mf-surface);
+    border: 1px solid var(--mf-border);
+    border-radius: var(--mf-radius-lg);
+    box-shadow: var(--mf-elev-1);
+  }
+
+  .c-stat--success { --stat-tone: var(--mf-success); --stat-soft: var(--mf-success-soft); }
+  .c-stat--warning { --stat-tone: var(--mf-warning); --stat-soft: var(--mf-warning-soft); }
+  .c-stat--danger { --stat-tone: var(--mf-danger); --stat-soft: var(--mf-danger-soft); }
+  .c-stat--info { --stat-tone: var(--mf-info); --stat-soft: var(--mf-info-soft); }
+  .c-stat--neutral { --stat-tone: var(--mf-text-muted); --stat-soft: var(--mf-neutral-soft); }
+
+  .c-stat__icon {
+    display: grid;
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    place-items: center;
+    inline-size: 2.5rem;
+    block-size: 2.5rem;
+    color: var(--stat-tone);
+    background: var(--stat-soft);
+    border-radius: var(--mf-radius-md);
+  }
+
+  .c-stat__label {
+    color: var(--mf-text-muted);
+    font-size: var(--mf-fs-sm);
+    font-weight: 600;
+  }
+
+  .c-stat__value {
+    grid-column: 1;
+    font-family: var(--mf-font-display);
+    font-size: var(--mf-fs-3xl);
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+  }
+
+  .c-stat__meta,
+  .c-stat__hint {
+    grid-column: 1 / -1;
+    margin-block-start: var(--mf-space-1);
+    color: var(--mf-text-muted);
+    font-size: var(--mf-fs-xs);
+  }
+
+  .c-stat__delta { font-weight: 700; }
+  .c-stat__delta--up { color: var(--mf-success); }
+  .c-stat__delta--down { color: var(--mf-danger); }
+
+  .c-stat--link {
+    transition: box-shadow var(--mf-duration-base) var(--mf-ease-out), transform var(--mf-duration-base) var(--mf-ease-out), border-color var(--mf-duration-base) var(--mf-ease-out);
+
+    &:hover,
+    &:focus-visible {
+      color: var(--mf-text);
+      border-color: color-mix(in srgb, var(--stat-tone) 45%, var(--mf-border));
+      box-shadow: var(--mf-elev-2);
+      transform: translateY(-2px);
+    }
+  }
+}

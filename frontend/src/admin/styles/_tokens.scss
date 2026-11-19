@@ -1,0 +1,29 @@
+// =============================================================================
+// Console design tokens. The values live in frontend/src/shared/tokens/ (the single
+// source shared with the public site, see _palette.scss for the colour rules); this
+// file only emits them inside the `tokens` cascade layer and adds the few bridges that
+// are specific to the console shell.
+//
+// Contrast (WCAG 2.2 AA) is asserted for every text/surface/accent pair in both themes by
+// tests/backend/admin/test_admin_theme.py.
+// =============================================================================
+@use "../../shared/tokens/emit";
+
+@layer tokens {
+  @include emit.theme-tokens;
+  @include emit.scale-tokens($surface: console);
+
+  :root:root {
+    --bs-body-font-size: var(--mf-fs-base);
+    --bs-body-line-height: var(--mf-lh-base);
+  }
+
+  // Strong borders for the operating-system "more contrast" preference. The explicit
+  // data-contrast="high" switch is handled by the shared high-contrast palettes.
+  @media (prefers-contrast: more) {
+    :root {
+      --mf-border: var(--mf-border-strong);
+      --mf-text-muted: var(--mf-text);
+    }
+  }
+}

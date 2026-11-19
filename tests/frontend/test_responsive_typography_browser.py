@@ -99,7 +99,7 @@ def seeded_public_site(request):
             posts[0].get_absolute_url(),
             reverse("firmwares:firmware_detail", args=["official", firmware.pk]),
             "/marketplace/",
-            "/shop/",
+            "/pricing/",
             "/accounts/login/",
         ]
     }

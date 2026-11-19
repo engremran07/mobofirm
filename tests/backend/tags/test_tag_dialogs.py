@@ -44,8 +44,8 @@ class TagDialogTests(TestCase):
         page = self.client.get(self.reject_url(), **HTMX)
         self.assertContains(page, "Reject this suggested tag?")
         self.assertContains(page, "Odd suggestion")
-        self.assertContains(page, "mf-ui-btn--danger")
-        self.assertNotContains(page, "btn-danger")
+        self.assertContains(page, "btn-danger")
+        self.assertNotContains(page, "mf-ui-btn--danger")
 
         response = self.client.post(self.reject_url(), **HTMX)
 
@@ -133,4 +133,4 @@ class TagDialogTests(TestCase):
         page = self.client.get(reverse("tags:manage"))
         self.assertContains(page, f'hx-get="{self.reject_url()}"')
         self.assertContains(page, f'hx-get="{reverse("tags:merge_dialog")}"')
-        self.assertContains(page, 'hx-target="#dialog-slot"')
+        self.assertContains(page, 'hx-target="#console-dialog"')

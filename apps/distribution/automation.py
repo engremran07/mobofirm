@@ -10,7 +10,7 @@ from django.utils import timezone
 
 from apps.core.app_service import app_enabled
 from apps.distribution import content as content_module
-from apps.distribution import media, services
+from apps.distribution import media, services, videos
 from apps.distribution.constants import (
     HOUSEKEEPING_EVERY_SECONDS,
     SHAREABLE_KINDS,
@@ -19,6 +19,8 @@ from apps.distribution.models import (
     Channel,
     ClickEvent,
     DistributionSettings,
+    FeedStat,
+    PingOutbox,
     ShareJob,
     ShareLog,
     ShortLink,
@@ -111,6 +113,18 @@ def purge_logs(days: int, now: datetime | None = None) -> int:
     return ShareLog.objects.filter(created_at__lt=cutoff).delete()[0]
 
 
+def purge_feed_data(days: int, now: datetime | None = None) -> int:
+    """Hourly fetch counters and finished pings follow the audit-log retention."""
+    if days <= 0:
+        return 0
+    cutoff = (now or timezone.now()) - timedelta(days=days)
+    stats = FeedStat.objects.filter(bucket__lt=cutoff).delete()[0]
+    pings = PingOutbox.objects.exclude(status=PingOutbox.Status.PENDING).filter(
+        created_at__lt=cutoff
+    )
+    return stats + pings.delete()[0]
+
+
 def housekeeping(now: datetime | None = None, *, force: bool = False) -> dict[str, int]:
     """Retention purge + evergreen scheduling; at most once an hour unless forced."""
     moment = now or timezone.now()
@@ -125,6 +139,10 @@ def housekeeping(now: datetime | None = None, *, force: bool = False) -> dict[st
     result = {
         "clicks": purge_clicks(cfg.click_retention_days, moment),
         "logs": purge_logs(cfg.log_retention_days, moment),
+        "feed_data": purge_feed_data(cfg.log_retention_days, moment),
+        "videos_swept": videos.sweep_stale(moment),
+        "videos_purged": videos.purge_expired(cfg.media_retention_days, moment),
+        "roundup": int(videos.enlist_weekly_roundup(moment) is not None),
         "media": media.purge_expired(cfg.media_retention_days, moment),
         "evergreen": run_evergreen(moment),
     }

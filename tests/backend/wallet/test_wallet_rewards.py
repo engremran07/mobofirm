@@ -6,11 +6,13 @@ from datetime import timedelta
 from typing import Any
 
 import pytest
+from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from apps.wallet import registry, services
 from apps.wallet.models import LedgerEntry, RewardRefusal, RewardRule, Wallet
 from apps.wallet.services import IdempotencyConflict, WalletError
+from tests.backend.wallet.conftest import tamper_with_ledger
 
 pytestmark = pytest.mark.django_db
 
@@ -21,7 +23,8 @@ def grant(user: Any, key: str, **kwargs: Any) -> LedgerEntry | None:
     return services.grant_reward(user, EVENT, key=key, **kwargs)
 
 
-def test_a_registered_event_pays_its_rule_amount(user: Any, rule: RewardRule) -> None:
+@pytest.mark.usefixtures("rule")
+def test_a_registered_event_pays_its_rule_amount(user: Any) -> None:
     entry = grant(user, "r:1", reference="obj:1")
 
     assert entry is not None
@@ -30,7 +33,7 @@ def test_a_registered_event_pays_its_rule_amount(user: Any, rule: RewardRule) ->
     assert services.balance(user) == 10
 
 
-def test_rule_rows_are_created_from_the_registered_defaults(db: Any) -> None:
+def test_rule_rows_are_created_from_the_registered_defaults() -> None:
     assert not RewardRule.objects.filter(event_key=EVENT).exists()
 
     services.sync_registry()
@@ -42,7 +45,8 @@ def test_rule_rows_are_created_from_the_registered_defaults(db: Any) -> None:
     assert RewardRule.objects.get(event_key=EVENT).credits == 99
 
 
-def test_a_reward_is_idempotent_on_its_key(user: Any, rule: RewardRule) -> None:
+@pytest.mark.usefixtures("rule")
+def test_a_reward_is_idempotent_on_its_key(user: Any) -> None:
     first = grant(user, "r:dup")
     again = grant(user, "r:dup")
 
@@ -51,9 +55,8 @@ def test_a_reward_is_idempotent_on_its_key(user: Any, rule: RewardRule) -> None:
     assert services.balance(user) == 10
 
 
-def test_a_key_cannot_be_reused_for_another_user(
-    user: Any, other: Any, rule: RewardRule
-) -> None:
+@pytest.mark.usefixtures("rule")
+def test_a_key_cannot_be_reused_for_another_user(user: Any, other: Any) -> None:
     grant(user, "r:shared")
 
     with pytest.raises(IdempotencyConflict):
@@ -106,7 +109,8 @@ def test_new_accounts_wait_for_the_minimum_age(user: Any, rule: RewardRule) -> N
     assert grant(user, "r:age2") is not None
 
 
-def test_self_rewards_are_refused(user: Any, rule: RewardRule) -> None:
+@pytest.mark.usefixtures("rule")
+def test_self_rewards_are_refused(user: Any) -> None:
     assert grant(user, "r:self", context={"source_user_id": user.pk}) is None
     assert RewardRefusal.objects.get(key="r:self").reason == "self_reward"
 
@@ -156,7 +160,8 @@ def test_cooldown_spaces_out_rewards(user: Any, rule: RewardRule) -> None:
     assert RewardRefusal.objects.get(key="cd:2").reason == "cooldown"
 
 
-def test_a_frozen_wallet_earns_nothing(user: Any, staff: Any, rule: RewardRule) -> None:
+@pytest.mark.usefixtures("rule")
+def test_a_frozen_wallet_earns_nothing(user: Any, staff: Any) -> None:
     services.set_frozen(user, True, actor=staff, reason_text="Review")
 
     assert grant(user, "f:1") is None
@@ -185,17 +190,16 @@ def test_zero_credit_rewards_are_refused_not_booked(
     assert not LedgerEntry.objects.exists()
 
 
-def test_reward_modifiers_adjust_the_amount_and_are_recorded(
-    user: Any, rule: RewardRule
-) -> None:
-    def double(_user: Any, event_key: str, credits: int, _ctx: Any) -> int:
-        return credits * 2 if event_key == EVENT else credits
+@pytest.mark.usefixtures("rule")
+def test_reward_modifiers_adjust_the_amount_and_are_recorded(user: Any) -> None:
+    def double(_user: Any, event_key: str, amount: int, _ctx: Any) -> int:
+        return amount * 2 if event_key == EVENT else amount
 
     registry.register_reward_modifier(double)
     try:
         entry = grant(user, "m:1")
     finally:
-        registry._reward_modifiers.remove(double)
+        registry.unregister_reward_modifier(double)
 
     assert entry is not None and entry.amount == 20
     assert entry.snapshot["base"] == 10
@@ -209,8 +213,9 @@ def test_conflicting_event_registration_is_rejected() -> None:
         registry.register_reward_event(clash)
 
 
+@pytest.mark.usefixtures("rule")
 def test_rewards_publish_a_credited_event_after_commit(
-    user: Any, rule: RewardRule, django_capture_on_commit_callbacks: Any
+    user: Any, django_capture_on_commit_callbacks: Any
 ) -> None:
     from apps.core.events.bus import EventTypes, event_bus
 
@@ -224,3 +229,74 @@ def test_rewards_publish_a_credited_event_after_commit(
 
     assert seen and seen[0]["event_key"] == EVENT and seen[0]["amount"] == 10
     assert Wallet.objects.get(user=user).balance == 10
+
+
+def age_ledger(**shift: int) -> None:
+    """Move every ledger row back in time (what waiting would do), below the ORM."""
+    when = timezone.now() - timedelta(**shift)
+    tamper_with_ledger("UPDATE wallet_ledgerentry SET created_at = %s", [when])
+
+
+def test_a_cooldown_ends_when_its_seconds_have_passed(
+    user: Any, rule: RewardRule
+) -> None:
+    rule.cooldown_seconds = 3600
+    rule.save()
+    assert grant(user, "cd:a") is not None
+    assert grant(user, "cd:b") is None
+
+    age_ledger(hours=2)
+
+    assert grant(user, "cd:c") is not None
+
+
+def test_the_daily_cap_starts_again_each_day(user: Any, rule: RewardRule) -> None:
+    rule.daily_cap = 10
+    rule.save()
+    assert grant(user, "day:1") is not None
+    assert grant(user, "day:2") is None
+
+    age_ledger(hours=25)
+
+    assert grant(user, "day:3") is not None
+
+
+def test_the_monthly_cap_ignores_earnings_of_earlier_months(
+    user: Any, rule: RewardRule
+) -> None:
+    rule.monthly_cap = 10
+    rule.save()
+    assert grant(user, "mon:1") is not None
+    assert grant(user, "mon:2") is None
+
+    age_ledger(days=40)
+
+    assert grant(user, "mon:3") is not None
+
+
+def test_caps_and_cooldowns_are_counted_per_user(
+    user: Any, other: Any, rule: RewardRule
+) -> None:
+    rule.daily_cap = 10
+    rule.cooldown_seconds = 3600
+    rule.save()
+
+    assert grant(user, "pu:1") is not None
+    assert grant(user, "pu:2") is None
+    assert grant(other, "pu:3") is not None
+
+
+def test_a_shorter_cap_cannot_exceed_a_longer_one(rule: RewardRule) -> None:
+    rule.daily_cap, rule.monthly_cap, rule.lifetime_cap = 50, 40, 0
+    with pytest.raises(ValidationError) as caught:
+        rule.clean()
+    assert "daily_cap" in caught.value.message_dict
+
+    rule.daily_cap, rule.monthly_cap, rule.lifetime_cap = 0, 40, 30
+    with pytest.raises(ValidationError):
+        rule.clean()
+
+    rule.daily_cap, rule.monthly_cap, rule.lifetime_cap = 10, 0, 30
+    rule.clean()
+    rule.daily_cap = rule.monthly_cap = rule.lifetime_cap = 0
+    rule.clean()

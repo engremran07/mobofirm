@@ -1,15 +1,16 @@
 {% extends "admin/staff_dialog.html" %}
+{% load i18n staff_ui %}
 {% block dialog_body %}
   {% if decision == "approve" %}
-    <p>Each approved suggestion creates a placement for its template and zone (switched on, with no creative until you assign one).</p>
+    <p class="mb-0">{% translate "Each approved suggestion creates a placement for its template and zone (switched on, with no creative until you assign one)." %}</p>
   {% else %}
-    <p>Rejected suggestions leave the queue and no placement is created.</p>
+    <p class="mb-0">{% translate "Rejected suggestions leave the queue and no placement is created." %}</p>
   {% endif %}
   {% if discoveries %}
-    <ul class="mf-ui-list">
-      {% for discovery in discoveries %}<li><code class="mf-ui-code">{{ discovery.scan_result.template_path }}</code> &middot; {{ discovery.placement_name }}</li>{% endfor %}
-    </ul>
+    {% staff_list %}
+      {% for discovery in discoveries %}{% staff_item %}<code>{{ discovery.scan_result.template_path }}</code> &middot; {{ discovery.placement_name }}{% endstaff_item %}{% endfor %}
+    {% endstaff_list %}
   {% else %}
-    <p class="mf-ui-note mf-ui-note--warning" role="status">None of the selected suggestions is pending.</p>
+    {% staff_notice tone="warning" %}{% translate "None of the selected suggestions is pending." %}{% endstaff_notice %}
   {% endif %}
 {% endblock %}

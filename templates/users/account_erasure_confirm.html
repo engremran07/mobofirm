@@ -1,0 +1,15 @@
+{% extends "account/_auth_layout.html" %}
+{% block title %}Confirm account erasure | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block auth_crumbs %}{% url 'users:account_erasure' as erasure_url %}{% include "components/breadcrumbs.html" with current="Confirm" parent_label="Erase account" parent_url=erasure_url %}{% endblock %}
+{% block auth_aside %}{% endblock %}
+{% block auth_icon %}user-x{% endblock %}
+{% block auth_eyebrow %}Privacy{% endblock %}
+{% block auth_title %}Confirm account erasure{% endblock %}
+{% block auth_body %}
+<p class="auth-card__lead">Your account will be erased {{ grace_days }} days after you confirm. Until then nothing changes and you can cancel from the Erase account page.</p>
+<form method="post" class="auth-form">
+  {% csrf_token %}
+  <button class="btn btn-danger btn-lg w-100" type="submit">Confirm erasure</button>
+</form>
+<a class="btn btn-link w-100 mt-3" href="{% url 'users:account_erasure' %}">Not now</a>
+{% endblock %}

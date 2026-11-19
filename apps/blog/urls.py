@@ -2,12 +2,31 @@
 
 from django.urls import path
 
-from . import dialogs, feeds, views, views_api, views_manage, views_requests
+from . import (
+    dialogs,
+    feeds,
+    views,
+    views_api,
+    views_contribute,
+    views_manage,
+    views_requests,
+)
 
 app_name = "blog"
 
 urlpatterns = [
     path("", views.post_list, name="post_list"),
+    path("contribute/", views_contribute.contribute, name="contribute"),
+    path(
+        "contribute/<slug:slug>/edit/",
+        views_contribute.contribute_edit,
+        name="contribute_edit",
+    ),
+    path(
+        "contribute/<slug:slug>/withdraw/",
+        views_contribute.contribute_withdraw,
+        name="contribute_withdraw",
+    ),
     path("manage/", views_manage.manage_posts, name="manage_posts"),
     path("manage/bulk_publish/", views_manage.bulk_publish, name="bulk_publish"),
     path("create/", views_manage.post_create, name="post_create"),

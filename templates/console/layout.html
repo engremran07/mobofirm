@@ -1,0 +1,62 @@
+{% load i18n static console console_ui %}{% comment %}
+  The staff console shell: AdminLTE-style app wrapper (header, grouped sidebar, main, footer) re-skinned with the Mobofirm tokens.
+  Every console page extends it through admin/base.html -> admin/base_site.html ({% extends console_layout|default:"console/layout.html" %}),
+  which swaps in console/base_partial.html for HTMX requests. No inline script, style or handler; no CDN.
+
+  Block contract (Django-admin names are kept so stock templates keep working):
+    title            text of <title> and of the announced page title            default "<page title> | <site name>"
+    extrastyle       extra <link>/<style> in the head (after the console bundle)
+    extrahead        extra head markup, e.g. {% console_media media %}
+    bodyclass        extra classes on <body>
+    breadcrumbs      the trail above the content (alias block: nav-breadcrumbs)   default: Dashboard > app > model > object
+    content_class    width modifier of the content column: app-content--narrow | app-content--reading | app-content--full
+    messages         the Django messages, rendered as toasts in #console-toasts
+    pretitle / content_title / content_subtitle   (empty by default: pages title themselves with the page_header component)
+    content          the page body
+    footer           the footer line
+  Landmarks: skip link -> header (banner) -> nav (console sections) -> main#console-main -> footer.
+  Context needed: request (the shell data is computed lazily from it through {% console_shell %}).
+{% endcomment %}{% console_shell as shell %}<!doctype html>
+{% get_current_language as LANGUAGE_CODE %}{% get_current_language_bidi as LANGUAGE_BIDI %}<html lang="{{ LANGUAGE_CODE|default:'en' }}" dir="{% if LANGUAGE_BIDI %}rtl{% else %}ltr{% endif %}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<meta name="csrf-token" content="{{ csrf_token }}">
+<meta name="console-login-url" content="{% url 'users:account_login' %}">
+<meta name="console-url-prefix" content="{% url 'admin:index' %}">
+<meta name="application-version" content="{{ release_version }}">
+<title>{% block title %}{% if title %}{{ title }} | {% endif %}{{ site_title|default:shell.console_brand.title }}{% endblock %}</title>
+{% for favicon in shell.console_brand.favicons %}<link rel="{{ favicon.rel }}" href="{{ favicon.href }}">
+{% endfor %}<script src="{% static 'build/theme-init.js' %}"></script>
+{% console_assets %}
+{% block extrastyle %}{% endblock %}
+{% block extrahead %}{% endblock %}
+</head>
+<body class="layout-fixed sidebar-expand-lg sidebar-mini fixed-header{% block bodyclass %}{% endblock %}" hx-indicator:inherited="#console-loadbar" hx-boost:inherited="target:#console-main select:#console-main swap:outerHTML" hx-select-oob:inherited="#console-toasts:beforeend">
+<a class="skip-link" href="#console-main">{% translate "Skip to main content" %}</a>
+<div class="c-loadbar htmx-indicator" id="console-loadbar" data-console-progress role="progressbar" aria-label="{% translate 'Loading' %}" aria-hidden="true"></div>
+<div class="app-wrapper">
+{% include "console/shell/header.html" %}
+{% include "console/shell/sidebar.html" %}
+<div class="sidebar-overlay" data-console-sidebar-overlay aria-hidden="true"></div>
+<main class="app-main" id="console-main" tabindex="-1">
+<div class="app-content-header">{% block breadcrumbs %}{% block nav-breadcrumbs %}{% console_breadcrumbs as crumbs %}{% ui "breadcrumb" items=crumbs %}{% endblock %}{% endblock %}</div>
+<div class="app-content {% block content_class %}{% endblock %}">
+{% block pretitle %}{% endblock %}{% block content_title %}{% endblock %}{% block content_subtitle %}{% endblock %}
+{% block content %}{% endblock %}
+</div>
+</main>
+<footer class="app-footer">
+{% block footer %}<span>{{ shell.console_brand.header }} &middot; {% translate "Staff console" %}</span>
+<span data-app-version="{{ release_version }}">{% translate "Version" %} {{ release_version }}</span>{% if release_build.git_sha %}
+<span>{% translate "Build" %} {{ release_build.git_sha }}{% if release_build.build_date %} ({{ release_build.build_date }}){% endif %}</span>{% endif %}{% endblock %}
+</footer>
+</div>
+<div class="c-toast-region" id="console-toasts" data-console-toasts role="region" aria-label="{% translate 'Notifications' %}">{% block messages %}{% for message in messages %}{% ui "toast" message=message level=message|console_level %}{% endfor %}{% endblock %}</div>
+<template data-console-toast-template>{% ui "toast" message="" level="info" %}</template>
+<dialog class="modal" id="console-dialog"></dialog>
+{% url 'admin:console_search' as search_url %}{% ui "command_palette" items=shell.console_palette_items search_url=search_url %}
+</body>
+</html>

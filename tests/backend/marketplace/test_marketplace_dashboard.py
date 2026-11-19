@@ -143,9 +143,9 @@ class SubmissionsTableTests(DashboardTestCase):
     def test_empty_state_and_upload_call_to_action(self):
         response = self.client.get(reverse("marketplace:dashboard"))
 
-        self.assertContains(response, "You have not uploaded any firmware yet")
-        self.assertContains(response, reverse("firmwares:upload"))
-        self.assertContains(response, "Upload firmware")
+        self.assertContains(response, "You have not contributed any firmware yet")
+        self.assertContains(response, reverse("firmwares:contribute"))
+        self.assertContains(response, "Contribute a firmware")
 
     @patch("apps.marketplace.wallet_bridge.wallet_enabled", return_value=False)
     def test_rules_and_the_wallet_status_are_stated(self, _enabled):

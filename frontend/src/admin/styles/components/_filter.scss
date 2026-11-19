@@ -1,0 +1,88 @@
+// Filters: chips, range inputs and the date hierarchy (the filter controls themselves live in _filter-bar.scss).
+//   Chip: <span class="c-chip">Status: <strong>Pending</strong><button class="c-chip__remove" aria-label="Remove filter"><svg/></button></span>
+//         <a class="c-chip" aria-pressed="true|false" href>Label</a>  (toggle chip)  | .c-chip--add (dashed "clear all")
+//   Range inputs: <div class="c-filter__range"><label>From<input class="form-control" type="date"></label>..</div>
+//   Date hierarchy: <nav class="c-datehier"><a>2026</a><a aria-current="true">Nov</a>...</nav>
+@layer components {
+  .c-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--mf-space-2);
+    min-block-size: 1.875rem;
+    padding: 0 var(--mf-space-3);
+    color: var(--mf-text);
+    font: inherit;
+    font-size: var(--mf-fs-sm);
+    text-decoration: none;
+    background: var(--mf-surface-raised);
+    border: 1px solid var(--mf-border-strong);
+    border-radius: var(--mf-radius-pill);
+    cursor: default;
+    transition: background-color var(--mf-duration-fast) var(--mf-ease-out), border-color var(--mf-duration-fast) var(--mf-ease-out);
+
+    strong { font-weight: 650; }
+
+    &:is(a, button) { cursor: pointer; }
+    &:is(a, button):hover { color: var(--mf-text); background: var(--mf-surface-soft); }
+
+    &[aria-pressed="true"],
+    &.is-active {
+      color: var(--mf-accent-strong);
+      background: var(--mf-accent-soft);
+      border-color: var(--mf-accent);
+    }
+  }
+
+  .c-chip--add { color: var(--mf-text-muted); background: transparent; border-style: dashed; }
+
+  .c-chip__remove {
+    display: inline-grid;
+    place-items: center;
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+    margin-inline-end: -0.5rem;
+    padding: 0;
+    color: var(--mf-text-muted);
+    background: transparent;
+    border: 0;
+    border-radius: 50%;
+    cursor: pointer;
+
+    &:hover { color: var(--mf-text); background: var(--mf-surface-soft); }
+  }
+
+  .c-filter__count {
+    color: var(--mf-text-muted);
+    font-size: var(--mf-fs-xs);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .c-filter__range {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--mf-space-2);
+    padding-block: var(--mf-space-1);
+
+    label { display: grid; gap: 2px; color: var(--mf-text-muted); font-size: var(--mf-fs-xs); }
+    .form-control { min-block-size: var(--mf-control-h-sm); padding-inline: var(--mf-space-2); font-size: var(--mf-fs-sm); }
+  }
+
+  .c-datehier {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--mf-space-1);
+    color: var(--mf-text-muted);
+    font-size: var(--mf-fs-sm);
+
+    a {
+      padding: 0.25rem var(--mf-space-3);
+      color: var(--mf-text);
+      text-decoration: none;
+      border-radius: var(--mf-radius-pill);
+
+      &:hover { background: var(--mf-hover); }
+      &[aria-current] { color: var(--mf-accent-strong); font-weight: 650; background: var(--mf-accent-soft); }
+    }
+  }
+}

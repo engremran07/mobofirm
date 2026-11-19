@@ -1,0 +1,10 @@
+{% load i18n console_ui console_admin %}{% if inline.blank %}<button type="button" class="c-inline__add" data-console-formset-add>{% console_icon "plus" %}<span>{% blocktranslate with name=inline_admin_formset.opts.verbose_name %}Add another {{ name }}{% endblocktranslate %}</span></button>{% endif %}
+{% if inline.paginated %}{% with formset=inline_admin_formset.formset %}
+<nav class="c-pager" aria-label="{% blocktranslate with name=inline_admin_formset.opts.verbose_name_plural %}{{ name }} pages{% endblocktranslate %}">
+<ul class="c-pager__list">
+{% if formset.page.has_previous %}{% console_inline_page_url formset formset.page.previous_page_number as previous_url %}<li class="c-pager__item"><a class="c-pager__link" rel="prev" href="{{ previous_url }}" aria-label="{% translate 'Previous page' %}">{% console_icon "chevron-left" "c-icon--sm" %}</a></li>{% endif %}
+{% for number in formset.paginator.page_range %}{% console_inline_page_url formset number as page_url %}<li class="c-pager__item"><a class="c-pager__link" href="{{ page_url }}"{% if number == formset.page.number %} aria-current="page"{% endif %}>{{ number }}</a></li>{% endfor %}
+{% if formset.page.has_next %}{% console_inline_page_url formset formset.page.next_page_number as next_url %}<li class="c-pager__item"><a class="c-pager__link" rel="next" href="{{ next_url }}" aria-label="{% translate 'Next page' %}">{% console_icon "chevron-right" "c-icon--sm" %}</a></li>{% endif %}
+</ul>
+</nav>
+{% endwith %}{% endif %}

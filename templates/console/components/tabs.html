@@ -1,0 +1,13 @@
+{% comment %}
+  tabs - two forms sharing one look.
+  1) Navigation tabs (each tab is a page/URL; work everywhere): items = list of {"title" (or "label"), "link" (or "url"), "active", "badge"}.
+       {% ui "tabs" items=tabs label="Status" %}
+  2) In-page tabs (JS-enhanced; every panel is visible without JavaScript): panes = list of {"id", "title", "errors"}; the caller supplies the
+     panels as content with the tab_panel component, ids matching the panes.
+       {% component "tabs" panes=panes label="Sections" %}{% ui "tab_panel" id="p1" content=... %}{% endcomponent %}
+     A pane with errors > 0 shows a danger dot so a failed save never hides its problem; deep links use the panel id as the #hash.
+  Context: label (accessible name of the tab list).
+{% endcomment %}{% load i18n %}{% if items %}<nav class="c-tabs" aria-label="{{ label|default:_('Sections') }}">{% for item in items %}<a class="c-tabs__item" href="{% if item.link %}{{ item.link }}{% else %}{{ item.url }}{% endif %}"{% if item.active %} aria-current="page"{% endif %}>{% if item.title %}{{ item.title }}{% else %}{{ item.label }}{% endif %}{% if item.badge %}<span class="c-tabs__badge">{{ item.badge }}</span>{% endif %}</a>{% endfor %}</nav>{% elif panes %}<div class="c-tabs" data-console-tabs>
+<div class="c-tabs__list" role="tablist" aria-label="{{ label|default:_('Sections') }}">{% for pane in panes %}<button type="button" class="c-tabs__tab" role="tab" id="{{ pane.id }}-tab" data-console-tab aria-controls="{{ pane.id }}" aria-selected="{% if forloop.first %}true{% else %}false{% endif %}"{% if pane.errors %} data-has-errors{% endif %}>{{ pane.title }}{% if pane.errors %}<span class="visually-hidden"> ({% blocktranslate count counter=pane.errors %}{{ counter }} problem{% plural %}{{ counter }} problems{% endblocktranslate %})</span>{% endif %}</button>{% endfor %}</div>
+{{ content }}
+</div>{% endif %}

@@ -1,0 +1,11 @@
+<article class="c-card c-card--staff{% if tone %} c-card--{{ tone }}{% endif %}"{% if ident %} aria-labelledby="{{ ident }}"{% endif %}>
+  <div class="c-card__body">
+    {% if title %}
+      <header class="c-card__lead">
+        <h2 class="c-card__title" id="{{ ident }}">{{ title }}</h2>
+        {% if subtitle %}<p class="c-card__subtitle">{{ subtitle }}</p>{% endif %}
+      </header>
+    {% endif %}
+    {{ content }}
+  </div>
+</article>

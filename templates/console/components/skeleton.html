@@ -1,0 +1,12 @@
+{% comment %}
+  skeleton - a loading placeholder that keeps the layout stable until the real content arrives.
+  Context: shape (text|list|tiles|table|block; default text), label (screen-reader text; default "Loading").
+  Decorative: hidden from assistive tech except for one polite status line.
+{% endcomment %}{% load i18n %}<div class="c-skeleton-group" role="status" aria-live="polite"><span class="visually-hidden">{{ label|default:_("Loading") }}&hellip;</span>
+<div aria-hidden="true">
+{% if shape == "tiles" %}<div class="c-dashboard__stats">{% for n in "1234" %}<div class="c-skeleton c-skeleton--tile"></div>{% endfor %}</div>
+{% elif shape == "list" %}{% for n in "12345" %}<div class="c-skeleton-row"><span class="c-skeleton c-skeleton--circle"></span><span class="c-skeleton-row__text"><span class="c-skeleton c-skeleton--title"></span><span class="c-skeleton c-skeleton--text"></span></span></div>{% endfor %}
+{% elif shape == "table" %}{% for n in "123456" %}<div class="c-skeleton c-skeleton--row"></div>{% endfor %}
+{% elif shape == "block" %}<div class="c-skeleton c-skeleton--block"></div>
+{% else %}<div class="c-skeleton c-skeleton--title"></div><div class="c-skeleton c-skeleton--text"></div><div class="c-skeleton c-skeleton--text"></div><div class="c-skeleton c-skeleton--text"></div>{% endif %}
+</div></div>

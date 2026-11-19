@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from functools import partial
 from typing import ClassVar
 
@@ -13,15 +14,9 @@ from django.forms import ModelForm
 from django.http import Http404, HttpRequest, HttpResponse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from unfold.contrib.filters.admin import (
-    BooleanRadioFilter,
-    RangeDateTimeFilter,
-    RelatedDropdownFilter,
-)
-from unfold.enums import ActionVariant
-from unfold.widgets import UnfoldAdminTextInputWidget
 
 from apps.core.admin_base import (
+    ActionVariant,
     ConfirmForm,
     ModelAdmin,
     SingletonModelAdmin,
@@ -32,6 +27,12 @@ from apps.core.admin_base import (
     htmx_redirect,
     return_url,
 )
+from apps.core.admin_filters import (
+    BooleanRadioFilter,
+    RangeDateTimeFilter,
+    RelatedDropdownFilter,
+)
+from apps.core.admin_forms import ConsoleTextInputWidget
 
 from .models import Tag, TagsSettings
 from .models_keyword import KeywordProvider, KeywordSuggestion
@@ -51,7 +52,7 @@ class MergeTagForm(ConfirmForm):
     target = forms.CharField(
         label=_("Merge into"),
         max_length=80,
-        widget=UnfoldAdminTextInputWidget,
+        widget=ConsoleTextInputWidget,
         help_text=_("Slug or exact name of the tag to keep."),
     )
 
@@ -90,7 +91,7 @@ class TagAdmin(ModelAdmin):
         ("created_at", RangeDateTimeFilter),
     )
     search_fields = ("name", "slug", "normalized_name", "synonyms_text")
-    prepopulated_fields: ClassVar[dict[str, tuple[str, ...]]] = {"slug": ("name",)}
+    prepopulated_fields: ClassVar[dict[str, Sequence[str]]] = {"slug": ("name",)}
     autocomplete_fields = ("parent", "merge_into")
     raw_id_fields = ("deleted_by",)
     readonly_fields = (

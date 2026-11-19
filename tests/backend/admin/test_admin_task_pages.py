@@ -12,14 +12,15 @@ from django.urls import reverse
 
 from apps.blog.models import Post
 from apps.core.admin_base import RelatedOverviewMixin
+from apps.core.utils.managers import default_manager
 from apps.firmwares.models import AutomatedBlogLink, OfficialFirmware, PendingFirmware
 from apps.firmwares.models import Model as DeviceModel
-from tests.backend.admin.admin_model_factory import build
+from tests.backend.admin.admin_model_factory import build, registered_admins
 
 
-@pytest.fixture
-def client(db) -> Client:
-    superuser = get_user_model().objects.create_superuser(
+@pytest.fixture(name="client")
+def client_fixture(django_user_model) -> Client:
+    superuser = django_user_model.objects.create_superuser(
         username="task-pages-admin", email="task-pages-admin@example.test"
     )
     test_client = Client()
@@ -109,7 +110,8 @@ def test_user_page_lists_related_records_with_filtered_links(client):
     assert "Firmware uploads" in html
 
 
-def test_related_overview_only_lists_models_the_staff_user_may_view(db):
+@pytest.mark.django_db
+def test_related_overview_only_lists_models_the_staff_user_may_view():
     target = get_user_model().objects.create_user(
         username="related-target", email="related-target@example.test"
     )
@@ -133,9 +135,10 @@ def test_related_overview_only_lists_models_the_staff_user_may_view(db):
     assert "Firmware uploads" not in html
 
 
-def test_every_declared_related_link_resolves_to_a_real_field(db):
+@pytest.mark.django_db
+def test_every_declared_related_link_resolves_to_a_real_field():
     declared = 0
-    for model_admin in admin.site._registry.values():
+    for model_admin in registered_admins().values():
         if not isinstance(model_admin, RelatedOverviewMixin):
             continue
         for link in model_admin.related_links:
@@ -144,5 +147,5 @@ def test_every_declared_related_link_resolves_to_a_real_field(db):
             assert admin.site.is_registered(related), link
             field = related._meta.get_field(link.lookup.split("__")[0])
             assert field.is_relation, link
-            assert related._default_manager.filter(**{link.lookup: 0}).count() == 0
+            assert default_manager(related).filter(**{link.lookup: 0}).count() == 0
     assert declared

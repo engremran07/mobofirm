@@ -14,7 +14,10 @@ from apps.core.view_counter import SESSION_KEY, is_bot_request, should_count
 from apps.firmwares.models import Brand, Model, OfficialFirmware
 from apps.firmwares.tracking_models import FirmwareView
 
-BROWSER = {"HTTP_USER_AGENT": "Mozilla/5.0 (X11; Linux x86_64) Firefox/130.0"}
+BROWSER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) Firefox/130.0"
+# ``Client.get(headers=...)`` is typed; ``**{"HTTP_...": ...}`` is not.
+BROWSER_HEADERS = {"User-Agent": BROWSER_AGENT}
+BROWSER = {"HTTP_USER_AGENT": BROWSER_AGENT}
 
 
 class BotDetectionTests(TestCase):
@@ -25,15 +28,15 @@ class BotDetectionTests(TestCase):
         self.assertFalse(is_bot_request(self.request(**BROWSER)))
 
     def test_crawlers_empty_agents_head_and_prefetch_are_bots(self):
-        self.assertTrue(
-            is_bot_request(self.request(HTTP_USER_AGENT="Googlebot/2.1"))
-        )
+        self.assertTrue(is_bot_request(self.request(HTTP_USER_AGENT="Googlebot/2.1")))
         self.assertTrue(is_bot_request(self.request()))
         self.assertTrue(is_bot_request(self.request("head", **BROWSER)))
         self.assertTrue(
             is_bot_request(self.request(HTTP_SEC_PURPOSE="prefetch", **BROWSER))
         )
-        self.assertTrue(is_bot_request(self.request(HTTP_PURPOSE="prefetch", **BROWSER)))
+        self.assertTrue(
+            is_bot_request(self.request(HTTP_PURPOSE="prefetch", **BROWSER))
+        )
 
     def test_should_count_once_per_day_then_again_the_next_day(self):
         request = self.request(**BROWSER)
@@ -78,24 +81,26 @@ class FirmwareViewCountTests(TestCase):
         return self.firmware.view_count
 
     def test_human_views_count_once_and_log_one_analytics_row(self):
-        self.client.get(self.url, **BROWSER)
-        self.client.get(self.url, **BROWSER)
+        self.client.get(self.url, headers=BROWSER_HEADERS)
+        self.client.get(self.url, headers=BROWSER_HEADERS)
 
         self.assertEqual(self.views(), 1)
         self.assertEqual(FirmwareView.objects.count(), 1)
 
     def test_crawlers_and_prefetch_are_not_counted(self):
-        self.client.get(self.url, HTTP_USER_AGENT="Googlebot/2.1")
-        self.client.get(self.url, HTTP_SEC_PURPOSE="prefetch", **BROWSER)
+        self.client.get(self.url, headers={"User-Agent": "Googlebot/2.1"})
+        self.client.get(
+            self.url, headers={**BROWSER_HEADERS, "Sec-Purpose": "prefetch"}
+        )
         self.client.get(self.url)
 
         self.assertEqual(self.views(), 0)
         self.assertEqual(FirmwareView.objects.count(), 0)
 
     def test_the_page_shows_the_exact_count_and_last_update(self):
-        self.client.get(self.url, **BROWSER)
+        self.client.get(self.url, headers=BROWSER_HEADERS)
 
-        response = self.client.get(self.url, **BROWSER)
+        response = self.client.get(self.url, headers=BROWSER_HEADERS)
 
         self.assertContains(response, 'title="1 view"')
 

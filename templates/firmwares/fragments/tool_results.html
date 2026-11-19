@@ -1,6 +1,19 @@
 {# Tools hub body. Swapped into #tool-results by HTMX. Context: categories, featured_tools, latest_guides, tool_total, search_* (list_search_context). #}
 {% include "components/search_feedback.html" with noun="tool" %}
 {% if not search_query %}
+  {% if browse_groups %}
+    <section class="cat-section" aria-labelledby="browse-categories-title" data-browse-categories>
+      <div class="cat-section__head"><h2 id="browse-categories-title" class="cat-section__title">Browse by chipset, brand and system</h2></div>
+      {% for label, rows in browse_groups %}
+        <h3 class="visually-hidden">{{ label }}</h3>
+        <ul class="list-unstyled d-flex flex-wrap gap-2 mb-3" aria-label="{{ label }}">
+          {% for category, children in rows %}
+            <li><a class="chip-ui" href="{{ category.get_absolute_url }}">{{ category.name }}</a>{% if children %}<ul class="list-unstyled d-flex flex-wrap gap-1 mt-1 ms-2" aria-label="{{ category.name }} families">{% for child in children %}<li><a class="chip-ui" href="{{ child.get_absolute_url }}">{{ child.name }}</a></li>{% endfor %}</ul>{% endif %}</li>
+          {% endfor %}
+        </ul>
+      {% endfor %}
+    </section>
+  {% endif %}
   {% if latest_guides %}
     <section class="cat-section" aria-labelledby="latest-guides-title">
       <div class="cat-section__head"><h2 id="latest-guides-title" class="cat-section__title">Latest flashing guides</h2><a href="{% url 'firmwares:flashing_guides' %}">All guides</a></div>

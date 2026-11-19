@@ -1,8 +1,7 @@
 {% extends "admin/staff_dialog.html" %}
+{% load i18n staff_ui %}
 {# Comments-owned content for the staff dialog shell: shows what is being moderated; the optional note renders after it. #}
 {% block dialog_body %}
-  <blockquote class="mf-ui-dialog__quote">
-    <p>{{ comment.body|striptags|truncatechars:280|linebreaksbr }}</p>
-    <footer class="mf-ui-help">{{ comment.user.public_display_name }} on {{ comment.post.title|truncatechars:60 }}</footer>
-  </blockquote>
+  {% blocktranslate with author=comment.user.public_display_name post=comment.post.title|truncatechars:60 asvar source %}{{ author }} on {{ post }}{% endblocktranslate %}
+  {% staff_quote source=source %}{{ comment.body|striptags|truncatechars:280|linebreaksbr }}{% endstaff_quote %}
 {% endblock %}

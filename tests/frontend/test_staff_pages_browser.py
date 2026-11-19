@@ -1,6 +1,6 @@
 """Browser checks for the staff tool pages of tags, comments and storage.
 
-They render in the Unfold admin shell (sidebar, admin CSP) and open app-owned
+They render in the staff console shell (sidebar, console CSP) and open app-owned
 dialogs: no console/CSP errors, no overflow, dialogs open, close with Escape and
 confirm.
 """
@@ -28,6 +28,8 @@ from tests.frontend.browser_support import (
     visit_all,
     watch,
 )
+
+DIALOG = ".modal[data-console-dialog]"
 
 
 def staff_user(username: str):
@@ -73,7 +75,7 @@ def firmware_root_fixture(settings, tmp_path: Path) -> Path:
 
 def open_dialog(page: Page, trigger_name: str):
     page.get_by_role("link", name=trigger_name).first.click()
-    dialog = page.locator("dialog[data-staff-dialog]")
+    dialog = page.locator(DIALOG)
     expect(dialog).to_be_visible(timeout=10_000)
     return dialog
 
@@ -103,7 +105,7 @@ def test_staff_pages_render_in_the_admin_shell_without_problems(live_server):
         for path in paths:
             page.goto(f"{live_server.url}{path}")
             ready(page)
-            if page.locator("nav a[href]").count() < 3:
+            if page.locator("aside[data-console-sidebar] a[href]").count() < 3:
                 failures.append(f"{path}: admin sidebar is missing")
             if page.locator(".site-header, .site-container").count():
                 failures.append(f"{path}: public shell markup rendered")
@@ -129,7 +131,7 @@ def test_tag_dialogs_open_close_with_escape_and_confirm(live_server):
         dialog = open_dialog(page, "Reject Browser suggestion")
         expect(dialog.get_by_role("heading")).to_have_text("Reject this suggested tag?")
         page.keyboard.press("Escape")
-        expect(page.locator("dialog[data-staff-dialog]")).to_have_count(0)
+        expect(page.locator(DIALOG)).to_have_count(0)
 
         open_dialog(page, "Reject Browser suggestion")
         page.get_by_role("button", name="Reject tag").click()
@@ -142,13 +144,13 @@ def test_tag_dialogs_open_close_with_escape_and_confirm(live_server):
         page.get_by_label("Source tag slug").fill(source.slug)
         page.get_by_label("Destination tag slug").fill(target.slug)
         page.get_by_role("button", name="Review merge").click()
-        merge = page.locator("dialog[data-staff-dialog]")
+        merge = page.locator(DIALOG)
         expect(merge).to_be_visible(timeout=10_000)
         expect(merge).to_contain_text("This will change 1 article")
         width = overflow(page)
         assert width["document"] <= width["viewport"] + 1
         merge.get_by_role("button", name="Cancel").click()
-        expect(page.locator("dialog[data-staff-dialog]")).to_have_count(0)
+        expect(page.locator(DIALOG)).to_have_count(0)
         page.get_by_role("button", name="Review merge").click()
         page.get_by_role("button", name="Merge tags").click()
         page.wait_for_url(f"**{reverse('tags:manage')}")
@@ -179,7 +181,7 @@ def test_comment_moderation_dialogs_record_the_decision(live_server):
 
         article = page.locator("article", has_text="Reject me please")
         article.get_by_role("link", name="Reject").click()
-        dialog = page.locator("dialog[data-staff-dialog]")
+        dialog = page.locator(DIALOG)
         expect(dialog).to_be_visible(timeout=10_000)
         expect(dialog).to_contain_text("Reject me please")
         dialog.get_by_label("Note for the record (optional)").fill("Off topic")
@@ -190,9 +192,9 @@ def test_comment_moderation_dialogs_record_the_decision(live_server):
         page.locator("article", has_text="Buy cheap watches").get_by_role(
             "link", name="Mark as spam"
         ).click()
-        expect(page.locator("dialog[data-staff-dialog]")).to_be_visible(timeout=10_000)
+        expect(page.locator(DIALOG)).to_be_visible(timeout=10_000)
         page.keyboard.press("Escape")
-        expect(page.locator("dialog[data-staff-dialog]")).to_have_count(0)
+        expect(page.locator(DIALOG)).to_have_count(0)
 
     assert not failures, "\n".join(failures)
     rejected.refresh_from_db()

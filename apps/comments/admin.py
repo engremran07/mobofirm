@@ -9,16 +9,10 @@ from django.db.models import QuerySet
 from django.http import Http404, HttpRequest, HttpResponse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
-from unfold.contrib.filters.admin import (
-    ChoicesDropdownFilter,
-    RangeDateTimeFilter,
-    RangeNumericFilter,
-)
-from unfold.enums import ActionVariant
-from unfold.widgets import UnfoldAdminTextareaWidget
 
 from apps.core.admin_base import (
     BADGE_APPROVAL,
+    ActionVariant,
     ConfirmForm,
     ModelAdmin,
     SingletonModelAdmin,
@@ -29,6 +23,12 @@ from apps.core.admin_base import (
     htmx_redirect,
     return_url,
 )
+from apps.core.admin_filters import (
+    ChoicesDropdownFilter,
+    RangeDateTimeFilter,
+    RangeNumericFilter,
+)
+from apps.core.admin_forms import ConsoleTextareaWidget
 
 from .models import Comment, CommentSettings
 from .services.decisions import MAX_NOTE_LENGTH, moderate_comment
@@ -41,7 +41,7 @@ class DecisionNoteForm(ConfirmForm):
         label=_("Note"),
         required=False,
         max_length=MAX_NOTE_LENGTH,
-        widget=UnfoldAdminTextareaWidget(attrs={"rows": 3}),
+        widget=ConsoleTextareaWidget(attrs={"rows": 3}),
         help_text=_("Optional. Stored with the decision."),
     )
 
@@ -142,25 +142,25 @@ class CommentAdmin(ModelAdmin):
             done += 1
         self.message_user(request, f"{label} {done} comments.")
 
-    @action(description=_("Approve selected comments"))
+    @action(description=_("Approve selected comments"), permissions=["change"])
     def approve_selected(
         self, request: HttpRequest, queryset: QuerySet[Comment]
     ) -> None:
         self._decide(request, queryset, "approve", "Approved")
 
-    @action(description=_("Reject selected comments"))
+    @action(description=_("Reject selected comments"), permissions=["change"])
     def reject_selected(
         self, request: HttpRequest, queryset: QuerySet[Comment]
     ) -> None:
         self._decide(request, queryset, "reject", "Rejected")
 
-    @action(description=_("Mark selected comments as spam"))
+    @action(description=_("Mark selected comments as spam"), permissions=["change"])
     def mark_selected_spam(
         self, request: HttpRequest, queryset: QuerySet[Comment]
     ) -> None:
         self._decide(request, queryset, "spam", "Marked as spam:")
 
-    @action(description=_("Soft delete selected comments"))
+    @action(description=_("Soft delete selected comments"), permissions=["change"])
     def soft_delete(self, request: HttpRequest, queryset: QuerySet[Comment]) -> None:
         queryset.update(
             is_deleted=True, deleted_at=timezone.now(), deleted_by=request.user

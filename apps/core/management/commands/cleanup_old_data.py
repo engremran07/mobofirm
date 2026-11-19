@@ -51,7 +51,7 @@ class Command(BaseCommand):
         total_deleted += self.cleanup_api_tokens(dry_run)
         total_deleted += self.cleanup_download_sessions(cutoff, dry_run)
         total_deleted += self.cleanup_ad_events(cutoff, dry_run)
-
+        total_deleted += self.cleanup_metrics(cutoff, dry_run)
         self.stdout.write(
             self.style.SUCCESS(
                 f"\nTotal records {'matched' if dry_run else 'deleted'}: {total_deleted:,}"
@@ -107,4 +107,15 @@ class Command(BaseCommand):
         if count and not dry_run:
             old_events.delete()
         self.stdout.write(f"  Ad events: {count:,}")
+        return count
+
+    def cleanup_metrics(self, cutoff, dry_run=False):
+        """Cleanup stored metric samples past the retention window"""
+        from apps.core.metrics.collector import Metric
+
+        old_samples = Metric.objects.filter(timestamp__lt=cutoff)
+        count = old_samples.count()
+        if count and not dry_run:
+            old_samples.delete()
+        self.stdout.write(f"  Metric samples: {count:,}")
         return count

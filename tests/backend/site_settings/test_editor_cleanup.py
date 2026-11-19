@@ -36,8 +36,9 @@ def _image(age_days: int) -> EditorImage:
 
 def _reference(monkeypatch: pytest.MonkeyPatch, *paths: str) -> None:
     """Register ``EditorProfile.placeholder`` as the stored-content field."""
-    EditorProfile.objects.create(
-        context="page", placeholder="".join(f"/media/{path} " for path in paths)
+    EditorProfile.objects.update_or_create(
+        context="page",
+        defaults={"placeholder": "".join(f"/media/{path} " for path in paths)},
     )
     monkeypatch.setattr(
         editor_cleanup, "RICH_TEXT_FIELDS", ("site_settings.EditorProfile.placeholder",)

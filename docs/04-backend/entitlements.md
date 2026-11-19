@@ -42,7 +42,7 @@ fair cap >= daily cap).
    default.
 3. The newest unexpired `PackageQuotaOverride` of that user package (staff exception; empty
    fields inherit, 0 = unlimited).
-4. The account's `UserQuotaOverride` (**Shop → Account overrides**): per account, whatever
+4. The account's `UserQuotaOverride` (**Pricing → Account overrides**): per account, whatever
    package it holds. Files and data volume (`limit_files`, `limit_size` + unit) per window
    (optionally a different `window`), item-type switches (`covers_free`, `covers_featured`,
    `covers_paid`), `device_limit`, `expires_at`, a required `reason` and `granted_by`. Empty
@@ -87,7 +87,7 @@ Everything goes through it: `active_package`, `quota_snapshot`, `quota_windows`,
 ## Orders, credits and events
 
 Cash orders are offline: users request a package or a paid file, staff confirm payment in
-the Unfold admin (mark paid / cancel / refund dialogs from `apps/shop/dialogs.py`).
+the staff console (mark paid / cancel / refund dialogs from `apps/shop/dialogs.py`).
 Online payments are disabled (`services.ONLINE_PAYMENTS_ENABLED = False`).
 
 **Pay with credits** (needs `apps.wallet`; otherwise credits are shown as unavailable and
@@ -108,7 +108,7 @@ An account **without** a package that covers featured files can unlock a single 
 credits (`credits.pay_file_with_credits`, dialog `shop:file_credits`):
 
 * paid file: its staff-approved USD price less the package's paid-file discount;
-* featured file: `ShopSettings.featured_file_price` (USD, **Shop → Shop settings**, 0 = not
+* featured file: `ShopSettings.featured_file_price` (USD, **Pricing → Pricing settings**, 0 = not
   sold one by one; firmware rows may only carry `approved_price` when they are paid).
 * credits = `to_credits(price)`; the spend, the order and the per-file entitlement commit in
   one transaction, so a failure after the charge rolls the charge back. Buying again is
@@ -116,7 +116,7 @@ credits (`credits.pay_file_with_credits`, dialog `shop:file_credits`):
   (`credits.purchase_block_reason`): the package quota is used and nobody pays twice.
 * the entitlement is per file and lifetime: `has_purchased` lets `check_quota` allow it even
   when the free allowance is exhausted, and `consume_quota` records it as
-  `QuotaConsumption.Reason.PURCHASED` (served, listed in **My files**, never counted in the
+  `QuotaConsumption.Reason.PURCHASED` (served, listed in **My contributions › Downloads**, never counted in the
   free or fair-usage quota). `apps/firmwares/access.py::_featured_decision` accepts it.
 
 ### Featured blog articles (contract for `apps.blog`)
@@ -138,12 +138,68 @@ only; `credits` is 0 for cash orders).
 
 ## Admin
 
-`PackageTier` has ONE Unfold form with tabs (Basic, Bandwidth, Item types, Extra, Fair usage,
-Perks, Preview), the summary in the list and the preview tab, filters (active / public /
-default), activate/deactivate actions, row and detail dialogs to duplicate (inactive, hidden
-draft) and archive (hides the package, cancels its pending orders, holders keep it) and a
+`PackageTier` has ONE console form with tabs (Basic, Bandwidth, Item types, Extra, Fair usage,
+Perks, Ads & unlocks, Preview), the summary in the list and the preview tab, filters (active /
+public / default), activate/deactivate actions, row and detail dialogs to duplicate (inactive,
+hidden draft) and archive (hides the package, cancels its pending orders, holders keep it) and a
 Holders inline. `UserPackage` carries the quota-override inline; `Order` shows its items
-inline with mark-paid, cancel and refund dialogs.
+inline with mark-paid, cancel and refund dialogs. **Ad unlocks** (Pricing → Ad unlocks) lists
+every ticket read-only with status, kind, package and date filters.
+
+## The pricing ladder and ads
+
+The pricing page and the package builder are ONE source (`shop.PackageTier`): the cards and
+comparison rows (`ads_text`, `unlock_text`, "Over your limit", "Featured files by ads") are
+computed from the same fields staff edit. `manage.py seed_packages` creates the ladder
+(Free → Silver → Gold → Platinum; Premium stays as it is):
+
+| Package | Ads | Shortener | Unlock by ads |
+|---------|-----|-----------|---------------|
+| Free (default) | download-gate ads | yes | 3 ads per free file, 5 per featured file |
+| Silver | download-gate ads | no (`direct_links`) | 2 ads free, 3 ads featured |
+| Gold | none (`ad_free`) | no | n/a |
+| Platinum | none | no | n/a |
+
+`ad_free` removes the download-gate ads and every rewarded offer; `direct_links` removes the URL
+shortener (`firmwares.shortener.should_shorten`, the one gate hook). Online payment stays off:
+packages are bought with earned credits (`credit_purchase`) or by staff-confirmed offline orders.
+
+## Unlock by watching ads
+
+Package builder tab **Ads & unlocks**: `unlock_by_ads_free` + `unlock_ads_free` (ads per free
+file, 1–20, default 3), `unlock_by_ads_featured` + `unlock_ads_featured` (ads per featured file;
+only for packages without featured access), `unlock_cooldown_seconds` (pause between the ads of
+one unlock) and `unlock_daily_cap` (files unlockable per 24 h, 0 = no cap). The default package
+has the free unlock on (migration `shop/0005`).
+
+`apps/shop/ad_unlock.py` owns the rules; `apps/shop/unlock_models.py` the records:
+
+* `AdUnlockTicket` — one row per user and file (unique); `status` `open` (counting ads) →
+  `ready` (all ads watched; one download may use it for `READY_TTL` = 60 min) → `redeemed`;
+  `expired` / `cancelled` end an unused unlock and a later unlock of the same file starts a new
+  `cycle`. An unfinished ticket expires after `OPEN_TTL` = 24 h (`cancel_stale()` is the
+  housekeeping call). `AdUnlockProgress.view_id` is unique: exactly one step per rewarded view.
+* `offer(user, firmware)` → `UnlockOffer.state`: `none` (not offered, ad-free, paid file),
+  `quota_ok`, `verify`, `unavailable` (no enabled unlock ad), `available`, `in_progress`,
+  `cooldown`, `daily_cap`, `ready`. `start_ticket` creates or resumes the ticket
+  (`shop:unlock_start`, POST + CSRF, HTMX partial or PRG redirect; `shop:unlock_panel` refreshes
+  the panel and re-fetches itself when a cooldown ends).
+* `check_watch` runs before a watch starts (closed or foreign ticket, package no longer offering
+  it, cooldown, the daily cap on the last ad) and `record_watch` runs in the ads completion
+  transaction. The package rule is re-read every time, so an upgrade to an ad-free package
+  cancels the ticket, a lower or higher ad count applies at once and a package without
+  unlocks refuses the watch.
+* The gate: `entitlements.has_ad_unlock` makes `check_quota` and the featured decision allow
+  that one file (it consumes **no** allowance and writes no `QuotaConsumption`);
+  `consume_quota` redeems the ticket when the download is charged, so a second use is refused;
+  the shortener serves the file with a plain link while the unlock is live. Nothing outside
+  the shop imports ad tickets: `firmwares.access.has_ad_unlock` reads the optional entitlement
+  module and `apps/ads/unlock_bridge.py` is the only place that knows both apps.
+
+Abuse guards: ticket bound to the user, per-view idempotency, `READY_TTL`, daily cap, cooldown,
+and every rewarded-ad guard of `docs/04-backend/rewarded-ads.md` (verified email, advertising
+consent, start rate limit, one active view, abuse flags). Audit trail: `RewardedAdView` rows
+(`reference` = ticket) plus `AdUnlockProgress`.
 
 ## Download expiry and history
 
@@ -176,7 +232,7 @@ allowance exactly once and passes the same fair-usage checks). Re-serving a laps
 restarts it (new first-serve date, counter, rule and period). Free-file consumption keeps its
 one-per-file rule.
 
-**My files.** `/files/` has **Active** (downloadable now) and **History** tabs. History is
+**My contributions › Downloads.** `/contributions/downloads/` (formerly `/files/`, now a 301) has **Active** (downloadable now) and **History** tabs. History is
 read-only: no download button, the reason ("Package expired — renew to download again" with a
 **Renew your package** action, or the spent allowance) and a details link.
 

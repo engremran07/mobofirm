@@ -35,6 +35,7 @@ from .policy import (
     compose_title,
     is_private_path,
     robots_directive,
+    route_ref,
     truncate,
 )
 from .providers import ProviderContext, get_provider
@@ -101,6 +102,11 @@ def override_for(ref: tuple[str, str] | None) -> Metadata | None:
         )
         .first()
     )
+
+
+def valid_robots(value: str) -> str:
+    """Normalised robots tokens when every token is a known directive, else ``""``."""
+    return _valid_robots(value)
 
 
 def _valid_robots(value: str) -> str:
@@ -183,7 +189,7 @@ def _resolve(request: HttpRequest, context: Mapping[str, Any]) -> ResolvedSEO:
     description_source = sources.get("description", "object")
     social_title = social_description = social_image = robots_override = ""
 
-    override = override_for(page.object_ref)
+    override = override_for(page.object_ref or route_ref(request.path))
     if override is not None:
         if override.meta_title:
             title, full_title, title_source = override.meta_title, True, "override"

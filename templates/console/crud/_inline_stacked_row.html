@@ -1,0 +1,21 @@
+{% load i18n admin_urls console_ui console_admin %}{% with formset=inline_admin_formset.formset %}
+<div class="c-inline__row" data-console-formset-row id="{{ formset.prefix }}-{{ prefix_index }}">
+<span class="c-inline__handle" aria-hidden="true"></span>
+<div class="c-inline__fields">
+<div class="u-cluster u-gap-2 mb-2">
+<strong>{{ inline_admin_formset.opts.verbose_name|capfirst }}{% if iform.original %}: {{ iform.original }}{% elif not is_blank %}: #{{ prefix_index|add:1 }}{% endif %}</strong>
+{% if iform.original and iform.model_admin.show_change_link and iform.model_admin.has_registered_model %}<a class="u-text-sm" href="{% url iform.model_admin.opts|admin_urlname:'change' iform.original.pk|admin_urlquote %}">{% if inline_admin_formset.has_change_permission %}{% translate "Change" %}{% else %}{% translate "View" %}{% endif %}</a>{% endif %}
+{% if iform.show_url %}<a class="u-text-sm" href="{{ iform.absolute_url }}">{% translate "View on site" %}</a>{% endif %}
+</div>
+{% if iform.form.non_field_errors %}<div role="alert">{{ iform.form.non_field_errors }}</div>{% endif %}
+{% for fieldset in iform %}{% include "admin/includes/fieldset.html" with fieldset=fieldset inline=True %}{% endfor %}
+{% if iform.needs_explicit_pk_field %}{{ iform.pk_field.field }}{% endif %}
+{% if iform.fk_field %}{{ iform.fk_field.field }}{% endif %}
+</div>
+<div class="c-inline__tools">
+{% if iform.original and inline.can_delete %}<span hidden>{{ iform.deletion_field.field }}</span>
+<button type="button" class="btn btn-ghost btn-icon btn-sm" data-console-formset-remove aria-pressed="false" aria-label="{% translate 'Mark for deletion' %}">{% console_icon "trash-2" %}</button>
+{% elif not iform.original and inline.blank %}<button type="button" class="btn btn-ghost btn-icon btn-sm" data-console-formset-remove aria-label="{% translate 'Remove this row' %}">{% console_icon "x" %}</button>{% endif %}
+</div>
+</div>
+{% endwith %}

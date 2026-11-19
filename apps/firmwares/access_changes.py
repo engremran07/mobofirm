@@ -39,9 +39,10 @@ from .access_change_models import (
     AccessChangeRequest,
     AccessChangeSource,
 )
+from .constants import MAX_PRICE
 from .models import AccessTier, BaseFirmware
 from .notifications import notify_users
-from .services import MAX_PRICE
+from .references import content_type_for
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +84,7 @@ class AccessChange:
 
 def content_type_of(firmware: BaseFirmware) -> ContentType:
     """Content type of the typed firmware row (never a proxy or the base class)."""
-    return ContentType.objects.get_for_model(firmware, for_concrete_model=False)
+    return content_type_for(firmware)
 
 
 def parse_price(raw: Any) -> Decimal:

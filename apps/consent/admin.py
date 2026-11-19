@@ -1,4 +1,4 @@
-"""Consent administration (Unfold): categories, policy versions, audit log, stats."""
+"""Consent administration: categories, policy versions, audit log, stats."""
 
 from __future__ import annotations
 
@@ -8,19 +8,18 @@ from django.contrib import messages
 from django.contrib.admin import register
 from django.contrib.admin.utils import unquote
 from django.core.exceptions import PermissionDenied
+from django.db.models import Count, QuerySet
 from django.forms import ModelForm
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import redirect
 from django.template.response import TemplateResponse
 from django.urls import URLPattern, path
 from django.utils.translation import gettext_lazy as _
-from unfold.contrib.filters.admin import ChoicesDropdownFilter, RangeDateTimeFilter
-from unfold.forms import BaseDialogForm
 
 from apps.consent import services
 from apps.consent.models import ConsentCategory, ConsentDecision, ConsentPolicy
-from apps.core.admin_base import ConfirmForm as PublishForm
 from apps.core.admin_base import (
+    BaseDialogForm,
     ModelAdmin,
     ReadOnlyModelAdmin,
     action,
@@ -30,6 +29,8 @@ from apps.core.admin_base import (
     htmx_redirect,
     return_url,
 )
+from apps.core.admin_base import ConfirmForm as PublishForm
+from apps.core.admin_filters import ChoicesDropdownFilter, RangeDateTimeFilter
 
 ACTION_BADGES = {
     "accept_all": "success",
@@ -69,6 +70,9 @@ class ConsentPolicyAdmin(ModelAdmin):
     actions_row = ("publish_policy",)
     actions_detail = ("publish_policy",)
     readonly_fields = ("version", "published_at", "categories_summary", "is_active")
+
+    def get_queryset(self, request: HttpRequest) -> QuerySet[ConsentPolicy]:
+        return super().get_queryset(request).annotate(decision_total=Count("decisions"))
 
     def get_fields(
         self, request: HttpRequest, obj: ConsentPolicy | None = None
@@ -123,9 +127,10 @@ class ConsentPolicyAdmin(ModelAdmin):
             return "Active"
         return "Draft" if not obj.is_published else "Superseded"
 
-    @display(description=_("Records"))
+    @display(description=_("Records"), ordering="decision_total")
     def decision_count(self, obj: ConsentPolicy) -> int:
-        return obj.decisions.count()
+        annotated = getattr(obj, "decision_total", None)
+        return obj.decisions.count() if annotated is None else int(annotated)
 
     @display(description=_("Categories offered"))
     def categories_summary(self, obj: ConsentPolicy | None) -> str:

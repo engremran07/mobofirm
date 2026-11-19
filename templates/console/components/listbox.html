@@ -1,0 +1,16 @@
+{% comment %}
+  listbox - a headless select: a button + popover listbox over a native <select> that stays the submitted value and the no-JavaScript fallback.
+  Context: field (a bound ChoiceField; its widget renders the native <select>), label (accessible name of the list), size (sm).
+  Behaviour: frontend/src/admin/js/ui/popover.js + controls.js. State attributes: data-open (root), data-active / data-selected (option), data-empty (root, blank value).
+  Keyboard: Enter/Space/ArrowDown open, Arrows/Home/End/type-ahead move, Enter/Space choose, Escape closes and restores focus.
+{% endcomment %}{% load i18n console_ui %}{% with current=field.value|default_if_none:""|stringformat:"s" %}
+<div class="c-select{% if size %} c-select--{{ size }}{% endif %}" data-ui-select data-ui-popover{% if not current %} data-empty{% endif %}>
+{{ field }}
+<button type="button" class="c-select__btn" data-ui-trigger aria-haspopup="listbox" aria-expanded="false" aria-controls="{{ field.auto_id }}-listbox"><span class="c-select__value" data-ui-select-value>{% for value, text in field.field.choices %}{% if value|stringformat:"s" == current %}{{ text }}{% endif %}{% endfor %}</span>{% console_icon "chevron-down" "c-icon--xs c-fctl__caret" %}</button>
+<div class="c-fpanel" id="{{ field.auto_id }}-listbox" data-ui-panel data-ui-fixed hidden>
+<ul class="c-fpanel__list" role="listbox" aria-label="{{ label|default:field.label }}">
+{% for value, text in field.field.choices %}<li role="presentation"><button type="button" role="option" tabindex="-1" data-value="{{ value }}" aria-selected="{% if value|stringformat:'s' == current %}true{% else %}false{% endif %}"{% if value|stringformat:'s' == current %} data-selected{% endif %}>{{ text }}</button></li>
+{% endfor %}
+</ul>
+</div>
+</div>{% endwith %}

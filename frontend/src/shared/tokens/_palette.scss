@@ -1,0 +1,204 @@
+// =============================================================================
+// SINGLE SOURCE OF TRUTH - colour palettes.
+//
+// This file and ../tokens/_scale.scss are the ONLY places in the repository where a raw
+// colour literal (hex / rgb() / hsl()) may be written. Everything else - public SCSS/CSS,
+// console SCSS, templates, Python format_html badges - must use a `--mf-*` custom
+// property, a Bootstrap `--bs-*` bridge value, or a `u-*` / `c-*` / component class.
+// `tests/backend/admin/test_admin_theme.py` fails the build when that rule is broken.
+//
+// One hex per line, `name: #rrggbb,` - the drift guard parses these maps to check
+// light/dark parity and WCAG AA contrast, so keep that exact shape.
+//
+// How to add a colour:
+//   1. add `name: #rrggbb,` to BOTH $light and $dark (and to the high-contrast maps when
+//      it is a text/surface colour);
+//   2. use it as `var(--mf-name)`; if it is a text/surface pair, add the pair to the
+//      contrast list in tests/backend/admin/test_admin_theme.py;
+//   3. never copy the hex anywhere else.
+//
+// Brand: teal accent #0b7376 (light) / #72d9ce (dark), warm paper neutrals in light,
+// blue-slate neutrals in dark.
+// =============================================================================
+
+$light: (
+  page: #f5f2eb,
+  surface: #fffdf9,
+  surface-raised: #ffffff,
+  surface-soft: #ece7de,
+  border: #d9d2c7,
+  border-strong: #857d6e,
+  text: #19272c,
+  text-muted: #52636a,
+  accent: #0b7376,
+  accent-strong: #07595d,
+  accent-ink: #ffffff,
+  accent-warm: #b86143,
+  accent-cool: #686bb2,
+  link-hover: #06484b,
+  success: #28664d,
+  warning: #80530c,
+  danger: #a43838,
+  danger-ink: #ffffff,
+  info: #1d5a96,
+  focus: #07595d,
+  rust: #a2492c,
+  amber-ink: #8a4a00,
+  sidebar-bg: #efe9dd,
+  sidebar-text: #3a4a50,
+  sidebar-heading: #5d6c71,
+  skeleton-base: #e7e1d6,
+  skeleton-shine: #f6f2ea,
+);
+
+$dark: (
+  page: #151c24,
+  surface: #1d2730,
+  surface-raised: #24313a,
+  surface-soft: #293740,
+  border: #3a4a52,
+  border-strong: #7d8f94,
+  text: #edf4f1,
+  text-muted: #adbbb8,
+  accent: #72d9ce,
+  accent-strong: #4fc4b7,
+  accent-ink: #10201f,
+  accent-warm: #ed9a76,
+  accent-cool: #a8a9eb,
+  link-hover: #b3f2eb,
+  success: #81d6a3,
+  warning: #f1c476,
+  danger: #ff9292,
+  danger-ink: #2b0d0d,
+  info: #8fc2f5,
+  focus: #a8eee5,
+  rust: #f0a183,
+  amber-ink: #f1c476,
+  sidebar-bg: #10171e,
+  sidebar-text: #b9c7c4,
+  sidebar-heading: #8fa09d,
+  skeleton-base: #293740,
+  skeleton-shine: #34454f,
+);
+
+// Theme-specific non-hex values (kept next to the hex so a theme is read in one place).
+$light-extra: (
+  shadow-rgb: "49 54 46",
+  shadow-alpha: 12%,
+  card-shadow-alpha: 5%,
+  highlight-alpha: 55%,
+  glass-surface: "var(--mf-surface-raised)",
+  glass-alpha: 72%,
+  glass-strong-alpha: 90%,
+  glass-border: "color-mix(in srgb, var(--mf-border) 60%, transparent)",
+  card-edge: "var(--mf-border)",
+  overlay: "rgb(14 22 28 / 52%)",
+);
+
+$dark-extra: (
+  shadow-rgb: "0 0 0",
+  shadow-alpha: 28%,
+  card-shadow-alpha: 15%,
+  highlight-alpha: 8%,
+  glass-surface: "var(--mf-surface)",
+  glass-alpha: 68%,
+  glass-strong-alpha: 88%,
+  glass-border: "color-mix(in srgb, var(--mf-white) 9%, transparent)",
+  card-edge: "color-mix(in srgb, var(--mf-white) 9%, var(--mf-border))",
+  overlay: "rgb(4 8 12 / 66%)",
+);
+
+// High-contrast overrides (data-contrast="high" from the appearance controls).
+// They only re-point colour tokens.
+$light-high: (
+  page: #ffffff,
+  surface: #ffffff,
+  surface-raised: #ffffff,
+  surface-soft: #efefef,
+  border: #1a1a1a,
+  border-strong: #1a1a1a,
+  text: #000000,
+  text-muted: #2b2b2b,
+  accent: #00494c,
+  accent-strong: #00383a,
+  accent-ink: #ffffff,
+  link-hover: #00292b,
+  success: #0e4d2e,
+  warning: #5c3a00,
+  danger: #8a1010,
+  danger-ink: #ffffff,
+  focus: #0033cc,
+  info: #0b3d75,
+  skeleton-base: #dcdcdc,
+  skeleton-shine: #f2f2f2,
+);
+
+$dark-high: (
+  page: #000000,
+  surface: #0b0b0b,
+  surface-raised: #141414,
+  surface-soft: #1c1c1c,
+  border: #e6e6e6,
+  border-strong: #e6e6e6,
+  text: #ffffff,
+  text-muted: #e0e0e0,
+  accent: #8ff5e8,
+  accent-strong: #6fe6d8,
+  accent-ink: #00201e,
+  link-hover: #c9fbf5,
+  success: #9af0b9,
+  warning: #ffd98a,
+  danger: #ffb4b4,
+  danger-ink: #2b0000,
+  focus: #ffe14d,
+  info: #b8dcff,
+  skeleton-base: #262626,
+  skeleton-shine: #3a3a3a,
+);
+
+// Rich-text content colours (editor text-colour swatches). Content, not chrome, but they
+// still live here so no stylesheet carries a hex.
+$content-light: (
+  c-red: #c62f2f,
+  c-orange: #c25e0a,
+  c-amber: #8a6a00,
+  c-green: #23794a,
+  c-teal: #0e7274,
+  c-blue: #2158b4,
+  c-indigo: #4a4ab8,
+  c-purple: #7b3796,
+  c-pink: #b8286f,
+  c-gray: #57626f,
+);
+
+$content-dark: (
+  c-red: #ff8a8a,
+  c-orange: #ffae66,
+  c-amber: #f1c84c,
+  c-green: #7fdc9f,
+  c-teal: #63d6d2,
+  c-blue: #8ab8ff,
+  c-indigo: #aab0ff,
+  c-purple: #d7a3f0,
+  c-pink: #ff9bc8,
+  c-gray: #b3bdc9,
+);
+
+// Theme-independent colours: pure white/black, print ink, and the gamification rank
+// medals (gold / silver / bronze: gradient stops + their ink).
+$fixed: (
+  "white": #ffffff,
+  "black": #000000,
+  print-muted: #333333,
+  print-border: #999999,
+  print-soft: #eeeeee,
+  medal-gold-from: #f6d365,
+  medal-gold-to: #e8a33d,
+  medal-gold-ink: #3a2406,
+  medal-silver-from: #e8edf1,
+  medal-silver-to: #9aa7b2,
+  medal-silver-ink: #26313a,
+  medal-bronze-from: #e0a370,
+  medal-bronze-to: #a8643a,
+  medal-bronze-ink: #2a1a08,
+);

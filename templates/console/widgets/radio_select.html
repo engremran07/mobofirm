@@ -1,0 +1,8 @@
+{% comment %}
+  A radio group as a segmented control (the console radio-group primitive over NATIVE radios: the inputs keep their name, value and
+  checked state, so it posts exactly as before and works without JavaScript; Arrow keys are the browser's own radio behaviour).
+  The wrapper keeps the widget's id. State attributes mirrored by controls.js: data-selected on the checked option's label.
+{% endcomment %}<div class="c-radiogroup c-radiogroup--native" role="radiogroup" data-ui-radiogroup{% if widget.attrs.id %} id="{{ widget.attrs.id }}"{% endif %}>
+{% for group_name, group_choices, group_index in widget.optgroups %}{% for option in group_choices %}<span class="c-radiogroup__option"><input type="radio" name="{{ option.name }}"{% if option.value != None %} value="{{ option.value|stringformat:'s' }}"{% endif %} class="c-radiogroup__input"{% for name, value in option.attrs.items %}{% if name != "class" and value is not False %} {{ name }}{% if value is not True %}="{{ value|stringformat:'s' }}"{% endif %}{% endif %}{% endfor %}><label class="c-radiogroup__item"{% if option.attrs.id %} for="{{ option.attrs.id }}"{% endif %}{% if option.selected %} data-selected{% endif %}>{{ option.label }}</label></span>
+{% endfor %}{% endfor %}
+</div>

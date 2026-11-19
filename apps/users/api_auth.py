@@ -1,3 +1,5 @@
+"""Token API for API clients: sign-up, password and Google sign-in, logout, profile."""
+
 from __future__ import annotations
 
 import logging
@@ -25,16 +27,18 @@ from rest_framework.response import Response
 from rest_framework.throttling import ScopedRateThrottle
 from rest_framework.views import APIView
 
-from apps.core.app_service import AppService
 from apps.core.utils.ip import get_client_ip
-from apps.devices.services import DevicePolicyError
 from apps.users.api_authentication import (
     ExpiringTokenAuthentication,
     issue_api_token,
 )
+from apps.users.services.device_gate import (
+    evaluate_device_policy,
+    mark_device_gate_applied,
+)
 from apps.users.services.mfa import (
     has_active_totp,
-    mfa_required_globally,
+    mfa_required_for_user,
     verify_mfa_code,
 )
 from apps.users.services.rate_limit import (
@@ -85,45 +89,82 @@ def _enforce_device_policy(
     django_request: HttpRequest, user: Any, *, mfa_verified: bool, has_totp: bool
 ) -> Response | None:
     """Apply the shared device login policy; return an error response if denied."""
-    try:
-        devices_api = AppService.get("devices")
-        if devices_api is None:
-            raise TypeError("Device login policy service is unavailable")
-        allowed, _ = devices_api.enforce_device_policy_for_login(
-            django_request,
-            user,
-            mfa_verified=mfa_verified,
-        )
-    except DevicePolicyError as exc:
-        if exc.reason in {"mfa_required", "mfa_required_risk"}:
-            return Response(
-                {
-                    "detail": "Two-factor verification is required for this device.",
-                    "mfa_required": True,
-                    "mfa_setup_required": not has_totp,
-                    "setup_url": reverse("users:mfa_setup") if not has_totp else None,
-                },
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        return Response(
-            {
-                "detail": "Device policy denied this sign-in.",
-                "device_policy_error": exc.reason,
-            },
-            status=status.HTTP_403_FORBIDDEN,
-        )
-    except (DatabaseError, RuntimeError, TypeError, AttributeError):
-        logger.exception("Device policy check failed for API login user %s", user.pk)
+    decision = evaluate_device_policy(django_request, user, mfa_verified=mfa_verified)
+    if decision.allowed:
+        return None
+    if decision.unavailable:
         return Response(
             {"detail": "Device security check could not be completed."},
             status=status.HTTP_503_SERVICE_UNAVAILABLE,
         )
-    if not allowed:
+    if decision.mfa_required:
         return Response(
-            {"detail": "Device policy denied this sign-in."},
+            {
+                "detail": "Two-factor verification is required for this device.",
+                "mfa_required": True,
+                "mfa_setup_required": not has_totp,
+                "setup_url": reverse("users:mfa_setup") if not has_totp else None,
+            },
             status=status.HTTP_403_FORBIDDEN,
         )
-    return None
+    return Response(
+        {
+            "detail": "Device policy denied this sign-in.",
+            "device_policy_error": decision.reason,
+        },
+        status=status.HTTP_403_FORBIDDEN,
+    )
+
+
+def _issue_token_after_security_gates(
+    django_request: HttpRequest, user: Any, totp_code: str | None
+) -> Response:
+    """Second factor and device policy, then the token: the API's session establishment.
+
+    Staff and superusers always need an authenticator (``mfa_required_for_user``),
+    everyone else when it is enforced globally or when one is enrolled.
+    """
+    try:
+        require_mfa = mfa_required_for_user(user)
+        has_totp = has_active_totp(user)
+    except DatabaseError:
+        return Response(
+            {"detail": "Account security policy is temporarily unavailable."},
+            status=status.HTTP_503_SERVICE_UNAVAILABLE,
+        )
+
+    if require_mfa and not has_totp:
+        return Response(
+            {
+                "detail": "Configure an authenticator before using API sign-in.",
+                "mfa_setup_required": True,
+                "setup_url": reverse("users:mfa_setup"),
+            },
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    mfa_verified = False
+    if require_mfa or has_totp:
+        if not totp_code:
+            return Response(
+                {
+                    "detail": "Two-factor verification is required.",
+                    "mfa_required": True,
+                },
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        failure = _check_second_factor(django_request, user, totp_code)
+        if failure is not None:
+            return failure
+        mfa_verified = True
+
+    failure = _enforce_device_policy(
+        django_request, user, mfa_verified=mfa_verified, has_totp=has_totp
+    )
+    if failure is not None:
+        return failure
+
+    token = issue_api_token(user)
+    return Response({"token": token.key, "token_type": "Token"})
 
 
 class _InputSerializer(serializers.Serializer):
@@ -281,48 +322,9 @@ class ApiLoginView(_DjangoRequestAPIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        try:
-            require_mfa = bool(mfa_required_globally())
-            has_totp = has_active_totp(user)
-        except DatabaseError:
-            return Response(
-                {"detail": "Account security policy is temporarily unavailable."},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
-
-        if require_mfa and not has_totp:
-            return Response(
-                {
-                    "detail": "Configure an authenticator before using API sign-in.",
-                    "mfa_setup_required": True,
-                    "setup_url": reverse("users:mfa_setup"),
-                },
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        mfa_verified = False
-        if require_mfa or has_totp:
-            code = payload.validated_data.get("totp_code")
-            if not code:
-                return Response(
-                    {
-                        "detail": "Two-factor verification is required.",
-                        "mfa_required": True,
-                    },
-                    status=status.HTTP_403_FORBIDDEN,
-                )
-            failure = _check_second_factor(self.django_request, user, code)
-            if failure is not None:
-                return failure
-            mfa_verified = True
-
-        failure = _enforce_device_policy(
-            self.django_request, user, mfa_verified=mfa_verified, has_totp=has_totp
+        return _issue_token_after_security_gates(
+            self.django_request, user, payload.validated_data.get("totp_code")
         )
-        if failure is not None:
-            return failure
-
-        token = issue_api_token(user)
-        return Response({"token": token.key, "token_type": "Token"})
 
 
 class ApiGoogleLoginView(_DjangoRequestAPIView):
@@ -363,6 +365,8 @@ class ApiGoogleLoginView(_DjangoRequestAPIView):
             )
 
         try:
+            # The API applies the device policy itself, after the second factor.
+            mark_device_gate_applied(django_request)
             complete_social_login(django_request, sociallogin)
         except ImmediateHttpResponse:
             return Response(
@@ -398,48 +402,9 @@ class ApiGoogleLoginView(_DjangoRequestAPIView):
                 status=status.HTTP_202_ACCEPTED,
             )
 
-        try:
-            require_mfa = bool(mfa_required_globally())
-            has_totp = has_active_totp(user)
-        except DatabaseError:
-            return Response(
-                {"detail": "Account security policy is temporarily unavailable."},
-                status=status.HTTP_503_SERVICE_UNAVAILABLE,
-            )
-
-        if require_mfa and not has_totp:
-            return Response(
-                {
-                    "detail": "Configure an authenticator before using API sign-in.",
-                    "mfa_setup_required": True,
-                    "setup_url": reverse("users:mfa_setup"),
-                },
-                status=status.HTTP_403_FORBIDDEN,
-            )
-        mfa_verified = False
-        if require_mfa or has_totp:
-            code = payload.validated_data.get("totp_code")
-            if not code:
-                return Response(
-                    {
-                        "detail": "Two-factor verification is required.",
-                        "mfa_required": True,
-                    },
-                    status=status.HTTP_403_FORBIDDEN,
-                )
-            failure = _check_second_factor(self.django_request, user, code)
-            if failure is not None:
-                return failure
-            mfa_verified = True
-
-        failure = _enforce_device_policy(
-            self.django_request, user, mfa_verified=mfa_verified, has_totp=has_totp
+        return _issue_token_after_security_gates(
+            self.django_request, user, payload.validated_data.get("totp_code")
         )
-        if failure is not None:
-            return failure
-
-        token = issue_api_token(user)
-        return Response({"token": token.key, "token_type": "Token"})
 
 
 class ApiPasswordResetView(_DjangoRequestAPIView):

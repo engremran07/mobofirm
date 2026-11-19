@@ -1,0 +1,39 @@
+// c-alert: inline message / Django messages / form error summary.
+//   <ul class="c-messages"><li class="c-alert c-alert--success" role="status">
+//     <svg class="c-icon c-alert__icon">..</svg><div class="c-alert__body"><strong class="c-alert__title">Saved</strong> Text</div>
+//     <button class="btn-close c-alert__close" aria-label="Dismiss"></button></li></ul>
+// Variants: --success --warning --danger --info (default info/neutral).
+@use "../../../shared/components/shared";
+
+@layer components {
+  .c-messages {
+    display: grid;
+    gap: var(--mf-space-2);
+    margin: 0 0 var(--mf-space-4);
+    padding: 0;
+    list-style: none;
+  }
+
+  .c-alert {
+    --alert-tone: var(--mf-info);
+    --alert-soft: var(--mf-info-soft);
+
+    display: flex;
+    align-items: flex-start;
+    gap: var(--mf-space-3);
+    padding: var(--mf-space-3) var(--mf-space-4);
+    color: var(--mf-text);
+    font-size: var(--mf-fs-sm);
+    background: var(--alert-soft);
+    border: 1px solid color-mix(in srgb, var(--alert-tone) 30%, transparent);
+    border-inline-start: 4px solid var(--alert-tone);
+    border-radius: var(--mf-radius-md);
+  }
+
+  @include shared.each(".c-alert", --alert-tone, --alert-soft);
+
+  .c-alert__icon { margin-block-start: 0.1rem; color: var(--alert-tone); }
+  .c-alert__body { flex: 1; min-inline-size: 0; }
+  .c-alert__title { display: block; font-weight: 700; }
+  .c-alert__close { margin: -0.375rem -0.5rem -0.375rem 0; }
+}

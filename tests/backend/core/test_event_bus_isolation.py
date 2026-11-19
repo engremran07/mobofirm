@@ -18,16 +18,19 @@ def test_domain_errors_are_isolated_from_the_publisher(error):
     bus = EventBus()
     seen: list[str] = []
 
-    def broken(data):
+    def broken(_data):
         raise error("refused")
 
-    def healthy(data):
+    def healthy(_data):
         seen.append("ran")
 
     bus.subscribe("sample.event", broken)
     bus.subscribe("sample.event", healthy)
 
-    bus.publish("sample.event", {})
+    try:
+        bus.publish("sample.event", {})
+    finally:
+        bus.clear_handlers("sample.event")
 
     assert seen == ["ran"]
 
@@ -35,10 +38,13 @@ def test_domain_errors_are_isolated_from_the_publisher(error):
 def test_unexpected_errors_still_surface():
     bus = EventBus()
 
-    def broken(data):
+    def broken(_data):
         raise Unexpected("bug")
 
     bus.subscribe("sample.event", broken)
 
-    with pytest.raises(Unexpected):
-        bus.publish("sample.event", {})
+    try:
+        with pytest.raises(Unexpected):
+            bus.publish("sample.event", {})
+    finally:
+        bus.clear_handlers("sample.event")

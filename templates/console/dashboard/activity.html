@@ -1,0 +1,14 @@
+{% extends "console/dashboard/_widget.html" %}{% load i18n console_ui %}{# Newest sign-ups, orders and firmware uploads. Context: entries (icon, title, meta, url, when). #}
+{% block widget_body %}
+{% if entries %}
+<ul class="c-activity">
+{% for entry in entries %}<li class="c-activity__item">
+<span class="c-activity__icon">{% console_icon entry.icon "c-icon--sm" %}</span>
+<div class="c-activity__body">{% if entry.url %}<a class="c-activity__title" href="{{ entry.url }}">{{ entry.title }}</a>{% else %}<p class="c-activity__title">{{ entry.title }}</p>{% endif %}<p class="c-activity__meta">{{ entry.meta }}</p></div>
+<time class="c-activity__time" datetime="{{ entry.when|date:'c' }}" title="{{ entry.when|date:'DATETIME_FORMAT' }}">{% blocktranslate with since=entry.when|timesince %}{{ since }} ago{% endblocktranslate %}</time>
+</li>
+{% endfor %}</ul>
+{% else %}
+{% ui "empty_state" title=_("Nothing yet") message=_("New accounts, orders and firmware uploads will appear here as they happen.") icon="activity" tone="compact" %}
+{% endif %}
+{% endblock %}

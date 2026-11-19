@@ -1,0 +1,5 @@
+{% extends "console/error_page.html" %}{% load i18n %}
+{% block page_title %}{% translate "Something went wrong" %}{% endblock %}
+{% block code %}500{% endblock %}
+{% block error_title %}{% translate "Something went wrong on our side" %}{% endblock %}
+{% block message %}{% translate "The error has been recorded. Your saved work is safe; reload the page or try again in a moment. If it keeps happening, tell an administrator what you were doing." %}{% endblock %}

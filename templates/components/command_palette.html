@@ -13,8 +13,11 @@
       <li><a class="cmdk__item" href="{% url 'firmwares:flashing_guides' %}"><i data-lucide="book-open" aria-hidden="true"></i>Flashing guides</a></li>
       <li><a class="cmdk__item" href="{% url 'blog:post_list' %}"><i data-lucide="newspaper" aria-hidden="true"></i>Blog</a></li>
       <li><a class="cmdk__item" href="{% url 'firmwares:requests_hub' %}"><i data-lucide="circle-help" aria-hidden="true"></i>Request something missing</a></li>
+      {% if ecosystem.shop %}<li><a class="cmdk__item" href="{% url 'shop:pricing' %}"><i data-lucide="package" aria-hidden="true"></i>Pricing</a></li>{% endif %}
+      <li><a class="cmdk__item" href="{% url 'firmwares:contribute' %}"><i data-lucide="upload" aria-hidden="true"></i>Contribute a firmware</a></li>
       {% if user.is_authenticated %}
-        <li><a class="cmdk__item" href="{% url 'library:my_files' %}"><i data-lucide="folder" aria-hidden="true"></i>My files</a></li>
+        <li><a class="cmdk__item" href="{% url 'blog:contribute' %}"><i data-lucide="newspaper" aria-hidden="true"></i>Contribute a blog post</a></li>
+        <li><a class="cmdk__item" href="{% url 'contributions:hub' %}"><i data-lucide="folder" aria-hidden="true"></i>My contributions</a></li>
         <li><a class="cmdk__item" href="{% url 'users:dashboard' %}"><i data-lucide="user-round" aria-hidden="true"></i>Account</a></li>
       {% else %}
         <li><a class="cmdk__item" href="{% url 'users:account_login' %}"><i data-lucide="user-round" aria-hidden="true"></i>Sign in</a></li>

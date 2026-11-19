@@ -9,6 +9,7 @@ from urllib.parse import urlsplit
 
 from django.apps import apps as django_apps
 from django.conf import settings
+from django.http.request import validate_host
 from django.test import RequestFactory
 from django.urls import Resolver404, get_resolver, resolve
 from django.urls.resolvers import RoutePattern, URLPattern, URLResolver
@@ -16,7 +17,7 @@ from django.urls.resolvers import RoutePattern, URLPattern, URLResolver
 from .contracts import ResolvedSEO
 from .managers import default_manager
 from .models import Issue, PageObservation
-from .policy import is_private_path
+from .policy import is_private_path, route_ref
 from .resolver import resolve as resolve_seo
 from .rules import GROUP_BY_PAGE_TYPE, OBJECT_GROUPS
 from .sitemap_registry import get_raw_sitemaps, get_sitemaps
@@ -24,11 +25,15 @@ from .siteurls import path_and_query, site_origin
 
 
 def serving_host() -> str:
+    """Host header for in-process requests: the public host when this deployment
+    accepts it, otherwise the first concrete allowed host."""
     origin_host = urlsplit(site_origin()).netloc
-    if origin_host:
+    if origin_host and validate_host(origin_host, settings.ALLOWED_HOSTS):
         return origin_host
     concrete = [h for h in settings.ALLOWED_HOSTS if h and not h.startswith((".", "*"))]
-    return concrete[0] if concrete else "localhost"
+    if concrete:
+        return concrete[0]
+    return origin_host or "localhost"
 
 
 def resolve_path(path: str) -> ResolvedSEO | None:
@@ -105,8 +110,13 @@ def object_title(label: str, pk: str) -> str:
     return str(row)[:255] if row is not None else ""
 
 
-def describe(resolved: ResolvedSEO | None) -> dict[str, str]:
-    """Review bucket and content object behind a resolved page."""
+def describe(resolved: ResolvedSEO | None, path: str = "") -> dict[str, str]:
+    """Review bucket and content object behind a resolved page.
+
+    A page without a content object (home, listings, hubs) is owned by its route:
+    the reference is ``seo.seosettings`` / ``route:<path>``, which is also where its
+    SEO override is stored, so every scanned URL has something to fix.
+    """
     where = {"group": "site", "object_label": "", "object_pk": "", "object_title": ""}
     if resolved is None:
         return where
@@ -120,47 +130,66 @@ def describe(resolved: ResolvedSEO | None) -> dict[str, str]:
             object_pk=ref[1],
             object_title=object_title(ref[0], ref[1]),
         )
+    elif path and not is_private_path(path):
+        label, pk = route_ref(urlsplit(path).path)
+        where.update(object_label=label, object_pk=pk, object_title=resolved.title)
     return where
 
 
 def locate(path: str) -> dict[str, str]:
     """Review bucket and content object behind a site path (no HTTP round trip)."""
-    return describe(resolve_path(path))
+    return describe(resolve_path(path), path)
 
 
-def build_inventory() -> list[InventoryItem]:
+def discover_entries() -> list[tuple[str, str]]:
+    """Sorted ``(path, source)`` for every static route and sitemap location.
+
+    Discovery only: nothing is resolved here, so the cost is one pass over the URL
+    conf and the sitemap sections regardless of how much content exists.
+    """
     in_sitemap = sitemap_paths()
     entries: dict[str, str] = {}
     for _name, path in iter_static_routes():
         entries.setdefault(path, "urlconf")
     for path in in_sitemap:
         entries[path] = f"sitemap:{in_sitemap[path]}"
-    items: list[InventoryItem] = []
-    for path, source in sorted(entries.items()):
-        resolved = resolve_path(path)
-        if resolved is None:
-            continue
-        listed = path in in_sitemap
-        conflicts: list[str] = []
-        if listed and not resolved.indexable:
-            conflicts.append("noindex_in_sitemap")
-        if listed and urlsplit(resolved.canonical).path != path:
-            conflicts.append("canonical_mismatch")
-        if listed and is_private_path(path):
-            conflicts.append("private_in_sitemap")
-        items.append(
-            InventoryItem(
-                path=path,
-                source=source,
-                page_type=resolved.page_type,
-                indexable=resolved.indexable,
-                reason=resolved.noindex_reason,
-                canonical=resolved.canonical,
-                in_sitemap=listed,
-                conflicts=tuple(conflicts),
-            )
-        )
-    return items
+    return sorted(entries.items())
+
+
+def describe_entry(path: str, source: str) -> InventoryItem | None:
+    """Resolver policy for one discovered path; ``None`` if it no longer resolves."""
+    resolved = resolve_path(path)
+    if resolved is None:
+        return None
+    listed = source.startswith("sitemap:")
+    conflicts: list[str] = []
+    if listed and not resolved.indexable:
+        conflicts.append("noindex_in_sitemap")
+    if listed and urlsplit(resolved.canonical).path != path:
+        conflicts.append("canonical_mismatch")
+    if listed and is_private_path(path):
+        conflicts.append("private_in_sitemap")
+    return InventoryItem(
+        path=path,
+        source=source,
+        page_type=resolved.page_type,
+        indexable=resolved.indexable,
+        reason=resolved.noindex_reason,
+        canonical=resolved.canonical,
+        in_sitemap=listed,
+        conflicts=tuple(conflicts),
+    )
+
+
+def build_inventory() -> list[InventoryItem]:
+    """Policy for every discovered path.
+
+    Resolves each path, so the cost grows with the content: use it only from
+    background work (the audit). Interactive pages must page through
+    :func:`discover_entries` and describe just the visible slice.
+    """
+    items = (describe_entry(path, source) for path, source in discover_entries())
+    return [item for item in items if item is not None]
 
 
 def inspect_url(url: str) -> dict[str, object]:

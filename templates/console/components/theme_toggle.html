@@ -1,0 +1,9 @@
+{% comment %}
+  theme_toggle - the colour-theme switch: light / dark / follow the system. A segmented button group (works wherever the behaviour layer is loaded).
+  Context: css_class. The pressed state is server-rendered as "system" and then kept in sync by the theme behaviour (data-console-theme-set),
+  which also writes the shared mobofirm-theme preference used by the public site.
+{% endcomment %}{% load i18n console_ui %}<div class="btn-group{% if css_class %} {{ css_class }}{% endif %}" role="group" aria-label="{% translate 'Colour theme' %}">
+<button type="button" class="btn btn-secondary btn-sm btn-icon" data-console-theme-set="light" aria-pressed="false" title="{% translate 'Light theme' %}">{% console_icon "sun" "c-icon--sm" %}<span class="visually-hidden">{% translate "Light theme" %}</span></button>
+<button type="button" class="btn btn-secondary btn-sm btn-icon" data-console-theme-set="dark" aria-pressed="false" title="{% translate 'Dark theme' %}">{% console_icon "moon" "c-icon--sm" %}<span class="visually-hidden">{% translate "Dark theme" %}</span></button>
+<button type="button" class="btn btn-secondary btn-sm btn-icon" data-console-theme-set="auto" aria-pressed="true" title="{% translate 'Follow system theme' %}">{% console_icon "monitor" "c-icon--sm" %}<span class="visually-hidden">{% translate "Follow system theme" %}</span></button>
+</div>

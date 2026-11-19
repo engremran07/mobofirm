@@ -1,4 +1,5 @@
 @use "../abstracts" as *;
+@use "../../shared/components/shared";
 
 // ---- Badges ----
 .badge-ui {
@@ -45,19 +46,16 @@
 }
 
 :root[data-bs-theme="light"] .badge-ui--popular {
-  --badge-color: #a2492c;
+  --badge-color: var(--mf-rust);
 }
 
 .badge-ui--new {
   --badge-color: var(--mf-accent);
 }
 
-.badge-ui--warning {
-  --badge-color: var(--mf-warning);
-}
-
-.badge-ui--danger {
-  --badge-color: var(--mf-danger);
+@include shared.each(".badge-ui", --badge-color);
+.badge-ui--accent {
+  --badge-color: var(--mf-accent);
 }
 
 .badge-ui--featured {

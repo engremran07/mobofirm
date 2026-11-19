@@ -8,8 +8,9 @@ API versions are constants so a platform bump is a one-line change):
   projects that are not audited by Google upload as private until audited.
 * TikTok's Content Posting API posts privately until the app is audited; videos are pulled
   from a verified URL prefix, so the site's media domain must be verified in TikTok.
-* WhatsApp Channels (newsletters) have no posting API; the Cloud API sends approved
-  template messages to recipients who opted in.
+* WhatsApp Channels (newsletters) have no posting API: that platform is *assisted* (staff
+  paste a prepared post). The Cloud API sends approved template messages (or free text inside
+  the 24 hour window) to recipients who opted in; see ``apps.distribution.whatsapp``.
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlsplit
 
+from apps.distribution import whatsapp
 from apps.distribution.channels import (
     FORM_HEADERS,
     JSON_HEADERS,
@@ -59,12 +61,13 @@ from apps.distribution.constants import (
     KIND_TIKTOK,
     KIND_WEBHOOK,
     KIND_WHATSAPP,
+    KIND_WHATSAPP_CHANNEL,
     KIND_X,
     KIND_YOUTUBE,
     MEDIA_IMAGE,
     MEDIA_VIDEO,
 )
-from apps.distribution.models import ShareJob
+from apps.distribution.models import ShareJob, WhatsAppRecipient
 
 GRAPH_VERSION = "v21.0"
 GRAPH_HOST = "graph.facebook.com"
@@ -1453,7 +1456,7 @@ class YouTubeAdapter(Adapter):
 @register
 class WhatsAppAdapter(Adapter):
     kind = KIND_WHATSAPP
-    label = "WhatsApp (Cloud API broadcast)"
+    label = "WhatsApp (Cloud API)"
     message_limit = 1000
     min_interval = 3600
     daily_max = 3
@@ -1467,7 +1470,9 @@ class WhatsAppAdapter(Adapter):
         CredentialField(
             "recipients",
             "Opted-in recipients",
-            "Comma-separated international numbers of people who subscribed to updates (max 50).",
+            "International numbers of people who agreed to receive these messages "
+            "(max 50). Listing a number means you hold their consent; anyone who "
+            "replies STOP is never messaged again, even while still listed.",
             store="option",
             placeholder="+15551234567, +4915112345678",
         ),
@@ -1489,58 +1494,127 @@ class WhatsAppAdapter(Adapter):
             "System-user access token",
             "Token with whatsapp_business_messaging.",
         ),
+        CredentialField(
+            "app_secret",
+            "App secret (webhook)",
+            "Optional. Verifies the signature of delivery-status and STOP/START "
+            "webhooks. Without it the webhook endpoint stays closed.",
+            required=False,
+        ),
+        CredentialField(
+            "verify_token",
+            "Webhook verify token",
+            "Optional. Any random string; enter the same one in Meta's webhook setup.",
+            required=False,
+        ),
     )
     legacy_secret_field = "access_token"
-    how_to = "WhatsApp Channels (newsletters) have no posting API. This sends a pre-approved template message through the Cloud API to people who opted in; create and get the template approved in Meta Business Manager first."
+    how_to = (
+        "Official API, to opted-in people only: sends your approved template message "
+        "(or a plain text while the person's 24 hour window is open) through the Cloud "
+        "API. This is not a WhatsApp Channel: Channels have no posting API (use "
+        "“WhatsApp Channel (assisted)” for those)."
+    )
+    docs_url = "https://developers.facebook.com/docs/whatsapp/cloud-api/guides/send-message-templates"
     endpoints = (
-        f"POST {GRAPH_HOST}/{GRAPH_VERSION}/<phone id>/messages (template, one per recipient)",
+        (
+            f"POST {GRAPH_HOST}/{GRAPH_VERSION}/<phone id>/messages "
+            "(template, or text inside the 24 h window; one per opted-in recipient)"
+        ),
     )
 
     @classmethod
     def extra_problem(cls, values: Mapping[str, str]) -> str:
-        numbers = _numbers(values.get("recipients", ""))
+        numbers = whatsapp.normalise_numbers(values.get("recipients", ""))
         if not numbers:
             return "Add at least one opted-in recipient number."
-        if len(numbers) > 50:
-            return "At most 50 recipients per broadcast."
+        if len(numbers) > whatsapp.MAX_RECIPIENTS:
+            return f"At most {whatsapp.MAX_RECIPIENTS} recipients per broadcast."
         return ""
 
-    def publish(self, ctx: SendContext) -> Outcome:
-        done: list[str] = list(ctx.state.get("sent_to", []))
+    @staticmethod
+    def _payload(
+        ctx: SendContext, person: WhatsAppRecipient, now: datetime
+    ) -> dict[str, Any]:
         title = re.sub(r"\s+", " ", ctx.job.title)[:200]
-        for number in _numbers(ctx.value("recipients")):
-            if number in done:
-                continue
-            payload = {
-                "messaging_product": "whatsapp",
-                "to": number,
-                "type": "template",
-                "template": {
-                    "name": ctx.value("template_name"),
-                    "language": {"code": ctx.value("language") or "en_US"},
-                    "components": [
-                        {
-                            "type": "body",
-                            "parameters": [
-                                {"type": "text", "text": title},
-                                {"type": "text", "text": ctx.job.url},
-                            ],
-                        }
-                    ],
-                },
+        base: dict[str, Any] = {
+            "messaging_product": "whatsapp",
+            "to": person.phone,
+        }
+        if whatsapp.in_session(person, now):
+            body = f"{title}\n{ctx.job.url}"[: WhatsAppAdapter.message_limit]
+            return {
+                **base,
+                "type": "text",
+                "text": {"preview_url": True, "body": body},
             }
+        return {
+            **base,
+            "type": "template",
+            "template": {
+                "name": ctx.value("template_name"),
+                "language": {"code": ctx.value("language") or "en_US"},
+                "components": [
+                    {
+                        "type": "body",
+                        "parameters": [
+                            {"type": "text", "text": title},
+                            {"type": "text", "text": ctx.job.url},
+                        ],
+                    }
+                ],
+            },
+        }
+
+    def publish(self, ctx: SendContext) -> Outcome:
+        """One message per opted-in person; progress survives a retry.
+
+        ``remote_state`` remembers who was served (``sent_to``) or refused for good
+        (``failed_to``), so a retried job never messages anyone twice. A retryable
+        failure stops the run; a terminal refusal for one person is recorded and the
+        rest are still served (an opt-out signal also opts that person out).
+        """
+        now = datetime.now(UTC)
+        people = whatsapp.audience(
+            ctx.channel, whatsapp.normalise_numbers(ctx.value("recipients"))
+        )
+        if not people:
+            return Outcome(False, False, "config", "No opted-in recipients remain.")
+        done: list[str] = list(ctx.state.get("sent_to", []))
+        refused: list[str] = list(ctx.state.get("failed_to", []))
+        last_detail = ""
+        for person in people:
+            if person.phone in done or person.phone in refused:
+                continue
             try:
-                ctx.http.json(
+                result = ctx.http.call(
                     _graph(f"{ctx.value('phone_number_id')}/messages"),
                     headers={**JSON_HEADERS, **bearer(ctx.value("access_token"))},
-                    body=json_body(payload),
+                    body=json_body(self._payload(ctx, person, now)),
                     hosts=_host(GRAPH_HOST),
                 )
             except StepError as error:
-                ctx.state["sent_to"] = done
+                ctx.state.update(sent_to=done, failed_to=refused)
                 return error.outcome
-            done.append(number)
-        ctx.state["sent_to"] = done
+            outcome = classify_status(result.status, result.headers, result.body)
+            if outcome.ok:
+                done.append(person.phone)
+                whatsapp.record_status(person, "sent", now)
+                continue
+            if outcome.retryable:
+                ctx.state.update(sent_to=done, failed_to=refused)
+                return replace(outcome, detail=ctx.http.scrub(outcome.detail))
+            refused.append(person.phone)
+            last_detail = ctx.http.scrub(outcome.detail)
+            if whatsapp.error_code(result.body) in whatsapp.OPT_OUT_ERROR_CODES:
+                whatsapp.opt_out(person, "platform: stopped marketing", now)
+            else:
+                whatsapp.record_status(person, "failed", now)
+        ctx.state.update(sent_to=done, failed_to=refused)
+        if not done:
+            return Outcome(
+                False, False, "400", last_detail or "Every recipient was refused."
+            )
         return Outcome(True, False, "200", external_id=f"{len(done)} recipients")
 
     def check(self, ctx: SendContext) -> Outcome:
@@ -1558,6 +1632,57 @@ class WhatsAppAdapter(Adapter):
         )
 
 
-def _numbers(raw: str) -> list[str]:
-    found = [re.sub(r"[^\d+]", "", part) for part in re.split(r"[,\s]+", raw) if part]
-    return [n for n in found if re.fullmatch(r"\+?\d{8,15}", n)]
+@register
+class WhatsAppChannelAssistedAdapter(Adapter):
+    """WhatsApp Channel (newsletter): assisted only.
+
+    Meta offers no API to post to a Channel; only its admins can, from the WhatsApp app
+    or WhatsApp Web. This platform therefore never sends anything: it prepares the
+    post (composer, approval and schedule rules apply as usual), then the job waits as
+    "ready to post by hand" with copy-ready text and the channel link until a person
+    pastes it and marks it posted.
+    """
+
+    kind = KIND_WHATSAPP_CHANNEL
+    label = "WhatsApp Channel (assisted)"
+    message_limit = 2000
+    supports_check = False
+    assisted = True
+    fields = (
+        CredentialField(
+            "channel_url",
+            "Channel link",
+            "The channel's invite link, https://whatsapp.com/channel/…, from the "
+            "channel's Share option in WhatsApp.",
+            store="option",
+            placeholder="https://whatsapp.com/channel/0029Va…",
+        ),
+    )
+    how_to = (
+        "Assisted, not automatic: WhatsApp Channels have no posting API. New firmware "
+        "and posts are prepared as copy-ready text; open the channel link and paste "
+        "it, then press “Mark as posted”. Nothing is ever reported as sent before then."
+    )
+    docs_url = "https://www.whatsapp.com/channels/"
+    endpoints = ("No network call: staff post by hand from the WhatsApp app",)
+
+    @classmethod
+    def extra_problem(cls, values: Mapping[str, str]) -> str:
+        parts = urlsplit(values.get("channel_url", ""))
+        host = (parts.hostname or "").lower()
+        if (
+            parts.scheme != "https"
+            or host not in {"whatsapp.com", "www.whatsapp.com"}
+            or not parts.path.startswith("/channel/")
+        ):
+            return "The channel link must look like https://whatsapp.com/channel/…"
+        return ""
+
+    def publish(self, ctx: SendContext) -> Outcome:
+        del ctx
+        return Outcome(
+            False,
+            False,
+            "assisted",
+            "WhatsApp Channels cannot be posted to through an API.",
+        )

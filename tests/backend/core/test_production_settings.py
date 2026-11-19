@@ -21,8 +21,9 @@ PRODUCTION_ENV = {
     "DB_PASSWORD": "not-a-real-password",
     "DJANGO_ALLOWED_HOSTS": "example.org",
     "SITE_URL": "https://example.org",
-    "MFA_ENCRYPTION_KEY": "m" * 40,
+    "MFA_ENCRYPTION_KEY": "q7Zk-Lm3vN8xR2tYb5Wc9HdPf4GjS6aEu1B",
     "SOCIAL_CREDENTIAL_ENCRYPTION_KEY": Fernet.generate_key().decode(),
+    "FERNET_KEY": Fernet.generate_key().decode(),
     "CACHE_URL": "redis://redis:6379/1",
     "CELERY_BROKER_URL": "redis://redis:6379/0",
     "EMAIL_HOST": "smtp.example.org",
@@ -113,6 +114,7 @@ class ProductionSettingsTests(SimpleTestCase):
             "CACHE_URL": "shared Redis cache",
             "MFA_ENCRYPTION_KEY": "MFA_ENCRYPTION_KEY",
             "SOCIAL_CREDENTIAL_ENCRYPTION_KEY": "Fernet key",
+            "FERNET_KEY": "FERNET_KEY",
             "SITE_URL": "SITE_URL",
             "CELERY_BROKER_URL": "CELERY_BROKER_URL",
             "EMAIL_HOST": "EMAIL_HOST",
@@ -143,6 +145,45 @@ class ProductionSettingsTests(SimpleTestCase):
         )
 
         self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+
+    def test_deploy_checks_reject_weak_or_shared_encryption_keys(self):
+        check = (
+            "from django.core.management import call_command\n"
+            "call_command('check', '--deploy')\n"
+        )
+        shared = Fernet.generate_key().decode()
+        cases = {
+            "core.E004": {"MFA_ENCRYPTION_KEY": "m" * 40},
+            "core.E005": {
+                "FERNET_KEY": shared,
+                "SOCIAL_CREDENTIAL_ENCRYPTION_KEY": shared,
+            },
+        }
+        for code, overrides in cases.items():
+            with self.subTest(code=code):
+                result = run_settings(overrides, check)
+
+                self.assertNotEqual(result.returncode, 0)
+                self.assertIn(code, result.stderr + result.stdout)
+                self.assertNotIn("m" * 40, result.stderr + result.stdout)
+
+    def test_celery_time_limits_default_and_are_configurable(self):
+        probe = (
+            "from django.conf import settings\n"
+            "print(settings.CELERY_TASK_SOFT_TIME_LIMIT, settings.CELERY_TASK_TIME_LIMIT)\n"
+        )
+
+        default = run_settings({}, probe)
+        custom = run_settings(
+            {"CELERY_TASK_SOFT_TIME_LIMIT": "100", "CELERY_TASK_TIME_LIMIT": "120"},
+            probe,
+        )
+        invalid = run_settings({"CELERY_TASK_TIME_LIMIT": "abc"}, probe)
+
+        self.assertEqual(default.stdout.split(), ["1500", "1800"])
+        self.assertEqual(custom.stdout.split(), ["100", "120"])
+        self.assertNotEqual(invalid.returncode, 0)
+        self.assertIn("CELERY_TASK_TIME_LIMIT must be an integer", invalid.stderr)
 
 
 class HealthEndpointTests(TestCase):

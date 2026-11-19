@@ -284,7 +284,14 @@ def test_housekeeping_runs_at_most_once_an_hour_unless_forced():
 def test_the_minutely_task_delivers_and_runs_housekeeping(make_channel, make_content):
     make_channel("webhook")
     summary = tasks.process_share_jobs()
-    assert summary == {"sent": 0, "retried": 0, "failed": 0, "deferred": 0}
+    assert summary == {
+        "sent": 0,
+        "retried": 0,
+        "failed": 0,
+        "deferred": 0,
+        "pings_sent": 0,
+        "pings_failed": 0,
+    }
     assert DistributionSettings.get_solo().last_housekeeping_at is not None
     assert "evergreen" in tasks.run_housekeeping()
 

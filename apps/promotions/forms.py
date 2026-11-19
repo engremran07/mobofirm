@@ -1,4 +1,4 @@
-"""Staff dialog forms for promotion lifecycle actions (Unfold action dialogs)."""
+"""Staff dialog forms for promotion lifecycle actions."""
 
 from __future__ import annotations
 

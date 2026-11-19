@@ -1,0 +1,43 @@
+// c-breadcrumb: <nav aria-label="Breadcrumb"><ol class="c-breadcrumb"><li class="c-breadcrumb__item"><a href>Home</a></li>
+//   <li class="c-breadcrumb__item" aria-current="page">Current</li></ol></nav>   (separator is drawn in CSS, RTL aware)
+@layer components {
+  .c-breadcrumb {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--mf-space-1) var(--mf-space-2);
+    margin: 0;
+    padding: 0;
+    color: var(--mf-text-muted);
+    font-size: var(--mf-fs-sm);
+    list-style: none;
+
+    a {
+      color: inherit;
+      text-decoration: none;
+      &:hover { color: var(--mf-text); text-decoration: underline; }
+    }
+  }
+
+  .c-breadcrumb__item {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--mf-space-2);
+    min-inline-size: 0;
+
+    + .c-breadcrumb__item::before {
+      content: "";
+      flex: none;
+      inline-size: 0.4em;
+      block-size: 0.4em;
+      border-block-start: 1.5px solid currentcolor;
+      border-inline-end: 1.5px solid currentcolor;
+      opacity: 0.6;
+      transform: rotate(45deg);
+    }
+
+    &[aria-current="page"] { color: var(--mf-text); font-weight: 600; }
+  }
+
+  [dir="rtl"] .c-breadcrumb__item + .c-breadcrumb__item::before { transform: rotate(-135deg); }
+}

@@ -1,7 +1,7 @@
 """Public contract of the promotions app (use ``AppService.get("promotions")``).
 
 * :func:`effective_price` / :func:`redeem_price` – promotional package prices (shop).
-* :func:`offers_for_user` – running offers for panels such as My files and "Ways to earn".
+* :func:`offers_for_user` – running offers for panels such as My contributions and "Ways to earn".
 * :func:`offer_url` – the offer landing page of a promotion.
 
 Nothing here keeps balances: bonus quota flows through the shop entitlement resolver,

@@ -150,13 +150,13 @@ class ControlCenterContentTests(TestCase):
             fingerprint="f1",
         )
         response = self.client.get(reverse("seo:dashboard"))
-        self.assertContains(response, "80%")
+        self.assertRegex(response.content.decode(), r"80\s*(<small[^>]*>)?\s*%")
         self.assertContains(response, "10 crawled pages")
 
     def test_inventory_lists_routes_and_flags_policy(self):
         make_catalog()
 
-        response = self.client.get(reverse("seo:inventory"))
+        response = self.client.get(reverse("seo:inventory"), {"q": "/firmwares/nova/"})
 
         self.assertContains(response, "/firmwares/nova/")
         self.assertContains(response, "noindex")
@@ -290,7 +290,7 @@ class ControlCenterContentTests(TestCase):
         form = {
             field.name: field.value()
             for field in page.context["form"]
-            if field.value() not in (None, False)
+            if field.value() is not None
         }
         form["autonomy_mode"] = SEOSettings.AutonomyMode.SAFE_AUTOPILOT
         form["allow_ai_training_bots"] = "on"
@@ -321,6 +321,8 @@ class ControlCenterContentTests(TestCase):
             "min_posts_for_tag_index": 1,
             "crawl_max_pages": 50,
             "crawl_delay_ms": 0,
+            "sitemap_page_size": 5000,
+            "robots_crawl_delay": 0,
             "allow_ai_search_bots": "on",
             "allow_ai_user_agents": "on",
             "indexnow_enabled": "on",

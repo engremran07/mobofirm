@@ -35,6 +35,7 @@
         {% endif %}
       {% endif %}
     {% endif %}
-    <p class="small mb-0"><a href="{{ account_url }}">Your allowance</a> · <a href="{{ pricing_url }}">Compare packages</a>{% if files_url %} · <a href="{{ files_url }}">My files</a>{% endif %}</p>
+    {% if unlock %}{% include "shop/_ad_unlock_panel.html" with offer=unlock.offer firmware=unlock.firmware panel_url=unlock.panel_url start_url=unlock.start_url pricing_url=unlock.pricing_url download_url=unlock.download_url %}{% endif %}
+    <p class="small mb-0 mt-3"><a href="{{ account_url }}">Your allowance</a> · <a href="{{ pricing_url }}">Compare packages</a>{% if files_url %} · <a href="{{ files_url }}">My contributions</a>{% endif %}</p>
   </section>
 {% endif %}

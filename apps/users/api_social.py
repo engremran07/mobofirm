@@ -12,13 +12,17 @@ from __future__ import annotations
 
 import json
 import logging
+import uuid
 
 from django.contrib.admin.views.decorators import staff_member_required
 from django.core.exceptions import ImproperlyConfigured, ValidationError
 from django.db import DatabaseError
+from django.db.models import Model
 from django.http import HttpRequest, JsonResponse
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_http_methods
+
+from apps.core.utils.managers import default_manager
 
 from .models_social import SocialPostingAccount, SocialProviderConfig
 from .request_user import current_user
@@ -34,8 +38,41 @@ _OPERATION_ERRORS = (
     ValueError,
     TypeError,
     AttributeError,
-    KeyError,
 )
+
+
+def _find_by_id[M: Model](model: type[M], raw_id: str) -> M | None:
+    """Look a row up by its UUID primary key; a malformed id simply matches nothing.
+
+    The ids in these routes are ``<str:...>``, so a non-UUID segment reaches the
+    ORM, where ``UUIDField`` raises ``ValidationError``. That is a "not found",
+    not a server error.
+    """
+    try:
+        key = uuid.UUID(raw_id)
+    except ValueError:
+        return None
+    return default_manager(model).filter(pk=key).first()
+
+
+def _deny(request: HttpRequest, model: type[Model], action: str) -> JsonResponse | None:
+    """403 unless the staff member holds the model permission for ``action``.
+
+    ``is_staff`` alone only says someone may enter the console; these endpoints read
+    and write provider secrets, so they follow the same per-model permissions as the
+    admin pages (``users.view_socialproviderconfig`` and so on).
+    """
+    opts = model._meta
+    if request.user.has_perm(f"{opts.app_label}.{action}_{opts.model_name}"):
+        return None
+    return JsonResponse({"error": "Permission denied"}, status=403)
+
+
+def _failure() -> JsonResponse:
+    """Generic 500 body: the cause is logged, never echoed (it may name secrets)."""
+    return JsonResponse(
+        {"error": "The operation failed. See the server log for details."}, status=500
+    )
 
 
 # ==============================================================================
@@ -53,6 +90,8 @@ def social_providers_list(request: HttpRequest) -> JsonResponse:
     Returns:
         JSON list of provider configurations with status and user counts.
     """
+    if denied := _deny(request, SocialProviderConfig, "view"):
+        return denied
     try:
         providers = SocialProviderConfig.objects.all()
 
@@ -81,9 +120,9 @@ def social_providers_list(request: HttpRequest) -> JsonResponse:
             )
 
         return JsonResponse({"providers": data})
-    except _OPERATION_ERRORS as exc:
+    except _OPERATION_ERRORS:
         logger.exception("Failed to list social providers")
-        return JsonResponse({"error": str(exc)}, status=500)
+        return _failure()
 
 
 @csrf_protect
@@ -103,6 +142,8 @@ def social_provider_create(request: HttpRequest) -> JsonResponse:
         - key_id: For Apple - Key ID
         - scopes: List of OAuth scopes
     """
+    if denied := _deny(request, SocialProviderConfig, "add"):
+        return denied
     try:
         data = json.loads(request.body) if request.body else {}
 
@@ -182,9 +223,9 @@ def social_provider_create(request: HttpRequest) -> JsonResponse:
 
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON body"}, status=400)
-    except _OPERATION_ERRORS as exc:
+    except _OPERATION_ERRORS:
         logger.exception("Failed to create social provider")
-        return JsonResponse({"error": str(exc)}, status=500)
+        return _failure()
 
 
 @csrf_protect
@@ -194,8 +235,14 @@ def social_provider_detail(request: HttpRequest, provider_id: str) -> JsonRespon
     """
     Get, update, or delete a social provider configuration.
     """
+    if denied := _deny(
+        request,
+        SocialProviderConfig,
+        {"GET": "view", "PUT": "change", "DELETE": "delete"}[request.method or "GET"],
+    ):
+        return denied
     try:
-        config = SocialProviderConfig.objects.filter(id=provider_id).first()
+        config = _find_by_id(SocialProviderConfig, provider_id)
         if not config:
             return JsonResponse({"error": "Provider not found"}, status=404)
 
@@ -281,9 +328,9 @@ def social_provider_detail(request: HttpRequest, provider_id: str) -> JsonRespon
 
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON body"}, status=400)
-    except _OPERATION_ERRORS as exc:
+    except _OPERATION_ERRORS:
         logger.exception("Social provider operation failed")
-        return JsonResponse({"error": str(exc)}, status=500)
+        return _failure()
     return JsonResponse({"error": "Method not allowed"}, status=405)
 
 
@@ -294,8 +341,10 @@ def social_provider_test(request: HttpRequest, provider_id: str) -> JsonResponse
     """
     Test a social provider's credentials.
     """
+    if denied := _deny(request, SocialProviderConfig, "change"):
+        return denied
     try:
-        config = SocialProviderConfig.objects.filter(id=provider_id).first()
+        config = _find_by_id(SocialProviderConfig, provider_id)
         if not config:
             return JsonResponse({"error": "Provider not found"}, status=404)
 
@@ -312,9 +361,9 @@ def social_provider_test(request: HttpRequest, provider_id: str) -> JsonResponse
             }
         )
 
-    except _OPERATION_ERRORS as exc:
+    except _OPERATION_ERRORS:
         logger.exception("Social provider test failed")
-        return JsonResponse({"error": str(exc)}, status=500)
+        return _failure()
 
 
 @csrf_protect
@@ -324,8 +373,10 @@ def social_provider_sync(request: HttpRequest, provider_id: str) -> JsonResponse
     """
     Sync a social provider configuration to django-allauth.
     """
+    if denied := _deny(request, SocialProviderConfig, "change"):
+        return denied
     try:
-        config = SocialProviderConfig.objects.filter(id=provider_id).first()
+        config = _find_by_id(SocialProviderConfig, provider_id)
         if not config:
             return JsonResponse({"error": "Provider not found"}, status=404)
 
@@ -338,9 +389,9 @@ def social_provider_sync(request: HttpRequest, provider_id: str) -> JsonResponse
             }
         )
 
-    except _OPERATION_ERRORS as exc:
+    except _OPERATION_ERRORS:
         logger.exception("Social provider sync failed")
-        return JsonResponse({"error": str(exc)}, status=500)
+        return _failure()
 
 
 # ==============================================================================
@@ -355,6 +406,8 @@ def social_posting_list(request: HttpRequest) -> JsonResponse:
     """
     List all configured social posting accounts.
     """
+    if denied := _deny(request, SocialPostingAccount, "view"):
+        return denied
     try:
         accounts = SocialPostingAccount.objects.all()
 
@@ -392,9 +445,9 @@ def social_posting_list(request: HttpRequest) -> JsonResponse:
             )
 
         return JsonResponse({"accounts": data})
-    except _OPERATION_ERRORS as exc:
+    except _OPERATION_ERRORS:
         logger.exception("Failed to list social posting accounts")
-        return JsonResponse({"error": str(exc)}, status=500)
+        return _failure()
 
 
 @csrf_protect
@@ -414,6 +467,8 @@ def social_posting_create(request: HttpRequest) -> JsonResponse:
         - access_token: For Medium or already authorized platforms
         - api_key/api_secret: For Twitter API v2
     """
+    if denied := _deny(request, SocialPostingAccount, "add"):
+        return denied
     try:
         data = json.loads(request.body) if request.body else {}
 
@@ -486,9 +541,9 @@ def social_posting_create(request: HttpRequest) -> JsonResponse:
 
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON body"}, status=400)
-    except _OPERATION_ERRORS as exc:
+    except _OPERATION_ERRORS:
         logger.exception("Failed to create social posting account")
-        return JsonResponse({"error": str(exc)}, status=500)
+        return _failure()
 
 
 @csrf_protect
@@ -498,8 +553,14 @@ def social_posting_detail(request: HttpRequest, account_id: str) -> JsonResponse
     """
     Get, update, or delete a social posting account.
     """
+    if denied := _deny(
+        request,
+        SocialPostingAccount,
+        {"GET": "view", "PUT": "change", "DELETE": "delete"}[request.method or "GET"],
+    ):
+        return denied
     try:
-        account = SocialPostingAccount.objects.filter(id=account_id).first()
+        account = _find_by_id(SocialPostingAccount, account_id)
         if not account:
             return JsonResponse({"error": "Account not found"}, status=404)
 
@@ -630,9 +691,9 @@ def social_posting_detail(request: HttpRequest, account_id: str) -> JsonResponse
 
     except json.JSONDecodeError:
         return JsonResponse({"error": "Invalid JSON body"}, status=400)
-    except _OPERATION_ERRORS as exc:
+    except _OPERATION_ERRORS:
         logger.exception("Social posting account operation failed")
-        return JsonResponse({"error": str(exc)}, status=500)
+        return _failure()
     return JsonResponse({"error": "Method not allowed"}, status=405)
 
 
@@ -643,8 +704,10 @@ def social_posting_test(request: HttpRequest, account_id: str) -> JsonResponse:
     """
     Test a social posting account's credentials.
     """
+    if denied := _deny(request, SocialPostingAccount, "change"):
+        return denied
     try:
-        account = SocialPostingAccount.objects.filter(id=account_id).first()
+        account = _find_by_id(SocialPostingAccount, account_id)
         if not account:
             return JsonResponse({"error": "Account not found"}, status=404)
 
@@ -661,9 +724,9 @@ def social_posting_test(request: HttpRequest, account_id: str) -> JsonResponse:
             }
         )
 
-    except _OPERATION_ERRORS as exc:
+    except _OPERATION_ERRORS:
         logger.exception("Social posting account test failed")
-        return JsonResponse({"error": str(exc)}, status=500)
+        return _failure()
 
 
 @csrf_protect
@@ -673,8 +736,10 @@ def social_posting_send_test(request: HttpRequest, account_id: str) -> JsonRespo
     """
     Send a test post to verify the account is working.
     """
+    if denied := _deny(request, SocialPostingAccount, "change"):
+        return denied
     try:
-        account = SocialPostingAccount.objects.filter(id=account_id).first()
+        account = _find_by_id(SocialPostingAccount, account_id)
         if not account:
             return JsonResponse({"error": "Account not found"}, status=404)
 
@@ -701,9 +766,9 @@ def social_posting_send_test(request: HttpRequest, account_id: str) -> JsonRespo
             status=501,
         )
 
-    except _OPERATION_ERRORS as exc:
+    except _OPERATION_ERRORS:
         logger.exception("Social posting test send failed")
-        return JsonResponse({"error": str(exc)}, status=500)
+        return _failure()
 
 
 # ==============================================================================

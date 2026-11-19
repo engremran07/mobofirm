@@ -1,0 +1,30 @@
+{% comment %}
+  One admin field (django.contrib.admin.helpers.AdminField / AdminReadonlyField) as a console field block.
+  Params: field; line_size (number of fields on its fieldset line; a lone text area or multi-choice takes the full row);
+  id_prefix (from the page context: "dlg-" inside the dialog so ids stay unique next to the page form).
+  The ids <prefix><auto_id>_helptext / _error are what aria-describedby points at, so keep them. Hidden inputs render bare.
+{% endcomment %}{% load i18n console_admin %}{% with bf=field.field %}{% if field.is_readonly %}
+<div class="c-field c-field--wide field-{{ bf.name }}" data-console-field="{{ bf.name }}">
+<span class="c-field__label form-label">{{ bf.label }}</span>
+<div class="c-field__value">{{ field.contents }}</div>
+{% if bf.help_text %}<p class="c-field__help form-text">{{ bf.help_text|safe }}</p>{% endif %}
+</div>
+{% elif bf.is_hidden %}{{ bf }}
+{% else %}
+<div class="c-field{% if bf.errors %} c-field--invalid{% endif %}{% if line_size == 1 and field|console_field_is_wide %} c-field--wide{% endif %} field-{{ bf.name }}" data-console-field="{{ bf.name }}">
+{% if field.is_checkbox %}
+{% if console_switches %}<div class="c-switch-row">{% console_field_widget field id_prefix switch=True %}<label class="c-switch-row__label" for="{{ id_prefix }}{{ bf.id_for_label }}">{{ bf.label }}</label></div>
+{% else %}<div class="form-check">{% console_field_widget field id_prefix %}<label class="form-check-label" for="{{ id_prefix }}{{ bf.id_for_label }}">{{ bf.label }}</label></div>{% endif %}
+{% elif field.is_fieldset %}
+<fieldset{% if bf.help_text or bf.errors %} aria-describedby="{% if bf.help_text %}{{ id_prefix }}{{ bf.auto_id }}_helptext{% endif %}{% if bf.help_text and bf.errors %} {% endif %}{% if bf.errors %}{{ id_prefix }}{{ bf.auto_id }}_error{% endif %}"{% endif %}>
+<legend class="c-field__label form-label">{{ bf.label }}{% if bf.field.required %}<span class="c-field__required">{% translate "required" %}</span>{% endif %}</legend>
+<div class="c-field__control">{% console_field_widget field id_prefix %}</div>
+</fieldset>
+{% else %}
+<label class="c-field__label form-label" for="{{ id_prefix }}{{ bf.id_for_label }}">{{ bf.label }}{% if bf.field.required %}<span class="c-field__required">{% translate "required" %}</span>{% endif %}</label>
+<div class="c-field__control">{% console_field_widget field id_prefix %}</div>
+{% endif %}
+{% if bf.help_text %}<p class="c-field__help form-text" id="{{ id_prefix }}{{ bf.auto_id }}_helptext">{{ bf.help_text|safe }}</p>{% endif %}
+{% if bf.errors %}<ul class="c-field__errors errorlist" id="{{ id_prefix }}{{ bf.auto_id }}_error" role="alert">{% for error in bf.errors %}<li>{{ error }}</li>{% endfor %}</ul>{% endif %}
+</div>
+{% endif %}{% endwith %}

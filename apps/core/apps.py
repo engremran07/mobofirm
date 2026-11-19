@@ -11,10 +11,21 @@ class CoreConfig(AppConfig):
     def ready(self):
         """
         Core app initialization:
+        - Stamp the correlation id on every log record and forward it to Celery
+        - Register the runtime-configuration system checks
         - Clear the django.contrib.sites in-memory cache after registry load
         - Autodiscover signals or other startup modules
         """
+        from importlib import import_module
+
         from django.contrib.sites.models import Site
+
+        from apps.core import celery_context
+        from apps.core.utils.logging import install_log_record_factory
+
+        import_module("apps.core.checks")  # registers the system checks
+        install_log_record_factory()
+        celery_context.connect()
 
         Site.objects.clear_cache()
 

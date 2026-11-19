@@ -1,0 +1,8 @@
+{% load i18n console_ui %}{% comment %}
+  Fragment layout for HTMX requests (selected by admin/base.html through console_layout): the page without its shell.
+  htmx 4 reads <title> from the response and updates the document title; Django messages travel as an out-of-band
+  append to #console-toasts so a fragment response never swallows them.
+  Same block names as console/layout.html; blocks that only make sense in the shell (breadcrumbs, extrahead, ...) are not rendered here.
+{% endcomment %}<title>{% block title %}{% if title %}{{ title }} | {% endif %}{{ site_title|default:_("Staff console") }}{% endblock %}</title>
+{% if messages %}<div hx-swap-oob="beforeend:#console-toasts">{% block messages %}{% for message in messages %}{% ui "toast" message=message level=message|console_level %}{% endfor %}{% endblock %}</div>{% endif %}
+{% block content %}{% endblock %}

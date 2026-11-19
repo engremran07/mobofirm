@@ -1,7 +1,6 @@
 // Public site stylesheet entry (compiled by Vite to static/build/site.css).
 // Layer order: tokens -> base -> legacy (page-level rules awaiting migration) ->
-// layout -> components -> utilities -> themes. Colour themes live in tokens.css.
-@use "tokens/scale";
+// layout -> components -> utilities -> themes. Tokens come from tokens.scss (shared/tokens).
 @use "base/base";
 @use "legacy/site";
 @use "layout/shell";

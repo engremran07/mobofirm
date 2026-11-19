@@ -17,6 +17,7 @@ KIND_TIKTOK: Final = "tiktok"
 KIND_MASTODON: Final = "mastodon"
 KIND_BLUESKY: Final = "bluesky"
 KIND_WHATSAPP: Final = "whatsapp"
+KIND_WHATSAPP_CHANNEL: Final = "whatsapp_channel"
 KIND_SLACK: Final = "slack"
 
 CONTENT_FIRMWARE: Final = "firmware"

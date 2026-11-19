@@ -11,7 +11,17 @@ from dataclasses import dataclass
 
 from apps.firmwares.models import FlashingGuideTemplate, FlashingTool
 
-from .chipsets import dim, exynos, helio, sd, tensor
+from .chipsets import (
+    CHIPSETS,
+    allwinner,
+    dim,
+    exynos,
+    helio,
+    rockchip,
+    sd,
+    tensor,
+    unisoc,
+)
 
 
 @dataclass(frozen=True)
@@ -53,6 +63,7 @@ class GuideSeed:
     tools: tuple[str, ...]
     model_name: str = ""
     chipset_filter: str = ""
+    body: str = ""
 
 
 TOOL_CATEGORIES: tuple[ToolCategorySeed, ...] = (
@@ -98,6 +109,8 @@ _FASTBOOT_BRANDS = (
     "lenovo",
     "zte",
 )
+
+_APPLE_CHIPSETS = tuple(chip.key for chip in CHIPSETS if chip.vendor == "Apple")
 
 _MEDIATEK_CHIPSETS = (
     dim("9300"),
@@ -224,6 +237,98 @@ TOOLS: tuple[ToolSeed, ...] = (
         features=("Manufacturer-supported software recovery",),
         requirements=("A supported Motorola phone", "A Windows computer"),
         brands=("motorola",),
+    ),
+    ToolSeed(
+        slug="lenovo-motorola-lmsa",
+        name="Lenovo Rescue and Smart Assistant (LMSA)",
+        category="oem-recovery-utilities",
+        description=(
+            "Lenovo's official Windows companion for Lenovo and Motorola phones and "
+            "tablets. Its Rescue function reinstalls the manufacturer's firmware on "
+            "a device that will not start; Smart Assistant backs up and transfers "
+            "data. Eligibility, firmware and regional availability are decided by "
+            "Lenovo and the device serial number or IMEI."
+        ),
+        tool_type=FlashingTool.ToolType.OEM,
+        platform=FlashingTool.Platform.WINDOWS,
+        risk_level=FlashingTool.RiskLevel.MODERATE,
+        official_url="https://support.lenovo.com/",
+        features=(
+            "Manufacturer rescue of a device that will not start",
+            "Backup, restore and data transfer",
+        ),
+        requirements=(
+            "A Windows computer",
+            "A Lenovo or Motorola device that the tool recognises",
+            "The device model, serial number or IMEI",
+            "A charged device and a good USB cable",
+        ),
+        instructions=(
+            "Back up first. Open the Rescue function, pick your exact model, and let "
+            "the tool download and install the firmware Lenovo offers for it. A "
+            "rescue erases the device; do not disconnect it while it runs."
+        ),
+        brands=("lenovo", "motorola"),
+        chipsets=_QUALCOMM_CHIPSETS,
+    ),
+    ToolSeed(
+        slug="sony-xperia-companion",
+        name="Xperia Companion",
+        category="oem-recovery-utilities",
+        description=(
+            "Sony's official computer software for Xperia phones and tablets. Its "
+            "software repair function reinstalls Sony's firmware on a device that "
+            "will not start and also updates and backs up devices. Availability "
+            "depends on the model and region, as decided by Sony."
+        ),
+        tool_type=FlashingTool.ToolType.OEM,
+        platform=FlashingTool.Platform.MULTI,
+        risk_level=FlashingTool.RiskLevel.SAFE,
+        official_url="https://www.sony.com/electronics/support",
+        features=("Software repair", "Update and backup"),
+        requirements=(
+            "A Windows or macOS computer",
+            "A supported Xperia device",
+            "A charged device and a good USB cable",
+        ),
+        instructions=(
+            "Back up first, then use the software repair function and follow the "
+            "prompts. Repair erases the device. Sony's service tool Emma is not "
+            "published for end users and is not listed here."
+        ),
+        brands=("sony",),
+        chipsets=_QUALCOMM_CHIPSETS,
+    ),
+    ToolSeed(
+        slug="asus-flash-tool",
+        name="ASUS Flash Tool",
+        category="oem-recovery-utilities",
+        description=(
+            "ASUS's own Windows flashing utility for ASUS Zenfone and ROG Phone "
+            "devices, used with the firmware package that ASUS publishes for the "
+            "exact model and region. The tool and the package are listed on ASUS's "
+            "support pages for supported models; check availability there."
+        ),
+        tool_type=FlashingTool.ToolType.OEM,
+        platform=FlashingTool.Platform.WINDOWS,
+        risk_level=FlashingTool.RiskLevel.ADVANCED,
+        official_url="https://www.asus.com/support/",
+        features=(
+            "Flashes ASUS firmware packages",
+            "Recovery of a device that fails to boot",
+        ),
+        requirements=(
+            "A Windows computer",
+            "ASUS USB drivers",
+            "The ASUS firmware package for the exact model and region",
+        ),
+        instructions=(
+            "Back up first. Load the firmware package for your model, connect the "
+            "device in the mode the package describes and start the flash. A "
+            "package for another model or region can leave the device unbootable."
+        ),
+        brands=("asus",),
+        chipsets=_QUALCOMM_CHIPSETS,
     ),
     ToolSeed(
         slug="samsung-smart-switch",
@@ -372,6 +477,261 @@ TOOLS: tuple[ToolSeed, ...] = (
         requirements=("A Windows computer", "A supported Huawei device"),
         brands=("huawei",),
     ),
+    ToolSeed(
+        slug="spd-researchdownload",
+        name="SPD ResearchDownload and Upgrade Tool",
+        category="chipset-flashing-tools",
+        description=(
+            "The Windows flashing utilities used with Unisoc, Spreadtrum and RDA "
+            "devices: ResearchDownload for engineering and repair work and the "
+            "Upgrade Tool for end-user packages. Both load a .pac firmware package. "
+            "Unisoc supplies them to partners and copies are community-distributed, "
+            "so verify the source and the file before use."
+        ),
+        tool_type=FlashingTool.ToolType.FREE,
+        platform=FlashingTool.Platform.WINDOWS,
+        risk_level=FlashingTool.RiskLevel.RISKY,
+        features=(
+            "Loads .pac firmware packages",
+            "Flashes in the Unisoc USB download mode",
+        ),
+        requirements=(
+            "A Windows computer",
+            "Unisoc / Spreadtrum USB drivers",
+            "A .pac package that matches the exact model and chipset",
+        ),
+        instructions=(
+            "Install the USB drivers, open the tool and load the .pac file, then "
+            "power the phone off and connect it in download mode. Flashing the "
+            "wrong package can leave the device unable to boot."
+        ),
+        chipsets=(
+            unisoc("T606"),
+            unisoc("T610"),
+            unisoc("T612"),
+            unisoc("T616"),
+            unisoc("T618"),
+            unisoc("SC9863A"),
+            unisoc("SC7731E"),
+            unisoc("RDA8810PL"),
+        ),
+    ),
+    ToolSeed(
+        slug="rkdevtool",
+        name="RKDevTool",
+        category="chipset-flashing-tools",
+        description=(
+            "Rockchip's Windows flashing utility (also called Android Tool). It "
+            "writes update.img packages and individual partitions to Rockchip "
+            "tablets and phones in Maskrom or Loader mode. Copies are "
+            "community-distributed, so verify the source before use."
+        ),
+        tool_type=FlashingTool.ToolType.FREE,
+        platform=FlashingTool.Platform.WINDOWS,
+        risk_level=FlashingTool.RiskLevel.RISKY,
+        features=("update.img and partition flashing", "Maskrom and Loader modes"),
+        requirements=(
+            "A Windows computer",
+            "Rockchip USB driver (DriverAssistant)",
+            "An update.img that matches the exact board",
+        ),
+        instructions=(
+            "Install the driver, put the device in Loader or Maskrom mode, open "
+            "the tool and load the firmware before starting the upgrade. A wrong "
+            "image can make the device unbootable."
+        ),
+        chipsets=(
+            rockchip("RK3288"),
+            rockchip("RK3326"),
+            rockchip("RK3399"),
+            rockchip("RK3566"),
+            rockchip("RK3568"),
+        ),
+    ),
+    ToolSeed(
+        slug="phoenixsuit",
+        name="PhoenixSuit",
+        category="chipset-flashing-tools",
+        description=(
+            "Allwinner's Windows flashing utility (PhoenixSuit, with LiveSuit for "
+            "Linux) for .img firmware packages on Allwinner tablets and phones over "
+            "USB in FEL mode. Copies are community-distributed, so verify the "
+            "source before use."
+        ),
+        tool_type=FlashingTool.ToolType.FREE,
+        platform=FlashingTool.Platform.WINDOWS,
+        risk_level=FlashingTool.RiskLevel.RISKY,
+        features=("Flashes Allwinner .img packages", "FEL mode upgrade"),
+        requirements=(
+            "A Windows computer (LiveSuit on Linux)",
+            "Allwinner USB driver",
+            "An .img package that matches the exact board",
+        ),
+        instructions=(
+            "Install the driver, open the tool and load the .img, then connect the "
+            "device in FEL mode as described for the board. Flashing erases user "
+            "data and a wrong image can brick the device."
+        ),
+        chipsets=(
+            allwinner("A33"),
+            allwinner("A64"),
+            allwinner("A83T"),
+            allwinner("A100"),
+            allwinner("A133"),
+            allwinner("A523"),
+            allwinner("T507"),
+        ),
+    ),
+    ToolSeed(
+        slug="apple-finder-devices-restore",
+        name="Finder / Apple Devices app",
+        category="oem-recovery-utilities",
+        description=(
+            "Apple's own way to update or restore an iPhone or iPad from a computer. "
+            "Finder does this on a Mac; the Apple Devices app does it on Windows 10 "
+            "and 11. Restore installs an IPSW image and erases the device; Update "
+            "keeps your data. Only IPSW files that Apple still signs can be "
+            "installed. It never bypasses Activation Lock."
+        ),
+        tool_type=FlashingTool.ToolType.OEM,
+        platform=FlashingTool.Platform.MULTI,
+        risk_level=FlashingTool.RiskLevel.MODERATE,
+        official_url="https://support.apple.com/",
+        features=(
+            "Update or restore with the newest signed version",
+            "Install a downloaded IPSW that Apple still signs",
+            "Back up and restore device data",
+        ),
+        requirements=(
+            "A Mac with Finder, or Windows 10 or 11 with the Apple Devices app",
+            "A good USB cable and an unlocked device that trusts the computer",
+            "An IPSW for the exact model that Apple still signs (to restore from file)",
+            "The Apple Account of the device owner (Activation Lock stays in force)",
+        ),
+        instructions=(
+            "Back up first. Connect the device, choose it in Finder or the Apple "
+            "Devices app, then pick Update to keep data or Restore to erase it. To "
+            "use a downloaded IPSW, Option-click (Mac) or Shift-click (Windows) the "
+            "button. If the device does not respond, use recovery mode or DFU mode."
+        ),
+        brands=("apple",),
+        chipsets=_APPLE_CHIPSETS,
+        featured=True,
+    ),
+    ToolSeed(
+        slug="apple-itunes",
+        name="iTunes",
+        category="oem-recovery-utilities",
+        description=(
+            "Apple's media app, still the way to update or restore an iPhone or iPad "
+            "from Windows 8.1 and earlier Windows 10 setups that cannot use the Apple "
+            "Devices app. Current Macs use Finder instead. As with Finder, only IPSW "
+            "files that Apple still signs can be installed."
+        ),
+        tool_type=FlashingTool.ToolType.OEM,
+        platform=FlashingTool.Platform.WINDOWS,
+        risk_level=FlashingTool.RiskLevel.MODERATE,
+        official_url="https://www.apple.com/itunes/",
+        features=("Update and restore", "Backup and restore"),
+        requirements=(
+            "An older Windows computer, or one without the Apple Devices app",
+            "A good USB cable",
+            "A device whose IPSW Apple still signs",
+        ),
+        instructions=(
+            "Back up first, connect the device and open the Summary page, then use "
+            "Check for Update or Restore iPhone / iPad. Restore erases the device."
+        ),
+        brands=("apple",),
+        chipsets=_APPLE_CHIPSETS,
+    ),
+    ToolSeed(
+        slug="apple-configurator-2",
+        name="Apple Configurator 2",
+        category="oem-recovery-utilities",
+        description=(
+            "Apple's free Mac app for deploying and servicing iPhone and iPad. Its "
+            "Revive action reinstalls the system on a device that does not start "
+            "while keeping data where possible, and Restore erases the device and "
+            "installs a signed IPSW. Supervised and managed devices stay managed, "
+            "and Activation Lock is never bypassed."
+        ),
+        tool_type=FlashingTool.ToolType.OEM,
+        platform=FlashingTool.Platform.MAC,
+        risk_level=FlashingTool.RiskLevel.MODERATE,
+        official_url="https://apps.apple.com/app/apple-configurator/id1037126344",
+        features=("Revive a device that does not start", "Restore with an IPSW"),
+        requirements=(
+            "A Mac running a supported macOS",
+            "A USB cable; DFU mode for a device that does not respond",
+            "An IPSW that Apple still signs",
+        ),
+        instructions=(
+            "Connect the device, put it in DFU mode if it shows nothing, then choose "
+            "Revive Device to keep data or Restore to erase it. Do not disconnect "
+            "until the device restarts."
+        ),
+        brands=("apple",),
+        chipsets=_APPLE_CHIPSETS,
+    ),
+    ToolSeed(
+        slug="idevicerestore",
+        name="idevicerestore",
+        category="chipset-flashing-tools",
+        description=(
+            "An open-source command-line tool from the libimobiledevice project that "
+            "restores or updates iOS and iPadOS devices with an IPSW. It asks Apple's "
+            "signing servers for approval, so it can only install versions that Apple "
+            "currently signs. It does not bypass Activation Lock or iCloud."
+        ),
+        tool_type=FlashingTool.ToolType.OPEN_SOURCE,
+        platform=FlashingTool.Platform.MULTI,
+        risk_level=FlashingTool.RiskLevel.ADVANCED,
+        official_url="https://libimobiledevice.org/",
+        download_url="https://github.com/libimobiledevice/idevicerestore",
+        features=("Restore and update from an IPSW", "Linux, macOS and Windows builds"),
+        requirements=(
+            "Comfort with the command line",
+            "The libimobiledevice libraries and a USB connection",
+            "An IPSW for the exact model that Apple still signs",
+        ),
+        instructions=(
+            "Back up first. Put the device in recovery or DFU mode and run "
+            "idevicerestore with the IPSW. A restore erases the device, and a wrong "
+            "or unsigned image is refused."
+        ),
+        brands=("apple",),
+        chipsets=_APPLE_CHIPSETS,
+    ),
+    ToolSeed(
+        slug="futurerestore",
+        name="futurerestore",
+        category="chipset-flashing-tools",
+        description=(
+            "An open-source command-line tool that restores a device with SHSH blobs "
+            "saved earlier for a version that Apple has since stopped signing. It "
+            "works only when valid blobs exist for that exact device and version, "
+            "and only for versions and devices where the method is still possible; "
+            "it is not a general downgrade tool. It does not bypass Activation "
+            "Lock or iCloud."
+        ),
+        tool_type=FlashingTool.ToolType.OPEN_SOURCE,
+        platform=FlashingTool.Platform.MULTI,
+        risk_level=FlashingTool.RiskLevel.RISKY,
+        official_url="https://github.com/futurerestore/futurerestore",
+        features=("Restore with saved SHSH blobs", "Command-line tool"),
+        requirements=(
+            "Valid SHSH blobs for the exact device (ECID) and version",
+            "A currently signed IPSW for the required baseband and firmware parts",
+            "Command-line experience; mistakes can leave the device unbootable",
+        ),
+        instructions=(
+            "Use only blobs saved for your own device. Back up first; a failed "
+            "restore may need DFU mode and a normal signed restore to recover."
+        ),
+        brands=("apple",),
+        chipsets=_APPLE_CHIPSETS,
+    ),
 )
 
 GUIDE_PLATFORM_TOOLS = ("android-sdk-platform-tools",)
@@ -379,6 +739,35 @@ GUIDE_XIAOMI_TOOLS = ("miflash-tool", "mi-unlock-tool", "android-sdk-platform-to
 
 STOCK = FlashingGuideTemplate.GuideType.STOCK_FLASH
 UNLOCK = FlashingGuideTemplate.GuideType.UNLOCK_BOOTLOADER
+RECOVERY = FlashingGuideTemplate.GuideType.RECOVERY
+REPAIR = FlashingGuideTemplate.GuideType.REPAIR
+GENERAL = FlashingGuideTemplate.GuideType.GENERAL
+DOWNGRADE = FlashingGuideTemplate.GuideType.DOWNGRADE
+
+APPLE_GUIDE_BODY = """{intro}
+
+## Before you start
+
+- Back up the device first. A restore erases it.
+- Use the exact IPSW for your model; Apple signs only some versions at a time.
+- You need the Apple Account and passcode of the device owner. This guide does not
+  remove Activation Lock or an iCloud account, and we do not cover bypassing them.
+- Use a good USB cable and keep the device connected until it restarts.
+
+## Tools
+
+{tools}
+
+## Steps
+
+{steps}
+
+## If something goes wrong
+
+Do not repeat a failed restore blindly. Check that the IPSW matches the model and
+is still signed by Apple, try another cable or port, and contact Apple or an
+authorised service provider if the device still does not start.
+"""
 
 GUIDES: tuple[GuideSeed, ...] = (
     GuideSeed(
@@ -569,5 +958,67 @@ GUIDES: tuple[GuideSeed, ...] = (
         ("android-flash-tool", "android-sdk-platform-tools"),
         model_name="Pixel 8",
         chipset_filter="Tensor",
+    ),
+    GuideSeed(
+        STOCK,
+        "apple",
+        "How to restore {brand} iPhone and iPad firmware with Finder or the Apple "
+        "Devices app",
+        "Apple firmware is an IPSW image. Finder on a Mac and the Apple Devices app "
+        "on Windows install the newest signed version, or an IPSW file you choose. "
+        "Only IPSW files that Apple still signs for your exact model will install.",
+        ("apple-finder-devices-restore", "apple-itunes"),
+        body=APPLE_GUIDE_BODY,
+    ),
+    GuideSeed(
+        RECOVERY,
+        "apple",
+        "How to use recovery mode on {brand} iPhone and iPad",
+        "Recovery mode lets Finder or the Apple Devices app update or restore an "
+        "iPhone or iPad that will not start normally. Try Update first: it keeps "
+        "your data when it works.",
+        ("apple-finder-devices-restore", "apple-itunes"),
+        body=APPLE_GUIDE_BODY,
+    ),
+    GuideSeed(
+        REPAIR,
+        "apple",
+        "How to use DFU mode on {brand} iPhone and iPad, by device generation",
+        "DFU mode is the lowest-level state a device can be restored from. The key "
+        "sequence depends on the device generation, and a wrong sequence only "
+        "restarts the device. Use DFU only when recovery mode does not work.",
+        ("apple-finder-devices-restore", "apple-configurator-2", "idevicerestore"),
+        body=APPLE_GUIDE_BODY,
+    ),
+    GuideSeed(
+        REPAIR,
+        "apple",
+        "How to revive or restore {brand} devices with Apple Configurator 2",
+        "Apple Configurator 2 on a Mac can revive an iPhone or iPad that does not "
+        "start, reinstalling the system while keeping data where possible, or "
+        "restore it with an IPSW that Apple still signs.",
+        ("apple-configurator-2", "apple-finder-devices-restore"),
+        body=APPLE_GUIDE_BODY,
+    ),
+    GuideSeed(
+        GENERAL,
+        "apple",
+        "{brand} OTA update or IPSW restore: which one to use",
+        "An over-the-air (OTA) update changes only what is needed and keeps your "
+        "data. An IPSW restore installs a complete firmware image from a computer. "
+        "Apple decides which versions are signed, so older IPSW files stop working.",
+        ("apple-finder-devices-restore", "apple-configurator-2"),
+        body=APPLE_GUIDE_BODY,
+    ),
+    GuideSeed(
+        DOWNGRADE,
+        "apple",
+        "Can you downgrade iOS or iPadOS on {brand} devices? Signed IPSW rules",
+        "Apple installs only IPSW files it still signs, so a downgrade is normally "
+        "possible only to a version Apple is still signing. futurerestore needs "
+        "SHSH blobs saved earlier for the exact device and version and works only "
+        "in narrow cases.",
+        ("apple-finder-devices-restore", "idevicerestore", "futurerestore"),
+        body=APPLE_GUIDE_BODY,
     ),
 )
