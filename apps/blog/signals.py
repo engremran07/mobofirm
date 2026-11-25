@@ -37,9 +37,10 @@ def _after_publish(post_id: int) -> None:
     post = Post.objects.filter(pk=post_id, status=PostStatus.PUBLISHED).first()
     if post is None:
         return
-    from apps.tags.tasks import sync_post_tags
+    if post.content_source != PostSource.AUTOMATED:
+        from apps.tags.tasks import sync_post_tags
 
-    sync_post_tags.delay(post.pk)
+        sync_post_tags.delay(post.pk)
 
     if post.content_source != PostSource.AUTOMATED and apps.is_installed("apps.users"):
         from apps.blog.tasks import send_post_notifications_batched

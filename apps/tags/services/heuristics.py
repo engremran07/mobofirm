@@ -160,7 +160,7 @@ def curated_matches(text: str) -> list[Tag]:
     """Curated tags whose name or synonym appears in ``text``."""
     haystack = f" {normalize(strip_tags(text))} "
     matches: list[Tag] = []
-    for tag in public_tags():
+    for tag in public_tags().order_by().iterator(chunk_size=500):
         names = {tag.normalized_name or normalize(tag.name)}
         names.update(
             normalize(item) for item in (tag.synonyms or []) if isinstance(item, str)

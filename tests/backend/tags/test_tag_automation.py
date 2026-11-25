@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from django.contrib.auth import get_user_model
+from django.db import connection
 from django.test import TestCase
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
 from apps.blog.models import Category, Post, PostStatus
@@ -18,6 +20,7 @@ from apps.tags.services import (
     suggest_tags_from_text,
     sync_post_tags,
 )
+from apps.tags.services.heuristics import curated_matches
 
 
 def curated_tag(name: str) -> Tag:
@@ -97,6 +100,15 @@ class CuratedTagTests(TagAutomationTestCase):
 
 
 class PostTagSyncTests(TagAutomationTestCase):
+    def test_curated_matches_does_not_sort_the_full_public_tag_catalog(self):
+        flashing = curated_tag("Flashing")
+
+        with CaptureQueriesContext(connection) as queries:
+            matches = curated_matches("Safe flashing instructions.")
+
+        self.assertIn(flashing, matches)
+        self.assertNotIn("ORDER BY", queries[0]["sql"].upper())
+
     def test_publishing_attaches_catalog_tags_after_commit_without_manual_steps(self):
         brand = Brand.objects.create(name="Nokia", slug="nokia")
         model = Model.objects.create(brand=brand, name="G21", slug="g21")

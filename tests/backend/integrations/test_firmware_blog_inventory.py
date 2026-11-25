@@ -51,6 +51,31 @@ class CatalogTestCase(TestCase):
 
 @override_settings(FIRMWARE_BLOG_AUTOGENERATION_ASYNC=False)
 class AutomatedModelBlogTests(CatalogTestCase):
+    @patch("apps.tags.tasks.sync_post_tags.delay")
+    def test_automated_posts_use_catalog_tags_without_generic_tag_scan(
+        self, sync_post_tags
+    ):
+        with self.commit():
+            model = self.make_model()
+
+        post = Post.objects.get(firmware_model=model)
+        sync_post_tags.assert_not_called()
+        self.assertEqual(
+            set(post.tags.values_list("name", flat=True)),
+            {"Auto Brand", "Auto Brand Auto Phone", "Firmware", "Download"},
+        )
+
+    def test_resync_repairs_catalog_tags_on_an_existing_post(self):
+        with self.commit():
+            model = self.make_model()
+        post = Post.objects.get(firmware_model=model)
+        download = post.tags.get(name="Download")
+        post.tags.remove(download)
+
+        FirmwareBlogService.sync_model_post(model)
+
+        self.assertIn(download, post.tags.all())
+
     def test_new_model_creates_exactly_one_published_post_by_the_system_author(self):
         self.assertFalse(get_user_model().objects.filter(is_staff=True).exists())
 

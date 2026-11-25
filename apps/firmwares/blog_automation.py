@@ -767,7 +767,7 @@ class FirmwareBlogService:
                 link.save(
                     update_fields=["content_hash", "last_synced_at", "updated_at"]
                 )
-                cls._update_post_tags(link.post, draft.tag_names)
+            cls._update_post_tags(link.post, draft.tag_names)
             return link.post
         try:
             with transaction.atomic():
