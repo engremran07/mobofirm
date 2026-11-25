@@ -11,7 +11,6 @@ from __future__ import annotations
 import tempfile
 from io import StringIO
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 from django.core.exceptions import ValidationError
@@ -26,6 +25,7 @@ from apps.firmwares.catalog import FIRMWARE_TYPE_DISPLAY
 from apps.firmwares.chipsets import (
     SUPPORTED_CHIPSET_VENDORS,
     canonical_vendor,
+    create_chipset_record,
     normalize_chipset,
     resolve_chipset,
 )
@@ -67,13 +67,7 @@ F = FirmwarePackageFormat
 
 @pytest.fixture(autouse=True)
 def stage(settings):
-    with (
-        tempfile.TemporaryDirectory() as directory,
-        patch(
-            "apps.firmwares.ai_analysis.FirmwareAIAnalyzer._ai_based_analysis",
-            return_value={"confidence": 0.0, "method": "ai"},
-        ),
-    ):
+    with tempfile.TemporaryDirectory() as directory:
         settings.FIRMWARE_STORAGE_ROOT = Path(directory)
         yield
 
@@ -291,7 +285,7 @@ class TestValidation:
 
     def test_the_chipset_row_of_the_model_decides(self, device):
         _, model = device("Acme", "")
-        model.chipset_ref = Chipset.objects.create(
+        model.chipset_ref = create_chipset_record(
             vendor="Allwinner", name="A133", slug="allwinner-a133"
         )
         model.save()
@@ -675,17 +669,17 @@ class TestApple:
 @pytest.mark.django_db
 class TestPruneUnsupportedChipsets:
     def make_rows(self):
-        unused = Chipset.objects.create(
+        unused = create_chipset_record(
             vendor="Intel", name="Atom Z3560", slug="intel-z"
         )
-        used = Chipset.objects.create(vendor="Intel", name="Core i5", slug="intel-i5")
+        used = create_chipset_record(vendor="Intel", name="Core i5", slug="intel-i5")
         brand = Brand.objects.create(name="Tabco", slug="tabco")
         Model.objects.create(
             brand=brand, name="Tab", slug="tab", chipset="Intel Core i5"
         )
         # ``chipset`` text is not resolved for an unsupported vendor; reference it.
         Model.objects.filter(slug="tab").update(chipset_ref=used)
-        supported = Chipset.objects.create(
+        supported = create_chipset_record(
             vendor="Apple", family="A-series", name="A17 Pro", slug="apple-a17-pro"
         )
         return unused, used, supported
@@ -728,7 +722,7 @@ class TestPruneUnsupportedChipsets:
         assert "Deleted 0 unreferenced" in output
 
     def test_a_clean_database_reports_nothing_to_do(self):
-        Chipset.objects.create(vendor="Apple", name="M2", slug="apple-m2")
+        create_chipset_record(vendor="Apple", name="M2", slug="apple-m2")
         assert "No chipset rows outside the allow-list" in self.run()
 
 
@@ -746,13 +740,15 @@ class TestSeedPlatformCoverage:
         seed_brands_and_models((APPLE_BRAND,))
         seed_tools()
 
-        assert Chipset.objects.filter(vendor="Apple").count() == len(chipsets)
+        assert Chipset.objects.filter(vendor__name="Apple").count() == len(chipsets)
         assert Brand.objects.filter(slug="apple").exists()
         iphone = Model.objects.get(brand__slug="apple", slug="iphone-15-pro")
         assert iphone.os_version == "iOS 17"
-        assert iphone.chipset_ref is not None and iphone.chipset_ref.vendor == "Apple"
+        assert (
+            iphone.chipset_ref is not None and iphone.chipset_ref.vendor.name == "Apple"
+        )
         finder = FlashingTool.objects.get(slug="apple-finder-devices-restore")
-        assert finder.chipsets.filter(vendor="Apple").exists()
+        assert finder.chipsets.filter(vendor__name="Apple").exists()
         assert finder.supported_brands.filter(slug="apple").exists()
         # Re-seeding is additive and idempotent.
         seed_tools()

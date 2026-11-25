@@ -700,6 +700,15 @@
     margin: 0;
     font-size: var(--mf-text-base);
     font-weight: 750;
+
+    a {
+      color: inherit;
+      text-decoration-color: var(--mf-accent);
+      text-underline-offset: 0.15em;
+
+      &:hover { text-decoration-line: underline; }
+      &:focus-visible { outline: none; box-shadow: var(--mf-focus-ring); }
+    }
   }
 
   .flow-card__amount {

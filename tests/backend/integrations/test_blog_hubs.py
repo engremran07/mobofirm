@@ -5,10 +5,10 @@ from django.urls import reverse
 
 from apps.blog.models import Post, PostStatus
 from apps.firmwares.blog_automation import FirmwareBlogService
+from apps.firmwares.chipsets import create_chipset_record
 from apps.firmwares.models import (
     AutomatedBlogLink,
     Brand,
-    Chipset,
     Model,
     OfficialFirmware,
     UnclassifiedFirmware,
@@ -22,7 +22,7 @@ class BlogHubTests(TestCase):
         self.brand = Brand.objects.create(
             name="Hubphone", slug="hubphone", description="A brand for hub tests."
         )
-        self.chipset = Chipset.objects.create(
+        self.chipset = create_chipset_record(
             vendor="MediaTek", name="Helio G99", slug="mediatek-helio-g99"
         )
         self.model = Model.objects.create(
@@ -50,7 +50,7 @@ class BlogHubTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Featured story")
         self.assertContains(response, self.brand_post.title)
-        self.assertContains(response, self.model_post.title)
+        self.assertContains(response, self.model_post.title, html=True)
         self.assertContains(response, "Hubphone firmware")
         self.assertNotContains(response, "Local demo preview")
 
@@ -62,7 +62,7 @@ class BlogHubTests(TestCase):
             )
         )
 
-        self.assertContains(response, self.model_post.title)
+        self.assertContains(response, self.model_post.title, html=True)
         self.assertContains(
             response, reverse("blog:chipset_posts", kwargs={"slug": self.chipset.slug})
         )
@@ -81,7 +81,7 @@ class BlogHubTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, self.chipset_post.title)
-        self.assertContains(response, self.model_post.title)
+        self.assertContains(response, self.model_post.title, html=True)
         self.assertEqual(
             self.client.get(
                 reverse("blog:chipset_posts", kwargs={"slug": "missing"})

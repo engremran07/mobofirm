@@ -78,6 +78,11 @@ class AppService:
     _cache: ClassVar[dict[str, Any]] = {}
 
     @classmethod
+    def clear(cls) -> None:
+        """Drop resolved app APIs after registry changes."""
+        cls._cache.clear()
+
+    @classmethod
     def get(cls, app_label: str) -> Any | None:
         """The app's ``api`` module, or ``None`` when it is off, unknown or missing."""
         key = app_label.strip().lower()

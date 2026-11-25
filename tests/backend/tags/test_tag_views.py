@@ -93,7 +93,7 @@ class PublicTagPageTests(TagViewTestCase):
         self.assertContains(response, "Bootloader")
 
     def test_search_endpoint_is_public_curated_only_and_bounded(self):
-        Tag.objects.create(name="Boot hidden", ai_suggested=True)
+        Tag.objects.create(name="Boot hidden", is_suggested=True)
 
         response = self.client.get(reverse("tags:search"), {"q": "boot"})
 
@@ -121,7 +121,7 @@ class TagStaffToolTests(TagViewTestCase):
             self.assertEqual(self.client.get(url).status_code, 200, url)
 
     def test_review_approves_and_rejects_suggestions_via_post(self):
-        suggestion = Tag.objects.create(name="Suggested", ai_suggested=True)
+        suggestion = Tag.objects.create(name="Suggested", is_suggested=True)
         self.client.force_login(self.staff)
         url = reverse("tags:review")
 
@@ -129,7 +129,7 @@ class TagStaffToolTests(TagViewTestCase):
             self.client.post(url, {"tag_id": suggestion.pk, "decision": "approve"})
         suggestion.refresh_from_db()
         self.assertTrue(suggestion.is_curated and suggestion.is_active)
-        self.assertFalse(suggestion.ai_suggested)
+        self.assertFalse(suggestion.is_suggested)
 
         self.client.post(url, {"tag_id": suggestion.pk, "decision": "reject"})
         suggestion.refresh_from_db()

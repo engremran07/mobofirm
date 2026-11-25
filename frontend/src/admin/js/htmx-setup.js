@@ -41,8 +41,6 @@
 //   focused; boosted navigation moves focus to #console-main and announces the new title.
 // * View transitions: only for boosted navigation and `[data-console-transition]` regions,
 //   only when supported and motion is not reduced.
-import htmx from "htmx.org";
-
 import "./htmx-extensions.js";
 
 import { confirmDialog } from "./components/confirm.js";
@@ -50,9 +48,9 @@ import { showToast } from "./components/toasts.js";
 import { UNSAVED_QUESTION, askToDiscard, dirtyForms } from "./components/unsaved.js";
 import { renderIcons } from "./icons.js";
 import { EVENTS, announce, emit, reducedMotion } from "./lib/util.js";
+import { htmx, sanitizeSwapTasks } from "../../shared/htmx.js";
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
-const NO_SWAP = [204, 304, 401, 403, 404, 405, 408, 410, 413, 429, "5xx"];
 const BUSY_TTL_MS = 70000;
 
 const MESSAGES = {
@@ -111,20 +109,6 @@ function goToLogin(responseUrl) {
   const target = new URL(responseUrl || loginUrl() || "/", window.location.href);
   target.searchParams.set("next", window.location.pathname + window.location.search);
   window.location.assign(target.toString());
-}
-
-// Executable scripts and inline event handlers never enter the DOM through a swap.
-function sanitizeFragment(fragment) {
-  if (!fragment?.querySelectorAll) return;
-  for (const script of fragment.querySelectorAll("script")) {
-    const type = (script.getAttribute("type") ?? "").toLowerCase();
-    if (type === "" || type.includes("javascript") || type === "module") script.remove();
-  }
-  for (const element of fragment.querySelectorAll("*")) {
-    for (const { name } of [...element.attributes]) {
-      if (/^(on|hx-on|data-hx-on)/i.test(name)) element.removeAttribute(name);
-    }
-  }
 }
 
 function setBusy() {
@@ -249,7 +233,7 @@ function onBeforeSwap(event) {
     event.preventDefault();
     return;
   }
-  for (const task of tasks ?? []) sanitizeFragment(task.fragment);
+  sanitizeSwapTasks(tasks);
 }
 
 function applyFocus(ctx) {
@@ -331,9 +315,6 @@ function confirmCopy(source, question) {
 
 export function setupHtmx() {
   const config = htmx.config;
-  config.implicitInheritance = false;
-  config.noSwap = NO_SWAP;
-  config.defaultTimeout = 45000;
   config.history = true;
   config.transitions = false;
   config.defaultFocusScroll = false;

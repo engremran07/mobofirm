@@ -194,6 +194,7 @@ def test_discord_never_pings_and_embeds_the_card(make_channel):
     )
     body = json.loads(request.body)
     assert request.url.endswith("/api/webhooks/1/abc?wait=true")
+    assert request.allowed_hosts == platforms.DISCORD_HOSTS
     assert body["allowed_mentions"] == {"parse": []}
     assert body["embeds"] == [{"image": {"url": IMAGE}}]
     for bad in ("https://evil.example/api/webhooks/1/a", "https://discord.com/other"):
@@ -614,6 +615,18 @@ def test_platforms_without_a_read_only_check_say_so(kind, make_channel, net):
     assert outcome.code == "unsupported" and fetcher.calls == []
     assert channel.connection_ok is None
     assert "Send test post" in channel.connection_message
+
+
+def test_discord_connection_check_uses_the_webhook_host_allowlist(make_channel, net):
+    channel = make_channel("discord")
+    fetcher = net.Fetcher(routes={"discord.com": net.ok({"id": "1"})})
+
+    outcome = services.check_connection(channel, fetcher=fetcher)
+
+    assert outcome.ok
+    assert len(fetcher.calls) == 1
+    assert fetcher.calls[0]["method"] == "GET"
+    assert fetcher.calls[0]["allowed_hosts"] == platforms.DISCORD_HOSTS
 
 
 def test_an_incomplete_channel_fails_the_connection_test_locally(net):

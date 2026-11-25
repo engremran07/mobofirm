@@ -8,14 +8,10 @@ from django.contrib.auth import get_user_model
 from django.contrib.sessions.backends.db import SessionStore
 from django.core.cache import cache
 from django.test import RequestFactory, TestCase, override_settings
-from django.urls import reverse
 from django.utils import timezone
-from rest_framework.test import APIClient
 
 from apps.devices.admin import DeviceAdmin
 from apps.devices.models import (
-    AppPolicy,
-    BehaviorInsight,
     Device,
     DeviceConfig,
     DeviceEvent,
@@ -24,9 +20,8 @@ from apps.devices.services import (
     DevicePolicyError,
     enforce_device_policy_for_login,
     hash_browser_key,
+    hash_client_ip,
     mark_device_trusted,
-    promote_from_device_event,
-    record_insight,
     resolve_or_create_device,
 )
 from apps.devices.tasks import purge_old_device_events
@@ -161,9 +156,7 @@ class NewDevicePolicyTests(DeviceEnforcementBase):
         self.assertTrue(result["is_new"])
 
     def test_app_policy_strict_locking_mode_is_enforced(self):
-        AppPolicy.objects.update_or_create(
-            name="default", defaults={"device_locking_mode": "strict"}
-        )
+        self.configure(app_policies={"default": {"device_locking_mode": "strict"}})
         self.register("a" * 43, trusted=True)
 
         with self.assertRaises(DevicePolicyError) as error:
@@ -172,9 +165,7 @@ class NewDevicePolicyTests(DeviceEnforcementBase):
         self.assertEqual(error.exception.reason, "untrusted_new_device")
 
     def test_app_policy_always_mfa_requires_a_verified_second_factor(self):
-        AppPolicy.objects.update_or_create(
-            name="default", defaults={"mfa_requirement": "always"}
-        )
+        self.configure(app_policies={"default": {"mfa_requirement": "always"}})
         request = self.request("a" * 43)
 
         with self.assertRaises(DevicePolicyError) as error:
@@ -210,7 +201,7 @@ class NewDevicePolicyTests(DeviceEnforcementBase):
                 user=self.user,
                 device=device,
                 event_type="login",
-                ip=f"198.51.100.{index}",
+                ip_hash=hash_client_ip(f"198.51.100.{index}"),
             )
             _, _, context = resolve_or_create_device(
                 self.request("a" * 43, ip=f"203.0.113.{index + 20}"), self.user
@@ -245,84 +236,29 @@ class MarkTrustedTests(DeviceEnforcementBase):
         self.assertFalse(mark_device_trusted(device.pk, self.user.pk))
 
 
-class BehaviorInsightTests(DeviceEnforcementBase):
-    def test_record_insight_stores_identifier_and_ip_in_metadata(self):
-        insight = record_insight(
-            related_user=self.user,
-            device_identifier="device-1",
-            related_ip="203.0.113.4",
-            severity="high",
-            recommendation="Review",
-            metadata={"reason": "x"},
-        )
+class DeviceAuditTests(DeviceEnforcementBase):
+    def test_device_event_persists_only_a_keyed_ip_digest(self):
+        request = self.request("a" * 43, ip="203.0.113.42")
 
-        insight.refresh_from_db()
-        self.assertEqual(insight.metadata["device_identifier"], "device-1")
-        self.assertEqual(insight.metadata["ip"], "203.0.113.4")
-        self.assertEqual(insight.metadata["reason"], "x")
+        enforce_device_policy_for_login(request, self.user)
 
-    def test_failed_events_create_insights_and_successes_do_not(self):
-        failed = promote_from_device_event(
-            {
-                "device_identifier": "d",
-                "ip": "203.0.113.4",
-                "user": self.user,
-                "event_type": "login",
-                "success": False,
-                "reason": "blocked_device",
-            }
-        )
-        succeeded = promote_from_device_event(
-            {"user": self.user, "success": True, "reason": "policy_pass"}
-        )
+        event = DeviceEvent.objects.get(user=self.user, event_type="login")
+        self.assertEqual(event.ip_hash, hash_client_ip("203.0.113.42"))
+        self.assertNotIn("203.0.113.42", str(event.metadata))
+        self.assertNotIn("user_agent", event.metadata)
 
-        assert failed is not None
-        self.assertEqual(failed.severity, "high")
-        self.assertIsNone(succeeded)
-        self.assertEqual(BehaviorInsight.objects.count(), 1)
-
-    def test_a_denied_login_records_an_insight_end_to_end(self):
+    def test_a_denied_login_keeps_auditable_device_event_without_insight_records(self):
         device = self.register("a" * 43)
         Device.objects.filter(pk=device.pk).update(is_blocked=True)
 
         with self.assertRaises(DevicePolicyError):
             enforce_device_policy_for_login(self.request("a" * 43), self.user)
 
-        insight = BehaviorInsight.objects.get(related_user=self.user)
-        self.assertEqual(insight.metadata["device_identifier"], str(device.pk))
-        self.assertEqual(insight.metadata["reason"], "blocked_device")
-
-    def test_successful_logins_do_not_flood_the_insight_table(self):
-        enforce_device_policy_for_login(self.request("a" * 43), self.user)
-
-        self.assertFalse(BehaviorInsight.objects.exists())
-
-    def test_staff_may_only_update_the_status_of_an_insight(self):
-        staff = get_user_model().objects.create_user(
-            email="insight-staff@example.com",
-            username="insightstaff",
-            password="x-Valid-pass-1!",
-            is_staff=True,
+        self.assertTrue(
+            DeviceEvent.objects.filter(
+                user=self.user, device=device, reason="blocked_device", success=False
+            ).exists()
         )
-        insight = record_insight(related_user=self.user, severity="low")
-        client = APIClient()
-        client.force_authenticate(staff)
-        url = reverse("devices:behavior-insights-detail", args=[insight.pk])
-
-        patched = client.patch(
-            url, {"status": "resolved", "severity": "critical"}, format="json"
-        )
-        created = client.post(
-            reverse("devices:behavior-insights-list"),
-            {"status": "open"},
-            format="json",
-        )
-
-        insight.refresh_from_db()
-        self.assertEqual(patched.status_code, 200)
-        self.assertEqual(insight.status, "resolved")
-        self.assertEqual(insight.severity, "low")
-        self.assertEqual(created.status_code, 405)
 
 
 class DeviceAdminAuditTests(DeviceEnforcementBase):
@@ -380,10 +316,14 @@ class DeviceRetentionTests(DeviceEnforcementBase):
     @override_settings(DEVICE_EVENT_RETENTION_DAYS=30)
     def test_purge_task_removes_only_events_past_retention(self):
         old = DeviceEvent.objects.create(
-            user=self.user, event_type="login", ip="1.1.1.1"
+            user=self.user,
+            event_type="login",
+            ip_hash=hash_client_ip("1.1.1.1"),
         )
         recent = DeviceEvent.objects.create(
-            user=self.user, event_type="login", ip="2.2.2.2"
+            user=self.user,
+            event_type="login",
+            ip_hash=hash_client_ip("2.2.2.2"),
         )
         DeviceEvent.objects.filter(pk=old.pk).update(
             created_at=timezone.now() - timedelta(days=31)
@@ -391,7 +331,7 @@ class DeviceRetentionTests(DeviceEnforcementBase):
 
         result = purge_old_device_events.apply().get()
 
-        self.assertEqual(result["deleted"], 1)
+        self.assertEqual(result, {"status": "success", "deleted": 1})
         self.assertFalse(DeviceEvent.objects.filter(pk=old.pk).exists())
         self.assertTrue(DeviceEvent.objects.filter(pk=recent.pk).exists())
 

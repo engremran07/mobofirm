@@ -67,33 +67,60 @@ def overflow(page):
 def test_sitemaps_and_robots_render_without_csp_or_console_errors(live_server):
     make_catalog()
     errors: list[str] = []
+    warnings: list[str] = []
 
     with sync_playwright() as playwright:
         browser = launch(playwright)
         page = browser.new_page()
         collect_errors(page, errors)
+        page.on(
+            "console",
+            lambda message: (
+                warnings.append(message.text) if message.type == "warning" else None
+            ),
+        )
         for path in ("/sitemap.xml", "/sitemap-brands-1.xml", "/robots.txt"):
             response = page.goto(f"{live_server.url}{path}", wait_until="load")
             assert response is not None and response.status == 200, path
         page.goto(f"{live_server.url}/sitemap.xml", wait_until="load")
         assert (
             page.evaluate("getComputedStyle(document.documentElement).display")
-            == "table"
+            == "block"
+        )
+        assert page.locator("sitemapindex > sitemap").count() > 0
+        assert "Mobofirm sitemap index" in page.evaluate(
+            "getComputedStyle(document.documentElement, '::before').content"
+        )
+        assert "/site-map/" in page.evaluate(
+            "getComputedStyle(document.documentElement, '::after').content"
         )
         assert "sitemap-brands-1.xml" in page.evaluate(
             "document.documentElement.textContent"
         )
+        for width in (390, 768, 1365):
+            page.set_viewport_size({"width": width, "height": 900})
+            dimensions = overflow(page)
+            assert dimensions["document"] <= dimensions["viewport"] + 1
+
         page.goto(f"{live_server.url}/sitemap-brands-1.xml", wait_until="load")
         assert (
             page.evaluate("getComputedStyle(document.documentElement).display")
-            == "table"
+            == "block"
         )
         assert "/firmwares/nova/" in page.evaluate(
             "document.documentElement.textContent"
         )
+        assert page.locator("urlset > url").count() > 0
+        assert (
+            page.evaluate(
+                "getComputedStyle(document.querySelector('urlset > url')).display"
+            )
+            == "grid"
+        )
         browser.close()
 
     assert errors == []
+    assert warnings == []
 
 
 @pytest.mark.django_db(transaction=True)

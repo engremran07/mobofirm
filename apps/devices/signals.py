@@ -39,11 +39,10 @@ def register_device_on_login(request, user, **kwargs) -> None:
         and device.revoked_at is None
     ):
         request.session["device_registration_prompt"] = {
-            "device_name": device.display_name,
+            "device_name": f"{device.os_family} device"
+            if device.os_family
+            else "New device",
             "os_family": device.os_family,
-            "browser_family": device.browser_family,
             "active_devices": context.get("current_device_count", 0),
             "max_devices": context.get("max_devices", 3),
-            "can_approve": context.get("current_device_count", 0)
-            < context.get("max_devices", 3),
         }

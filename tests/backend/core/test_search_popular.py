@@ -19,9 +19,9 @@ from django.utils import timezone
 from apps.blog.models import Post, PostStatus
 from apps.core.models import SearchSettings
 from apps.core.search import popular_entries, popular_settings
+from apps.firmwares.chipsets import create_chipset_record
 from apps.firmwares.models import (
     Brand,
-    Chipset,
     DownloadToken,
     Model,
     OfficialFirmware,
@@ -86,7 +86,7 @@ def _world() -> dict[str, Any]:
     """Two brands/chipsets with devices and files of different popularity."""
     samsung = Brand.objects.create(name="Samsung", slug="samsung")
     xiaomi = Brand.objects.create(name="Xiaomi", slug="xiaomi")
-    chip = Chipset.objects.create(
+    chip = create_chipset_record(
         vendor="Qualcomm", family="Snapdragon", name="Snapdragon 8", slug="sd8"
     )
     galaxy = Model.objects.create(

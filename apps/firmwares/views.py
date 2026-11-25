@@ -47,10 +47,8 @@ from .serializers import (
 )
 from .services import (
     approve_pending_firmware,
-    attempt_extraction,
     handle_upload,
     reject_pending_firmware,
-    run_ai_analysis,
     submit_external_firmware,
     withdraw_firmware,
 )
@@ -124,8 +122,6 @@ class FirmwareUploadView(_SubmissionEndpoint):
             )
         except ValueError as exc:
             return Response({"detail": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-        attempt_extraction(pf)
-        run_ai_analysis(pf)
         return Response(
             PendingFirmwareSerializer(pf).data, status=status.HTTP_201_CREATED
         )

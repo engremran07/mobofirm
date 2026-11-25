@@ -1,7 +1,7 @@
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-from apps.blog.models import PostRevision, PostStatus
+from apps.blog.models import PostRevision, PostSource, PostStatus
 from apps.firmwares.blog_automation import get_automation_author
 from apps.firmwares.guide_service import generate_guide_for_brand_model
 from apps.firmwares.models import (
@@ -49,6 +49,7 @@ class FlashingGuideReviewTests(TestCase):
         self.assertEqual(post.author, self.author)
         self.assertFalse(post.author.is_staff)
         self.assertEqual(post.status, PostStatus.IN_REVIEW)
+        self.assertEqual(post.content_source, PostSource.AUTOMATED)
         self.assertFalse(post.is_published)
         self.assertEqual(PostRevision.objects.filter(post=post).count(), 1)
 

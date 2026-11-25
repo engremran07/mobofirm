@@ -41,6 +41,15 @@
           {% for value, label in sort_options %}{% if value != "recent" %}<option value="{{ value }}"{% if filters.sort == value %} selected{% endif %}>{{ label }}</option>{% endif %}{% endfor %}
         </select>
       </div>
+      <div class="journal-access">
+        <label class="visually-hidden" for="journal-access">Filter by article access</label>
+        <select id="journal-access" class="form-select" name="access"
+                hx-get="{% url 'blog:post_list' %}" hx-trigger="change" hx-include="closest form"
+                hx-target="#journal-results" hx-push-url="true" hx-indicator="#journal-loading">
+          <option value=""{% if not filters.access %} selected{% endif %}>All access</option>
+          {% for value, label in access_options %}<option value="{{ value }}"{% if filters.access == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+      </div>
       {% include "components/spinner.html" with id="journal-loading" label="Updating articles" %}
     </div>
     <fieldset class="chip-bar">

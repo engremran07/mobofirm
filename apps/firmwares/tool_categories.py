@@ -340,9 +340,9 @@ def deactivate_brand_category(brand: Brand) -> int:
 def ensure_chipset_categories(chipset: Chipset) -> None:
     """Make sure a chipset's vendor (and family) category exists."""
     if (
-        chipset.vendor not in SUPPORTED_CHIPSET_VENDORS
+        chipset.vendor.name not in SUPPORTED_CHIPSET_VENDORS
         or FlashingToolCategory.objects.filter(
-            kind=Kind.CHIPSET_VENDOR, vendor=chipset.vendor
+            kind=Kind.CHIPSET_VENDOR, vendor=chipset.vendor.name
         ).exists()
     ):
         return
@@ -443,7 +443,7 @@ class CategoryIndex:
         ).values_list("flashingtool_id", "brand_id")
         chipset_rows = (
             FlashingTool.chipsets.through.objects.filter(flashingtool_id__in=active)
-            .values_list("flashingtool_id", "chipset__vendor", "chipset__family")
+            .values_list("flashingtool_id", "chipset__vendor__name", "chipset__family")
             .distinct()
         )
         ios: set[int] = set()
@@ -476,7 +476,7 @@ class CategoryIndex:
             "pk",
             "brand_id",
             "brand__slug",
-            "model__chipset_ref__vendor",
+            "model__chipset_ref__vendor__name",
             "model__chipset_ref__family",
             "chipset",
         )

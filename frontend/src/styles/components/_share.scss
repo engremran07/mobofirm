@@ -36,3 +36,23 @@
   }
 }
 
+.share__link[data-share-network="x"] .icon {
+  color: var(--mf-share-x);
+}
+
+.share__link[data-share-network="facebook"] .icon {
+  color: var(--mf-share-facebook);
+}
+
+.share__link[data-share-network="whatsapp"] .icon {
+  color: var(--mf-share-whatsapp);
+}
+
+.share__link[data-share-network="telegram"] .icon {
+  color: var(--mf-share-telegram);
+}
+
+.share__link[data-share-network="linkedin"] .icon {
+  color: var(--mf-share-linkedin);
+}
+

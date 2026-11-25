@@ -27,7 +27,7 @@ from typing import Any
 
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
-from django.db import IntegrityError, transaction
+from django.db import DatabaseError, IntegrityError, transaction
 from django.utils import timezone
 
 from apps.distribution import content as content_module
@@ -130,15 +130,25 @@ def create(
     if kind not in pack.kinds:
         return None, "That template does not fit this content."
     key = key_for(kind, ref, pack, preset, hook)
-    existing = VideoJob.objects.filter(idempotency_key=key).first()
-    if existing is not None:
-        return existing, "A video for this content and template already exists."
-    if auto and auto_budget(now) <= 0:
-        return None, "The daily limit for automatic drafts is reached."
     params = snapshot(found)
     params["auto"] = auto
     try:
         with transaction.atomic():
+            if auto:
+                singleton = DistributionSettings.get_solo()
+                cfg = DistributionSettings.objects.select_for_update().get(
+                    pk=singleton.pk
+                )
+            existing = VideoJob.objects.filter(idempotency_key=key).first()
+            if existing is not None:
+                return existing, "A video for this content and template already exists."
+            if auto:
+                used = VideoJob.objects.filter(
+                    created_at__gte=_today_start(now or timezone.now()),
+                    params__auto=True,
+                ).count()
+                if cfg.video_daily_cap <= 0 or used >= cfg.video_daily_cap:
+                    return None, "The daily limit for automatic drafts is reached."
             job = VideoJob.objects.create(
                 content_kind=kind,
                 object_ref=ref[:120],
@@ -284,29 +294,43 @@ def build_plan(
     )
 
 
-def _store(job: VideoJob, result: render.RenderResult) -> None:
-    token = job.media_token or secrets.token_hex(16)
+def _delete_storage_files(names: tuple[str, ...]) -> None:
+    """Remove files only when their replacement or owning row is committed."""
+    for name in names:
+        if not name:
+            continue
+        try:
+            default_storage.delete(name)
+        except OSError:
+            logger.warning("Could not delete video asset %s", name)
+
+
+def _store(job: VideoJob, result: render.RenderResult) -> tuple[str, ...]:
+    """Store a render at a fresh path and return the superseded files."""
+    previous = tuple(name for name in (job.video_name, job.poster_name) if name)
+    token = secrets.token_hex(16)
     video_name = f"distribution/videos/{token}/video.mp4"
     poster_name = f"distribution/videos/{token}/poster.jpg"
-    for name in (video_name, poster_name):
-        if default_storage.exists(name):
-            default_storage.delete(name)
-    with result.path.open("rb") as handle:
-        default_storage.save(video_name, ContentFile(handle.read()))
-    if result.poster:
-        default_storage.save(poster_name, ContentFile(result.poster))
+    stored: list[str] = []
+    try:
+        with result.path.open("rb") as handle:
+            saved_video = default_storage.save(video_name, ContentFile(handle.read()))
+        stored.append(saved_video)
+        saved_poster = ""
+        if result.poster:
+            saved_poster = default_storage.save(poster_name, ContentFile(result.poster))
+            stored.append(saved_poster)
+    except OSError:
+        _delete_storage_files(tuple(stored))
+        raise
     job.media_token = token
-    job.video_name = video_name
-    job.poster_name = poster_name if result.poster else ""
+    job.video_name = saved_video
+    job.poster_name = saved_poster
+    return tuple(name for name in previous if name not in stored)
 
 
 def delete_files(job: VideoJob) -> None:
-    for name in (job.video_name, job.poster_name):
-        if name:
-            try:
-                default_storage.delete(name)
-            except OSError:
-                logger.warning("Could not delete %s", name)
+    _delete_storage_files((job.video_name, job.poster_name))
     job.video_name = job.poster_name = ""
 
 
@@ -345,8 +369,7 @@ def render_job(
                 workers=workers,
                 with_audio=with_audio,
             )
-            delete_files(job)
-            _store(job, result)
+            previous_files = _store(job, result)
     except (render.RenderError, plan.PlanError, OSError) as error:
         retryable = (
             bool(getattr(error, "retryable", False)) and job.attempts < MAX_ATTEMPTS
@@ -379,7 +402,12 @@ def render_job(
     job.render_log = result.log
     job.error = ""
     job.rendered_at = timezone.now()
-    job.save()
+    try:
+        job.save()
+    except DatabaseError:
+        _delete_storage_files((job.video_name, job.poster_name))
+        raise
+    transaction.on_commit(lambda: _delete_storage_files(previous_files))
     _log(
         f"Video rendered: {job.title} ({result.duration_ms // 1000} s, {result.size_bytes // 1024} KiB)"
     )
@@ -474,13 +502,10 @@ def rerender(
     if slug == job.template and chosen_hook == job.hook:
         if job.status not in MUTABLE:
             return None, "This video cannot be rendered again in its current state."
-        delete_files(job)
         job.checksum = ""
         job.attempts = 0
         job.save(
             update_fields=[
-                "video_name",
-                "poster_name",
                 "checksum",
                 "attempts",
                 "updated_at",
@@ -488,7 +513,7 @@ def rerender(
         )
         target = job
     else:
-        target, reason = create(
+        created, reason = create(
             job.content_kind,
             job.object_ref,
             pack_slug=slug,
@@ -496,8 +521,9 @@ def rerender(
             preset=job.preset,
             source=source_from(job.params),
         )
-        if target is None:
+        if created is None:
             return None, reason
+        target = created
     started = request_render(target, dispatch=dispatch)
     _log(f"Video re-render requested by {_actor(user)}: {target.title}")
     return (target, "") if started else (target, "It could not be queued.")

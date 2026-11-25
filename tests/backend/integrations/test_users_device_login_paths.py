@@ -29,7 +29,7 @@ from django.urls import reverse
 from rest_framework.authtoken.models import Token
 from rest_framework.test import APIClient
 
-from apps.devices.models import AppPolicy, Device, DeviceConfig
+from apps.devices.models import Device, DeviceConfig
 from apps.devices.services import DEVICE_COOKIE_NAME, resolve_or_create_device
 from apps.devices.slots import STAFF_PERMISSION, reset_slots_as_staff
 from apps.users.mfa import TOTPService
@@ -284,9 +284,8 @@ class AllauthPathTests(StrictAccountMixin, TestCase):
         config = DeviceConfig.get_solo()
         config.strict_new_device_login = False
         config.save(update_fields=["strict_new_device_login"])
-        AppPolicy.objects.update_or_create(
-            name="default", defaults={"mfa_requirement": "always"}
-        )
+        config.app_policies = {"default": {"mfa_requirement": "always"}}
+        config.save(update_fields=["app_policies"])
 
         without_factor, request_a = self.social_callback(OTHER_KEY)
         self.assertEqual(without_factor["Location"], reverse("users:account_login"))

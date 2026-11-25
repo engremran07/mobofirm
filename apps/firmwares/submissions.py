@@ -24,10 +24,8 @@ from .models import (
 )
 from .services import (
     FirmwareUploadError,
-    attempt_extraction,
     check_submission_rate,
     handle_upload,
-    run_ai_analysis,
     submit_external_firmware,
 )
 from .variant_rules import variant_is_required
@@ -63,7 +61,7 @@ def can_offer_paid(user: Any) -> bool:
 
 
 def submit_user_upload(user: Any, submission: UploadSubmission) -> PendingFirmware:
-    """Create the pending submission for the model (and variant) and analyse it."""
+    """Create a pending submission for the model (and variant)."""
     if not (
         getattr(user, "is_authenticated", False)
         and user.is_active
@@ -107,8 +105,6 @@ def submit_user_upload(user: Any, submission: UploadSubmission) -> PendingFirmwa
             password=submission.archive_password,
             **common,
         )
-        attempt_extraction(pending)
-        run_ai_analysis(pending)
         return pending
     if not submission.external_url:
         raise FirmwareUploadError("Attach a file or provide a download link.")

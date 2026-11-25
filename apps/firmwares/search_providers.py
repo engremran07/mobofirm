@@ -232,7 +232,7 @@ class VariantProvider(QuerySetProvider[Variant]):
 
 
 CHIPSET_ALIAS_TEXT = "alias_text"
-CHIPSET_FIELDS = ("name", "vendor", "family", "slug", CHIPSET_ALIAS_TEXT)
+CHIPSET_FIELDS = ("name", "vendor__name", "family", "slug", CHIPSET_ALIAS_TEXT)
 CHIPSET_ANNOTATIONS = {CHIPSET_ALIAS_TEXT: Cast("aliases", TextField())}
 
 
@@ -245,13 +245,13 @@ class ChipsetProvider(QuerySetProvider[Chipset]):
     icon = "cpu"
     priority = 40
     search_fields = CHIPSET_FIELDS
-    ordering = ("vendor", "name")
+    ordering = ("vendor__name", "name")
     suggestible = True
     supports_browse = True
     watches = (Chipset,)
 
     def get_queryset(self, context: SearchContext) -> QuerySet[Chipset]:
-        return Chipset.objects.annotate(**CHIPSET_ANNOTATIONS)
+        return Chipset.objects.select_related("vendor").annotate(**CHIPSET_ANNOTATIONS)
 
     def score_fields(self, obj: Chipset) -> tuple[str, ...]:
         aliases = obj.aliases if isinstance(obj.aliases, list) else []
@@ -263,7 +263,7 @@ class ChipsetProvider(QuerySetProvider[Chipset]):
         return SearchHit(
             kind=self.kind,
             title=obj.display_name,
-            subtitle=obj.family or obj.vendor,
+            subtitle=obj.family or obj.vendor.name,
             url=reverse("firmwares:chipset_detail", args=[obj.slug]),
             icon=self.icon,
             score=score,

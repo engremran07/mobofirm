@@ -9,11 +9,13 @@ from urllib.parse import unquote, urlsplit
 
 import segno
 from django.conf import settings
+from django.core.exceptions import SuspiciousFileOperation
 from django.core.files.storage import default_storage
 from PIL import Image, UnidentifiedImageError
 
 logger = logging.getLogger(__name__)
 MAX_IMAGE_BYTES = 4 * 1024 * 1024
+MAX_IMAGE_PIXELS = 20_000_000
 MAX_IMAGE_SIDE = 1400
 ALLOWED_FORMATS = frozenset({"PNG", "JPEG", "WEBP"})
 
@@ -36,29 +38,52 @@ def qr_path(url: str) -> dict[str, object]:
     return {"size": len(matrix), "d": "".join(parts)}
 
 
-def local_image(url: str) -> str:
-    """A data URI for an image served from this site's media storage, or ``''``.
-
-    Only paths below ``MEDIA_URL`` are read, through the storage backend; the bytes are
-    verified and re-encoded with Pillow so a hostile file cannot reach the render page.
-    """
+def _media_storage_name(url: str) -> str | None:
+    """Return a safe storage-relative name for a local media URL."""
     if not url:
-        return ""
-    prefix = str(getattr(settings, "MEDIA_URL", "/media/"))
+        return None
+    prefix = urlsplit(str(getattr(settings, "MEDIA_URL", "/media/"))).path
+    if not prefix:
+        return None
+    if not prefix.endswith("/"):
+        prefix += "/"
     path = urlsplit(url).path
-    if not path.startswith(prefix) or ".." in path:
-        return ""
+    if not path.startswith(prefix):
+        return None
     name = unquote(path[len(prefix) :])
+    if (
+        not name
+        or name.startswith("/")
+        or "\\" in name
+        or any(part in {"", ".", ".."} for part in name.split("/"))
+    ):
+        return None
+    return name
+
+
+def _image_is_supported(image: Image.Image) -> bool:
+    """Check format and decoded pixel dimensions before loading image data."""
+    return (
+        image.format in ALLOWED_FORMATS
+        and image.width * image.height <= MAX_IMAGE_PIXELS
+    )
+
+
+def local_image(url: str) -> str:
+    """A data URI for a verified local image, or ``''`` for an invalid source."""
+    name = _media_storage_name(url)
+    if name is None:
+        return ""
     try:
         with default_storage.open(name, "rb") as handle:
             raw = handle.read(MAX_IMAGE_BYTES + 1)
-    except (OSError, ValueError):
+    except (OSError, ValueError, SuspiciousFileOperation):
         return ""
     if len(raw) > MAX_IMAGE_BYTES:
         return ""
     try:
         image = Image.open(io.BytesIO(raw))
-        if image.format not in ALLOWED_FORMATS:
+        if not _image_is_supported(image):
             return ""
         image.load()
         image.thumbnail((MAX_IMAGE_SIDE, MAX_IMAGE_SIDE))

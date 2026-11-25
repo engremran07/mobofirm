@@ -269,7 +269,9 @@ def _check_text(text: RequestText, bounty_offer: int | None) -> RequestText:
         )
     for label, value in (("What you tried", tried), ("The extra details", description)):
         if text_length(value) > MAX_TEXT_LENGTH:
-            raise GuideRequestError(f"{label} must not exceed {MAX_TEXT_LENGTH} characters.")
+            raise GuideRequestError(
+                f"{label} must not exceed {MAX_TEXT_LENGTH} characters."
+            )
     if bounty_offer is not None and not 1 <= bounty_offer <= MAX_BOUNTY_OFFER:
         raise GuideRequestError(
             f"A bounty offer is between 1 and {MAX_BOUNTY_OFFER} credits."

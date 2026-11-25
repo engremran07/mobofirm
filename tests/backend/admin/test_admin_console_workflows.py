@@ -249,7 +249,7 @@ def test_comment_bulk_soft_delete_stamps_who_and_when(superuser, pending_comment
 # -- tags -----------------------------------------------------------------------------
 @pytest.mark.django_db
 def test_tag_detail_approve_and_reject(superuser):
-    tag = Tag.objects.create(name="Suggested", ai_suggested=True, is_curated=False)
+    tag = Tag.objects.create(name="Suggested", is_suggested=True, is_curated=False)
     client = _client(superuser)
 
     client.post(_url("tags_tag_approve", tag.pk), DIALOG)
@@ -311,7 +311,7 @@ def test_tag_merge_rejects_merging_a_tag_into_itself(superuser):
 @pytest.mark.django_db
 def test_tag_actions_need_the_change_permission():
     viewer = _user("tag-viewer", staff=True, perms=("view_tag",))
-    tag = Tag.objects.create(name="Guarded", ai_suggested=True, is_curated=False)
+    tag = Tag.objects.create(name="Guarded", is_suggested=True, is_curated=False)
 
     response = _client(viewer).post(_url("tags_tag_approve", tag.pk), DIALOG)
 

@@ -7,8 +7,13 @@
 //   Dialog     dialog.c-dialog-native[data-ui-dialog] > header.c-dialog-native__head, .c-dialog-native__body, footer.c-dialog-native__foot (--end = offcanvas)
 @layer components {
   // ---- Menu (popover, role=menu) -------------------------------------------------------
-  [data-ui-popover] > .dropdown-menu { display: none; }
-  [data-ui-popover][data-open] > .dropdown-menu { display: block; animation: c-pop var(--mf-duration-fast) var(--mf-ease-out); }
+  [data-ui-popover] > .dropdown-menu,
+  [data-ui-panel].dropdown-menu { display: none; }
+  [data-ui-panel][data-ui-open].dropdown-menu {
+    display: block;
+    animation: c-pop var(--mf-duration-fast) var(--mf-ease-out);
+  }
+  [data-ui-panel][data-ui-open][data-ui-fixed] { z-index: 1040; }
   .dropdown-item[data-active],
   .dropdown-item:hover { background: var(--mf-hover); }
   .dropdown-item[data-selected] { color: var(--mf-accent-strong); background: var(--mf-accent-soft); }

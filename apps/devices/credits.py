@@ -16,7 +16,7 @@ from django.apps import apps as django_apps
 WALLET_APP = "apps.wallet"
 WALLET_API = "apps.wallet.api"
 SLOT_RESET_SINK = "device.slot_reset"
-SLOT_RESET_LABEL = "Reset registered-browser slots"
+SLOT_RESET_LABEL = "Reset registered-device slots"
 SLOT_RESET_DEFAULT_CREDITS = 10
 
 
@@ -51,6 +51,7 @@ def register_sink() -> bool:
             app="devices",
             default_credits=SLOT_RESET_DEFAULT_CREDITS,
             user_price=price,
+            url_name="devices:my_devices",
         )
     )
     return True

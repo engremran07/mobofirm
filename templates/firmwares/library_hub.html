@@ -12,7 +12,7 @@
       <h1 id="home-title" class="hero-title mb-3">Find the right firmware <span class="text-gradient">for your device.</span></h1>
       <p class="hero-copy mb-4">Search by device name, model code, codename, or manufacturer. Review exact model details before choosing a file.</p>
       <form id="universal-search" class="home-search" method="get" action="{% url 'firmwares:universal_search' %}"
-            hx-get="{% url 'firmwares:universal_search' %}" hx-trigger="input changed delay:250ms from:find input, search, submit"
+            hx-get="{% url 'firmwares:universal_search' %}" hx-trigger="input changed delay:250ms from:#catalog-query, search from:#catalog-query, submit"
             hx-target="#search-results" hx-swap="innerHTML" hx-sync="this:replace">
         <label class="visually-hidden" for="catalog-query">Search devices and firmware</label>
         <span class="home-search__icon" aria-hidden="true"><i data-lucide="search"></i></span>

@@ -44,7 +44,7 @@ class RejectSuggestionDialog(StaffDialogView):
             pk=self.kwargs["tag_id"],
             is_deleted=False,
             is_curated=False,
-            ai_suggested=True,
+            is_suggested=True,
         )
 
     def get_context_data(self, form: DialogForm) -> dict[str, Any]:

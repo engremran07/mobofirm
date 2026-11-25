@@ -14,6 +14,7 @@ from apps.core.search import (
     search_queryset,
 )
 from apps.core.search.trigram import trigram_available, trigram_candidates
+from apps.firmwares.chipsets import create_chipset_record
 from apps.firmwares.models import Brand, Chipset, FlashingTool, FlashingToolCategory
 from apps.firmwares.search_providers import CHIPSET_ANNOTATIONS, CHIPSET_FIELDS
 
@@ -32,20 +33,20 @@ def _fresh_cache() -> None:
 def _chipsets() -> dict[str, Chipset]:
     """Three chipsets with aliases (code names) for two vendors."""
     return {
-        "d9200": Chipset.objects.create(
+        "d9200": create_chipset_record(
             vendor="MediaTek",
             family="Dimensity",
             name="Dimensity 9200",
             slug="mediatek-dimensity-9200",
             aliases=["MT6985"],
         ),
-        "d9300": Chipset.objects.create(
+        "d9300": create_chipset_record(
             vendor="MediaTek",
             family="Dimensity",
             name="Dimensity 9300",
             slug="mediatek-dimensity-9300",
         ),
-        "sd8g2": Chipset.objects.create(
+        "sd8g2": create_chipset_record(
             vendor="Qualcomm",
             family="Snapdragon",
             name="Snapdragon 8 Gen 2",
@@ -247,7 +248,7 @@ def test_chipset_empty_state_keeps_request_button_and_suggestion() -> None:
 def test_chipset_pagination_links_keep_query_and_filters() -> None:
     """Page links carry q and vendor and are HTMX enabled."""
     for number in range(60):
-        Chipset.objects.create(
+        create_chipset_record(
             vendor="Unisoc", name=f"Tiger {number}", slug=f"unisoc-tiger-{number}"
         )
     response = Client().get(reverse(CHIPSET_URL), {"q": "tiger", "vendor": "Unisoc"})

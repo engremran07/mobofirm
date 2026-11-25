@@ -5,15 +5,35 @@
 {% staff_notice tone="warning" %}<strong>{% translate "Nothing is posted without your approval." %}</strong> {% translate "Videos are drawn and encoded on this server with free local tools only. A draft is created for each published post and verified firmware; render it, watch it here, then approve it. Only approved videos are ever sent to TikTok, YouTube Shorts or Reels." %}{% endstaff_notice %}
 
 {% staff_section title=_("Rendering tools") ident="video-tools" intro=_("What this machine can do. Nothing here calls a paid or cloud service.") %}
-  {% staff_table label=_("Rendering capability report") %}
-    <thead><tr><th scope="col">{% translate "Tool" %}</th><th scope="col">{% translate "State" %}</th><th scope="col">{% translate "Details and how to install" %}</th></tr></thead>
-    <tbody>{% for cap in capabilities_report %}<tr>
-      <th scope="row">{{ cap.label }}{% if cap.required %} <span class="u-muted u-text-xs">({% translate "required" %})</span>{% endif %}</th>
-      <td><span class="c-badge c-badge--{% if cap.ok %}success{% elif cap.required %}danger{% else %}warning{% endif %}">{% if cap.ok %}{% translate "Ready" %}{% elif cap.required %}{% translate "Missing" %}{% else %}{% translate "Not installed" %}{% endif %}</span></td>
-      <td class="u-break">{{ cap.detail }}{% if cap.guidance %}<br><small class="u-muted">{{ cap.guidance }}</small>{% endif %}</td>
-    </tr>{% endfor %}</tbody>
-  {% endstaff_table %}
-  <p class="u-muted u-text-sm mb-0">{% blocktranslate with cap=settings.video_daily_cap left=budget timeout=settings.video_render_timeout %}Automatic drafts: {{ left }} left today (limit {{ cap }} a day). A render stops after {{ timeout }} seconds. Music is generated here (no third-party audio); voice-over needs an offline engine and is optional.{% endblocktranslate %}</p>
+  <ul class="c-video-capabilities" aria-label="{% translate 'Rendering capability report' %}">
+    {% for cap in capabilities_report %}
+      <li class="c-video-capability">
+        <div class="c-video-capability__head">
+          <strong>{{ cap.label }}{% if cap.required %} <span class="u-muted u-text-xs">({% translate "required" %})</span>{% endif %}</strong>
+          <span class="c-badge c-badge--{% if cap.ok %}success{% elif cap.required %}danger{% else %}warning{% endif %}">{% if cap.ok %}{% translate "Ready" %}{% elif cap.required %}{% translate "Missing" %}{% else %}{% translate "Not installed" %}{% endif %}</span>
+        </div>
+        <p class="c-video-capability__detail u-break">{{ cap.detail }}</p>
+        {% if cap.guidance %}
+          <details class="c-video-capability__guidance">
+            <summary>{% translate "Setup guidance" %}</summary>
+            <p class="u-break">{{ cap.guidance }}</p>
+          </details>
+        {% endif %}
+      </li>
+    {% endfor %}
+  </ul>
+  {% if settings.video_daily_cap > 0 %}
+    <div class="c-video-budget">
+      <div class="c-video-budget__summary">
+        <strong id="video-budget-label">{% blocktranslate with used=budget_used cap=settings.video_daily_cap %}{{ used }} / {{ cap }} automatic drafts used today{% endblocktranslate %}</strong>
+        <span>{{ budget }} {% translate "remaining" %}</span>
+      </div>
+      <progress class="c-video-budget__meter" max="{{ settings.video_daily_cap }}" value="{{ budget_used }}" aria-labelledby="video-budget-label"></progress>
+    </div>
+  {% else %}
+    <p class="u-muted u-text-sm mb-0">{% translate "Automatic drafts are off; staff can still create videos manually." %}</p>
+  {% endif %}
+  <p class="u-muted u-text-sm mb-0">{% blocktranslate with timeout=settings.video_render_timeout %}A render stops after {{ timeout }} seconds. Music is generated here (no third-party audio); voice-over needs an offline engine and is optional.{% endblocktranslate %}</p>
 {% endstaff_section %}
 
 {% if can_add %}

@@ -191,7 +191,7 @@ def get_or_create_suggestion(name: str) -> Tag | None:
                 name=name,
                 normalized_name=norm,
                 slug=slug,
-                ai_suggested=True,
+                is_suggested=True,
                 is_curated=False,
             )
     except IntegrityError:

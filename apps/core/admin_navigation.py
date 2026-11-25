@@ -31,6 +31,7 @@ from apps.core.admin_nav_catalog import (
     NavGroup,
     UrlEntry,
 )
+from apps.core.app_service import app_enabled
 
 __all__ = [
     "BADGE_VARIANTS",
@@ -317,7 +318,7 @@ _TAG_TABS: tuple[TabItem, ...] = (
     ("All", "tags.tag", ""),
     ("Unapproved", "tags.tag", "is_curated__exact=0"),
     ("Curated", "tags.tag", "is_curated__exact=1"),
-    ("AI suggested", "tags.tag", "ai_suggested__exact=1"),
+    ("Suggested tags", "tags.tag", "is_suggested__exact=1"),
 )
 
 
@@ -402,11 +403,17 @@ def tabs_for_path(request: HttpRequest, model_label: str) -> list[dict[str, Any]
 
 
 def account_links(request: HttpRequest) -> list[dict[str, str]]:
-    links = []
-    for title, icon, url_name in (
+    entries = [
         (_("My dashboard"), "layout-dashboard", "users:dashboard"),
         (_("My profile"), "user-round", "users:profile"),
-    ):
+        (_("My contributions"), "file-text", "contributions:hub"),
+        (_("Notifications"), "bell", "users:notifications"),
+    ]
+    if app_enabled("wallet"):
+        entries.insert(2, (_("My wallet"), "wallet", "wallet:dashboard"))
+
+    links = []
+    for title, icon, url_name in entries:
         try:
             links.append({"title": title, "icon": icon, "link": reverse(url_name)})
         except NoReverseMatch:

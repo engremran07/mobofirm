@@ -42,7 +42,8 @@ OWNERS: dict[str, str] = {
     ),
     "intake": (
         "services submissions forms views serializers catalog_requests catalog_review "
-        "ai_analysis reward_events events user_views admin_requests admin_io"
+        "reward_events events user_views admin_requests admin_io views_catalog_updates "
+        "catalog_update_proposals catalog_update_forms"
     ),
     "serving": "download_service download_identity public_views api",
     "guides": "guide_service tool_matcher tool_categories views_flashing",
@@ -50,7 +51,7 @@ OWNERS: dict[str, str] = {
     "shortener": (
         "shortener shortener_providers shortener_views admin_shortener urls_short"
     ),
-    "wiring": "admin urls apps",
+    "wiring": "admin admin_catalog_updates urls apps",
 }
 
 # What each responsibility may import (besides itself). ``base`` depends on nothing but

@@ -24,8 +24,9 @@ async function shareNatively(widget) {
 
 export function initializeShare() {
   revealNativeButtons();
-  document.addEventListener("htmx:afterSwap", (event) => {
-    revealNativeButtons(event.target instanceof Element ? event.target : document);
+  document.addEventListener("htmx:after:swap", (event) => {
+    const target = event.detail.ctx?.target;
+    revealNativeButtons(target instanceof Element ? target : document);
   });
   document.addEventListener("click", (event) => {
     const button = event.target instanceof Element ? event.target.closest("[data-share-native]") : null;

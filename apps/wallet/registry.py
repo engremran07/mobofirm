@@ -29,6 +29,7 @@ class RewardEvent:
     per_object_once: bool = True
     default_enabled: bool = True
     dynamic_amount: bool = False
+    url_name: str = ""
 
 
 @dataclass(frozen=True)
@@ -45,6 +46,7 @@ class SpendSink:
     """Optional ``(user) -> credits`` for sinks whose price differs per account (a
     package override); ``None`` means "the sink price applies". Shown on the Ways to
     spend page."""
+    url_name: str = ""
 
 
 # (user, event_key, credits, context) -> adjusted credits

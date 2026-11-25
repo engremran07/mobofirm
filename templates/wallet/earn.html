@@ -8,10 +8,11 @@
   {% include "wallet/_subnav.html" with wallet_tab="earn" %}
   {% if rules %}
     <ul class="cm-grid list-unstyled mb-0" aria-label="Ways to earn credits" data-reveal>
-      {% for rule in rules %}
+      {% for method in rules %}
+        {% with rule=method.rule %}
         <li class="flow-card is-earn">
           <span class="flow-card__icon"><i data-lucide="arrow-down-left" aria-hidden="true"></i></span>
-          <h2 class="flow-card__title">{{ rule.label }}</h2>
+          <h2 class="flow-card__title">{% if method.url %}<a href="{{ method.url }}">{{ rule.label }}</a>{% else %}{{ rule.label }}{% endif %}</h2>
           <p class="flow-card__amount amount is-in mb-0">{% if rule.dynamic_amount %}Varies{% else %}+{{ rule.credits }}{% endif %}</p>
           <p class="flow-card__meta">
             {% if rule.daily_cap or rule.monthly_cap or rule.lifetime_cap %}
@@ -23,6 +24,7 @@
             <p class="flow-card__meta">{% if rule.requires_verified_email %}Needs a verified email{% endif %}{% if rule.min_account_age_days %}<span class="d-block">Account {{ rule.min_account_age_days }}+ days old</span>{% endif %}</p>
           {% endif %}
         </li>
+        {% endwith %}
       {% endfor %}
     </ul>
   {% else %}

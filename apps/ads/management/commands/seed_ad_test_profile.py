@@ -26,8 +26,20 @@ TARGETS: tuple[tuple[str, str], ...] = (
     ("blog/post_detail.html", "in_content"),
     ("firmwares/firmware_detail.html", "sidebar"),
     ("firmwares/firmware_detail.html", "in_content"),
+    ("firmwares/model_detail.html", "left_rail"),
+    ("firmwares/model_detail.html", "right_rail"),
+    ("firmwares/download.html", "left_rail"),
+    ("firmwares/download.html", "right_rail"),
     ("blog/post_list.html", "between_items"),
+    ("blog/archive.html", "between_items"),
+    ("blog/brand_posts.html", "between_items"),
+    ("blog/model_posts.html", "between_items"),
+    ("blog/chipset_posts.html", "between_items"),
+    ("blog/requests/list.html", "between_items"),
     ("firmwares/browse.html", "between_items"),
+    ("firmwares/model_detail.html", "between_items"),
+    ("firmwares/flashing_guides.html", "between_items"),
+    ("firmwares/flashing_category.html", "between_items"),
     # Automatic slots: paragraphs of a post and tiles of the catalogue grids.
     ("blog/post_detail.html", "in_article"),
     ("firmwares/brand_list.html", "between_items"),
@@ -37,6 +49,7 @@ TARGETS: tuple[tuple[str, str], ...] = (
 )
 CREATIVES: dict[str, str] = {
     "728x90": '<div class="ad-zone__house">Mobofirm house ad &middot; 728x90</div>',
+    "160x600": '<div class="ad-zone__house">Mobofirm house ad &middot; 160x600</div>',
     "300x250": '<div class="ad-zone__house">Mobofirm house ad &middot; 300x250</div>',
 }
 

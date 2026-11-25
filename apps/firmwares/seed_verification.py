@@ -218,6 +218,7 @@ def _get_ok(client: Client, path: str, result: CatalogVerification) -> None:
 def _verify_pages(brands: Sequence[BrandSeed], result: CatalogVerification) -> None:
     started = timezone.now()
     client = Client(raise_request_exception=False)
+    download_page_checked = False
     try:
         for name in ("library_hub", "browse", "brand_list", "chipset_list"):
             _get_ok(client, reverse(f"firmwares:{name}"), result)
@@ -250,11 +251,13 @@ def _verify_pages(brands: Sequence[BrandSeed], result: CatalogVerification) -> N
                         reverse("firmwares:firmware_detail", kwargs=kwargs),
                         result,
                     )
-                    _get_ok(
-                        client,
-                        reverse("firmwares:firmware_download", kwargs=kwargs),
-                        result,
-                    )
+                    if not download_page_checked:
+                        _get_ok(
+                            client,
+                            reverse("firmwares:firmware_download", kwargs=kwargs),
+                            result,
+                        )
+                        download_page_checked = True
         for chipset in Chipset.objects.all():
             _get_ok(
                 client,

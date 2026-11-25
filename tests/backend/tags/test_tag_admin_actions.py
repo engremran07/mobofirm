@@ -15,7 +15,7 @@ class TagAdminApprovalTests(TestCase):
         self.client = Client()
         self.client.force_login(self.admin_user)
         self.tag = Tag.objects.create(
-            name="Suggested tag", ai_suggested=True, is_curated=False
+            name="Suggested tag", is_suggested=True, is_curated=False
         )
         self.url = reverse("admin:tags_tag_changelist")
 

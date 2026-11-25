@@ -13,12 +13,12 @@ def get_settings() -> dict[str, Any]:
     except DatabaseError:
         return {
             "allow_public_suggestions": False,
-            "enable_ai_suggestions": False,
+            "automatic_suggestions_enabled": False,
             "show_tag_usage": False,
         }
     return {
         "allow_public_suggestions": config.allow_public_suggestions,
-        "enable_ai_suggestions": config.enable_ai_suggestions,
+        "automatic_suggestions_enabled": config.automatic_suggestions_enabled,
         "show_tag_usage": config.show_tag_usage,
     }
 

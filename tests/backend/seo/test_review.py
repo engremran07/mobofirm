@@ -209,7 +209,7 @@ class ApplyFixTests(TestCase):
         )
         Metadata.objects.create(seo=container, noindex=True)
         scan.run_scan()
-        issue = open_issue("noindex_public_content", "/pages/about/")
+        issue = open_issue("noindex_public_content", "/help/about/")
 
         fixes.apply_fix(issue, self.user, value="false")
 
@@ -541,7 +541,7 @@ class ReviewScreenTests(TestCase):
 
         paths = [row["snapshot"].path for row in response.context["rows"]]
         self.assertIn(URL_MODEL, paths)
-        self.assertNotIn("/pages/about/", paths)
+        self.assertNotIn("/help/about/", paths)
 
     def test_inspector_links_to_issue_fixes(self):
         response = self.client.get(

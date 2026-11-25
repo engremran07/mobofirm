@@ -23,7 +23,12 @@ from django.utils import timezone
 from playwright.sync_api import Page
 
 from tests.backend import design_tokens as tokens
-from tests.frontend.browser_support import chromium, login_cookie, overflow
+from tests.frontend.browser_support import (
+    chromium,
+    login_cookie,
+    overflow,
+    record_page_errors,
+)
 from tests.frontend.console_browser_support import (
     ConsoleServer,
     Probe,
@@ -48,7 +53,8 @@ READ_COLOURS = """(selector) => {
 
 def _hex(value: str) -> str:
     channels = [int(part) for part in re.findall(r"\d+", value)[:3]]
-    return "#%02x%02x%02x" % tuple(channels)
+    red, green, blue = channels
+    return f"#{red:02x}{green:02x}{blue:02x}"
 
 
 def _shots(tmp_path_factory) -> Path:
@@ -62,24 +68,40 @@ def _slug(path: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", path.lower()).strip("-") or "root"
 
 
-def _check(page: Page, label: str, selector: str, prop: str, allowed: set[str], failures: list[str]) -> None:
+def _check(
+    page: Page,
+    label: str,
+    selector: str,
+    prop: str,
+    allowed: set[str],
+    failures: list[str],
+) -> None:
     """Fail when ``selector`` is missing or its computed ``prop`` is not one of the token colours."""
     colours = page.evaluate(READ_COLOURS, selector)
     if colours is None:
         failures.append(f"{label}: expected element {selector!r} is missing")
         return
     if _hex(colours[prop]) not in allowed:
-        failures.append(f"{label}: {selector} {prop} {_hex(colours[prop])} is not a token ({sorted(allowed)})")
+        failures.append(
+            f"{label}: {selector} {prop} {_hex(colours[prop])} is not a token ({sorted(allowed)})"
+        )
 
 
 def _console_server(live_server, username: str) -> ConsoleServer:
     serialize_requests(live_server)
     model = get_user_model()
     user = model.objects.create_superuser(
-        username=username, email=f"{username}@example.test", email_verified_at=timezone.now()
+        username=username,
+        email=f"{username}@example.test",
+        email_verified_at=timezone.now(),
     )
     model.objects.bulk_create(
-        [model(username=f"{username}-row-{i}", email=f"{username}-row-{i}@example.test") for i in range(3)]
+        [
+            model(
+                username=f"{username}-row-{i}", email=f"{username}-row-{i}@example.test"
+            )
+            for i in range(3)
+        ]
     )
     return ConsoleServer(live_server.url, user, login_cookie(user))
 
@@ -92,21 +114,58 @@ def test_console_colours_come_from_the_token_set(live_server, tmp_path_factory):
     with chromium() as browser:
         for theme in THEMES:
             palette = tokens.themes()[theme]
-            surfaces = {palette["surface"], palette["surface-raised"], palette["page"], palette["surface-soft"]}
+            surfaces = {
+                palette["surface"],
+                palette["surface-raised"],
+                palette["page"],
+                palette["surface-soft"],
+            }
             accents = {palette["accent"], palette["accent-strong"]}
-            links = accents | {palette["text"], palette["link-hover"], palette["text-muted"]}
+            links = accents | {
+                palette["text"],
+                palette["link-hover"],
+                palette["text-muted"],
+            }
             for width in WIDTHS:
                 context = server.context(browser, width=width)
-                context.add_init_script(f"localStorage.setItem('mobofirm-theme', '{theme}')")
+                context.add_init_script(
+                    f"localStorage.setItem('mobofirm-theme', '{theme}')"
+                )
                 page = context.new_page()
                 probe = Probe(origin=server.url)
                 probe.attach(page)
                 probe.begin()
                 try:
                     for path, checks in (
-                        ("/admin/", (("body", "background", {palette["page"]}), (".c-stat", "background", surfaces), (".app-content a:not(.btn)", "color", links))),
-                        (USERS, (("body", "color", {palette["text"]}), (".c-fctl__btn", "background", surfaces), (".c-table", "color", {palette["text"], palette["text-muted"]}), (".btn-primary", "background", accents))),
-                        (ADD_POST, (("body", "background", {palette["page"]}), (".form-control", "background", surfaces), (".btn-primary", "background", accents))),
+                        (
+                            "/admin/",
+                            (
+                                ("body", "background", {palette["page"]}),
+                                (".c-stat", "background", surfaces),
+                                (".app-content a:not(.btn)", "color", links),
+                            ),
+                        ),
+                        (
+                            USERS,
+                            (
+                                ("body", "color", {palette["text"]}),
+                                (".c-fctl__btn", "background", surfaces),
+                                (
+                                    ".c-table",
+                                    "color",
+                                    {palette["text"], palette["text-muted"]},
+                                ),
+                                (".btn-primary", "background", accents),
+                            ),
+                        ),
+                        (
+                            ADD_POST,
+                            (
+                                ("body", "background", {palette["page"]}),
+                                (".form-control", "background", surfaces),
+                                (".btn-primary", "background", accents),
+                            ),
+                        ),
                     ):
                         label = f"console {path} {width}px {theme}"
                         open_console(page, probe, server, path, failures)
@@ -114,15 +173,24 @@ def test_console_colours_come_from_the_token_set(live_server, tmp_path_factory):
                             _check(page, label, selector, prop, allowed, failures)
                         dimensions = overflow(page)
                         if dimensions["document"] > dimensions["viewport"] + 1:
-                            failures.append(f"{label}: horizontal overflow {dimensions}")
-                        page.screenshot(path=str(shots / f"console-{_slug(path)}-{width}-{theme}.png"), full_page=True)
+                            failures.append(
+                                f"{label}: horizontal overflow {dimensions}"
+                            )
+                        page.screenshot(
+                            path=str(
+                                shots / f"console-{_slug(path)}-{width}-{theme}.png"
+                            ),
+                            full_page=True,
+                        )
                 finally:
                     failures.extend(probe.end())
                     context.close()
     assert failures == []
 
 
-def test_public_site_colours_come_from_the_same_token_set(live_server, tmp_path_factory):
+def test_public_site_colours_come_from_the_same_token_set(
+    live_server, tmp_path_factory
+):
     shots = _shots(tmp_path_factory)
     failures: list[str] = []
     with chromium() as browser:
@@ -130,26 +198,57 @@ def test_public_site_colours_come_from_the_same_token_set(live_server, tmp_path_
             palette = tokens.themes()[theme]
             for width in WIDTHS:
                 context = browser.new_context(viewport={"width": width, "height": 900})
-                context.add_init_script(f"localStorage.setItem('mobofirm-theme', '{theme}')")
+                context.add_init_script(
+                    f"localStorage.setItem('mobofirm-theme', '{theme}')"
+                )
                 page = context.new_page()
                 errors: list[str] = []
-                page.on("pageerror", lambda error, sink=errors: sink.append(str(error)))
+                record_page_errors(page, errors)
                 try:
                     for path, checks in (
-                        ("/", (("body", "color", {palette["text"]}), ("body", "background", {palette["page"]}))),
-                        ("/accounts/login/", (("body", "color", {palette["text"]}), (".btn-primary", "background", {palette["accent"], palette["accent-strong"]}))),
+                        (
+                            "/",
+                            (
+                                ("body", "color", {palette["text"]}),
+                                ("body", "background", {palette["page"]}),
+                            ),
+                        ),
+                        (
+                            "/accounts/login/",
+                            (
+                                ("body", "color", {palette["text"]}),
+                                (
+                                    ".btn-primary",
+                                    "background",
+                                    {palette["accent"], palette["accent-strong"]},
+                                ),
+                            ),
+                        ),
                     ):
                         label = f"public {path} {width}px {theme}"
-                        response = page.goto(f"{live_server.url}{path}", wait_until="load", timeout=30_000)
+                        response = page.goto(
+                            f"{live_server.url}{path}",
+                            wait_until="load",
+                            timeout=30_000,
+                        )
                         if response is None or response.status != 200:
-                            failures.append(f"{label}: HTTP {response and response.status}")
+                            failures.append(
+                                f"{label}: HTTP {response and response.status}"
+                            )
                             continue
                         for selector, prop, allowed in checks:
                             _check(page, label, selector, prop, allowed, failures)
                         dimensions = overflow(page)
                         if dimensions["document"] > dimensions["viewport"] + 1:
-                            failures.append(f"{label}: horizontal overflow {dimensions}")
-                        page.screenshot(path=str(shots / f"public-{_slug(path)}-{width}-{theme}.png"), full_page=True)
+                            failures.append(
+                                f"{label}: horizontal overflow {dimensions}"
+                            )
+                        page.screenshot(
+                            path=str(
+                                shots / f"public-{_slug(path)}-{width}-{theme}.png"
+                            ),
+                            full_page=True,
+                        )
                 finally:
                     failures.extend(f"{path}: {error}" for error in errors)
                     context.close()
@@ -161,7 +260,9 @@ def test_both_shells_emit_identical_brand_tokens(live_server, theme):
     server = _console_server(live_server, "unity-brand")
     palette = tokens.themes()[theme]
     names = ("page", "text", "accent", "accent-strong", "danger", "success")
-    read = "() => Object.fromEntries(%s.map(n => ['--mf-' + n, getComputedStyle(document.documentElement).getPropertyValue('--mf-' + n).trim().toLowerCase()]))" % list(names)
+    read = (
+        "() => Object.fromEntries(__NAMES__.map(n => ['--mf-' + n, getComputedStyle(document.documentElement).getPropertyValue('--mf-' + n).trim().toLowerCase()]))"
+    ).replace("__NAMES__", repr(list(names)))
     seen: dict[str, dict[str, str]] = {}
     with chromium() as browser:
         public = browser.new_context(viewport={"width": 1280, "height": 900})
@@ -192,20 +293,28 @@ def test_admin_404_page_fits_the_viewport_and_has_no_inline_styles(live_server, 
     with chromium() as browser:
         context = server.context(browser, width=width)
         page = context.new_page()
-        page.on("console", lambda m: errors.append(m.text) if m.type in {"error", "warning"} else None)
+        page.on(
+            "console",
+            lambda m: errors.append(m.text) if m.type in {"error", "warning"} else None,
+        )
         response = page.goto(f"{server.url}/admin/does-not-exist/", wait_until="load")
         assert response is not None and response.status == 404
         assert page.locator("h1").count() == 1
         dimensions = overflow(page)
         assert dimensions["document"] <= dimensions["viewport"] + 1, dimensions
-        assert page.locator("[style]").count() == 0, "strict CSP: no inline style attributes"
+        assert page.locator("[style]").count() == 0, (
+            "strict CSP: no inline style attributes"
+        )
         context.close()
     assert [e for e in errors if "Content Security Policy" in e] == []
 
 
 # -- Part 2: primitives, keyboard only ------------------------------------------------------------
 def _inject(page: Page, html: str) -> None:
-    page.evaluate("(html) => document.querySelector('.app-content').insertAdjacentHTML('beforeend', html)", html)
+    page.evaluate(
+        "(html) => document.querySelector('.app-content').insertAdjacentHTML('beforeend', html)",
+        html,
+    )
 
 
 def test_menu_is_keyboard_operable(live_server):
@@ -218,18 +327,25 @@ def test_menu_is_keyboard_operable(live_server):
         probe.begin()
         problems: list[str] = []
         open_console(page, probe, server, USERS, problems)
-        trigger = page.locator("[data-ui-popover] > [data-ui-trigger][aria-haspopup='menu']").first
+        trigger = page.locator(
+            "[data-ui-popover] > [data-ui-trigger][aria-haspopup='menu']"
+        ).first
         trigger.focus()
         page.keyboard.press("ArrowDown")
         assert trigger.get_attribute("aria-expanded") == "true"
-        assert page.evaluate("() => document.activeElement.getAttribute('role')") == "menuitem"
+        assert (
+            page.evaluate("() => document.activeElement.getAttribute('role')")
+            == "menuitem"
+        )
         page.keyboard.press("ArrowDown")
         assert page.locator("[data-ui-popover][data-open] [data-active]").count() == 1
         page.keyboard.press("End")
         page.keyboard.press("Home")
         page.keyboard.press("Escape")
         assert trigger.get_attribute("aria-expanded") == "false"
-        assert page.evaluate("() => document.activeElement === document.querySelector('[data-ui-trigger][aria-haspopup=menu]:focus')")
+        assert page.evaluate(
+            "() => document.activeElement === document.querySelector('[data-ui-trigger][aria-haspopup=menu]:focus')"
+        )
         problems.extend(probe.end())
         context.close()
     assert problems == []
@@ -237,10 +353,22 @@ def test_menu_is_keyboard_operable(live_server):
 
 def test_switch_radio_group_and_select_are_keyboard_operable(live_server):
     server = _console_server(live_server, "unity-controls")
-    switch = render_to_string("console/components/switch.html", {"name": "notify", "id": "unity-switch", "label": "Notify me"})
+    switch = render_to_string(
+        "console/components/switch.html",
+        {"name": "notify", "id": "unity-switch", "label": "Notify me"},
+    )
     radios = render_to_string(
         "console/components/radio_group.html",
-        {"name": "density", "label": "Density", "value": "a", "options": [{"value": "a", "label": "One"}, {"value": "b", "label": "Two"}, {"value": "c", "label": "Three"}]},
+        {
+            "name": "density",
+            "label": "Density",
+            "value": "a",
+            "options": [
+                {"value": "a", "label": "One"},
+                {"value": "b", "label": "Two"},
+                {"value": "c", "label": "Three"},
+            ],
+        },
     )
     with chromium() as browser:
         context = server.context(browser, width=1280)
@@ -295,7 +423,11 @@ def test_native_dialog_traps_focus_and_restores_it(live_server):
     server = _console_server(live_server, "unity-dialog")
     dialog = render_to_string(
         "console/components/dialog_native.html",
-        {"id": "unity-dialog", "title": "Sure?", "content": "<button type='button' id='in-one'>One</button><button type='button' id='in-two'>Two</button>"},
+        {
+            "id": "unity-dialog",
+            "title": "Sure?",
+            "content": "<button type='button' id='in-one'>One</button><button type='button' id='in-two'>Two</button>",
+        },
     )
     with chromium() as browser:
         context = server.context(browser, width=1280)
@@ -305,16 +437,23 @@ def test_native_dialog_traps_focus_and_restores_it(live_server):
         probe.begin()
         problems: list[str] = []
         open_console(page, probe, server, USERS, problems)
-        _inject(page, f"<button type='button' id='opener' data-ui-dialog-open='unity-dialog'>Open</button>{dialog}")
+        _inject(
+            page,
+            f"<button type='button' id='opener' data-ui-dialog-open='unity-dialog'>Open</button>{dialog}",
+        )
         page.locator("#opener").focus()
         page.keyboard.press("Enter")
         assert page.locator("#unity-dialog[open][data-open]").count() == 1
         for _ in range(8):
             page.keyboard.press("Tab")
-            assert page.evaluate("() => document.activeElement === document.body || !!document.activeElement.closest('#unity-dialog')"), "focus escaped the dialog"
+            assert page.evaluate(
+                "() => document.activeElement === document.body || !!document.activeElement.closest('#unity-dialog')"
+            ), "focus escaped the dialog"
         page.keyboard.press("Escape")
         assert page.locator("#unity-dialog[open]").count() == 0
-        assert page.evaluate("() => document.activeElement.id") == "opener", "focus returns to the opener"
+        assert page.evaluate("() => document.activeElement.id") == "opener", (
+            "focus returns to the opener"
+        )
         problems.extend(probe.end())
         context.close()
     assert problems == []
@@ -335,7 +474,9 @@ def test_combobox_exposes_the_shared_data_attributes_from_the_keyboard(live_serv
         field = root.locator("[data-console-combobox-input]")
         field.focus()
         page.keyboard.press("ArrowDown")
-        page.wait_for_function("(el) => el.hasAttribute('data-open')", arg=root.element_handle())
+        page.wait_for_function(
+            "(el) => el.hasAttribute('data-open')", arg=root.element_handle()
+        )
         assert field.get_attribute("aria-expanded") == "true"
         page.keyboard.press("Escape")
         assert root.get_attribute("data-open") is None
@@ -359,13 +500,23 @@ def test_shared_button_card_and_form_control_use_the_same_tokens(live_server, th
         open_console(page, probe, server, ADD_POST, failures)
         button = page.evaluate(READ_COLOURS, ".btn-primary")
         control = page.evaluate(READ_COLOURS, ".form-control")
-        assert button and control, "the post form renders a primary button and form controls"
+        assert button and control, (
+            "the post form renders a primary button and form controls"
+        )
         assert tokens.contrast(_hex(button["color"]), _hex(button["background"])) >= 4.5
-        assert tokens.contrast(_hex(control["color"]), _hex(control["background"])) >= 4.5
-        assert _hex(control["background"]) in {palette["surface"], palette["surface-raised"], palette["page"]}
+        assert (
+            tokens.contrast(_hex(control["color"]), _hex(control["background"])) >= 4.5
+        )
+        assert _hex(control["background"]) in {
+            palette["surface"],
+            palette["surface-raised"],
+            palette["page"],
+        }
         assert control["radius"] > 0 and button["radius"] > 0
         # The shared status-tone mixin: badges and alerts take ink from the same status tokens.
-        badge = page.evaluate("() => { const el = document.createElement('span'); el.className = 'c-badge c-badge--danger'; document.body.append(el); const c = getComputedStyle(el).color; el.remove(); return c; }")
+        badge = page.evaluate(
+            "() => { const el = document.createElement('span'); el.className = 'c-badge c-badge--danger'; document.body.append(el); const c = getComputedStyle(el).color; el.remove(); return c; }"
+        )
         assert _hex(badge) == palette["danger"]
         failures.extend(probe.end())
         context.close()

@@ -112,7 +112,9 @@ def _literals(path: Path) -> list[str]:
     hits: list[str] = []
     for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         if hex_pattern.search(line) or COLOUR_FUNCTION.search(line):
-            hits.append(f"{path.relative_to(ROOT).as_posix()}:{number}: {line.strip()[:90]}")
+            hits.append(
+                f"{path.relative_to(ROOT).as_posix()}:{number}: {line.strip()[:90]}"
+            )
     return hits
 
 
@@ -134,8 +136,12 @@ def test_literal_allowlist_entries_are_real_and_still_needed():
     for relative, reason in LITERAL_ALLOWLIST.items():
         path = ROOT / relative
         assert reason.strip()
-        assert path.is_file(), f"{relative} no longer exists; drop it from LITERAL_ALLOWLIST"
-        assert _literals(path), f"{relative} has no colour literal; drop it from LITERAL_ALLOWLIST"
+        assert path.is_file(), (
+            f"{relative} no longer exists; drop it from LITERAL_ALLOWLIST"
+        )
+        assert _literals(path), (
+            f"{relative} has no colour literal; drop it from LITERAL_ALLOWLIST"
+        )
 
 
 def test_pwa_manifest_defaults_stay_equal_to_the_tokens():
@@ -198,9 +204,13 @@ def test_status_ink_is_legible_on_its_soft_tint(mode):
 def test_both_bundles_consume_the_shared_token_emitters():
     for source in (tokens.PUBLIC_TOKENS, tokens.CONSOLE_TOKENS):
         text = source.read_text(encoding="utf-8")
-        assert "shared/tokens/emit" in text, f"{source.name} must use the shared emitters"
+        assert "shared/tokens/emit" in text, (
+            f"{source.name} must use the shared emitters"
+        )
         assert "emit.theme-tokens" in text and "emit.scale-tokens" in text
-        assert not re.search(r"--mf-[a-z-]+:\s*#", text), f"{source.name} defines its own colour"
+        assert not re.search(r"--mf-[a-z-]+:\s*#", text), (
+            f"{source.name} defines its own colour"
+        )
 
 
 def test_token_emitter_defines_light_dark_and_system_themes():
@@ -217,14 +227,18 @@ def test_token_emitter_defines_light_dark_and_system_themes():
     ):
         assert needle in emit, needle
     # The console bundle turns the system theme on; the public site resolves it in JS.
-    assert "theme-tokens($system: false" in tokens.PUBLIC_TOKENS.read_text(encoding="utf-8")
-    assert "@include emit.theme-tokens;" in tokens.CONSOLE_TOKENS.read_text(encoding="utf-8")
+    assert "theme-tokens($system: false" in tokens.PUBLIC_TOKENS.read_text(
+        encoding="utf-8"
+    )
+    assert "@include emit.theme-tokens;" in tokens.CONSOLE_TOKENS.read_text(
+        encoding="utf-8"
+    )
 
 
 def test_console_bootstrap_seam_takes_its_colours_from_the_palette():
-    seam = (ROOT / "frontend" / "src" / "admin" / "styles" / "_bootstrap.scss").read_text(
-        encoding="utf-8"
-    )
+    seam = (
+        ROOT / "frontend" / "src" / "admin" / "styles" / "_bootstrap.scss"
+    ).read_text(encoding="utf-8")
 
     assert "shared/tokens/palette" in seam
     assert not tokens.HEX_VALUE.search(seam)

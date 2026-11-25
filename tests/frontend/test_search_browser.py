@@ -33,6 +33,33 @@ def _wait_options(page: Page) -> None:
 
 
 @pytest.mark.django_db(transaction=True)
+def test_catalog_search_triggers_on_the_scoped_input(live_server):
+    _catalog()
+    failures: list[str] = []
+    with chromium() as browser:
+        page = browser.new_page(viewport={"width": 1365, "height": 900})
+        watch(page, failures)
+        page.goto(f"{live_server.url}/")
+        ready(page)
+
+        page.locator("#catalog-query").fill("Zephyr")
+        page.locator("#search-results").get_by_role("link", name="Zephyr One").wait_for(
+            state="visible"
+        )
+        assert page.url.endswith("/")
+
+        page.goto(f"{live_server.url}{reverse('firmwares:universal_search')}")
+        ready(page)
+        page.locator("#search-query").fill("Zephyr")
+        page.locator("#search-results").get_by_role("link", name="Zephyr One").wait_for(
+            state="visible"
+        )
+        page.wait_for_url("**?q=Zephyr")
+
+    assert not failures, "\n".join(failures)
+
+
+@pytest.mark.django_db(transaction=True)
 def test_header_search_suggests_per_keystroke_and_navigates_by_keyboard(live_server):
     _catalog()
     failures: list[str] = []

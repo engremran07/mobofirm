@@ -403,6 +403,11 @@ CRAWL_RULES: dict[str, Rule] = _rules(
                 "Sitemap conflicts with indexation policy",
                 "Sitemap and policy agree.",
             ),
+            (
+                "indexable_route_missing_from_sitemap",
+                "Indexable route missing from sitemap",
+                "Canonical, indexable public routes should be listed in a sitemap.",
+            ),
             ("site_url_missing", "SITE_URL is not configured", "Set SITE_URL."),
             (
                 "orphan_page",

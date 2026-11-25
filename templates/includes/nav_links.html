@@ -1,11 +1,37 @@
-{# Contract: mobile (truthy renders the stacked mobile variant). aria-current comes from the nav_current context value. #}
-<a class="site-nav-link" href="{% url 'firmwares:browse' %}"{% if nav_current == "firmware" %} aria-current="page"{% endif %}>Firmware</a>
-<a class="site-nav-link" href="{% url 'firmwares:brand_list' %}"{% if nav_current == "brands" %} aria-current="page"{% endif %}>Brands</a>
-<a class="site-nav-link" href="{% url 'firmwares:chipset_list' %}"{% if nav_current == "chipsets" %} aria-current="page"{% endif %}>Chipsets</a>
-<a class="site-nav-link" href="{% url 'firmwares:flashing_tools' %}"{% if nav_current == "guides" %} aria-current="page"{% endif %}>Tools &amp; Guides</a>
-<a class="site-nav-link" href="{% url 'blog:post_list' %}"{% if nav_current == "blog" %} aria-current="page"{% endif %}>Blog</a>
+{# Mobile navigation groups mirror the desktop destinations while keeping secondary routes reachable. #}
+<details class="mobile-nav-group" data-mobile-nav-group>
+  <summary>Firmware</summary>
+  <div class="mobile-nav-group__links">
+    <a class="site-nav-link" href="{% url 'firmwares:browse' %}"{% if nav_current == "firmware" %} aria-current="page"{% endif %}>Browse firmware</a>
+    <a class="site-nav-link" href="{% url 'firmwares:brand_list' %}"{% if nav_current == "brands" %} aria-current="page"{% endif %}>Brands</a>
+    <a class="site-nav-link" href="{% url 'firmwares:chipset_list' %}"{% if nav_current == "chipsets" %} aria-current="page"{% endif %}>Chipsets</a>
+    <a class="site-nav-link" href="{% url 'firmwares:universal_search' %}">Search by model code</a>
+    <a class="site-nav-link" href="{% url 'firmwares:requests_hub' %}">Request catalog items</a>
+    <a class="site-nav-link" href="{% url 'firmwares:contribute' %}">Contribute firmware</a>
+  </div>
+</details>
+<details class="mobile-nav-group" data-mobile-nav-group>
+  <summary>Tools &amp; Guides</summary>
+  <div class="mobile-nav-group__links">
+    <a class="site-nav-link" href="{% url 'firmwares:flashing_tools' %}"{% if nav_current == "guides" %} aria-current="page"{% endif %}>Flashing tools</a>
+    <a class="site-nav-link" href="{% url 'firmwares:flashing_guides' %}">Flashing guides</a>
+    <a class="site-nav-link" href="{% url 'blog:request_list' %}">Method requests</a>
+    <a class="site-nav-link" href="{% url 'tags:list' %}">Topics</a>
+    {% if ecosystem.pages %}<a class="site-nav-link" href="{% url 'pages:index' %}"{% if nav_current == "pages" %} aria-current="page"{% endif %}>Help centre</a>{% endif %}
+  </div>
+</details>
+<a class="site-nav-link" href="{% url 'blog:post_list' %}"{% if nav_current == "blog" %} aria-current="page"{% endif %}>Journal</a>
+{% if ecosystem.marketplace or ecosystem.bounty or ecosystem.gamification %}
+  <details class="mobile-nav-group" data-mobile-nav-group>
+    <summary>Community</summary>
+    <div class="mobile-nav-group__links">
+      {% if ecosystem.marketplace %}<a class="site-nav-link" href="{% url 'marketplace:listing_browse' %}">Marketplace</a>{% endif %}
+      {% if ecosystem.bounty %}<a class="site-nav-link" href="{% url 'bounty:list' %}">Bounties</a>{% endif %}
+      {% if ecosystem.gamification %}
+        <a class="site-nav-link" href="{% url 'gamification:leaderboard' %}">Leaderboard</a>
+        <a class="site-nav-link" href="{% url 'gamification:badges' %}">Badges</a>
+      {% endif %}
+    </div>
+  </details>
+{% endif %}
 {% if ecosystem.shop %}<a class="site-nav-link" href="{% url 'shop:pricing' %}"{% if nav_current == "shop" %} aria-current="page"{% endif %}>Pricing</a>{% endif %}
-{% if ecosystem.marketplace %}<a class="site-nav-link" href="{% url 'marketplace:listing_browse' %}"{% if nav_current == "marketplace" %} aria-current="page"{% endif %}>Marketplace</a>{% endif %}
-{% if user.is_authenticated %}<a class="site-nav-link" href="{% url 'contributions:hub' %}"{% if nav_current == "contributions" %} aria-current="page"{% endif %}>My contributions</a>{% endif %}
-{% if ecosystem.pages %}<a class="site-nav-link" href="{% url 'pages:index' %}"{% if nav_current == "pages" %} aria-current="page"{% endif %}>Help</a>{% endif %}
-{% if user.is_staff %}<a class="site-nav-link" href="{% url 'admin:index' %}">Admin</a>{% endif %}

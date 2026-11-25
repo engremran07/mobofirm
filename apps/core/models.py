@@ -2,16 +2,74 @@ from __future__ import annotations
 
 import copy
 
+from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.db.models.signals import post_delete, post_save
+from django.utils import timezone
 from solo.models import SingletonModel
 
 from apps.core.metrics.collector import Metric
 from apps.core.utils.request_cache import forget, memoize
-from apps.users.models import AuditFieldsModel, SoftDeleteModel, TimestampedModel
 
 REGISTRY_MEMO_KEY = "core.app_registry"
+
+
+class TimestampedModel(models.Model):
+    """Minimal timestamp mixin shared by domain models."""
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        abstract = True
+
+
+class SoftDeleteModel(models.Model):
+    """Opt-in soft-delete. Call obj.soft_delete(user) instead of obj.delete()."""
+
+    is_deleted = models.BooleanField(default=False, db_index=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+    deleted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="%(class)s_deleted",
+    )
+
+    class Meta:
+        abstract = True
+
+    def soft_delete(self, user=None, commit: bool = True) -> None:
+        self.is_deleted = True
+        self.deleted_at = timezone.now()
+        if user and not self.deleted_by:
+            self.deleted_by = user
+        if commit:
+            self.save(update_fields=["is_deleted", "deleted_at", "deleted_by"])
+
+
+class AuditFieldsModel(models.Model):
+    """Adds created_by / updated_by FKs to AUTH_USER_MODEL."""
+
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="%(class)s_created",
+    )
+    updated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="%(class)s_updated",
+    )
+
+    class Meta:
+        abstract = True
 
 
 class AppRegistry(SingletonModel):
@@ -70,6 +128,9 @@ class AppRegistry(SingletonModel):
 
 def _forget_registry(**_kwargs: object) -> None:
     forget(REGISTRY_MEMO_KEY)
+    from apps.core.app_service import AppService
+
+    AppService.clear()
 
 
 post_save.connect(

@@ -53,6 +53,27 @@ def test_public_community_pages_render_cleanly_at_every_width(live_server):
         for width in WIDTHS:
             page = context_with(browser, live_server, cookies, width).new_page()
             watch(page, failures)
+            response = page.goto(f"{live_server.url}/community/badges/")
+            assert response and response.status == 200
+            if width < 992:
+                page.get_by_role("button", name="Toggle navigation").click()
+                mobile_nav = page.get_by_role("navigation", name="Mobile navigation")
+                for label in ("Bounties", "Leaderboard", "Badges"):
+                    assert mobile_nav.get_by_role("link", name=label).is_visible()
+            else:
+                main_nav = page.get_by_role("navigation", name="Main navigation")
+                community_link = main_nav.get_by_role("link", name="Community")
+                assert community_link.is_visible()
+                community_link.hover()
+                for label in ("Open bounties", "Leaderboard", "Badges"):
+                    assert main_nav.get_by_role("link", name=label).is_visible()
+            footer_nav = page.get_by_role(
+                "navigation", name="Footer catalogue navigation"
+            )
+            for label in ("Bounties", "Leaderboard", "Badges"):
+                assert footer_nav.get_by_role("link", name=label).is_visible()
+            nav_overflow = overflow(page)
+            assert nav_overflow["document"] <= nav_overflow["viewport"] + 1
             for path in ("/community/badges/", "/leaderboard/", "/bounty/"):
                 response = page.goto(f"{live_server.url}{path}")
                 assert response and response.status == 200, path

@@ -15,6 +15,7 @@ from django.utils import timezone
 
 from apps.blog.models import BlogSettings, Category, Post, PostAccess, PostStatus
 from apps.blog.services import contributions, workflow
+from apps.core.admin_base import ModelAdmin
 from apps.core.app_service import AppService
 from apps.users.models import Notification
 
@@ -328,6 +329,7 @@ class TestReviewerDowngrade:
         from django.contrib import admin
 
         post_admin = admin.site.get_model_admin(Post)
+        assert isinstance(post_admin, ModelAdmin)
         assert "lower_access" in post_admin.actions_detail
 
 

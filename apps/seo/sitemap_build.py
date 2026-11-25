@@ -50,6 +50,8 @@ IMAGE_ATTRIBUTES = (
     "cover_image_url",
     "image_url",
     "logo_url",
+    "image_upload",
+    "logo_upload",
     "hero_image",
     "og_image",
 )
@@ -264,10 +266,11 @@ def news_entries(row: SEOSettings, origin: str) -> list[NewsEntry]:
     found: list[NewsEntry] = []
     for section, sitemap_class in get_sitemaps().items():
         sitemap = sitemap_class()
-        if not callable(getattr(sitemap, "news", None)):
+        news_hook = getattr(sitemap, "news", None)
+        if not callable(news_hook):
             continue
         for entry in section_entries(section, origin):
-            declared = sitemap.news(entry.item)
+            declared = news_hook(entry.item)
             if not declared:
                 continue
             title, published = declared

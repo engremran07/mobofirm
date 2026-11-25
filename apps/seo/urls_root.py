@@ -10,6 +10,7 @@ app_name = "seo_public"
 
 urlpatterns = [
     path("robots.txt", sitemap_views.robots_txt, name="robots"),
+    path("site-map/", sitemap_views.human_sitemap, name="human_sitemap"),
     path("sitemap.xml", sitemap_views.sitemap_index, name="sitemap"),
     path(
         "sitemap.xml.gz",

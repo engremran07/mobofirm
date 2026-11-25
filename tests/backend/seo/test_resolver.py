@@ -414,7 +414,7 @@ class SeoDisabledTests(TestCase):
 
 
 @pytest.mark.parametrize(
-    "path", ["/", "/firmwares/brands/", "/blog/", "/tags/", "/pages/"]
+    "path", ["/", "/firmwares/brands/", "/blog/", "/tags/", "/help/"]
 )
 @pytest.mark.django_db
 def test_head_markup_contains_no_inline_script_or_style(client, path, settings):

@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import gzip
 import json
+from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import timedelta
 from xml.etree import ElementTree as ET
 
@@ -22,6 +24,7 @@ from apps.distribution.models import (
     PingOutbox,
     ShareLog,
 )
+from apps.seo.fetcher import FetchResult, SafeFetcher
 
 pytestmark = pytest.mark.django_db
 HUB = "https://hub.example.com/"
@@ -52,6 +55,7 @@ def test_rss_is_valid_and_complete(client, make_post):
     assert node is not None
     guid = node.find("guid")
     assert guid is not None and guid.get("isPermaLink") == "true"
+    assert guid.text is not None
     assert guid.text.endswith(post.get_absolute_url())
     assert "FULL-BODY-TEXT" in body.decode()  # content:encoded
     assert node.find("{http://purl.org/dc/elements/1.1/}creator") is not None
@@ -292,24 +296,42 @@ def item(ref="post:1"):
     )
 
 
-class Reply:
-    def __init__(self, status):
-        self.status = status
-        self.headers = {}
-        self.body = b""
+@dataclass(frozen=True)
+class HubCall:
+    """What the fake hub was asked to fetch."""
+
+    url: str
+    method: str
+    body: bytes
+    follow_redirects: bool
+    allowed_hosts: frozenset[str] | None
 
 
-class Hub:
-    def __init__(self, *outcomes):
+class Hub(SafeFetcher):
+    """A scripted hub: each call consumes one HTTP status (or raises an error)."""
+
+    def __init__(self, *outcomes: int | Exception) -> None:
+        super().__init__()
         self.outcomes = list(outcomes)
-        self.calls = []
+        self.calls: list[HubCall] = []
 
-    def fetch(self, target, **kwargs):
-        self.calls.append((target, kwargs))
+    def fetch(
+        self,
+        url: str,
+        *,
+        method: str = "GET",
+        headers: Mapping[str, str] | None = None,
+        body: bytes | None = None,
+        follow_redirects: bool = True,
+        allowed_hosts: frozenset[str] | None = None,
+    ) -> FetchResult:
+        self.calls.append(
+            HubCall(url, method, body or b"", follow_redirects, allowed_hosts)
+        )
         outcome = self.outcomes.pop(0)
         if isinstance(outcome, Exception):
             raise outcome
-        return Reply(outcome)
+        return FetchResult(url=url, final_url=url, status=outcome, headers={}, body=b"")
 
 
 def test_nothing_is_queued_until_a_hub_is_configured():
@@ -334,14 +356,10 @@ def test_delivery_posts_hub_publish_and_audits():
     fake = Hub(*[204] * PingOutbox.objects.count())
     counts = syndication.process_due(fetcher=fake, limit=100)
     assert counts["sent"] == len(fake.calls) > 0
-    target, kwargs = fake.calls[0]
-    assert (
-        target == HUB
-        and kwargs["method"] == "POST"
-        and kwargs["follow_redirects"] is False
-    )
-    assert kwargs["allowed_hosts"] == frozenset({"hub.example.com"})
-    assert b"hub.mode=publish" in kwargs["body"]
+    call = fake.calls[0]
+    assert call.url == HUB and call.method == "POST" and call.follow_redirects is False
+    assert call.allowed_hosts == frozenset({"hub.example.com"})
+    assert b"hub.mode=publish" in call.body
     assert not PingOutbox.objects.exclude(status="sent").exists()
     assert ShareLog.objects.filter(message__startswith="WebSub hub ping sent").exists()
 
@@ -350,6 +368,7 @@ def test_delivery_posts_hub_publish_and_audits():
 def test_transient_failure_backs_off_then_succeeds_and_terminal_gives_up():
     syndication.announce(item())
     ping = PingOutbox.objects.order_by("id").first()
+    assert ping is not None
     now = timezone.now()
     assert syndication.deliver(ping.pk, now=now, fetcher=Hub(503)) == "retried"
     ping.refresh_from_db()
@@ -360,6 +379,7 @@ def test_transient_failure_backs_off_then_succeeds_and_terminal_gives_up():
     later = ping.next_attempt_at + timedelta(seconds=1)
     assert syndication.deliver(ping.pk, now=later, fetcher=Hub(204)) == "sent"
     other = PingOutbox.objects.exclude(pk=ping.pk).first()
+    assert other is not None
     assert syndication.deliver(other.pk, now=now, fetcher=Hub(400)) == "failed"
     other.refresh_from_db()
     assert other.status == "failed" and "400" in other.last_error
@@ -371,6 +391,7 @@ def test_transient_failure_backs_off_then_succeeds_and_terminal_gives_up():
 def test_retries_stop_after_the_attempt_limit():
     syndication.announce(item())
     ping = PingOutbox.objects.first()
+    assert ping is not None
     now = timezone.now()
     outcome = ""
     for _ in range(syndication.MAX_ATTEMPTS):
@@ -392,6 +413,7 @@ def test_removing_the_hub_makes_pending_pings_fail_cleanly():
     cfg.websub_hub_url = ""
     cfg.save()
     ping = PingOutbox.objects.first()
+    assert ping is not None
     assert syndication.deliver(ping.pk, fetcher=Hub()) == "failed"
 
 
@@ -513,6 +535,7 @@ def test_toggle_validate_and_settings_post_redirect(
 def test_outbox_actions_and_news_step(admin_client):
     syndication.announce(item())
     ping = PingOutbox.objects.first()
+    assert ping is not None
     cancel = reverse("admin:distribution_channel_feeds_ping", args=[ping.pk, "cancel"])
     assert admin_client.post(cancel).status_code == 302
     ping.refresh_from_db()

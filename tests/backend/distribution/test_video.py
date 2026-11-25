@@ -319,7 +319,29 @@ def test_local_images_are_verified_and_remote_ones_ignored():
     assert art.local_image("/media/devices/bad.png") == ""
     assert art.local_image("https://evil.example/x.png") == ""  # never hotlinked
     assert art.local_image("/media/../etc/passwd") == ""
-    assert art.qr_path("https://mobofirm.example/x")["size"] >= 21
+    qr_size = art.qr_path("https://mobofirm.example/x")["size"]
+    assert isinstance(qr_size, int) and qr_size >= 21
+
+
+def test_encoded_path_traversal_is_rejected_before_storage_read():
+    """Reject URL-encoded traversal before asking storage to open the path."""
+    from apps.distribution.video import art
+
+    assert not art.local_image("/media/%2e%2e/etc/passwd")
+
+
+def test_oversized_local_images_are_rejected_before_decode(monkeypatch, tmp_path):
+    """Reject images over the pixel budget before Pillow decodes them."""
+    from apps.distribution.video import art
+
+    monkeypatch.setattr(art, "MAX_IMAGE_PIXELS", 100)
+    buffer = io.BytesIO()
+    Image.new("RGB", (11, 10), "red").save(buffer, "PNG")
+    name = default_storage.save(
+        f"devices/{tmp_path.name}.png", ContentFile(buffer.getvalue())
+    )
+
+    assert not art.local_image(f"/media/{name}")
 
 
 # --------------------------------------------------------------- safe zones ----
@@ -538,6 +560,30 @@ def render_stubbed(job, **extra):
     return videos.render_job(job.pk, **{**options, **extra})
 
 
+class MemoryStorage:
+    """Small storage fake supporting failed writes and deletion assertions."""
+
+    def __init__(self, files=None, *, fail_on=""):
+        """Initialize stored files and an optional failing filename suffix."""
+        self.files = dict(files or {})
+        self.fail_on = fail_on
+
+    def exists(self, name):
+        """Report whether a path is present."""
+        return name in self.files
+
+    def save(self, name, content):
+        """Store bytes unless this path is configured to fail."""
+        if self.fail_on and name.endswith(self.fail_on):
+            raise OSError("storage unavailable")
+        self.files[name] = content.read()
+        return name
+
+    def delete(self, name):
+        """Remove a stored path if present."""
+        self.files.pop(name, None)
+
+
 def test_creation_is_idempotent_and_validates_content():
     first = new_draft()
     again, reason = videos.create("firmware", "official:1", source=firmware_source())
@@ -585,6 +631,74 @@ def test_state_machine_draft_to_ready_to_approved_to_posted():
     videos.note_posted("firmware", "official:1")
     job.refresh_from_db()
     assert job.status == "posted"
+
+
+def test_failed_render_replacement_keeps_previous_video_and_poster(
+    tmp_path, monkeypatch
+):
+    """A poster write failure must preserve the prior video and poster."""
+    job = queued(new_draft())
+    old_video = "distribution/videos/old-token/video.mp4"
+    old_poster = "distribution/videos/old-token/poster.jpg"
+    job.media_token = "old-token"
+    job.video_name = old_video
+    job.poster_name = old_poster
+    job.save(update_fields=["media_token", "video_name", "poster_name"])
+    storage = MemoryStorage(
+        {old_video: b"previous video", old_poster: b"previous poster"},
+        fail_on="poster.jpg",
+    )
+    monkeypatch.setattr(videos, "default_storage", storage)
+    rendered = tmp_path / "replacement.mp4"
+    rendered.write_bytes(b"replacement video")
+    result = render.RenderResult(
+        rendered, b"replacement poster", 1000, 18, "a" * 64, False
+    )
+    monkeypatch.setattr(videos.render, "render_video", lambda *args, **kwargs: result)
+
+    assert videos.render_job(job.pk, voice=False) == "failed"
+
+    job.refresh_from_db()
+    assert job.video_name == old_video
+    assert job.poster_name == old_poster
+    assert storage.files == {
+        old_video: b"previous video",
+        old_poster: b"previous poster",
+    }
+
+
+def test_successful_render_replacement_removes_old_files_after_commit(
+    tmp_path, monkeypatch, django_capture_on_commit_callbacks
+):
+    """Retire old render files after the new video metadata commits."""
+    job = queued(new_draft())
+    old_video = "distribution/videos/old-token/video.mp4"
+    old_poster = "distribution/videos/old-token/poster.jpg"
+    job.media_token = "old-token"
+    job.video_name = old_video
+    job.poster_name = old_poster
+    job.save(update_fields=["media_token", "video_name", "poster_name"])
+    storage = MemoryStorage(
+        {old_video: b"previous video", old_poster: b"previous poster"}
+    )
+    monkeypatch.setattr(videos, "default_storage", storage)
+    rendered = tmp_path / "replacement.mp4"
+    rendered.write_bytes(b"replacement video")
+    result = render.RenderResult(
+        rendered, b"replacement poster", 1000, 18, "a" * 64, False
+    )
+    monkeypatch.setattr(videos.render, "render_video", lambda *args, **kwargs: result)
+
+    with django_capture_on_commit_callbacks(execute=True):
+        assert videos.render_job(job.pk, voice=False) == "ready"
+
+    job.refresh_from_db()
+    assert job.video_name != old_video
+    assert job.poster_name != old_poster
+    assert old_video not in storage.files
+    assert old_poster not in storage.files
+    assert storage.files[job.video_name] == b"replacement video"
+    assert storage.files[job.poster_name] == b"replacement poster"
 
 
 def test_a_second_worker_cannot_render_the_same_job():
@@ -720,9 +834,9 @@ def test_a_retryable_failure_requeues_and_a_final_one_stops(monkeypatch):
         and job.attempts == videos.MAX_ATTEMPTS
         and "exceeded" in job.error
     )
-    assert (
-        videos.rerender(job, None, dispatch=lambda pk: None)[0].attempts == 0
-    )  # staff can start over
+    restarted, _ = videos.rerender(job, None, dispatch=lambda pk: None)
+    assert restarted is not None
+    assert restarted.attempts == 0  # staff can start over
 
 
 def test_missing_ffmpeg_fails_clearly_without_posting(monkeypatch):
@@ -767,9 +881,11 @@ def test_a_bulk_import_cannot_flood_the_queue(
         for index in range(12):
             make_post(f"Imported journal post number {index} about firmware")
     assert VideoJob.objects.filter(params__auto=True).count() == 3
+    automatic = VideoJob.objects.first()
+    assert automatic is not None
     manual, _ = videos.create(
         "blog",
-        f"post:{VideoJob.objects.first().object_ref.split(':')[1]}",
+        f"post:{automatic.object_ref.split(':')[1]}",
         pack_slug="blog-post",
         hook="B",
     )
@@ -821,13 +937,15 @@ def test_weekly_roundup_is_created_once_per_week(monkeypatch):
     )
     first = videos.enlist_weekly_roundup()
     assert first is not None and first.content_kind == "roundup"
-    assert videos.enlist_weekly_roundup().pk == first.pk
+    second = videos.enlist_weekly_roundup()
+    assert second is not None and second.pk == first.pk
     assert VideoJob.objects.count() == 1
 
 
 def test_params_snapshot_round_trips():
     original = guide_source()
     job, _ = videos.create("blog", "post:2", source=original)
+    assert job is not None
     assert videos.source_from(job.params) == original
 
 
@@ -951,6 +1069,7 @@ def test_scheduling_needs_an_approved_video(admin_client, make_post, make_channe
     post = make_post("A post whose video will be scheduled soon")
     channel = make_channel("tiktok", name="tt-main")
     job, _ = videos.create("blog", f"post:{post.pk}", pack_slug="blog-post")
+    assert job is not None
     schedule = reverse("admin:distribution_channel_video_schedule", args=[job.pk])
     admin_client.post(schedule, {"channels": [channel.pk]})
     assert not ShareJob.objects.filter(

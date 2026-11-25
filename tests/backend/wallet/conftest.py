@@ -30,7 +30,11 @@ TEST_DYNAMIC = RewardEvent(
     dynamic_amount=True,
 )
 TEST_SINK = SpendSink(
-    key="test.package", label="Test package", app="tests", default_credits=40
+    key="test.package",
+    label="Test package",
+    app="tests",
+    default_credits=40,
+    url_name="shop:pricing",
 )
 
 

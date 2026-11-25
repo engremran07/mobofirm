@@ -9,7 +9,7 @@ from django.apps import apps
 from django.db import DatabaseError, transaction
 from django.db.models.signals import post_save, pre_save
 
-from apps.blog.models import Post, PostStatus
+from apps.blog.models import Post, PostSource, PostStatus
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ def _after_publish(post_id: int) -> None:
 
     sync_post_tags.delay(post.pk)
 
-    if not post.is_ai_generated and apps.is_installed("apps.users"):
+    if post.content_source != PostSource.AUTOMATED and apps.is_installed("apps.users"):
         from apps.blog.tasks import send_post_notifications_batched
         from apps.users.services.notifications import notifications_enabled
 

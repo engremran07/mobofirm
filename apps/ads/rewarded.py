@@ -38,7 +38,6 @@ from apps.ads.models import (
 )
 from apps.consent.constants import ADVERTISING
 from apps.consent.services import has_consent
-from apps.core.utils.ip import get_client_ip
 from apps.users.services.rate_limit import allow_action
 
 logger = logging.getLogger(__name__)
@@ -292,8 +291,6 @@ def _record_refusal(
         status=RewardedAdView.Status.REJECTED,
         flags=[flag],
         is_flagged=True,
-        ip_address=get_client_ip(request) or None,
-        user_agent=(request.META.get("HTTP_USER_AGENT") or "")[:500],
         reward_note="Start refused: too frequent.",
     )
 
@@ -382,8 +379,6 @@ def start(
                 reference=reference[:64],
                 token_digest=digest_token(token),
                 expires_at=now + timedelta(seconds=required + SESSION_GRACE_SECONDS),
-                ip_address=get_client_ip(request) or None,
-                user_agent=(request.META.get("HTTP_USER_AGENT") or "")[:500],
             )
         except IntegrityError as error:
             raise RewardedAdError(
@@ -557,6 +552,12 @@ def _result(view: RewardedAdView, *, already: bool) -> CompletionResult:
 def _grant(view: RewardedAdView, config: RewardedAdConfig) -> None:
     """Pay the reward through the owner's contract; the caller holds the view lock."""
     user = view.user
+    if user is None:
+        raise RewardedAdError(
+            "account_erased",
+            "This rewarded-ad session is no longer available.",
+            status=409,
+        )
     kind = config.reward_type
     view.reward_type = kind
     view.reward_amount = config.reward_amount

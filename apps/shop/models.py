@@ -584,7 +584,9 @@ class PackageTier(models.Model):
     @property
     def fair_text(self) -> str:
         """The hard fair-usage caps, e.g. ``30 files per day, 600 files per month``."""
-        daily = self._cap_text(self.fair_daily_files, self.fair_daily_size, self.size_unit)
+        daily = self._cap_text(
+            self.fair_daily_files, self.fair_daily_size, self.size_unit
+        )
         monthly = self._cap_text(
             self.fair_monthly_files, self.fair_monthly_size, self.size_unit
         )
@@ -633,7 +635,9 @@ class PackageTier(models.Model):
         if not self.applies_to_featured_blog:
             return "Not included"
         if self.featured_blog_limit:
-            return f"{_plural(self.featured_blog_limit, 'article')} {self.window_phrase}"
+            return (
+                f"{_plural(self.featured_blog_limit, 'article')} {self.window_phrase}"
+            )
         return "Unlimited"
 
     @property

@@ -28,13 +28,22 @@ def render(url: str, title: str = "A title", request=None, **options: str) -> st
 
 
 def test_every_requested_network_is_offered_in_order() -> None:
-    assert [link.label for link in share_links(URL, TITLE)] == [
+    links = share_links(URL, TITLE)
+    assert [link.label for link in links] == [
         "X",
         "Facebook",
         "WhatsApp",
         "Telegram",
         "LinkedIn",
         "Email",
+    ]
+    assert [link.network for link in links] == [
+        "x",
+        "facebook",
+        "whatsapp",
+        "telegram",
+        "linkedin",
+        "email",
     ]
 
 
@@ -107,6 +116,7 @@ def test_tag_renders_accessible_controls_with_noopener_links() -> None:
     assert "data-share-native-item hidden" in html
     assert html.count('rel="noopener noreferrer"') == 5
     assert html.count('target="_blank"') == 5
+    assert 'data-share-network="facebook"' in html
     assert "(opens in a new tab)" in html
     assert 'href="mailto:' in html
     mailto_tag = re.search(r'<a [^>]*href="mailto:[^>]*>', html)

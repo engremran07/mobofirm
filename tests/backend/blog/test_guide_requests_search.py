@@ -8,7 +8,8 @@ import pytest
 
 from apps.blog import guide_requests_search as search
 from apps.blog.models import Post, PostAccess, PostStatus
-from apps.firmwares.models import Brand, Chipset, Model, Variant
+from apps.firmwares.chipsets import create_chipset_record
+from apps.firmwares.models import Brand, Model, Variant
 
 pytestmark = pytest.mark.django_db
 SECRET = "SECRETGATEDBODYTEXT"
@@ -17,7 +18,7 @@ SECRET = "SECRETGATEDBODYTEXT"
 @pytest.fixture
 def catalogue():
     brand = Brand.objects.create(name="Infinix", slug="infinix")
-    chipset = Chipset.objects.create(
+    chipset = create_chipset_record(
         vendor="MediaTek", name="Helio G99", slug="mediatek-helio-g99"
     )
     model = Model.objects.create(

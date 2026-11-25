@@ -11,6 +11,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from importlib.util import find_spec
 from typing import Any
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib import messages
@@ -37,6 +38,7 @@ from apps.distribution import (
     catalog,
     channels,
     feeds,
+    library,
     media,
     news,
     services,
@@ -66,6 +68,7 @@ TABS = (
     ("dashboard", "Dashboard", "admin:distribution_channel_dashboard"),
     ("channels", "Channels", "admin:distribution_channel_changelist"),
     ("videos", "Videos", "admin:distribution_channel_videos"),
+    ("library", "Media library", "admin:distribution_channel_media_library"),
     ("calendar", "Calendar", "admin:distribution_channel_calendar"),
     ("review", "Approvals", "admin:distribution_channel_review"),
     ("handoff", "Hand-off", "admin:distribution_channel_handoff"),
@@ -523,7 +526,7 @@ def feeds_settings(request: HttpRequest) -> HttpResponse:
         messages.success(request, "Feed settings saved.")
     else:
         for errors in form.errors.values():
-            messages.error(request, "; ".join(errors))
+            messages.error(request, "; ".join(str(error) for error in errors))
     return _feeds_back()
 
 
@@ -607,6 +610,7 @@ def feeds_ping_run(request: HttpRequest) -> HttpResponse:
 # ----------------------------------------------------------- motion videos ----
 
 VIDEO_PAGE_SIZE = 24
+LIBRARY_BATCH_LIMIT = 10
 RANGE_RE = re.compile(r"^bytes=(\d*)-(\d*)$")
 
 
@@ -634,6 +638,8 @@ def _videos_context(request: HttpRequest) -> dict[str, Any]:
         row["status"]: row["n"]
         for row in VideoJob.objects.values("status").annotate(n=Count("id"))
     }
+    distribution_settings = DistributionSettings.get_solo()
+    budget = videos.auto_budget()
     return {
         "jobs": [
             {
@@ -655,9 +661,213 @@ def _videos_context(request: HttpRequest) -> dict[str, Any]:
         ).order_by("name"),
         "can_edit": request.user.has_perm("distribution.change_videojob"),
         "can_add": request.user.has_perm("distribution.add_videojob"),
-        "budget": videos.auto_budget(),
-        "settings": DistributionSettings.get_solo(),
+        "budget": budget,
+        "budget_used": max(distribution_settings.video_daily_cap - budget, 0),
+        "settings": distribution_settings,
     }
+
+
+def media_library(request: HttpRequest) -> HttpResponse:
+    """Render a bounded inventory of public content and its generated media."""
+    _need(request, "view", "videojob")
+    kind = request.GET.get("kind", "firmware")
+    if kind not in library.LIBRARY_KINDS:
+        kind = "firmware"
+    firmware_type = request.GET.get("firmware_type", "all")
+    if firmware_type not in library.FIRMWARE_TYPES:
+        firmware_type = "all"
+    page_value = request.GET.get("page", "1").strip()
+    page_number = (
+        int(page_value)
+        if page_value.isascii() and page_value.isdigit() and len(page_value) <= 6
+        else 1
+    )
+    page = library.get_page(kind, page_number, firmware_type)
+    states = library.statuses(page.entries)
+    return _page(
+        request,
+        "admin/distribution/media_library.html",
+        title="Media library",
+        subtitle=(
+            "Public firmware, editorial posts, guides, tools and catalog spotlights. "
+            "Historical generation is manual, bounded and idempotent."
+        ),
+        section="library",
+        context={
+            "entries": [
+                {"entry": entry, "status": states[entry.key]} for entry in page.entries
+            ],
+            "kind": kind,
+            "kinds": library.LIBRARY_KINDS,
+            "firmware_type": firmware_type,
+            "firmware_types": library.FIRMWARE_TYPES,
+            "page": page,
+            "batch_limit": LIBRARY_BATCH_LIMIT,
+            "video_budget": videos.auto_budget(),
+            "video_cap": DistributionSettings.get_solo().video_daily_cap,
+            "card_capable": media.capabilities()["cards"],
+            "can_generate_cards": media.capabilities()["cards"]
+            and request.user.has_perm("distribution.add_mediaasset")
+            and request.user.has_perm("distribution.change_mediaasset"),
+            "can_create_videos": request.user.has_perm("distribution.add_videojob"),
+        },
+    )
+
+
+def _library_back(request: HttpRequest) -> HttpResponseRedirect:
+    """Return to the requested media-library filters after a staff action."""
+    kind = request.POST.get("kind", "")
+    firmware_type = request.POST.get("firmware_type", "")
+    page = request.POST.get("page", "")
+    params = {}
+    if kind in library.LIBRARY_KINDS:
+        params["kind"] = kind
+    if firmware_type in library.FIRMWARE_TYPES:
+        params["firmware_type"] = firmware_type
+    if page.isdigit():
+        params["page"] = page
+    suffix = f"?{urlencode(params)}" if params else ""
+    return redirect(f"{reverse('admin:distribution_channel_media_library')}{suffix}")
+
+
+def _create_library_cards(selected: list[str]) -> tuple[int, int, int]:
+    created = skipped = failed = 0
+    for selected_key in selected:
+        kind, separator, ref = selected_key.partition("|")
+        entry = library.resolve_entry(kind, ref) if separator else None
+        if entry is None:
+            skipped += 1
+            continue
+        spec = media.MediaSpec(
+            entry.media_kind,
+            entry.media_ref,
+            entry.title,
+            entry.label,
+            entry.lines,
+            services.site_name(),
+        )
+        horizontal = media.ensure_card(spec)
+        vertical = media.ensure_card(spec, vertical=True)
+        if horizontal.asset is None or vertical.asset is None:
+            failed += 1
+        else:
+            created += 1
+    return created, skipped, failed
+
+
+def _create_library_videos(selected: list[str]) -> tuple[int, int, int, int, bool]:
+    created = existing = skipped = failed = 0
+    cap_reached = False
+    for selected_key in selected:
+        kind, separator, ref = selected_key.partition("|")
+        entry = library.resolve_entry(kind, ref) if separator else None
+        if entry is None or not entry.video_kind:
+            skipped += 1
+            continue
+        source = sources.load(entry.video_kind, entry.video_ref)
+        if source is None:
+            skipped += 1
+            continue
+        job, reason = videos.create(
+            entry.video_kind,
+            entry.video_ref,
+            auto=True,
+            source=source,
+        )
+        if job is None:
+            if "daily limit" in reason.lower():
+                cap_reached = True
+                break
+            failed += 1
+        elif reason:
+            existing += 1
+        else:
+            created += 1
+    return created, existing, skipped, failed, cap_reached
+
+
+def _report_library_cards(
+    request: HttpRequest, created: int, failed: int, skipped: int
+) -> None:
+    if created:
+        messages.success(
+            request,
+            f"Horizontal and vertical share cards are ready for {created} item(s).",
+        )
+    if failed:
+        messages.error(
+            request,
+            f"Card generation failed for {failed} item(s); "
+            "check the rendering capability report.",
+        )
+    if skipped:
+        messages.warning(
+            request,
+            f"Skipped {skipped} item(s) that are no longer public or do not "
+            "support this action.",
+        )
+    if not (created or skipped or failed):
+        messages.info(request, "No media changes were needed.")
+
+
+def _report_library_videos(
+    request: HttpRequest,
+    result: tuple[int, int, int, int, bool],
+) -> None:
+    created, existing, skipped, failed, cap_reached = result
+    if created or existing:
+        messages.success(
+            request,
+            f"Created {created} automatic video draft(s); {existing} already existed.",
+        )
+    if cap_reached:
+        messages.warning(
+            request,
+            "The daily automatic draft cap is reached "
+            f"({videos.auto_budget()} remaining).",
+        )
+    if skipped:
+        messages.warning(
+            request,
+            f"Skipped {skipped} item(s) that are no longer public or do not "
+            "support this action.",
+        )
+    if failed:
+        messages.error(request, f"Could not create {failed} video draft(s).")
+    if not (created or existing or skipped or failed or cap_reached):
+        messages.info(request, "No media changes were needed.")
+
+
+@require_POST
+def media_library_bulk(request: HttpRequest) -> HttpResponse:
+    """Generate bounded media batches for currently public library entries."""
+    action = request.POST.get("action", "")
+    if action not in {"cards", "videos"}:
+        raise Http404
+    if action == "cards":
+        _need(request, "add", "mediaasset")
+        _need(request, "change", "mediaasset")
+    else:
+        _need(request, "add", "videojob")
+
+    selected = list(dict.fromkeys(request.POST.getlist("selected")))
+    if not selected:
+        messages.warning(request, "Select at least one public item.")
+        return _library_back(request)
+    if len(selected) > LIBRARY_BATCH_LIMIT:
+        messages.error(
+            request,
+            f"Choose no more than {LIBRARY_BATCH_LIMIT} items per batch.",
+        )
+        return _library_back(request)
+
+    if action == "cards":
+        created, skipped, failed = _create_library_cards(selected)
+        _report_library_cards(request, created, failed, skipped)
+    else:
+        result = _create_library_videos(selected)
+        _report_library_videos(request, result)
+    return _library_back(request)
 
 
 def videos_page(request: HttpRequest) -> HttpResponse:

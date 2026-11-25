@@ -6,6 +6,7 @@ registered renders as an empty box, so the names used server-side are compared w
 
 from __future__ import annotations
 
+import ast
 import re
 from pathlib import Path
 
@@ -16,7 +17,7 @@ from django.test import Client
 from django.urls import reverse
 
 from apps.core import admin_nav_catalog as catalog
-from apps.core.admin_actions import ICON_ALIASES
+from apps.core.admin_actions import ICON_ALIASES, lucide_icon
 
 ROOT = Path(__file__).resolve().parents[3]
 ICON_SOURCE = (ROOT / "frontend" / "src" / "admin" / "js" / "icons.js").read_text(
@@ -73,6 +74,28 @@ def test_navigation_catalogue_icons_are_registered():
 
 def test_action_icon_aliases_point_at_registered_icons():
     assert sorted(set(ICON_ALIASES.values()) - _registered()) == []
+
+
+def test_admin_action_icons_are_registered():
+    registered = _registered()
+    missing: dict[str, list[str]] = {}
+    for path in (ROOT / "apps").rglob("admin*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        names = {
+            rendered
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            for keyword in node.keywords
+            if keyword.arg == "icon"
+            and isinstance(keyword.value, ast.Constant)
+            and isinstance(keyword.value.value, str)
+            if (rendered := lucide_icon(keyword.value.value))
+        }
+        unknown = sorted(names - registered)
+        if unknown:
+            missing[str(path.relative_to(ROOT))] = unknown
+
+    assert missing == {}
 
 
 def test_template_icons_are_registered():

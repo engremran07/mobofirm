@@ -42,6 +42,13 @@ class ApplicationMapTests(unittest.TestCase):
         self.assertTrue(alpine_records)
         self.assertTrue(self.inventory["frontend_sources"]["javascript"])
         self.assertTrue(self.inventory["frontend_sources"]["stylesheets"])
+        self.assertTrue(
+            any(
+                path.startswith("frontend/src/")
+                for path in self.inventory["frontend_sources"]["javascript"]
+                + self.inventory["frontend_sources"]["stylesheets"]
+            )
+        )
 
     def test_inventory_marks_static_findings_as_candidates_not_runtime_proof(self):
         interpretation = self.inventory["interpretation"].lower()

@@ -1123,9 +1123,12 @@ def _existing_files(items: list[OrderItem]) -> set[tuple[int | None, Any]]:
         model_class = ContentType.objects.get_for_id(content_type_id).model_class()
         if model_class is None:
             continue
-        found = model_class._default_manager.filter(pk__in=object_ids).values_list(
-            "pk", flat=True
-        )
+        manager = model_class._meta.default_manager
+        if manager is None:
+            raise RuntimeError(
+                f"Content type {content_type_id} has no default model manager."
+            )
+        found = manager.filter(pk__in=object_ids).values_list("pk", flat=True)
         present.update((content_type_id, pk) for pk in found)
     return present
 
@@ -1157,7 +1160,10 @@ def purchased_unserved(user: Any) -> list[PurchasedFile]:
         if key in seen or key not in present:
             continue
         seen.add(key)
-        links = file_links(item.content_type_id, item.object_id)
+        content_type_id = item.content_type_id
+        if content_type_id is None:
+            continue
+        links = file_links(content_type_id, item.object_id)
         files.append(
             PurchasedFile(
                 label=item.description,

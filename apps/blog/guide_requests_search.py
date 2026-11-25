@@ -55,7 +55,7 @@ MODEL_FIELDS: Final = (
     "codes_text",
 )
 VARIANT_FIELDS: Final = ("model_code", "name", "slug", "board_id")
-CHIPSET_FIELDS: Final = ("name", "vendor", "family", "aliases_text")
+CHIPSET_FIELDS: Final = ("name", "vendor__name", "family", "aliases_text")
 BRAND_FIELDS: Final = ("name", "slug")
 CODE_FIELDS: Final = ("title", "summary", "tags__name")
 POST_FIELDS: Final = (

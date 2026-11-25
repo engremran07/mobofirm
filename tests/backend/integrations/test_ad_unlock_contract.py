@@ -6,14 +6,16 @@ import inspect
 import re
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import cast
 
 import pytest
+from django.contrib.auth.base_user import AbstractBaseUser
 
 from apps.ads import rewarded
 from apps.ads.models import AdPlacement, AdsSettings, RewardedAdConfig
 from apps.core.app_service import AppService
 from apps.firmwares import access
+from apps.firmwares.models import BaseFirmware
 from apps.shop import ad_unlock, entitlements
 
 pytestmark = pytest.mark.django_db
@@ -68,33 +70,46 @@ def test_the_bridge_registers_the_shop_rules_at_startup(unlock_config):
     assert callable(handler.check) and callable(handler.grant)
 
 
+def _authenticated_user() -> AbstractBaseUser:
+    """A stand-in for a signed-in account (the gate only reads ``is_authenticated``)."""
+    return cast("AbstractBaseUser", SimpleNamespace(is_authenticated=True))
+
+
+def _firmware(label: str) -> BaseFirmware:
+    """A stand-in firmware: the fake shop module only records what it receives."""
+    return cast("BaseFirmware", label)
+
+
 def test_the_gate_asks_the_shop_through_the_optional_module(monkeypatch):
-    seen: list[Any] = []
-    fake = SimpleNamespace(
-        has_ad_unlock=lambda user, firmware: seen.append(firmware) or True
-    )
-    user = SimpleNamespace(is_authenticated=True)
+    seen: list[BaseFirmware] = []
+
+    def record(user: object, firmware: BaseFirmware) -> bool:
+        seen.append(firmware)
+        return True
+
+    fake = SimpleNamespace(has_ad_unlock=record)
+    firmware = _firmware("firmware")
     monkeypatch.setattr(
         access,
         "optional_module",
         lambda name: fake if name == access.ENTITLEMENTS_MODULE else None,
     )
 
-    assert access.has_ad_unlock(user, "firmware") is True
-    assert seen == ["firmware"]
+    assert access.has_ad_unlock(_authenticated_user(), firmware) is True
+    assert seen == [firmware]
 
 
 def test_without_the_shop_nobody_holds_an_unlock(monkeypatch):
     monkeypatch.setattr(access, "optional_module", lambda name: None)
 
-    assert access.has_ad_unlock(SimpleNamespace(is_authenticated=True), "fw") is False
-    assert access.has_ad_unlock(None, "fw") is False
+    assert access.has_ad_unlock(_authenticated_user(), _firmware("fw")) is False
+    assert access.has_ad_unlock(None, _firmware("fw")) is False
 
 
 def test_a_shop_module_without_the_contract_is_tolerated(monkeypatch):
     monkeypatch.setattr(access, "optional_module", lambda name: SimpleNamespace())
 
-    assert access.has_ad_unlock(SimpleNamespace(is_authenticated=True), "fw") is False
+    assert access.has_ad_unlock(_authenticated_user(), _firmware("fw")) is False
 
 
 def test_the_entitlement_module_exports_the_unlock_hook():

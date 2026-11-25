@@ -1,3 +1,5 @@
+"""Production settings with deployment-required security checks."""
+
 import os
 from urllib.parse import urlsplit
 
@@ -96,7 +98,8 @@ _require(
         "django.core.mail.backends.locmem.EmailBackend",
         "django.core.mail.backends.dummy.EmailBackend",
     },
-    "Production requires a real email backend (SMTP or Gmail), not console/locmem/dummy.",
+    "Production requires a real email backend (SMTP or Gmail), not "
+    "console/locmem/dummy.",
 )
 _require(
     _default_mailer["BACKEND"] != "django.core.mail.backends.smtp.EmailBackend"

@@ -125,9 +125,13 @@ export function initializeToasts() {
     if (event.detail && typeof event.detail === "object") showToast(event.detail);
   });
   document.addEventListener("mf:toast", (event) => showToast(event.detail));
-  document.addEventListener("htmx:afterSwap", (event) => {
-    const target = event.target instanceof Element ? event.target : document;
+  document.addEventListener("htmx:after:swap", (event) => {
+    const target = event.detail.ctx?.target;
+    convertFlashMessages(target instanceof Element ? target : document);
+  });
+  document.addEventListener("htmx:after:settle", () => {
+    // OOB fragments settle independently of the primary target.
+    const target = document;
     convertFlashMessages(target);
   });
-  document.addEventListener("htmx:oobAfterSwap", () => convertFlashMessages());
 }

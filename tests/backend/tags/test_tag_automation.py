@@ -45,7 +45,7 @@ class TagAutomationTestCase(TestCase):
 
 class CuratedTagTests(TagAutomationTestCase):
     def test_ensure_curated_tag_is_idempotent_and_reactivates_suggestions(self):
-        suggestion = Tag.objects.create(name="Odin", ai_suggested=True)
+        suggestion = Tag.objects.create(name="Odin", is_suggested=True)
 
         first = curated_tag("  Odin ")
         second = curated_tag("odin")
@@ -54,7 +54,7 @@ class CuratedTagTests(TagAutomationTestCase):
         self.assertEqual(first.pk, suggestion.pk)
         first.refresh_from_db()
         self.assertTrue(first.is_curated and first.is_active)
-        self.assertFalse(first.ai_suggested)
+        self.assertFalse(first.is_suggested)
         self.assertEqual(Tag.objects.count(), 1)
 
     def test_ensure_curated_tag_follows_merges_and_rejects_blank_names(self):
@@ -145,12 +145,12 @@ class PostTagSyncTests(TagAutomationTestCase):
 
         suggestion = Tag.objects.get(normalized_name="zorblax utility")
         self.assertFalse(suggestion.is_curated)
-        self.assertTrue(suggestion.ai_suggested)
+        self.assertTrue(suggestion.is_suggested)
         self.assertNotIn(suggestion, post.tags.all())
 
     def test_automation_can_be_switched_off(self):
         TagsSettings.objects.update_or_create(
-            pk=1, defaults={"enable_ai_suggestions": False}
+            pk=1, defaults={"automatic_suggestions_enabled": False}
         )
         brand = Brand.objects.create(name="Itel", slug="itel")
         post = self.publish("Itel note", firmware_brand=brand)
@@ -186,7 +186,7 @@ class PostTagSyncTests(TagAutomationTestCase):
 class CurationTests(TagAutomationTestCase):
     def test_a_suggestion_is_promoted_once_enough_live_posts_mention_it(self):
         suggestion = Tag.objects.create(
-            name="Helio G99", normalized_name="helio g99", ai_suggested=True
+            name="Helio G99", normalized_name="helio g99", is_suggested=True
         )
         for index in range(2):
             self.publish(f"Helio G99 note {index}")
@@ -207,7 +207,7 @@ class CurationTests(TagAutomationTestCase):
         self.assertEqual(suggestion.usage_count, 3)
 
     def test_rejected_or_deleted_suggestions_are_never_promoted(self):
-        Tag.objects.create(name="Rejected", ai_suggested=True, is_deleted=True)
+        Tag.objects.create(name="Rejected", is_suggested=True, is_deleted=True)
         for index in range(3):
             self.publish(f"Rejected note {index}")
 

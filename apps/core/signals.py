@@ -30,10 +30,6 @@ SINGLETON_MODELS = (
     "site_settings.SiteSettings",
 )
 
-DEFAULT_APP_POLICY = {
-    "name": "default",
-}
-
 
 def ensure_singletons() -> None:
     """Create every installed singleton settings row (idempotent)."""
@@ -44,13 +40,6 @@ def ensure_singletons() -> None:
         model = django_apps.get_model(app_label, model_name)
         if model is not None and hasattr(model, "get_solo"):
             model.get_solo()
-
-    if django_apps.is_installed("apps.devices"):
-        from apps.devices.models import AppPolicy
-
-        AppPolicy.objects.get_or_create(
-            name=DEFAULT_APP_POLICY["name"], defaults=DEFAULT_APP_POLICY
-        )
 
 
 @receiver(post_migrate)
@@ -109,10 +98,6 @@ user_login_success = Signal()  # args: user, request
 # SEO signals
 seo_metadata_requested = Signal()  # args: content_object, force_regenerate
 seo_sitemap_updated = Signal()  # args: sitemap_type
-
-# Device signals
-device_fingerprint_created = Signal()  # args: device, user
-device_suspicious_activity = Signal()  # args: device, activity_type
 
 # Content signals
 content_viewed = Signal()  # args: content_object, user, request

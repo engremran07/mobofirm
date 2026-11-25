@@ -48,6 +48,54 @@ FIRMWARE_REQUEST_URGENCIES: list[tuple[int, str]] = [
 ]
 
 
+class FirmwareLinkReport(models.Model):
+    """A user report that an approved external firmware link needs review."""
+
+    class Reason(models.TextChoices):
+        BROKEN = "broken", "Link is broken or unavailable"
+        REMOVED = "removed", "File was removed"
+        WRONG_FILE = "wrong_file", "Link opens the wrong file"
+        OTHER = "other", "Other issue"
+
+    class Status(models.TextChoices):
+        OPEN = "open", "Open"
+        REVIEWED = "reviewed", "Reviewed"
+        INVALID = "invalid", "Not a valid report"
+
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    object_id = models.UUIDField()
+    firmware = GenericForeignKey("content_type", "object_id")
+    firmware_name = models.CharField(max_length=255)
+    reporter = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="firmware_link_reports",
+    )
+    reason = models.CharField(max_length=20, choices=Reason.choices)
+    details = models.CharField(max_length=1000, blank=True)
+    status = models.CharField(
+        max_length=12, choices=Status.choices, default=Status.OPEN, db_index=True
+    )
+    staff_notes = models.CharField(max_length=1000, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "firmwares_link_report"
+        indexes: ClassVar[list[models.Index]] = [
+            models.Index(fields=["content_type", "object_id"]),
+            models.Index(fields=["status", "-created_at"]),
+        ]
+        ordering: ClassVar[list[str]] = ["-created_at"]
+        verbose_name = "External firmware link report"
+        verbose_name_plural = "External firmware link reports"
+
+    def __str__(self) -> str:
+        return f"{self.get_reason_display()} ({self.object_id})"
+
+
 class FirmwareView(models.Model):
     """Track individual firmware views for analytics - optimized for high write volume"""
 

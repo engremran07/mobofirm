@@ -27,6 +27,7 @@ from typing import Any
 
 from django.core.files.base import ContentFile
 from django.core.files.storage import default_storage
+from django.db import transaction
 from django.utils import timezone
 from PIL import Image, ImageDraw, ImageFont
 
@@ -205,22 +206,51 @@ def render_card(spec: MediaSpec, size: tuple[int, int]) -> bytes:
     return buffer.getvalue()
 
 
-def _storage_name(spec: MediaSpec, asset_kind: str, extension: str) -> str:
-    digest = hashlib.sha256(f"{spec.kind}:{spec.ref}".encode()).hexdigest()[:20]
+def _storage_name(spec: MediaSpec, asset_kind: str, extension: str, data: bytes) -> str:
+    """Return a content-addressed path so replacement never overwrites a live file."""
+    identity = f"{spec.kind}:{spec.ref}:{asset_kind}:".encode() + data
+    digest = hashlib.sha256(identity).hexdigest()[:20]
     return f"distribution/{asset_kind}/{digest}.{extension}"
 
 
-def _store(spec: MediaSpec, asset_kind: str, extension: str, data: bytes) -> MediaAsset:
-    name = _storage_name(spec, asset_kind, extension)
-    if default_storage.exists(name):
+def _delete_storage_file(name: str) -> None:
+    """Remove a superseded file after its replacement row commits."""
+    try:
         default_storage.delete(name)
-    saved = default_storage.save(name, ContentFile(data))
-    asset, _created = MediaAsset.objects.update_or_create(
-        content_kind=spec.kind,
-        object_ref=spec.ref,
-        asset_kind=asset_kind,
-        defaults={"storage_name": saved, "reason": ""},
+    except OSError:
+        logger.warning("Could not delete superseded media asset %s", name)
+
+
+def _store(spec: MediaSpec, asset_kind: str, extension: str, data: bytes) -> MediaAsset:
+    """Persist an asset and retire its previous file only after the row commits."""
+    name = _storage_name(spec, asset_kind, extension, data)
+    saved = (
+        name
+        if default_storage.exists(name)
+        else default_storage.save(name, ContentFile(data))
     )
+    with transaction.atomic():
+        previous = (
+            MediaAsset.objects.filter(
+                content_kind=spec.kind,
+                object_ref=spec.ref,
+                asset_kind=asset_kind,
+            )
+            .values_list("storage_name", flat=True)
+            .first()
+        )
+        asset, _created = MediaAsset.objects.update_or_create(
+            content_kind=spec.kind,
+            object_ref=spec.ref,
+            asset_kind=asset_kind,
+            defaults={
+                "storage_name": saved,
+                "reason": "",
+                "created_at": timezone.now(),
+            },
+        )
+        if previous and previous != saved:
+            transaction.on_commit(lambda: _delete_storage_file(previous))
     return asset
 
 

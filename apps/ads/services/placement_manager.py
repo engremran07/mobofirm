@@ -171,7 +171,7 @@ def template_rows(
             type_label=scan.get_template_type_display(),
             traffic=scan.estimated_traffic,
             score=float(scan.score),
-            rationale=scan.ai_recommendation or _first_rationale(scan),
+            rationale=scan.recommendation or _first_rationale(scan),
             review_status=scan.review_status,
             excluded=scan.template_path in excluded,
             declared=zones,

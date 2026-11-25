@@ -12,7 +12,8 @@ from django.test import Client
 from django.urls import reverse
 from django.utils import timezone
 
-from apps.blog.models import BlogSettings, Category, Post, PostStatus
+from apps.blog.admin import PostAdmin
+from apps.blog.models import BlogSettings, Category, Post, PostSource, PostStatus
 from apps.blog.services import contributions, workflow
 from apps.blog.sitemaps import PublishedBlogPostsSitemap
 from apps.tags.models import Tag
@@ -162,6 +163,31 @@ class TestSubmit:
         for name in ("title", "summary", "body", "category", "tags", "access"):
             assert f'name="{name}"' in body
         assert 'name="proposed_price"' not in body
+        assert 'hx-get="/blog/contribute/title-matches/"' in body
+        assert 'hx-target="#contribution-title-matches"' in body
+        assert 'aria-live="polite"' in body
+
+    def test_a_published_similar_title_does_not_block_member_review(
+        self, member: Any, member_client: Client, category: Category
+    ) -> None:
+        title = "Recover a bricked phone"
+        Post.objects.create(
+            title=title,
+            body=BODY,
+            author=member,
+            category=category,
+            status=PostStatus.PUBLISHED,
+            publish_at=timezone.now(),
+        )
+
+        response = submit(member_client, category, title=title)
+
+        contribution = Post.objects.get(
+            content_source=PostSource.COMMUNITY_CONTRIBUTION
+        )
+        assert response.status_code == 302
+        assert contribution.title == title
+        assert contribution.status == PostStatus.IN_REVIEW
 
     def test_a_valid_post_enters_review_and_redirects(
         self,
@@ -432,6 +458,7 @@ class TestReview:
         assert "Sent back for changes" in listing
         assert "Please add the exact model codes." in listing
 
+        assert pending.category is not None
         edited = member_client.post(
             reverse("blog:contribute_edit", kwargs={"slug": pending.slug}),
             form(pending.category, summary="Model codes added."),
@@ -480,10 +507,11 @@ class TestReview:
         from django.contrib import admin
 
         post_admin = admin.site.get_model_admin(Post)
+        assert isinstance(post_admin, PostAdmin)
         assert "reject" in post_admin.actions_row
         assert "reject" in post_admin.actions_detail
         assert any(
-            isinstance(item, tuple) and item[0] == "is_community_contribution"
+            isinstance(item, tuple) and item[0] == "content_source"
             for item in post_admin.list_filter
         )
         client.force_login(reviewer)

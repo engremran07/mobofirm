@@ -8,6 +8,7 @@ from typing import Any
 from django.db import DatabaseError, transaction
 from django.db.models import F
 
+from apps.ads.erasure import anonymise_user
 from apps.ads.models import AdsSettings
 
 logger = logging.getLogger(__name__)
@@ -47,8 +48,6 @@ def get_settings() -> dict[str, Any]:
         # Native ads
         "native_ads_enabled": bool(getattr(s, "native_ads_enabled", False)),
         "native_ads_style": getattr(s, "native_ads_style", "card"),
-        # AI optimization
-        "ai_optimization_enabled": bool(getattr(s, "ai_optimization_enabled", False)),
         # Privacy: consent is decided per visitor by apps.consent, not configured here
         # Limits
         "max_ads_per_page": getattr(s, "max_ads_per_page", 5),
@@ -179,6 +178,7 @@ def track_affiliate_click_sync(
     Track affiliate click synchronously.
     For use in views that need immediate response.
     """
+    del ip_address, user_agent, session_id
     try:
         from django.contrib.auth import get_user_model
 
@@ -199,9 +199,6 @@ def track_affiliate_click_sync(
                 product=product,
                 provider=product.provider,
                 user=user,
-                session_id=session_id[:100] if session_id else "",
-                ip_address=ip_address[:45] if ip_address else None,
-                user_agent=user_agent[:500] if user_agent else "",
                 page_url=page_url[:500] if page_url else "",
             )
             AffiliateProduct.objects.filter(id=product_id).update(
@@ -311,6 +308,7 @@ def _product_to_dict(product) -> dict[str, Any]:
 
 
 __all__ = [
+    "anonymise_user",
     "get_affiliate_products_settings",
     "get_contextual_products",
     "get_enabled_networks",

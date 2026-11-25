@@ -36,7 +36,9 @@ def _server(live_server) -> ConsoleServer:
     return ConsoleServer(live_server.url, user, login_cookie(user))
 
 
-def test_settings_page_boolean_is_a_keyboard_switch_that_saves_the_same_value(live_server):
+def test_settings_page_boolean_is_a_keyboard_switch_that_saves_the_same_value(
+    live_server,
+):
     server = _server(live_server)
     settings = SEOSettings.get_solo()
     settings.sitemap_images_enabled = True
@@ -72,7 +74,9 @@ def test_settings_page_boolean_is_a_keyboard_switch_that_saves_the_same_value(li
 
 def test_list_editable_boolean_column_is_a_switch_and_posts_unchanged(live_server):
     server = _server(live_server)
-    category = ConsentCategory.objects.create(slug="analytics-x", name="Analytics X", description="d", is_active=True)
+    category = ConsentCategory.objects.create(
+        slug="analytics-x", name="Analytics X", description="d", is_active=True
+    )
     problems: list[str] = []
     with chromium() as browser:
         context = server.context(browser, width=1280)
@@ -81,7 +85,9 @@ def test_list_editable_boolean_column_is_a_switch_and_posts_unchanged(live_serve
         probe.attach(page)
         probe.begin()
         open_console(page, probe, server, "/admin/consent/consentcategory/", problems)
-        cell = page.locator("tr", has_text="Analytics X").locator("input[type=checkbox][name$='-is_active']")
+        cell = page.locator("tr", has_text="Analytics X").locator(
+            "input[type=checkbox][name$='-is_active']"
+        )
         expect(cell).to_have_attribute("role", "switch")
         assert cell.is_checked()
         cell.focus()
@@ -108,7 +114,15 @@ def test_radio_select_widget_is_a_segmented_group_over_native_radios(live_server
     assert 'role="radiogroup"' in html and "data-ui-radiogroup" in html
     assert html.count('type="radio"') == 2 and 'name="mode"' in html
     assert 'value="a"' in html and 'value="b"' in html and html.count("checked") == 1
-    assert render_to_string("console/components/radio_group.html", {"name": "m", "label": "M", "value": "a", "options": [{"value": "a", "label": "A"}]})
+    assert render_to_string(
+        "console/components/radio_group.html",
+        {
+            "name": "m",
+            "label": "M",
+            "value": "a",
+            "options": [{"value": "a", "label": "A"}],
+        },
+    )
 
     server = _server(live_server)
     problems: list[str] = []
@@ -119,14 +133,22 @@ def test_radio_select_widget_is_a_segmented_group_over_native_radios(live_server
         probe.attach(page)
         probe.begin()
         open_console(page, probe, server, "/admin/", problems)
-        page.evaluate("(html) => document.querySelector('.app-content').insertAdjacentHTML('beforeend', '<form id=\"lab\">' + html + '</form>')", html)
+        page.evaluate(
+            "(html) => document.querySelector('.app-content').insertAdjacentHTML('beforeend', '<form id=\"lab\">' + html + '</form>')",
+            html,
+        )
         group = page.locator("#lab [data-ui-radiogroup]")
         assert group.locator("label[data-selected]").inner_text() == "Beta"
         group.locator("input[value=b]").focus()
         page.keyboard.press("ArrowLeft")
         assert group.locator("input[value=a]").is_checked()
         assert group.locator("label[data-selected]").inner_text() == "Alpha"
-        assert page.evaluate("() => new FormData(document.querySelector('#lab')).get('mode')") == "a"
+        assert (
+            page.evaluate(
+                "() => new FormData(document.querySelector('#lab')).get('mode')"
+            )
+            == "a"
+        )
         problems.extend(probe.end())
         context.close()
     assert problems == []

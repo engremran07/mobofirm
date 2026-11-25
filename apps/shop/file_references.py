@@ -67,6 +67,7 @@ def purge_file_references(firmware: Any) -> dict[str, int]:
 
 
 def _on_firmware_deleted(sender: Any, instance: Any, **kwargs: Any) -> None:
+    del sender
     counts = purge_file_references(instance)
     if any(counts.values()):
         logger.info("Purged shop rows of deleted file %s: %s", instance.pk, counts)

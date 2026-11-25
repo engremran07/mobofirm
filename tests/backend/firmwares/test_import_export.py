@@ -31,6 +31,7 @@ from apps.core.admin_import_export import (
     xlsx_available,
 )
 from apps.firmwares.admin_io import BrandResource, ChipsetResource
+from apps.firmwares.chipsets import create_chipset_record
 from apps.firmwares.models import (
     Brand,
     Chipset,
@@ -458,7 +459,7 @@ class TestImportChipsetsAndModels:
             upload(client, "c.csv", brand_rows, model="chipset"),
             model="chipset",
         )
-        assert set(Chipset.objects.values_list("slug", "vendor")) == {
+        assert set(Chipset.objects.values_list("slug", "vendor__name")) == {
             ("allwinner-a133", "Allwinner"),
             ("unisoc-rda8810pl", "Unisoc"),
         }
@@ -502,7 +503,10 @@ class TestImportChipsetsAndModels:
         )
         confirm(client, upload(client, "m.csv", ok, model="model"), model="model")
         model = Model.objects.get(brand__slug="acme", slug="phone-one")
-        assert model.chipset_ref is not None and model.chipset_ref.vendor == "Qualcomm"
+        assert (
+            model.chipset_ref is not None
+            and model.chipset_ref.vendor.name == "Qualcomm"
+        )
         # The same model code with no slug matches the existing model: unchanged.
         again = csv_bytes(
             header,
@@ -667,7 +671,7 @@ class TestImportToolsCategoriesAndGuides:
     def test_tools_are_imported_with_links_and_cracks_are_refused(self):
         FlashingToolCategory.objects.create(name="OEM", slug="oem")
         Brand.objects.create(name="Acme", slug="acme")
-        Chipset.objects.create(
+        create_chipset_record(
             vendor="MediaTek", name="Helio G99", slug="mediatek-helio-g99"
         )
         client, _user = staff_client(superuser=True)

@@ -91,26 +91,6 @@ def update_firmware_request_priorities():
     return {"total_open": open_requests.count(), "top_requests": top}
 
 
-@shared_task(
-    max_retries=3,
-    default_retry_delay=60,
-    soft_time_limit=300,
-    time_limit=600,
-)
-def analyze_firmware_ai(pending_firmware_id: str):
-    """Analyse a pending upload's content and store metadata suggestions."""
-    from .ai_analysis import analyze_and_update_firmware
-
-    result = analyze_and_update_firmware(pending_firmware_id)
-    if not result.get("success"):
-        logger.warning(
-            "Firmware analysis failed for %s: %s",
-            pending_firmware_id,
-            result.get("error"),
-        )
-    return result
-
-
 # ============================================================
 # Automated blog tasks
 # ============================================================

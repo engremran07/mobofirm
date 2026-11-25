@@ -9,7 +9,8 @@ from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from apps.firmwares.models import Brand, Chipset
+from apps.firmwares.chipsets import create_chipset_record
+from apps.firmwares.models import Brand
 from apps.marketplace import services
 from apps.marketplace.models import (
     MAX_SOCIAL_LINKS,
@@ -143,9 +144,7 @@ class ProfileGateTests(OnboardingTestCase):
 class ApplicationSubmissionTests(OnboardingTestCase):
     def test_valid_application_creates_one_pending_review_and_notifies_staff(self):
         brand = Brand.objects.create(name="Tecno", slug="tecno")
-        chipset = Chipset.objects.create(
-            vendor="MediaTek", name="Helio G99", slug="g99"
-        )
+        chipset = create_chipset_record(vendor="MediaTek", name="Helio G99", slug="g99")
         data = payload(
             [
                 ("youtube", "https://www.youtube.com/@applicant"),
@@ -463,7 +462,7 @@ class PickerTests(OnboardingTestCase):
         super().setUp()
         self.tecno = Brand.objects.create(name="Tecno", slug="tecno")
         self.infinix = Brand.objects.create(name="Infinix", slug="infinix")
-        self.chipset = Chipset.objects.create(vendor="Unisoc", name="T606", slug="t606")
+        self.chipset = create_chipset_record(vendor="Unisoc", name="T606", slug="t606")
 
     def test_search_returns_matching_options_only(self):
         url = reverse("marketplace:picker", kwargs={"kind": "brands"})

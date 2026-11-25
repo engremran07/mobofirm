@@ -15,7 +15,10 @@ from playwright.sync_api import (
     BrowserContext,
     ConsoleMessage,
     Dialog,
+    FloatRect,
+    Locator,
     Page,
+    Request,
     sync_playwright,
 )
 from playwright.sync_api import Error as PlaywrightError
@@ -66,6 +69,32 @@ def collect_console(
             warnings.append(message.text)
 
     page.on("console", on_console)
+
+
+def record_page_errors(page: Page, errors: list[str]) -> None:
+    """Append the text of every uncaught page error to ``errors``."""
+
+    def on_page_error(error: PlaywrightError) -> None:
+        errors.append(str(error))
+
+    page.on("pageerror", on_page_error)
+
+
+def record_requests(page: Page, urls: list[str], *, method: str | None = None) -> None:
+    """Append the URL of every request (optionally only ``method`` requests)."""
+
+    def on_request(request: Request) -> None:
+        if method is None or request.method == method:
+            urls.append(request.url)
+
+    page.on("request", on_request)
+
+
+def box_of(locator: Locator) -> FloatRect:
+    """The element's bounding box; fails the test when it is not rendered."""
+    box = locator.bounding_box()
+    assert box is not None, "the element has no bounding box (not rendered)"
+    return box
 
 
 def dismiss_dialogs(page: Page, dialogs: list[str]) -> None:

@@ -23,10 +23,12 @@ def index(ctx: ProviderContext) -> PageSEO:
     path = reverse("pages:index")
     return PageSEO(
         page_type="pages_index",
-        title="Pages",
-        description=ctx.describe("", "Information pages and policies."),
+        title="Help and information",
+        description=ctx.describe(
+            "", "Guides, policies and answers about using the site."
+        ),
         path=path,
-        crumbs=[Crumb(*HOME), Crumb("Pages", path)],
+        crumbs=[Crumb(*HOME), Crumb("Help", path)],
     )
 
 

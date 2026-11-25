@@ -40,7 +40,7 @@ MAX_SUGGESTIONS_PER_POST = 5
 
 
 def automation_enabled() -> bool:
-    return TagsSettings.get_solo().enable_ai_suggestions
+    return TagsSettings.get_solo().automatic_suggestions_enabled
 
 
 def ensure_curated_tag(name: str) -> Tag | None:
@@ -80,9 +80,9 @@ def ensure_curated_tag(name: str) -> Tag | None:
     if not (tag.is_curated and tag.is_active):
         tag.is_curated = True
         tag.is_active = True
-        tag.ai_suggested = False
+        tag.is_suggested = False
         tag.save(
-            update_fields=["is_curated", "is_active", "ai_suggested", "updated_at"]
+            update_fields=["is_curated", "is_active", "is_suggested", "updated_at"]
         )
     return tag
 
@@ -179,7 +179,7 @@ def curate_suggested_tags(limit: int = 200) -> list[int]:
 
     promoted: list[int] = []
     candidates = Tag.objects.filter(
-        is_curated=False, is_deleted=False, merge_into__isnull=True, ai_suggested=True
+        is_curated=False, is_deleted=False, merge_into__isnull=True, is_suggested=True
     ).order_by("created_at")[:limit]
     for tag in candidates:
         mentions = (
@@ -194,9 +194,9 @@ def curate_suggested_tags(limit: int = 200) -> list[int]:
         if mentions >= AUTO_CURATE_MIN_POSTS:
             tag.is_curated = True
             tag.is_active = True
-            tag.ai_suggested = False
+            tag.is_suggested = False
             tag.save(
-                update_fields=["is_curated", "is_active", "ai_suggested", "updated_at"]
+                update_fields=["is_curated", "is_active", "is_suggested", "updated_at"]
             )
             promoted.append(tag.pk)
     if promoted:
@@ -226,8 +226,8 @@ def reject_suggestion(tag: Tag) -> None:
     """Retire a suggestion staff declined: out of the review queue and auto-curation."""
     tag.is_curated = False
     tag.is_active = False
-    tag.ai_suggested = False
-    tag.save(update_fields=["is_curated", "is_active", "ai_suggested", "updated_at"])
+    tag.is_suggested = False
+    tag.save(update_fields=["is_curated", "is_active", "is_suggested", "updated_at"])
 
 
 def merge_tags(source: Tag, target: Tag, user=None) -> None:

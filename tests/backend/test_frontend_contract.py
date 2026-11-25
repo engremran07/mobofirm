@@ -136,7 +136,8 @@ def test_header_has_navigation_search_and_current_section(client):
     assert f'hx-get="{reverse("search:suggest")}"' in html
     assert 'role="combobox"' in html
     assert 'id="global-feedback"' in html
-    assert 'hx-indicator="#global-progress"' in html
+    assert 'hx-indicator:inherited="#global-progress"' in html
+    assert "hx-headers:inherited=" in html
 
 
 @pytest.mark.django_db
@@ -146,8 +147,8 @@ def test_footer_links_privacy_terms_consent_and_status(client):
     html = client.get(reverse("home")).content.decode()
 
     for slug in ("privacy", "terms", "consent"):
-        assert f'href="/pages/{slug}/"' in html
-        assert client.get(f"/pages/{slug}/").status_code == 200
+        assert f'href="/help/{slug}/"' in html
+        assert client.get(f"/help/{slug}/").status_code == 200
     assert f'href="{reverse("health-live")}"' in html
 
 
@@ -158,7 +159,7 @@ def test_footer_never_links_to_unpublished_legal_pages(client):
     html = client.get(reverse("home")).content.decode()
 
     for slug in ("privacy", "terms", "consent"):
-        assert f'href="/pages/{slug}/"' not in html
+        assert f'href="/help/{slug}/"' not in html
     assert f'href="{reverse("health-live")}"' in html
 
 
@@ -183,10 +184,8 @@ def test_device_registration_prompt_has_no_blocking_backdrop_element():
     request.session.update(
         {
             "device_registration_prompt": {
-                "can_approve": True,
                 "device_name": "Test device",
                 "os_family": "Windows",
-                "browser_family": "Chrome",
                 "active_devices": 0,
                 "max_devices": 3,
             }

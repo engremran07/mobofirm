@@ -1,0 +1,88 @@
+{% extends "admin/staff_page.html" %}
+{% load i18n staff_ui %}
+{% block page_nav %}{% include "admin/distribution/_nav.html" %}{% endblock %}
+{% block page_body %}
+{% staff_notice tone="info" %}
+  {% blocktranslate with limit=batch_limit cap=video_cap left=video_budget %}
+    This library contains only currently public content. Historical video drafts are created only when staff select them, at most {{ limit }} items per batch and within today's automatic draft cap ({{ left }} of {{ cap }} remaining). Tools have share cards but no video template.
+  {% endblocktranslate %}
+{% endstaff_notice %}
+{% if not card_capable %}
+  {% staff_notice tone="warning" %}{% translate "Share card generation is unavailable because Pillow is not installed." %}{% endstaff_notice %}
+{% endif %}
+
+{% staff_section title=_("Public content") ident="media-library" intro=_("Check generated media before creating bounded batches. Video drafts are never rendered or posted automatically from this library.") %}
+  <form method="get" action="{% url 'admin:distribution_channel_media_library' %}" class="c-picker__tools" role="search" aria-label="{% translate 'Filter public content' %}">
+    {% staff_select "library-kind" "kind" _("Content type") %}
+      {% for value in kinds %}<option value="{{ value }}"{% if kind == value %} selected{% endif %}>{{ value|title }}</option>{% endfor %}
+    {% endstaff_select %}
+    {% if kind == "firmware" %}
+      {% staff_select "library-firmware-type" "firmware_type" _("Firmware classification") %}
+        {% for value in firmware_types %}<option value="{{ value }}"{% if firmware_type == value %} selected{% endif %}>{{ value|title }}</option>{% endfor %}
+      {% endstaff_select %}
+    {% endif %}
+    <button class="btn btn-primary" type="submit">{% translate "Filter" %}</button>
+  </form>
+
+  {% if entries %}
+    {% if can_generate_cards or can_create_videos %}
+      <form method="post" action="{% url 'admin:distribution_channel_media_library_bulk' %}" id="library-bulk" class="c-picker__tools">
+        {% csrf_token %}
+        <input type="hidden" name="kind" value="{{ kind }}">
+        <input type="hidden" name="firmware_type" value="{{ firmware_type }}">
+        <input type="hidden" name="page" value="{{ page.number }}">
+        <label for="library-action" class="u-text-sm">{% translate "For selected items" %}</label>
+        <select class="form-select" name="action" id="library-action" aria-label="{% translate 'Media library action' %}">
+          {% if can_generate_cards %}<option value="cards">{% translate "Generate horizontal and vertical cards" %}</option>{% endif %}
+          {% if can_create_videos %}<option value="videos">{% translate "Create video drafts" %}</option>{% endif %}
+        </select>
+        <button class="btn btn-primary" type="submit">{% translate "Apply" %}</button>
+        <span class="u-muted u-text-sm">{% blocktranslate with limit=batch_limit %}Maximum {{ limit }} selected items.{% endblocktranslate %}</span>
+      </form>
+    {% endif %}
+
+    {% staff_table label=_("Public content and generated media status") %}
+      <thead>
+        <tr>
+          {% if can_generate_cards or can_create_videos %}<th scope="col">{% translate "Select" %}</th>{% endif %}
+          <th scope="col">{% translate "Content" %}</th>
+          <th scope="col">{% translate "Share card" %}</th>
+          <th scope="col">{% translate "Vertical card" %}</th>
+          <th scope="col">{% translate "Legacy video asset" %}</th>
+          <th scope="col">{% translate "Motion video" %}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in entries %}
+          <tr>
+            {% if can_generate_cards or can_create_videos %}
+              <td><input type="checkbox" name="selected" value="{{ row.entry.key }}" form="library-bulk" aria-label="{% blocktranslate with title=row.entry.title %}Select {{ title }}{% endblocktranslate %}"></td>
+            {% endif %}
+            <th scope="row">
+              <a href="{{ row.entry.url }}">{{ row.entry.title }}</a>
+              <div class="u-muted u-text-xs">{{ row.entry.label }}</div>
+              {% if row.entry.lines %}<div class="u-muted u-text-xs">{{ row.entry.lines|join:" · " }}</div>{% endif %}
+            </th>
+            <td>{{ row.status.card }}</td>
+            <td>{{ row.status.vertical }}</td>
+            <td>{{ row.status.legacy_video }}</td>
+            <td>{{ row.status.motion_video }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    {% endstaff_table %}
+
+    <nav aria-label="{% translate 'Media library pages' %}" class="u-cluster mt-3">
+      {% if page.has_previous %}
+        <a class="btn btn-outline-secondary btn-sm" href="?kind={{ kind|urlencode }}&amp;firmware_type={{ firmware_type|urlencode }}&amp;page={{ page.number|add:'-1' }}">{% translate "Previous" %}</a>
+      {% endif %}
+      <span class="u-muted u-text-sm">{% blocktranslate with number=page.number total=page.num_pages items=page.count %}Page {{ number }} of {{ total }} · {{ items }} items{% endblocktranslate %}</span>
+      {% if page.has_next %}
+        <a class="btn btn-outline-secondary btn-sm" href="?kind={{ kind|urlencode }}&amp;firmware_type={{ firmware_type|urlencode }}&amp;page={{ page.number|add:'1' }}">{% translate "Next" %}</a>
+      {% endif %}
+    </nav>
+  {% else %}
+    {% staff_empty title=_("No public content found") %}{% translate "Only active approved firmware, currently published posts and guides, active flashing tools, and catalog spotlights with verified firmware are listed." %}{% endstaff_empty %}
+  {% endif %}
+{% endstaff_section %}
+{% endblock %}

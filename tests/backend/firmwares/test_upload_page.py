@@ -7,7 +7,6 @@ import tempfile
 import types
 from decimal import Decimal
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 from django.core.exceptions import ValidationError
@@ -28,13 +27,7 @@ from apps.firmwares.services import approve_pending_firmware
 
 @pytest.fixture(autouse=True)
 def stage(settings):
-    with (
-        tempfile.TemporaryDirectory() as directory,
-        patch(
-            "apps.firmwares.ai_analysis.FirmwareAIAnalyzer._ai_based_analysis",
-            return_value={"confidence": 0.0, "method": "ai"},
-        ),
-    ):
+    with tempfile.TemporaryDirectory() as directory:
         settings.FIRMWARE_STORAGE_ROOT = Path(directory)
         yield
 

@@ -2,7 +2,7 @@
 
 Runs once per publication (after commit, from ``signals``). Authors earn the
 ``blog.*`` reward events only for posts a *different* staff member published;
-automation, AI-generated and self-published posts earn nothing.
+automated and self-published posts earn nothing.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from typing import Any, Final
 
 from django.apps import apps
 
-from apps.blog.models import Post
+from apps.blog.models import Post, PostSource
 from apps.core.app_service import app_enabled
 from apps.core.events.bus import event_bus
 
@@ -26,7 +26,10 @@ def _wallet_ready() -> bool:
 
 
 def _earns_rewards(post: Post) -> bool:
-    if post.is_ai_generated or post.published_by_id in (None, post.author_id):
+    if post.content_source == PostSource.AUTOMATED or post.published_by_id in (
+        None,
+        post.author_id,
+    ):
         return False
     from apps.blog.selectors import is_editorial
 

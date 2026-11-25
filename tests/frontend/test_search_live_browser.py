@@ -9,9 +9,9 @@ from django.contrib.contenttypes.models import ContentType
 from django.utils import timezone
 from playwright.sync_api import Page
 
+from apps.firmwares.chipsets import create_chipset_record
 from apps.firmwares.models import (
     Brand,
-    Chipset,
     DownloadToken,
     Model,
     OfficialFirmware,
@@ -28,7 +28,7 @@ def _catalog() -> None:
         ("Dimensity 9300", "MediaTek", "Dimensity", {}),
         ("Snapdragon 8 Gen 2", "Qualcomm", "Snapdragon", {}),
     ):
-        Chipset.objects.create(
+        create_chipset_record(
             name=name,
             slug=f"{vendor}-{name}".lower().replace(" ", "-"),
             vendor=vendor,
@@ -40,13 +40,15 @@ def _catalog() -> None:
 
 
 def _cards(page: Page) -> list[str]:
-    return page.locator("#chipset-results a.surface-card strong").all_inner_texts()
+    return page.locator(
+        "#chipset-results .card-ui--chipset-tile strong"
+    ).all_inner_texts()
 
 
 def _wait_cards(page: Page, count: int) -> None:
     page.wait_for_function(
         "(count) => document.querySelectorAll("
-        "'#chipset-results a.surface-card').length === count",
+        "'#chipset-results .card-ui--chipset-tile').length === count",
         arg=count,
     )
 

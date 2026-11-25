@@ -248,7 +248,7 @@ def ad_tile(
     )
     if render is None:
         return mark_safe("")
-    layout = layout if layout in {"tile", "card", "tag"} else "tile"
+    layout = layout if layout in {"tile", "card", "tag", "guide"} else "tile"
     return mark_safe(
         render_to_string(
             "ads/includes/tile_ad.html", _tile_context(render, layout, tile)

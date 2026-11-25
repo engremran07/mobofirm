@@ -39,6 +39,7 @@ ALLOWED_EDGES: dict[str, frozenset[str]] = {
             "admin_base",
             "admin_filters",
             "admin_forms",
+            "admin_pages",
             "app_service",
             "dialogs",
             "editor",
@@ -76,6 +77,7 @@ ALLOWED_EDGES: dict[str, frozenset[str]] = {
             "admin_filters",
             "admin_forms",
             "app_service",
+            "decorators",
             "dialogs",
             "events",
             "services",
@@ -136,7 +138,9 @@ ALLOWED_EDGES: dict[str, frozenset[str]] = {
             "signals",
         }
     ),
-    "distribution->seo": frozenset({"fetcher", "siteurls"}),
+    "distribution->seo": frozenset(
+        {"(package)", "contracts", "fetcher", "providers", "siteurls"}
+    ),
     "distribution->site_settings": frozenset({"crypto", "services"}),
     "firmwares->blog": frozenset({"models", "services"}),
     "firmwares->core": frozenset(
@@ -146,11 +150,11 @@ ALLOWED_EDGES: dict[str, frozenset[str]] = {
             "admin_filters",
             "admin_forms",
             "admin_pages",
-            "ai_client",
             "app_service",
             "dialogs",
             "editor",
             "events",
+            "models",
             "search",
             "seed_data",
             "seeding",
@@ -179,7 +183,7 @@ ALLOWED_EDGES: dict[str, frozenset[str]] = {
     "firmwares->users": frozenset({"decorators", "request_user", "services"}),
     "firmwares->wallet": frozenset({"api"}),
     "gamification->core": frozenset(
-        {"admin_base", "admin_filters", "events", "services"}
+        {"admin_base", "admin_filters", "decorators", "events", "services"}
     ),
     "gamification->users": frozenset({"request_user"}),
     "gamification->wallet": frozenset({"api"}),

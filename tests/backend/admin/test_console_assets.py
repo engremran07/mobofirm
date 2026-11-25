@@ -11,7 +11,7 @@ import pytest
 from django.template import Context, Template
 
 from apps.core.templatetags.console import ConsoleAssetsError
-from scripts.check_offline_assets import is_remote_asset, scan_file
+from scripts.check_offline_assets import check_build, is_remote_asset, scan_file
 
 MANIFEST: dict[str, dict[str, Any]] = {
     "frontend/src/admin/admin.scss": {
@@ -151,3 +151,21 @@ def test_offline_check_flags_css_remote_imports(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     assert not scan_file(css)
+
+
+def test_offline_check_scans_public_build_assets(tmp_path: Path) -> None:
+    """Reject remote assets in the public build as well as the console bundle."""
+    (tmp_path / "assets").mkdir()
+    script = tmp_path / "assets" / "site.js"
+    script.write_text(
+        'const stylesheet = "https://cdn.example.com/site.css";', encoding="utf-8"
+    )
+
+    problems = check_build(
+        tmp_path,
+        manifest_required=False,
+        build_command="npm run build:public",
+    )
+
+    assert len(problems) == 1
+    assert "external asset URL" in problems[0]

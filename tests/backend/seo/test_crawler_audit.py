@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import ClassVar
+from unittest import mock
 from urllib.parse import urljoin, urlsplit
 
 from django.test import Client, TestCase, override_settings
@@ -15,7 +16,7 @@ from apps.seo.crawler import (
     run_crawl,
 )
 from apps.seo.fetcher import FetchResult, SafeFetcher
-from apps.seo.inventory import resolve_path
+from apps.seo.inventory import InventoryItem, resolve_path
 from apps.seo.models import CrawlRun, Issue, PageObservation, SEOSettings
 from tests.backend.seo.seo_helpers import SITE, Catalog, make_catalog
 
@@ -511,3 +512,72 @@ class IssueLifecycleTests(TestCase):
             self.assertIn(
                 "site_url_missing", {f.code for f in audit.analyze_inventory()}
             )
+
+    @override_settings(SITE_URL=SITE)
+    def test_inventory_audit_reports_only_missing_canonical_indexable_routes(self):
+        make_catalog()
+        missing = InventoryItem(
+            path="/public/missing/",
+            source="urlconf",
+            page_type="page",
+            indexable=True,
+            reason="",
+            canonical=f"{SITE}/public/missing/",
+            in_sitemap=False,
+        )
+        items = [
+            missing,
+            InventoryItem(
+                path="/accounts/private/",
+                source="urlconf",
+                page_type="page",
+                indexable=True,
+                reason="",
+                canonical=f"{SITE}/accounts/private/",
+                in_sitemap=False,
+            ),
+            InventoryItem(
+                path="/noindex/",
+                source="urlconf",
+                page_type="page",
+                indexable=False,
+                reason="private",
+                canonical=f"{SITE}/noindex/",
+                in_sitemap=False,
+            ),
+            InventoryItem(
+                path="/alias/",
+                source="urlconf",
+                page_type="page",
+                indexable=True,
+                reason="",
+                canonical=f"{SITE}/canonical/",
+                in_sitemap=False,
+            ),
+            InventoryItem(
+                path="/listed/",
+                source="sitemap:pages",
+                page_type="page",
+                indexable=True,
+                reason="",
+                canonical=f"{SITE}/listed/",
+                in_sitemap=True,
+            ),
+        ]
+        with mock.patch("apps.seo.audit.build_inventory", return_value=items):
+            findings = audit.analyze_inventory()
+
+        missing_findings = [
+            finding
+            for finding in findings
+            if finding.code == "indexable_route_missing_from_sitemap"
+        ]
+        self.assertEqual(len(missing_findings), 1)
+        self.assertEqual(missing_findings[0].url, "/public/missing/")
+        self.assertEqual(missing_findings[0].severity, Issue.Severity.WARNING)
+
+        audit.sync_issues(None, missing_findings, set(), inventory=True)
+        issue = Issue.objects.get(code="indexable_route_missing_from_sitemap")
+        audit.sync_issues(None, [], set(), inventory=True)
+        issue.refresh_from_db()
+        self.assertEqual(issue.status, Issue.Status.RESOLVED)

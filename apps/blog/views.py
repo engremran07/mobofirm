@@ -18,7 +18,7 @@ from django.utils.safestring import SafeString, mark_safe
 from django.views.decorators.http import require_GET
 from django.views.decorators.vary import vary_on_headers
 
-from apps.blog import selectors, shop_gateway
+from apps.blog import bounty_gateway, selectors, shop_gateway
 from apps.blog.access import (
     blog_enabled_for,
     can_edit_post,
@@ -26,7 +26,7 @@ from apps.blog.access import (
     comments_enabled,
 )
 from apps.blog.firmware_panel import firmware_inventory, firmware_summary
-from apps.blog.models import Category, Post, PostTranslation
+from apps.blog.models import Category, Post, PostAccess, PostTranslation
 from apps.blog.paywall import resolve_gate, teaser_text
 from apps.blog.rendering import RenderedArticle, render_article
 from apps.comments.selectors import comment_tree
@@ -90,6 +90,7 @@ def _listing_context(request: HttpRequest, base) -> dict:
         "total": page_obj.paginator.count,
         "trending": selectors.build_cards(selectors.trending_posts(5)),
         "cloud": tag_cloud(24),
+        "open_bounties": bounty_gateway.open_guide_bounties(),
     }
 
 
@@ -119,6 +120,7 @@ def post_list(request: HttpRequest) -> HttpResponse:
         "lead": _cards([lead], request)[0] if lead is not None else None,
         "chips": selectors.category_chips(),
         "active_category": active_category,
+        "access_options": PostAccess.choices,
         "sort_options": selectors.SORT_OPTIONS,
         "latest": selectors.build_cards(selectors.latest_posts(5)),
         "query_string": filters.query_string(),
@@ -218,6 +220,13 @@ def post_detail(request: HttpRequest, slug: str) -> HttpResponse:
         "latest": selectors.build_cards(selectors.latest_posts(4, exclude_pk=post.pk)),
         "cloud": tag_cloud(16),
         "can_edit": can_edit_post(request.user, post),
+        "can_propose_update": bool(
+            request.user.is_authenticated
+            and getattr(request.user, "email_verified_at", None) is not None
+            and post.is_live
+            and post.content_source != "automated"
+            and not gate.locked
+        ),
         "comments_open": comments_open,
         "comment_nodes": comment_tree(post, request.user, timezone.now())
         if comments_open
@@ -248,6 +257,7 @@ def _hub(
         lead_post = None
     context = _listing_context(request, posts.order_by("-published_at", "-pk"))
     context["lead"] = selectors.build_card(lead_post) if lead_post else None
+    context["ad_page"] = template
     context.update(extra)
     return render(request, template, context)
 
@@ -294,7 +304,9 @@ def model_posts(request: HttpRequest, brand_slug: str, model_slug: str) -> HttpR
 
     brand = get_object_or_404(Brand, slug=brand_slug)
     model = get_object_or_404(
-        DeviceModel.objects.select_related("chipset_ref"), brand=brand, slug=model_slug
+        DeviceModel.objects.select_related("chipset_ref__vendor"),
+        brand=brand,
+        slug=model_slug,
     )
     posts = selectors.live_posts().filter(firmware_model=model)
     return _hub(
@@ -310,7 +322,7 @@ def model_posts(request: HttpRequest, brand_slug: str, model_slug: str) -> HttpR
 def chipset_posts(request: HttpRequest, slug: str) -> HttpResponse:
     from apps.firmwares.models import Chipset
 
-    chipset = get_object_or_404(Chipset, slug=slug)
+    chipset = get_object_or_404(Chipset.objects.select_related("vendor"), slug=slug)
     posts = selectors.live_posts().filter(
         Q(firmware_model__chipset_ref=chipset)
         | Q(firmware_automation_link__chipset=chipset)

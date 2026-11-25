@@ -2,12 +2,12 @@
 //   * every group is a disclosure (`button.c-nav-toggle[aria-expanded][aria-controls]` + `.c-nav-panel`),
 //     animated by CSS (grid rows), keyboard operable, persisted per user in localStorage, and the group
 //     holding the current page opens by default (also after an htmx navigation);
-//   * "collapse all / expand all", an accordion switch (one group open at a time) and a live filter;
+//   * collapse all and a live filter; at most one navigation group stays open;
 //   * desktop: the whole sidebar collapses to an icon rail (persisted) with tooltips; mobile: off-canvas drawer.
 //
 // Hooks: aside[data-console-sidebar][data-console-user], [data-console-sidebar-toggle] (button, anywhere in
 // the header), [data-console-sidebar-overlay] (click-away layer), li[data-console-nav-group="slug"],
-// [data-console-nav-all="collapse|expand"], [data-console-nav-accordion], input[data-console-nav-filter],
+// [data-console-nav-all="collapse"], input[data-console-nav-filter],
 // [data-console-nav-empty]. NB: <html> carries the *state* attribute `data-console-sidebar`, so every
 // lookup of the sidebar itself is scoped with `aside[...]`.
 // State is published as attributes so CSS needs no JS knowledge:
@@ -18,7 +18,6 @@ import { EVENTS, debounce, emit, focusables, storage } from "../lib/util.js";
 
 const COLLAPSED_KEY = "mobofirm-console-sidebar";
 const GROUPS_KEY = "mobofirm-console-nav-groups";
-const ACCORDION_KEY = "mobofirm-console-nav-accordion";
 const mobileQuery = window.matchMedia("(max-width: 991.98px)");
 
 let collapsed = storage.get(COLLAPSED_KEY) === "mini";
@@ -97,9 +96,6 @@ function saveGroups() {
 const panelOf = (group) => group.querySelector(":scope > .c-nav-panel");
 const toggleOf = (group) => group.querySelector(":scope > .c-nav-toggle");
 const isOpen = (group) => panelOf(group)?.hasAttribute("data-open") ?? false;
-// One group open at a time unless the user switched the accordion off ("0").
-const accordion = () => storage.get(userKey(ACCORDION_KEY)) !== "0";
-
 function syncAria(group) {
   const shown = isOpen(group) || group.hasAttribute("data-filter-open");
   toggleOf(group)?.setAttribute("aria-expanded", String(shown));
@@ -111,17 +107,10 @@ function setGroup(group, open) {
   syncAria(group);
 }
 
-function setAll(open) {
-  if (open && accordion()) {
-    // "Expand all" is an explicit request for several open groups: leave accordion mode.
-    storage.set(userKey(ACCORDION_KEY), "0");
-    for (const button of sidebar()?.querySelectorAll("[data-console-nav-accordion]") ?? []) {
-      button.setAttribute("aria-pressed", "false");
-    }
-  }
-  for (const group of groups()) setGroup(group, open);
+function collapseAll() {
+  for (const group of groups()) setGroup(group, false);
   saveGroups();
-  announceNav(open ? "All navigation groups expanded" : "All navigation groups collapsed");
+  announceNav("All navigation groups collapsed");
 }
 
 function announceNav(message) {
@@ -130,9 +119,7 @@ function announceNav(message) {
 }
 
 function openGroup(group, { persist = true } = {}) {
-  if (accordion()) {
-    for (const other of groups()) if (other !== group) setGroup(other, false);
-  }
+  for (const other of groups()) if (other !== group) setGroup(other, false);
   setGroup(group, true);
   if (persist) saveGroups();
 }
@@ -150,16 +137,10 @@ function restoreGroups() {
     setGroup(current, true);
     saveGroups();
   }
-  if (accordion()) {
-    // Older stored state may hold several open groups; keep the current one (or the first).
-    const keep = current ?? groups().find(isOpen);
-    for (const group of groups()) if (group !== keep) setGroup(group, false);
-    saveGroups();
-  }
-  const pressed = accordion();
-  for (const button of sidebar()?.querySelectorAll("[data-console-nav-accordion]") ?? []) {
-    button.setAttribute("aria-pressed", String(pressed));
-  }
+  const keep = current ?? groups().find(isOpen);
+  for (const group of groups()) if (group !== keep) setGroup(group, false);
+  if (keep && !isOpen(keep)) setGroup(keep, true);
+  saveGroups();
 }
 
 function onGroupToggle(button) {
@@ -180,20 +161,6 @@ function onGroupToggle(button) {
   } else {
     openGroup(group);
   }
-}
-
-function toggleAccordion() {
-  const next = !accordion();
-  storage.set(userKey(ACCORDION_KEY), next ? "1" : "0");
-  for (const button of sidebar()?.querySelectorAll("[data-console-nav-accordion]") ?? []) {
-    button.setAttribute("aria-pressed", String(next));
-  }
-  if (next) {
-    const keep = groups().find((group) => group.querySelector('a[aria-current="page"]')) ?? groups().find(isOpen);
-    for (const group of groups()) if (group !== keep) setGroup(group, false);
-    saveGroups();
-  }
-  announceNav(next ? "Only one navigation group stays open" : "Several navigation groups can stay open");
 }
 
 // -- active page ---------------------------------------------------------------------------
@@ -362,13 +329,9 @@ export function initSidebar() {
       onGroupToggle(groupToggle);
       return;
     }
-    const all = event.target.closest("[data-console-nav-all]");
-    if (all) {
-      setAll(all.dataset.consoleNavAll === "expand");
-      return;
-    }
-    if (event.target.closest("[data-console-nav-accordion]")) {
-      toggleAccordion();
+    const collapse = event.target.closest("[data-console-nav-all='collapse']");
+    if (collapse) {
+      collapseAll();
       return;
     }
     if (event.target.closest("[data-console-sidebar-overlay]")) {

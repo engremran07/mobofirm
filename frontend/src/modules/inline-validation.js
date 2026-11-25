@@ -249,5 +249,5 @@ export function initializeInlineValidation() {
   document.addEventListener("input", onEdit);
   document.addEventListener("change", onEdit);
   document.addEventListener("mf:revalidate", onEdit);
-  document.addEventListener("htmx:afterSwap", () => prepare());
+  document.addEventListener("htmx:after:swap", () => prepare());
 }

@@ -44,10 +44,10 @@ function modulesFor(featureList, config) {
 }
 
 function csrfToken(textarea) {
+  const meta = document.querySelector('meta[name="csrf-token"]');
+  if (meta?.content) return meta.content;
   const field = textarea.form && textarea.form.querySelector("input[name=csrfmiddlewaretoken]");
-  if (field && field.value) return field.value;
-  const match = /(?:^|;\s*)csrftoken=([^;]+)/.exec(document.cookie);
-  return match ? decodeURIComponent(match[1]) : "";
+  return field?.value ?? "";
 }
 
 function labelElement(textarea) {

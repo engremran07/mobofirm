@@ -1,16 +1,21 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Iterable
 from importlib import import_module
 from typing import ClassVar
 
 from django.conf import settings
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import Q
 from django.db.models.functions import Lower
 from django.utils import timezone
+from django.utils.text import slugify
+
+from apps.core.models import TimestampedModel
 
 from .constants import MAIN_CATEGORIES, RESERVED_BRAND_SLUGS
 from .package_formats import (
@@ -20,7 +25,7 @@ from .package_formats import (
 )
 from .references import ref_kwargs
 from .shortener_constants import ShortenerOverride
-from .variant_rules import normalize_variant_code
+from .variant_rules import normalize_variant_code, normalize_variant_codes
 
 
 class FirmwareSourceType(models.TextChoices):
@@ -35,6 +40,22 @@ class AccessTier(models.TextChoices):
 
 
 PRICE_CURRENCY = "USD"
+
+
+def _normalized_codes(values: object) -> set[str]:
+    if isinstance(values, str):
+        values = [values]
+    if not isinstance(values, (list, tuple)):
+        return set()
+    return set(
+        normalize_variant_codes(value for value in values if isinstance(value, str))
+    )
+
+
+def validate_catalog_image_size(value) -> None:
+    """Keep uploaded catalogue images bounded without re-reading stored files."""
+    if not getattr(value, "_committed", True) and value.size > 2 * 1024 * 1024:
+        raise ValidationError("Catalogue images must be 2 MiB or smaller.")
 
 
 def price_constraint(name: str) -> models.CheckConstraint:
@@ -125,9 +146,8 @@ def source_constraint(name: str) -> models.CheckConstraint:
     )
 
 
-class Timestamped(models.Model):
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+class Timestamped(TimestampedModel):
+    """Firmware timestamp fields backed by the shared core model mixin."""
 
     class Meta:
         abstract = True
@@ -135,8 +155,6 @@ class Timestamped(models.Model):
 
 def _validate_tier_fields(instance) -> None:
     """Admin/form validation of the access tier and price combination."""
-    from django.core.exceptions import ValidationError
-
     if instance.access_tier not in AccessTier.values:
         raise ValidationError("Unsupported access tier.")
     price = instance.approved_price
@@ -150,8 +168,6 @@ def _validate_package_format(
     instance, *, variant, model, brand, chipset_text: str = ""
 ) -> None:
     """The package format must be generic or belong to the device's chipset vendor."""
-    from django.core.exceptions import ValidationError
-
     message = device_format_error(
         instance.package_format,
         variant=variant,
@@ -165,8 +181,6 @@ def _validate_package_format(
 
 def _validate_source_fields(instance) -> None:
     """Admin/form validation of the stored-vs-external source fields."""
-    from django.core.exceptions import ValidationError
-
     from .sources import validate_external_url
 
     if instance.source_type == FirmwareSourceType.EXTERNAL:
@@ -190,6 +204,12 @@ class Brand(Timestamped):
         blank=True,
         default="",
         help_text="Brand logo URL (SVG preferred)",
+    )
+    logo_upload = models.ImageField(
+        upload_to="brands/logos/",
+        blank=True,
+        validators=[validate_catalog_image_size],
+        help_text="Upload a brand logo (2 MiB maximum).",
     )
     description = models.TextField(
         blank=True,
@@ -230,10 +250,32 @@ class Brand(Timestamped):
         return self.name
 
 
+class ChipsetVendor(Timestamped):
+    """Canonical silicon vendor shared by chipsets, tools, and package formats."""
+
+    name = models.CharField(max_length=64, unique=True)
+    slug = models.SlugField(max_length=80, unique=True)
+    aliases = models.JSONField(default=list, blank=True)
+    os_family = models.CharField(max_length=32, blank=True, default="android")
+    default_flash_mode = models.CharField(max_length=64, blank=True, default="")
+    logo_url = models.URLField(max_length=500, blank=True, default="")
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ["name"]
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class Chipset(Timestamped):
     """A system-on-chip that models and variants reference and tools support."""
 
-    vendor = models.CharField(max_length=64, help_text="e.g. MediaTek, Qualcomm")
+    vendor = models.ForeignKey(
+        ChipsetVendor,
+        on_delete=models.PROTECT,
+        related_name="chipsets",
+    )
     family = models.CharField(
         max_length=64,
         blank=True,
@@ -250,7 +292,7 @@ class Chipset(Timestamped):
     description = models.TextField(blank=True, default="")
 
     class Meta:
-        ordering: ClassVar[list[str]] = ["vendor", "name"]
+        ordering: ClassVar[list[str]] = ["vendor__name", "name"]
         verbose_name = "Chipset"
         verbose_name_plural = "Chipsets"
         constraints: ClassVar[list[models.BaseConstraint]] = [
@@ -267,7 +309,7 @@ class Chipset(Timestamped):
 
     @property
     def display_name(self) -> str:
-        return f"{self.vendor} {self.name}".strip()
+        return f"{self.vendor.name} {self.name}".strip()
 
 
 class Model(Timestamped):
@@ -280,7 +322,7 @@ class Model(Timestamped):
         ("rumored", "Rumored"),
     ]
 
-    brand = models.ForeignKey(Brand, on_delete=models.CASCADE, related_name="models")
+    brand = models.ForeignKey(Brand, on_delete=models.PROTECT, related_name="models")
     name = models.CharField(
         max_length=128, help_text="Device model name (e.g., Galaxy S23)"
     )
@@ -310,6 +352,11 @@ class Model(Timestamped):
         blank=True,
         help_text='All variant model codes (e.g., ["2510DRA23G", "2510DRA23E"])',
     )
+    variant_codes = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Normalized manufacturer codes for this chipset-specific model.",
+    )
     also_known_as = models.TextField(
         blank=True,
         default="",
@@ -325,6 +372,12 @@ class Model(Timestamped):
         blank=True,
         default="",
         help_text="Device photo URL",
+    )
+    image_upload = models.ImageField(
+        upload_to="models/devices/",
+        blank=True,
+        validators=[validate_catalog_image_size],
+        help_text="Upload a device photo (2 MiB maximum).",
     )
 
     # Core specifications
@@ -445,9 +498,81 @@ class Model(Timestamped):
             return f"{self.brand}/{self.name} ({self.codename})"
         return f"{self.brand}/{self.name}"
 
+    def clean(self) -> None:
+        """Reject codes already claimed by another active model for this brand."""
+        super().clean()
+        own_codes = _normalized_codes(self.variant_codes)
+        own_codes.update(_normalized_codes(self.model_codes))
+        own_codes.update(_normalized_codes(self.model_code))
+        self.validate_variant_code_ownership(own_codes)
+
+    def validate_variant_code_ownership(
+        self, codes: Iterable[str], *, field_name: str = "variant_codes"
+    ) -> None:
+        """Check candidate manufacturer codes against other active models."""
+        own_codes = set(normalize_variant_codes(codes))
+        if not self.brand_id or not own_codes:
+            return
+
+        active_models = Model.objects.filter(
+            brand_id=self.brand_id, is_active=True
+        ).exclude(pk=self.pk)
+        claimed_codes: set[str] = set()
+        for variant_codes, model_code, model_codes in active_models.values_list(
+            "variant_codes", "model_code", "model_codes"
+        ).iterator(chunk_size=1000):
+            claimed_codes.update(_normalized_codes(variant_codes))
+            claimed_codes.update(_normalized_codes(model_codes))
+            claimed_codes.update(_normalized_codes(model_code))
+
+        variants = Variant.objects.filter(
+            model__brand_id=self.brand_id, model__is_active=True
+        )
+        if self.pk:
+            variants = variants.exclude(model_id=self.pk)
+        for value in variants.values_list("model_code", flat=True).iterator(
+            chunk_size=1000
+        ):
+            claimed_codes.update(_normalized_codes(value))
+
+        duplicates = sorted(own_codes & claimed_codes)
+        if duplicates:
+            raise ValidationError(
+                {
+                    field_name: (
+                        "These codes are already assigned to another active model "
+                        f"for this brand: {', '.join(duplicates)}."
+                    )
+                }
+            )
+
     def save(self, *args, **kwargs):
         from .chipsets import sync_chipset_reference
 
+        variant_codes = normalize_variant_codes(
+            [*self.variant_codes, self.model_code, *(self.model_codes or [])]
+        )
+        if variant_codes != self.variant_codes:
+            self.variant_codes = variant_codes
+            if kwargs.get("update_fields"):
+                kwargs["update_fields"] = {*kwargs["update_fields"], "variant_codes"}
+        if not self.slug:
+            base_slug = slugify(variant_codes[0] if variant_codes else self.name)[:160]
+            if not base_slug:
+                raise ValidationError("The model needs a code or name for its slug.")
+            slug = base_slug
+            suffix = 2
+            while (
+                Model.objects.filter(brand_id=self.brand_id, slug=slug)
+                .exclude(pk=self.pk)
+                .exists()
+            ):
+                suffix_text = f"-{suffix}"
+                slug = f"{base_slug[: 160 - len(suffix_text)]}{suffix_text}"
+                suffix += 1
+            self.slug = slug
+            if kwargs.get("update_fields"):
+                kwargs["update_fields"] = {*kwargs["update_fields"], "slug"}
         kwargs = sync_chipset_reference(self, kwargs)
         super().save(*args, **kwargs)
 
@@ -459,10 +584,7 @@ class Model(Timestamped):
     @property
     def all_model_codes_display(self) -> str:
         """Comma-separated model codes for display."""
-        codes = list(self.model_codes) if self.model_codes else []
-        if self.model_code and self.model_code not in codes:
-            codes.insert(0, self.model_code)
-        return ", ".join(codes)
+        return ", ".join(self.variant_codes)
 
 
 class Variant(Timestamped):
@@ -560,6 +682,10 @@ class Variant(Timestamped):
         """Normalise the code before the uniqueness constraints are checked."""
         super().clean()
         self.model_code = normalize_variant_code(self.model_code)
+        if self.model_id:
+            self.model.validate_variant_code_ownership(
+                [self.model_code], field_name="model_code"
+            )
 
     def save(self, *args, **kwargs):
         from .chipsets import sync_chipset_reference
@@ -580,7 +706,7 @@ class BrandCreationRequest(Timestamped):
         null=True,
         related_name="brand_creation_requests",
     )
-    ai_suggestion = models.JSONField(default=dict)
+    review_suggestion = models.JSONField(default=dict)
     status = models.CharField(
         max_length=16,
         choices=[
@@ -637,7 +763,7 @@ class ModelCreationRequest(Timestamped):
         null=True,
         related_name="model_creation_requests",
     )
-    ai_suggestion = models.JSONField(default=dict)
+    review_suggestion = models.JSONField(default=dict)
     status = models.CharField(
         max_length=16,
         choices=[
@@ -664,10 +790,17 @@ class ModelCreationRequest(Timestamped):
         constraints: ClassVar[list[models.BaseConstraint]] = [
             models.UniqueConstraint(
                 "brand",
+                "chipset",
                 Lower("name"),
-                condition=Q(status="pending"),
-                name="model_request_pending_name_unique",
-            )
+                condition=Q(status="pending") & Q(chipset__isnull=False),
+                name="model_req_pending_chipset_unique",
+            ),
+            models.UniqueConstraint(
+                "brand",
+                Lower("name"),
+                condition=Q(status="pending") & Q(chipset__isnull=True),
+                name="model_req_pending_nochip_unique",
+            ),
         ]
 
     def __str__(self) -> str:
@@ -695,7 +828,7 @@ class VariantCreationRequest(Timestamped):
         null=True,
         related_name="variant_creation_requests",
     )
-    ai_suggestion = models.JSONField(default=dict)
+    review_suggestion = models.JSONField(default=dict)
     status = models.CharField(
         max_length=16,
         choices=[
@@ -750,7 +883,7 @@ class ChipsetCreationRequest(Timestamped):
         null=True,
         related_name="chipset_creation_requests",
     )
-    ai_suggestion = models.JSONField(default=dict)
+    review_suggestion = models.JSONField(default=dict)
     status = models.CharField(
         max_length=16,
         choices=[
@@ -826,13 +959,14 @@ class PendingFirmware(TieredAccess, Timestamped):
         blank=True,
         related_name="pending_firmwares_variant",
     )
-    ai_brand = models.CharField(max_length=128, blank=True, default="")
-    ai_model = models.CharField(max_length=128, blank=True, default="")
-    ai_variant = models.CharField(max_length=128, blank=True, default="")
-    ai_category = models.CharField(
+    variant_code = models.CharField(max_length=64, blank=True, default="")
+    suggested_brand = models.CharField(max_length=128, blank=True, default="")
+    suggested_model = models.CharField(max_length=128, blank=True, default="")
+    suggested_variant = models.CharField(max_length=128, blank=True, default="")
+    suggested_category = models.CharField(
         max_length=32, choices=MAIN_CATEGORIES, blank=True, null=True
     )
-    ai_subtype = models.CharField(max_length=64, blank=True, null=True)
+    suggested_subtype = models.CharField(max_length=64, blank=True, null=True)
     package_format = models.CharField(
         max_length=32,
         choices=FirmwarePackageFormat.choices,
@@ -890,6 +1024,20 @@ class PendingFirmware(TieredAccess, Timestamped):
     def __str__(self):
         return f"{self.original_file_name} ({self.id})"
 
+    def save(self, *args, **kwargs):
+        uploaded_variant = self.uploaded_variant
+        code = ""
+        if uploaded_variant is not None:
+            code = normalize_variant_code(uploaded_variant.model_code)
+        uploaded_model = self.uploaded_model
+        if not code and uploaded_model is not None:
+            code = normalize_variant_code(uploaded_model.model_code)
+        if code and code != self.variant_code:
+            self.variant_code = code
+            if kwargs.get("update_fields") is not None:
+                kwargs["update_fields"] = {*kwargs["update_fields"], "variant_code"}
+        super().save(*args, **kwargs)
+
     def clean(self):
         super().clean()
         _validate_source_fields(self)
@@ -943,6 +1091,7 @@ class BaseFirmware(TieredAccess, Timestamped):
     variant = models.ForeignKey(
         Variant, on_delete=models.SET_NULL, null=True, related_name="%(class)s_firmware"
     )
+    variant_code = models.CharField(max_length=64, blank=True, default="")
 
     # Technical details
     chipset = models.CharField(
@@ -1008,6 +1157,20 @@ class BaseFirmware(TieredAccess, Timestamped):
         brand = self.brand.name if self.brand else "Unknown"
         model = self.model.name if self.model else "Unknown"
         return f"{brand}/{model} ({self.original_file_name})"
+
+    def save(self, *args, **kwargs):
+        variant = self.variant
+        code = ""
+        if variant is not None:
+            code = normalize_variant_code(variant.model_code)
+        model = self.model
+        if not code and model is not None:
+            code = normalize_variant_code(model.model_code)
+        if code and code != self.variant_code:
+            self.variant_code = code
+            if kwargs.get("update_fields") is not None:
+                kwargs["update_fields"] = {*kwargs["update_fields"], "variant_code"}
+        super().save(*args, **kwargs)
 
     @property
     def is_external(self) -> bool:
@@ -1975,6 +2138,195 @@ class GeneratedFlashingGuide(Timestamped):
     def __str__(self) -> str:
         model_str = self.model.name if self.model else "All"
         return f"Guide: {self.brand.name} {model_str}"
+
+
+class CatalogUpdateProposal(Timestamped):
+    """Member-proposed descriptive corrections to existing firmware catalog data."""
+
+    class TargetKind(models.TextChoices):
+        BRAND = "brand", "Brand"
+        CHIPSET_VENDOR = "chipset_vendor", "Chipset vendor"
+        CHIPSET = "chipset", "Chipset"
+        MODEL = "model", "Device model"
+        FLASHING_TOOL = "flashing_tool", "Flashing tool"
+        GUIDE_TEMPLATE = "guide_template", "Flashing guide template"
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending review"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+        STALE = "stale", "Stale"
+
+    target_kind = models.CharField(max_length=24, choices=TargetKind.choices)
+    brand = models.ForeignKey(
+        Brand,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="update_proposals",
+    )
+    chipset_vendor = models.ForeignKey(
+        ChipsetVendor,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="update_proposals",
+    )
+    chipset = models.ForeignKey(
+        Chipset,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="update_proposals",
+    )
+    model = models.ForeignKey(
+        Model,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="update_proposals",
+    )
+    flashing_tool = models.ForeignKey(
+        FlashingTool,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="update_proposals",
+    )
+    guide_template = models.ForeignKey(
+        FlashingGuideTemplate,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="update_proposals",
+    )
+    submitted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="firmware_catalog_update_proposals",
+    )
+    base_values = models.JSONField()
+    proposed_values = models.JSONField()
+    status = models.CharField(
+        max_length=12, choices=Status.choices, default=Status.PENDING
+    )
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="reviewed_firmware_catalog_update_proposals",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    review_reason = models.CharField(max_length=1000, blank=True, default="")
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ["-created_at"]
+        constraints: ClassVar[list[models.BaseConstraint]] = [
+            models.CheckConstraint(
+                condition=(
+                    Q(
+                        target_kind="brand",
+                        brand__isnull=False,
+                        chipset_vendor__isnull=True,
+                        chipset__isnull=True,
+                        model__isnull=True,
+                        flashing_tool__isnull=True,
+                        guide_template__isnull=True,
+                    )
+                    | Q(
+                        target_kind="chipset_vendor",
+                        brand__isnull=True,
+                        chipset_vendor__isnull=False,
+                        chipset__isnull=True,
+                        model__isnull=True,
+                        flashing_tool__isnull=True,
+                        guide_template__isnull=True,
+                    )
+                    | Q(
+                        target_kind="chipset",
+                        brand__isnull=True,
+                        chipset_vendor__isnull=True,
+                        chipset__isnull=False,
+                        model__isnull=True,
+                        flashing_tool__isnull=True,
+                        guide_template__isnull=True,
+                    )
+                    | Q(
+                        target_kind="model",
+                        brand__isnull=True,
+                        chipset_vendor__isnull=True,
+                        chipset__isnull=True,
+                        model__isnull=False,
+                        flashing_tool__isnull=True,
+                        guide_template__isnull=True,
+                    )
+                    | Q(
+                        target_kind="flashing_tool",
+                        brand__isnull=True,
+                        chipset_vendor__isnull=True,
+                        chipset__isnull=True,
+                        model__isnull=True,
+                        flashing_tool__isnull=False,
+                        guide_template__isnull=True,
+                    )
+                    | Q(
+                        target_kind="guide_template",
+                        brand__isnull=True,
+                        chipset_vendor__isnull=True,
+                        chipset__isnull=True,
+                        model__isnull=True,
+                        flashing_tool__isnull=True,
+                        guide_template__isnull=False,
+                    )
+                ),
+                name="fw_update_proposal_one_target",
+            ),
+            models.UniqueConstraint(
+                fields=["brand", "submitted_by"],
+                condition=Q(target_kind="brand", status="pending", brand__isnull=False),
+                name="fw_brand_proposal_pending_once",
+            ),
+            models.UniqueConstraint(
+                fields=["chipset_vendor", "submitted_by"],
+                condition=Q(
+                    target_kind="chipset_vendor",
+                    status="pending",
+                    chipset_vendor__isnull=False,
+                ),
+                name="fw_vendor_proposal_pending_once",
+            ),
+            models.UniqueConstraint(
+                fields=["chipset", "submitted_by"],
+                condition=Q(
+                    target_kind="chipset", status="pending", chipset__isnull=False
+                ),
+                name="fw_chipset_proposal_pending_once",
+            ),
+            models.UniqueConstraint(
+                fields=["model", "submitted_by"],
+                condition=Q(target_kind="model", status="pending", model__isnull=False),
+                name="fw_model_proposal_pending_once",
+            ),
+            models.UniqueConstraint(
+                fields=["flashing_tool", "submitted_by"],
+                condition=Q(
+                    target_kind="flashing_tool",
+                    status="pending",
+                    flashing_tool__isnull=False,
+                ),
+                name="fw_tool_proposal_pending_once",
+            ),
+            models.UniqueConstraint(
+                fields=["guide_template", "submitted_by"],
+                condition=Q(
+                    target_kind="guide_template",
+                    status="pending",
+                    guide_template__isnull=False,
+                ),
+                name="fw_guide_proposal_pending_once",
+            ),
+        ]
 
 
 class AutomatedBlogLink(Timestamped):

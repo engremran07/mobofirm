@@ -17,6 +17,10 @@ SINKS = (
     (PACKAGE_PURCHASE, "Buy a download package"),
     (FILE_PURCHASE, "Buy a paid or featured file"),
 )
+SINK_URLS = {
+    PACKAGE_PURCHASE: "shop:pricing",
+    FILE_PURCHASE: "firmwares:library_hub",
+}
 
 for _key, _label in SINKS:
-    wallet_gateway.register_sink(_key, _label, derived=True)
+    wallet_gateway.register_sink(_key, _label, derived=True, url_name=SINK_URLS[_key])

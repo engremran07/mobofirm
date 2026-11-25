@@ -1,4 +1,5 @@
 {# HTMX fragment and initial render of the journal results. Context: filters, cards, lead, page_obj, total. #}
+{% load ad_tags %}
 {% if filters.is_filtered %}
   <p class="results-summary" role="status">
     <strong>{{ total }}</strong> article{{ total|pluralize }}
@@ -18,7 +19,7 @@
 {% if cards %}
   <h2 class="visually-hidden">Articles</h2>
   <div class="post-grid">
-    {% for card in cards %}{% include "blog/partials/post_card.html" with card=card %}{% endfor %}
+    {% for card in cards %}{% include "blog/partials/post_card.html" with card=card %}{% ad_tile forloop.counter cards|length layout="card" tile="post-card" page="blog/post_list.html" %}{% endfor %}
   </div>
   {% include "components/pagination.html" with page_obj=page_obj label="Journal pages" hx_target="#journal-results" %}
 {% elif not lead %}

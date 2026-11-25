@@ -274,7 +274,8 @@
     // Controls and layout.
     --mf-content-width: 76rem;
     --mf-reading-width: 48rem;
-    --mf-header-height: 4.25rem;
+    --mf-header-height: 4rem;
+    --mf-sticky-top: calc(var(--mf-header-height) + 1rem);
     --mf-glass-blur: 18px;
 
     // Motion. Durations collapse to ~0 under reduced motion (below).

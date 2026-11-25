@@ -222,11 +222,9 @@
   font-size: var(--mf-text-sm);
 }
 
-// ---- Filter chips and sticky filter bar ----
+// ---- Filter chips and filter bar ----
 .filter-bar {
-  position: sticky;
-  z-index: 8;
-  top: calc(var(--mf-header-height) + 0.25rem);
+  position: static;
   display: flex;
   flex-wrap: wrap;
   align-items: center;

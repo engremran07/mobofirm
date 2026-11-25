@@ -136,7 +136,9 @@ def brand_detail(ctx: ProviderContext) -> PageSEO | None:
             "firmware files.",
         ),
         path=path,
-        image=same_site_image(brand.logo_url),
+        image=same_site_image(
+            brand.logo_upload.url if brand.logo_upload else brand.logo_url
+        ),
         crumbs=_crumbs(
             HOME, ("Brands", reverse("firmwares:brand_list")), (brand.name, path)
         ),
@@ -203,7 +205,9 @@ def model_detail(ctx: ProviderContext) -> PageSEO | None:
         title=f"{label} firmware download",
         description=ctx.describe(model.description, derived),
         path=path,
-        image=same_site_image(model.image_url),
+        image=same_site_image(
+            model.image_upload.url if model.image_upload else model.image_url
+        ),
         crumbs=_crumbs(
             HOME,
             ("Brands", reverse("firmwares:brand_list")),

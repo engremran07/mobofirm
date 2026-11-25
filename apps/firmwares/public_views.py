@@ -29,7 +29,9 @@ from django.http import (
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.crypto import salted_hmac
 from django.utils.http import content_disposition_header
+from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.http import require_GET, require_POST
 from django.views.decorators.vary import vary_on_headers
 
@@ -40,8 +42,10 @@ from apps.core.search import (
 )
 from apps.core.search import search as engine_search
 from apps.core.search.text import clean_query, score_text, tokenize
+from apps.core.utils.ip import get_client_ip
 from apps.core.view_counter import should_count
 from apps.site_settings.services import absolute_url
+from apps.users.services.rate_limit import allow_action
 
 from . import catalog
 from .access import (
@@ -87,13 +91,16 @@ from .download_service import (
 from .models import (
     Brand,
     Chipset,
+    ChipsetVendor,
     DownloadToken,
     FirmwarePackageFormat,
+    FirmwareSourceType,
     FlashingTool,
     GeneratedFlashingGuide,
     Model,
     Variant,
 )
+from .references import ref_kwargs
 from .search_providers import (
     BRAND_FIELDS,
     CHIPSET_ANNOTATIONS,
@@ -104,7 +111,7 @@ from .search_providers import (
 from .services import storage_root
 from .shortener import share_url_for
 from .sources import validate_external_url
-from .tracking_models import FirmwareDownloadAttempt, FirmwareView
+from .tracking_models import FirmwareDownloadAttempt, FirmwareLinkReport, FirmwareView
 
 logger = logging.getLogger(__name__)
 
@@ -428,9 +435,10 @@ def firmware_browse(request: HttpRequest) -> HttpResponse:
     search = list_search_context(outcome, firmwares.paginator.count, user=request.user)
 
     chipsets = (
-        Chipset.objects.annotate(model_total=Count("models", distinct=True))
+        Chipset.objects.select_related("vendor")
+        .annotate(model_total=Count("models", distinct=True))
         .filter(model_total__gt=0)
-        .order_by("vendor", "name")
+        .order_by("vendor__name", "name")
     )
     context = {
         "firmwares": firmwares,
@@ -505,7 +513,7 @@ def brand_detail(request: HttpRequest, slug: str) -> HttpResponse:
     """
     brand = get_object_or_404(Brand, slug=slug)
     all_models = Model.objects.filter(brand=brand, is_active=True).select_related(
-        "chipset_ref"
+        "chipset_ref__vendor"
     )
     result = search_queryset(all_models, request.GET.get("q"), MODEL_FIELDS)
     paginator = Paginator(result.queryset.order_by("name"), BRAND_MODEL_PAGE_SIZE)
@@ -529,13 +537,20 @@ def brand_detail(request: HttpRequest, slug: str) -> HttpResponse:
     brand_filter = Q(models__brand=brand, models__is_active=True)
     chipsets = list(
         Chipset.objects.filter(brand_filter)
+        .select_related("vendor")
         .annotate(model_total=Count("models", filter=brand_filter, distinct=True))
-        .order_by("vendor", "name")[:24]
+        .order_by("vendor__name", "name")[:24]
     )
     categories = _category_summary(brand=brand)
     context = {
         "brand": brand,
-        "logo_src": brand.logo_url if brand.logo_url.startswith("/") else "",
+        "logo_src": (
+            brand.logo_upload.url
+            if brand.logo_upload
+            else brand.logo_url
+            if brand.logo_url.startswith("/")
+            else ""
+        ),
         "models": models_page,
         "model_total": all_models.count() if result.is_active else paginator.count,
         **search,
@@ -563,9 +578,11 @@ def chipset_list(request: HttpRequest) -> HttpResponse:
     requests receive only the results fragment.
     """
     vendor = request.GET.get("vendor", "").strip()
-    base = Chipset.objects.all()
+    base = Chipset.objects.select_related("vendor")
     if vendor:
-        base = base.filter(vendor=vendor)
+        from .chipsets import canonical_vendor
+
+        base = base.filter(vendor__name=canonical_vendor(vendor) or vendor)
     result = search_queryset(
         base,
         request.GET.get("q"),
@@ -574,7 +591,7 @@ def chipset_list(request: HttpRequest) -> HttpResponse:
     )
     chipsets = result.queryset.annotate(
         model_total=Count("models", filter=Q(models__is_active=True), distinct=True)
-    ).order_by("vendor", "name")
+    ).order_by("vendor__name", "name")
     paginator = Paginator(chipsets, CHIPSET_PAGE_SIZE)
     page = paginator.get_page(request.GET.get("page"))
     context = {
@@ -582,8 +599,8 @@ def chipset_list(request: HttpRequest) -> HttpResponse:
         "total_chipsets": paginator.count,
         "selected_vendor": vendor,
         "vendors": list(
-            Chipset.objects.order_by("vendor")
-            .values_list("vendor", flat=True)
+            ChipsetVendor.objects.order_by("name")
+            .values_list("name", flat=True)
             .distinct()
         ),
         **list_search_context(
@@ -603,7 +620,7 @@ def chipset_detail(request: HttpRequest, slug: str) -> HttpResponse:
     ``q`` filters the device list through the shared engine; HTMX requests
     receive just the device cards.
     """
-    chipset = get_object_or_404(Chipset, slug=slug)
+    chipset = get_object_or_404(Chipset.objects.select_related("vendor"), slug=slug)
     all_models = (
         Model.objects.filter(
             Q(chipset_ref=chipset) | Q(variants__chipset_ref=chipset), is_active=True
@@ -651,6 +668,7 @@ def chipset_detail(request: HttpRequest, slug: str) -> HttpResponse:
         .distinct()
         .order_by("name"),
         "related_chipsets": Chipset.objects.filter(vendor=chipset.vendor)
+        .select_related("vendor")
         .exclude(pk=chipset.pk)
         .order_by("name")[:12],
     }
@@ -791,6 +809,79 @@ def firmware_detail(
         ),
     }
     return render(request, "firmwares/firmware_detail.html", context)
+
+
+@require_POST
+@csrf_protect
+def report_external_firmware_link(
+    request: HttpRequest, firmware_type: str, firmware_id: str
+) -> HttpResponse:
+    """Record a bounded user report without probing or fetching the external URL."""
+    model_class = get_firmware_model(firmware_type)
+    if model_class is None:
+        raise Http404("Invalid firmware type")
+    firmware = get_object_or_404(
+        get_public_firmware_queryset(model_class).filter(
+            source_type=FirmwareSourceType.EXTERNAL
+        ),
+        id=firmware_id,
+    )
+    reason = request.POST.get("reason", "")
+    details = request.POST.get("details", "").strip()
+    report_url = reverse(
+        "firmwares:firmware_detail",
+        kwargs={"firmware_type": firmware_type, "firmware_id": firmware.pk},
+    )
+    if reason not in FirmwareLinkReport.Reason.values or len(details) > 1000:
+        messages.error(
+            request, "Choose a report reason and keep details under 1,000 characters."
+        )
+        return redirect(report_url)
+
+    identity = (
+        str(request.user.pk)
+        if request.user.is_authenticated
+        else get_client_ip(request) or request.session.session_key or ""
+    )
+    rate_key = (
+        "firmwares:broken_link:"
+        + salted_hmac(
+            "firmwares.broken-link-report.v1", identity, algorithm="sha256"
+        ).hexdigest()
+        if identity
+        else ""
+    )
+    if not allow_action(rate_key, max_attempts=5, window_seconds=3600, fail_open=False):
+        messages.error(
+            request,
+            "Your report could not be submitted right now. Please try again later.",
+        )
+        return redirect(report_url)
+
+    reporter = request.user if request.user.is_authenticated else None
+    reference = ref_kwargs(firmware)
+    if (
+        reporter is not None
+        and FirmwareLinkReport.objects.filter(
+            **reference,
+            reporter=reporter,
+            status=FirmwareLinkReport.Status.OPEN,
+        ).exists()
+    ):
+        messages.info(request, "You already have an open report for this download.")
+        return redirect(report_url)
+
+    FirmwareLinkReport.objects.create(
+        **reference,
+        firmware_name=firmware.original_file_name[:255],
+        reporter=reporter,
+        reason=reason,
+        details=details,
+    )
+    messages.success(
+        request, "Thank you. The external download report was sent for review."
+    )
+    return redirect(report_url)
 
 
 # ============================================================

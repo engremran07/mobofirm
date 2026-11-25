@@ -1,0 +1,45 @@
+{% extends "admin/staff_page.html" %}
+{% load i18n staff_ui %}
+{% block page_body %}
+{% staff_section title=_("Proposal") ident="proposal-details" %}
+  {% staff_card ident="proposal-details-card" %}
+    <h2 class="h5"><a href="{{ proposal.post.get_absolute_url }}">{{ proposal.post.title }}</a></h2>
+    <p class="text-body-secondary mb-2">{% translate "Submitted by" %} {{ proposal.submitted_by.public_display_name }} · <time datetime="{{ proposal.created_at|date:'c' }}">{{ proposal.created_at|date:"M j, Y H:i" }}</time></p>
+    <p class="small text-body-secondary">{% translate "Article version at submission" %}: {{ proposal.base_version }} · {% translate "Current version" %}: {{ proposal.post.version }}</p>
+    <ul class="mb-0">
+      {% for field, value in proposal.proposed_changes.items %}
+        <li><strong>{{ field }}:</strong> {{ value|truncatechars:400 }}</li>
+      {% endfor %}
+    </ul>
+  {% endstaff_card %}
+{% endstaff_section %}
+
+{% if form %}
+  {% staff_section title=_("Review and edit proposed fields") ident="proposal-review" intro=_("Correct the suggested values if needed. Approval applies only these fields and records the previous article revision.") %}
+    <form method="post" class="c-staff-form">
+      {% csrf_token %}
+      {% if form.non_field_errors %}<div class="alert alert-danger" role="alert">{{ form.non_field_errors }}</div>{% endif %}
+      {% for field in form %}
+        <div class="mb-3">
+          <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+          {% if field.errors %}<div class="invalid-feedback d-block">{{ field.errors }}</div>{% endif %}
+        </div>
+      {% endfor %}
+      {% staff_row %}
+        {% staff_button _("Approve update") name="decision" value="approve" tone="primary" %}
+        {% staff_button _("Reject with reason") name="decision" value="reject" tone="danger" %}
+        {% url 'blog:update_proposal_queue' as queue_url %}
+        {% staff_button _("Cancel") href=queue_url %}
+      {% endstaff_row %}
+    </form>
+  {% endstaff_section %}
+{% else %}
+  {% staff_section title=_("Decision recorded") ident="proposal-decision" %}
+    <p>{% translate "Status" %}: {{ proposal.get_status_display }}</p>
+    {% if proposal.reviewed_by %}<p>{% translate "Reviewed by" %} {{ proposal.reviewed_by.public_display_name }}{% if proposal.reviewed_at %} · <time datetime="{{ proposal.reviewed_at|date:'c' }}">{{ proposal.reviewed_at|date:"M j, Y H:i" }}</time>{% endif %}</p>{% endif %}
+    {% if proposal.review_reason %}<p>{% translate "Reviewer note" %}: {{ proposal.review_reason }}</p>{% endif %}
+  {% endstaff_section %}
+{% endif %}
+{% endblock %}

@@ -43,6 +43,7 @@ def _server(live_server) -> ConsoleServer:
             template="firmware-release",
             idempotency_key=f"browser-{index}",
             status=status,
+            params={"auto": index == 0},
             video_name=f"distribution/videos/{token}/video.mp4"
             if status in {"ready", "approved"}
             else "",
@@ -89,10 +90,32 @@ def test_videos_page_filters_and_keyboard_flow(live_server):
         probe.attach(page)
         open_console(page, probe, server, path, problems)
         page.set_viewport_size({"width": 1280, "height": 900})
+        sidebar = page.locator("aside[data-console-sidebar]")
+        expect(sidebar.get_by_role("link", name="Videos")).to_have_attribute(
+            "href", path
+        )
+        expect(sidebar.get_by_role("link", name="Media library")).to_have_attribute(
+            "href", reverse("admin:distribution_channel_media_library")
+        )
+        expect(page.locator("#video-new")).to_be_visible()
+        expect(page.locator("#vn-ref")).to_be_visible()
+        expect(page.get_by_role("button", name="Create draft")).to_be_visible()
+        expect(page.locator("#video-budget-label")).to_have_text(
+            "1 / 10 automatic drafts used today"
+        )
+        assert page.locator(".c-video-budget__meter").evaluate(
+            "meter => [meter.value, meter.max]"
+        ) == [1, 10]
         expect(page.locator(".c-video")).to_have_count(4)
         expect(
             page.get_by_text("Nothing is posted without your approval")
         ).to_be_visible()
+        failed = page.locator(".c-video--failed")
+        details = failed.locator(".c-video__diagnostic")
+        expect(details.locator("summary")).to_have_text("Show render details")
+        expect(failed.get_by_text("Render failed in the test")).not_to_be_visible()
+        details.locator("summary").click()
+        expect(failed.get_by_text("Render failed in the test")).to_be_visible()
         page.select_option("#vf-status", "ready")
         expect(page.locator(".c-video")).to_have_count(1)
         approve = page.get_by_role("button", name="Approve")

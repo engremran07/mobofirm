@@ -74,7 +74,7 @@ def _surface_luminance(page: Page) -> float:
 def _choice(page: Page, name: str):
     return page.locator(
         f"header [data-console-theme-set='{name}'], "
-        f"[data-ui-popover][data-open] > .dropdown-menu [data-console-theme-set='{name}']"
+        f"[data-ui-panel][data-ui-open].dropdown-menu [data-console-theme-set='{name}']"
     ).first
 
 
@@ -163,17 +163,25 @@ def test_theme_switcher_is_keyboard_operable_in_the_phone_account_menu(live_serv
         _open(page, server)
 
         # The header switcher is hidden on a phone; the account menu carries it.
-        expect(page.locator("header .btn-group.d-none[aria-label='Colour theme']")).to_be_hidden()
+        expect(
+            page.locator("header .btn-group.d-none[aria-label='Colour theme']")
+        ).to_be_hidden()
         page.get_by_role("button", name="Account menu").click()
-        menu_choice = page.locator("[data-ui-popover][data-open] > .dropdown-menu [data-console-theme-set]")
+        menu_choice = page.locator(
+            "[data-ui-panel][data-ui-open].dropdown-menu [data-console-theme-set]"
+        )
         expect(menu_choice).to_have_count(3)
         dimensions = overflow(page)
         assert dimensions["document"] <= dimensions["viewport"] + 1, dimensions
 
-        page.locator("[data-ui-popover][data-open] > .dropdown-menu [data-console-theme-set='dark']").focus()
+        page.locator(
+            "[data-ui-panel][data-ui-open].dropdown-menu [data-console-theme-set='dark']"
+        ).focus()
         page.keyboard.press("Enter")
         expect(page.locator("html")).to_have_attribute("data-bs-theme", "dark")
-        page.locator("[data-ui-popover][data-open] > .dropdown-menu [data-console-theme-set='light']").focus()
+        page.locator(
+            "[data-ui-panel][data-ui-open].dropdown-menu [data-console-theme-set='light']"
+        ).focus()
         page.keyboard.press("Space")
         expect(page.locator("html")).to_have_attribute("data-bs-theme", "light")
         for index in range(3):

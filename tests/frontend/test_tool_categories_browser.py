@@ -17,9 +17,9 @@ from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import expect, sync_playwright
 
 from apps.blog.models import Post, PostStatus
+from apps.firmwares.chipsets import create_chipset_record
 from apps.firmwares.models import (
     Brand,
-    Chipset,
     FlashingGuideTemplate,
     FlashingTool,
     FlashingToolCategory,
@@ -35,7 +35,7 @@ def _seed():
     acme = Brand.objects.create(name="Acme", slug="acme")
     Brand.objects.create(name="Lonely", slug="lonely")
     legacy = FlashingToolCategory.objects.create(name="Legacy", slug="legacy")
-    chipset = Chipset.objects.create(
+    chipset = create_chipset_record(
         vendor="MediaTek", family="Helio", name="Helio G99", slug="mediatek-helio-g99"
     )
     tool = FlashingTool.objects.create(

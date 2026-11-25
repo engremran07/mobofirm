@@ -9,8 +9,6 @@ import "./styles/promotions.css";
 import "./styles/rewarded.css";
 import "./styles/ads.css";
 import "./styles/editor-content.css";
-import htmx from "htmx.org";
-
 import Alpine from "@alpinejs/csp";
 
 import { registerCombobox } from "./modules/combobox.js";
@@ -27,6 +25,8 @@ import { initializeShare } from "./modules/share.js";
 import { initializeTheme } from "./modules/theme.js";
 import { initializeToasts } from "./modules/toasts.js";
 import { initializeUi } from "./modules/ui.js";
+import { registerMobileNav } from "./modules/mobile-nav.js";
+import { htmx, sanitizeSwapTasks } from "./shared/htmx.js";
 
 // Page-specific Alpine components are separate chunks, fetched only when the page
 // renders them (x-data present in the initial HTML) so every other page stays lean.
@@ -38,14 +38,12 @@ const PAGE_COMPONENTS = [
 ];
 
 window.htmx = htmx;
-htmx.config.allowEval = false;
-htmx.config.allowScriptTags = false;
-htmx.config.includeIndicatorStyles = false;
 
 window.Alpine = Alpine;
 registerCombobox(Alpine);
 registerConsentBanner(Alpine);
 registerDialogs(Alpine);
+registerMobileNav(Alpine);
 registerRewardedAds(Alpine);
 // Alpine starts as soon as the page's own components are registered; pages without a
 // lazy component (the common case) start synchronously, exactly as before.
@@ -85,7 +83,10 @@ const INLINE_FORMS = 'form[method="post" i],form[hx-post],form[data-inline-valid
 const loadInlineValidation = () =>
   import("./modules/inline-validation.js").then((m) => m.initializeInlineValidation());
 if (document.querySelector(INLINE_FORMS)) loadInlineValidation();
-document.addEventListener("htmx:afterSwap", () => {
+document.addEventListener("htmx:before:swap", (event) => {
+  sanitizeSwapTasks(event.detail.tasks);
+});
+document.addEventListener("htmx:after:swap", () => {
   renderIcons();
   if (document.querySelector(INLINE_FORMS)) loadInlineValidation();
 });

@@ -23,7 +23,10 @@ CONVERTER_SAMPLES: dict[str, str | int | float] = {
 REGEX_GROUP_SAMPLES = {
     "app_label": "auth",
     "format": "json",
+    "fmt": "rss",
+    "gz": "",
     "key": "smoke-test",
+    "page": "1",
     "pk": "1",
     "uidb36": "1",
 }
@@ -71,9 +74,7 @@ def _pattern_kwargs(pattern: URLPattern) -> frozenset[str]:
 def _walk_admin(patterns: Any, prefix: str) -> Iterator[AdminRoute]:
     for pattern in patterns:
         if isinstance(pattern, URLResolver):
-            yield from _walk_admin(
-                pattern.url_patterns, prefix + str(pattern.pattern)
-            )
+            yield from _walk_admin(pattern.url_patterns, prefix + str(pattern.pattern))
         elif isinstance(pattern, URLPattern) and pattern.name:
             yield AdminRoute(
                 f"admin:{pattern.name}",

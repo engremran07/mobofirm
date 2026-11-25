@@ -68,5 +68,5 @@ function initializeCountdowns() {
 export function initializeCommerce() {
   initializeBillingToggle();
   initializeCountdowns();
-  document.addEventListener("htmx:afterSwap", initializeCountdowns);
+  document.addEventListener("htmx:after:swap", initializeCountdowns);
 }

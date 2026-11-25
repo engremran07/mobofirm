@@ -62,8 +62,10 @@ def _preflight(server: ConsoleServer, world: World) -> dict[str, int]:
     client.force_login(server.user)
     statuses: dict[str, int] = {}
     for target in world.targets:
-        headers = {"HTTP_HX_REQUEST": "true"} if target.mode == "fragment" else {}
-        statuses[target.key + target.path] = client.get(target.path, **headers).status_code
+        headers = {"HX-Request": "true"} if target.mode == "fragment" else {}
+        statuses[target.key + target.path] = client.get(
+            target.path, headers=headers
+        ).status_code
     return statuses
 
 
@@ -78,9 +80,11 @@ def console_world_fixture(request, django_db_blocker):
 
 def _selected_groups(request: pytest.FixtureRequest) -> set[str]:
     chosen = {
-        item.callspec.params["group"]
+        str(item.callspec.params["group"])
         for item in request.session.items
-        if item.originalname == GROUP_TEST and hasattr(item, "callspec")
+        if isinstance(item, pytest.Function)
+        and item.originalname == GROUP_TEST
+        and hasattr(item, "callspec")
     }
     return chosen
 
@@ -140,7 +144,12 @@ def _crawl(server: ConsoleServer, targets: list[Target]) -> list[PageResult]:
 def _visit(context, page, probe, server: ConsoleServer, target: Target) -> PageResult:
     if target.mode == "status":
         return check_status(
-            context, server.url, target.group, target.label, target.path, target.expected
+            context,
+            server.url,
+            target.group,
+            target.label,
+            target.path,
+            target.expected,
         )
     if target.mode == "fragment":
         return check_fragment(
@@ -152,7 +161,13 @@ def _visit(context, page, probe, server: ConsoleServer, target: Target) -> PageR
             target.needs_dialog_markup,
         )
     return crawl_page(
-        page, probe, server.url, target.group, target.label, target.path, target.expected
+        page,
+        probe,
+        server.url,
+        target.group,
+        target.label,
+        target.path,
+        target.expected,
     )
 
 
@@ -200,9 +215,7 @@ def test_every_target_answers_the_plain_django_client_as_expected(console_world)
 
 @pytest.mark.parametrize("group", GROUPS)
 def test_crawl_group_has_no_defects(group, crawl_results, console_world):
-    expected = [
-        target.key for target in console_world.world.for_group(group)
-    ]
+    expected = [target.key for target in console_world.world.for_group(group)]
     crawled = crawl_results.get(group, [])
     assert expected, f"{group}: the URL world has no pages for this group"
     assert sorted(f"{result.mode}:{result.label}" for result in crawled) == sorted(

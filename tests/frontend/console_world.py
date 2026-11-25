@@ -188,9 +188,12 @@ def _expected_for(model, suffix: str, request, row) -> tuple[int, ...]:
     model_admin = admin.site.get_model_admin(model)
     if suffix == "add" and not model_admin.has_add_permission(request):
         return (403,)
-    if suffix == "delete" and row is not None:
-        if not model_admin.has_delete_permission(request, row):
-            return (403,)
+    if (
+        suffix == "delete"
+        and row is not None
+        and not model_admin.has_delete_permission(request, row)
+    ):
+        return (403,)
     return (200,)
 
 

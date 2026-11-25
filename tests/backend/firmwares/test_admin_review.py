@@ -8,10 +8,10 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import Client, TestCase, override_settings
 from django.urls import reverse
 
+from apps.firmwares.chipsets import create_chipset_record
 from apps.firmwares.models import (
     AdGateLog,
     Brand,
-    Chipset,
     DownloadSession,
     DownloadToken,
     Model,
@@ -191,7 +191,7 @@ class FirmwareAdminTests(TestCase):
         self.assertFalse(firmware.is_active)
 
     def test_new_admin_pages_render(self):
-        chipset = Chipset.objects.create(
+        chipset = create_chipset_record(
             vendor="MediaTek", name="Helio G99", slug="mediatek-helio-g99"
         )
         brand = Brand.objects.create(name="Page Brand", slug="page-brand")

@@ -1,20 +1,23 @@
 {% extends "base.html" %}
-{% block title %}Registered browsers | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block title %}Registered devices | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block content %}
 <section class="site-container py-5">
   {% url 'users:dashboard' as account_url %}
-  {% include "components/breadcrumbs.html" with current="Registered browsers" parent_label="Account" parent_url=account_url %}
+  {% include "components/breadcrumbs.html" with current="Registered devices" parent_label="Account" parent_url=account_url %}
   
   <p class="section-eyebrow">Account security</p>
-  <h1 class="h2">Registered browsers</h1>
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+    <h1 class="h2 mb-0">Registered devices</h1>
+    {% if options %}<a class="btn btn-outline-primary" href="#slot-options">Free a device slot</a>{% endif %}
+  </div>
   <p class="muted">
-    Mobofirm registers your <strong>computer</strong> (its operating system) when your browser supports it, so switching browser needs no new registration and reinstalling the operating system voids the registration. Where that is unavailable, it falls back to remembering each browser with a random first-party cookie. The labels below are informational.
+    A device is registered with a platform credential held by its operating system. Browser-only registration is not allowed. The private key stays on your device; Mobofirm stores only its public key.
   </p>
 
   <div class="row g-3 my-3" aria-label="Device registration summary">
     <div class="col-sm-6">
       <article class="surface-card p-3">
-        <p class="muted mb-1">Approved browsers</p>
+        <p class="muted mb-1">Approved devices</p>
         <p class="h3 numeric mb-0">{{ active_devices }} / {{ max_devices }}</p>
       </article>
     </div>
@@ -27,18 +30,9 @@
   </div>
 
   <p class="small muted">
-    A registered computer counts as one device however many browsers you use on it. A browser-only registration is lost when you clear browser data or switch browser. A website cannot detect hardware: reinstalling the operating system removes the computer credential, so the computer is treated as unregistered. Apple and Google passkeys may sync to your other devices. You cannot remove an approved device yourself; when your allowance is full you can free slots by asking staff, paying credits or watching a rewarded ad.
+    A device credential is tied to this site's relying-party address and may be available from multiple browsers on the same operating-system profile. Reset choices appear here once all {{ max_devices }} approved device slots are in use ({{ active_devices }} currently used). A reset returns registrations to awaiting verification; it does not delete history.
   </p>
   {% load device_tags %}{% if not request.session.device_registration_prompt %}{% device_os_identity %}{% endif %}
-  {% if can_approve_current %}
-    <form method="post" action="{% url 'devices:acknowledge_new_device' %}" class="surface-card p-3 my-3 d-flex flex-wrap align-items-center gap-3">
-      {% csrf_token %}
-      <input type="hidden" name="decision" value="approve">
-      <input type="hidden" name="next" value="{% url 'devices:my_devices' %}">
-      <p class="mb-0 flex-grow-1">This browser is not approved yet and you have a free slot.</p>
-      <button type="submit" class="btn btn-primary">Approve this browser</button>
-    </form>
-  {% endif %}
   {% if options %}{% include "devices/includes/slot_options.html" %}{% endif %}
 
   <div class="d-grid gap-3 mt-4">
@@ -47,14 +41,14 @@
         <div class="d-flex flex-wrap align-items-start justify-content-between gap-2">
           <div>
             <h2 class="h5 mb-1">
-              {{ device.display_name|default:"Browser profile" }}
+              {{ device.display_name|default:"Device profile" }}
               {% if current_device and device.pk == current_device.pk %}
-                <span class="badge text-bg-primary">{% if device.os_credential_id_hash %}This computer{% else %}This browser{% endif %}</span>
+                <span class="badge text-bg-primary">Current device</span>
               {% endif %}
             </h2>
             <p class="small muted mb-2">
               {{ device.os_family|default:"Unknown operating system" }}
-              · {% if device.os_credential_id_hash %}Registered computer (all browsers){% else %}{{ device.browser_family|default:"Unknown browser" }} (this browser only){% endif %}
+              · {% if device.os_credential_id_hash %}Platform credential registered{% else %}Legacy browser profile (not device-verified){% endif %}
             </p>
           </div>
           <p class="mb-0">
@@ -62,7 +56,7 @@
               <span class="badge text-bg-secondary">Revoked</span>
             {% elif device.is_blocked %}
               <span class="badge text-bg-danger">Blocked</span>
-            {% elif not device.browser_key_hash and not device.os_credential_id_hash %}
+            {% elif not device.os_credential_id_hash %}
               <span class="badge text-bg-secondary">Legacy record</span>
             {% elif device.is_trusted %}
               <span class="badge text-bg-success">Approved</span>
@@ -71,9 +65,9 @@
             {% endif %}
           </p>
         </div>
-        {% if not device.browser_key_hash and not device.os_credential_id_hash %}
+        {% if not device.os_credential_id_hash %}
           <p class="small muted mb-2">
-            This historical record is not an active browser identity. Sign in from the browser to register its new profile key.
+            This record was created by the older browser-only flow. It does not satisfy the current device-credential requirement.
           </p>
         {% endif %}
         <p class="small muted mb-0">
@@ -82,7 +76,7 @@
         </p>
       </article>
     {% empty %}
-      {% include "components/empty_state.html" with title="No browser registrations are associated with this account yet" %}
+      {% include "components/empty_state.html" with title="No device registrations are associated with this account yet" %}
     {% endfor %}
   </div>
 </section>

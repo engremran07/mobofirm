@@ -18,6 +18,8 @@ from .models import Order, OrderItem
 
 __all__ = [
     "BlogAccess",
+    "cancel_credit_topup_order",
+    "confirm_credit_topup_order",
     "create_credit_topup_order",
     "featured_blog_access",
     "featured_blog_buyers",
@@ -50,3 +52,45 @@ def create_credit_topup_order(
         line_total=price,
     )
     return order.pk
+
+
+def cancel_credit_topup_order(
+    order_id: int,
+    *,
+    topup_id: int,
+    user_id: int,
+    credit_amount: int,
+    processed_by: Any | None = None,
+) -> Order:
+    """Cancel the exact shop order linked to a wallet top-up."""
+    from .services import cancel_credit_topup_order as cancel_order
+
+    return cancel_order(
+        order_id,
+        topup_id=topup_id,
+        user_id=user_id,
+        credit_amount=credit_amount,
+        processed_by=processed_by,
+    )
+
+
+def confirm_credit_topup_order(
+    order_id: int,
+    *,
+    topup_id: int,
+    user_id: int,
+    credit_amount: int,
+    staff_user: Any | None,
+    reference: str = "",
+) -> Order:
+    """Synchronize wallet staff confirmation with the linked shop order."""
+    from .services import confirm_credit_topup_order as confirm_order
+
+    return confirm_order(
+        order_id,
+        topup_id=topup_id,
+        user_id=user_id,
+        credit_amount=credit_amount,
+        staff_user=staff_user,
+        reference=reference,
+    )

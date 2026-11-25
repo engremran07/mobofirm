@@ -96,11 +96,16 @@ def test_staff_without_model_permissions_see_an_empty_console(
     assert dashboard.status_code == 200
     slugs = [widget["slug"] for widget in dashboard.context["widgets"]]
     assert "activity" not in slugs
-    assert client.get(
-        reverse("admin:console_dashboard_widget", args=["activity"])
-    ).status_code == 404
+    assert (
+        client.get(
+            reverse("admin:console_dashboard_widget", args=["activity"])
+        ).status_code
+        == 404
+    )
     invalidate_metrics()
-    attention = client.get(reverse("admin:console_dashboard_widget", args=["attention"]))
+    attention = client.get(
+        reverse("admin:console_dashboard_widget", args=["attention"])
+    )
     assert attention.status_code == 200
     assert b'id="kpi-' not in attention.content
     links = _sidebar_links(dashboard)
@@ -216,6 +221,8 @@ def test_sidebar_hides_models_the_user_cannot_view(staff_without_permissions):
     ]
 
     assert "Blog posts" not in titles
+    assert "Videos" not in titles
+    assert "Media library" not in titles
     assert "Dashboard" in titles
 
 
@@ -268,9 +275,7 @@ def test_admin_pages_have_no_inline_script_or_event_handler(superuser, name):
 @pytest.mark.parametrize("url_name", ["seo:dashboard", "ads:dashboard", "tags:manage"])
 def test_staff_pages_get_the_same_strict_policy_as_the_admin(superuser, url_name):
     client = _client_for(superuser)
-    admin_policy = client.get(reverse("admin:index")).headers[
-        "Content-Security-Policy"
-    ]
+    admin_policy = client.get(reverse("admin:index")).headers["Content-Security-Policy"]
     response = client.get(reverse(url_name))
 
     assert response.status_code == 200

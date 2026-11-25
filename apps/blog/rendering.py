@@ -63,13 +63,25 @@ def render_article(body: str, *, min_toc_entries: int = 3) -> RenderedArticle:
         return f'<{tag}{attributes} id="{anchor}">{inner}</{tag}>'
 
     html = _HEADING.sub(add_anchor, cleaned)
-    html = _TABLE.sub(
-        lambda match: (
-            '<div class="article-table" role="region" tabindex="0" '
-            f'aria-label="Scrollable table">{match.group(0)}</div>'
-        ),
-        html,
-    )
+
+    def wrap_table(match: re.Match[str]) -> str:
+        table = match.group(0)
+        first_row = re.search(r"<tr\b.*?</tr>", table, re.IGNORECASE | re.DOTALL)
+        cells = (
+            re.findall(r"<(?:th|td)\b", first_row.group(0), re.IGNORECASE)
+            if first_row
+            else []
+        )
+        table_modifier = (
+            "facts" if len(cells) == 2 else "firmware" if len(cells) >= 6 else ""
+        )
+        modifier_class = f" article-table--{table_modifier}" if table_modifier else ""
+        return (
+            f'<div class="article-table{modifier_class}" role="region" tabindex="0" '
+            f'aria-label="Scrollable table">{table}</div>'
+        )
+
+    html = _TABLE.sub(wrap_table, html)
     words = len(_WORDS.findall(strip_tags(cleaned)))
     return RenderedArticle(
         html=mark_safe(html),

@@ -279,7 +279,7 @@
   align-items: center;
   gap: var(--mf-space-3);
   margin: var(--mf-space-6) 0 var(--mf-space-3);
-  scroll-margin-top: calc(var(--mf-header-height) + 1rem);
+  scroll-margin-top: var(--mf-sticky-top);
   font-size: var(--mf-text-xl);
   font-weight: 800;
 

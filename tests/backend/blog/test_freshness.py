@@ -21,7 +21,7 @@ from apps.core.app_service import AppService
 
 SITE = "https://example.org"
 NS = {"sm": "http://www.sitemaps.org/schemas/sitemap/0.9"}
-BROWSER = {"HTTP_USER_AGENT": "Mozilla/5.0 (X11; Linux x86_64) Firefox/130.0"}
+BROWSER = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) Firefox/130.0"}
 
 
 class FreshnessTestCase(TestCase):
@@ -106,7 +106,7 @@ class StaleSelectionTests(FreshnessTestCase):
     def test_counters_do_not_refresh_the_update_time(self):
         post = self.post("Popular", age_days=300)
         Post.objects.filter(pk=post.pk).update(views_count=5)
-        Client().get(post.get_absolute_url(), **BROWSER)
+        Client().get(post.get_absolute_url(), headers=BROWSER)
 
         post.refresh_from_db()
 
@@ -156,9 +156,7 @@ class StaffSignalTests(FreshnessTestCase):
                 ordering = f"{prefix}{columns.index(field) + 1}"
                 response = self.client.get(self.changelist, {"o": ordering})
                 self.assertEqual(response.status_code, 200, ordering)
-                titles = [
-                    row.title for row in response.context["cl"].result_list
-                ]
+                titles = [row.title for row in response.context["cl"].result_list]
                 expected = list(
                     Post.objects.order_by(f"{prefix}{field}").values_list(
                         "title", flat=True
@@ -184,7 +182,11 @@ class StaffSignalTests(FreshnessTestCase):
         self.assertEqual(kpi.permission, "blog.view_post")
 
     def test_readers_never_see_the_stale_signal(self):
-        html = Client().get(self.stale.get_absolute_url(), **BROWSER).content.decode()
+        html = (
+            Client()
+            .get(self.stale.get_absolute_url(), headers=BROWSER)
+            .content.decode()
+        )
 
         self.assertNotIn("Stale ·", html)
         self.assertNotIn("freshness", html.lower())
@@ -196,7 +198,9 @@ class PublicFreshnessTests(FreshnessTestCase):
     def test_article_shows_last_updated_with_a_machine_readable_time(self):
         post = self.post("Visible update", age_days=3)
 
-        html = self.client.get(post.get_absolute_url(), **BROWSER).content.decode()
+        html = self.client.get(
+            post.get_absolute_url(), headers=BROWSER
+        ).content.decode()
 
         self.assertIn("Updated", html)
         self.assertIn(f'<time datetime="{post.updated_at.isoformat()}"', html)
@@ -216,13 +220,17 @@ class PublicFreshnessTests(FreshnessTestCase):
         Post.objects.filter(pk=post.pk).update(published_at=post.publish_at)
         post.refresh_from_db()
 
-        html = self.client.get(post.get_absolute_url(), **BROWSER).content.decode()
+        html = self.client.get(
+            post.get_absolute_url(), headers=BROWSER
+        ).content.decode()
         blocks = [
             json.loads(block.split("</script>")[0])
             for block in html.split('<script type="application/ld+json">')[1:]
         ]
         posting = next(block for block in blocks if block["@type"] == "BlogPosting")
 
+        self.assertIsNotNone(post.published_at)
+        assert post.published_at is not None
         self.assertEqual(posting["datePublished"], post.published_at.isoformat())
         self.assertEqual(posting["dateModified"], post.updated_at.isoformat())
 
@@ -235,7 +243,9 @@ class PublicFreshnessTests(FreshnessTestCase):
         post.refresh_from_db()
 
         self.assertGreater(post.updated_at, before)
-        html = self.client.get(post.get_absolute_url(), **BROWSER).content.decode()
+        html = self.client.get(
+            post.get_absolute_url(), headers=BROWSER
+        ).content.decode()
         self.assertIn(post.updated_at.isoformat(), html)
 
     def test_sitemap_lastmod_is_the_real_update_time(self):

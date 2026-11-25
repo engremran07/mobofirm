@@ -9,6 +9,7 @@ from django.template import Context, Template
 from django.test import Client, RequestFactory
 from django.urls import reverse
 
+from apps.wallet import registry as wallet_registry
 from apps.wallet import services
 from apps.wallet.models import LedgerEntry, LedgerReason, TopUpRequest
 
@@ -107,12 +108,39 @@ def test_earn_page_lists_live_rules_and_hides_disabled_ones(
     assert b"Test contribution" not in client.get(reverse("wallet:earn")).content
 
 
+def test_registered_earn_methods_link_to_their_owner_routes(user: Any) -> None:
+    services.sync_registry()
+
+    response = signed_in(user).get(reverse("wallet:earn"))
+    methods = {method.rule.event_key: method for method in response.context["rules"]}
+
+    for event in wallet_registry.reward_events().values():
+        if event.url_name:
+            assert methods[event.key].url == reverse(event.url_name)
+
+
 def test_spend_page_lists_enabled_prices(user: Any) -> None:
     services.sync_registry()
 
     html = signed_in(user).get(reverse("wallet:spend")).content.decode()
 
     assert "Test package" in html and "40 credits" in html
+
+
+def test_spend_methods_link_to_their_owner_routes(user: Any) -> None:
+    services.sync_registry()
+
+    response = signed_in(user).get(reverse("wallet:spend"))
+    prices = {price["sink_key"]: price for price in response.context["prices"]}
+
+    for sink in wallet_registry.spend_sinks().values():
+        price = prices[sink.key]
+        assert sink.url_name
+        assert price["url"] == reverse(sink.url_name)
+        assert (
+            f'<a href="{price["url"]}">{price["label"]}</a>'
+            in response.content.decode()
+        )
 
 
 def test_topup_post_creates_a_request_and_redirects(user: Any) -> None:
@@ -219,8 +247,8 @@ def test_balance_chip_renders_for_signed_in_users_only(user: Any) -> None:
 def test_pages_return_404_when_the_registry_flag_is_off(user: Any) -> None:
     from apps.core.models import AppRegistry
 
-    registry = AppRegistry.get_solo()
-    registry.wallet_enabled = False
-    registry.save()
+    app_registry = AppRegistry.get_solo()
+    app_registry.wallet_enabled = False
+    app_registry.save()
 
     assert signed_in(user).get(reverse("wallet:dashboard")).status_code == 404

@@ -207,12 +207,65 @@ def _editor_profile() -> models.Model:
     return row
 
 
+def _download_token() -> models.Model:
+    """Build a token attached to a real firmware target for GenericForeignKey reads."""
+    from django.contrib.contenttypes.models import ContentType
+
+    from apps.firmwares.models import DownloadToken, OfficialFirmware
+
+    firmware = build(OfficialFirmware)
+    assert isinstance(firmware, OfficialFirmware)
+    return DownloadToken.objects.create(
+        content_type=ContentType.objects.get_for_model(firmware),
+        object_id=firmware.pk,
+        expires_at=timezone.now() + datetime.timedelta(hours=1),
+    )
+
+
+def _catalog_update_proposal() -> models.Model:
+    """Build the exactly-one-target proposal constraint with a real brand target."""
+    from apps.firmwares.models import Brand, CatalogUpdateProposal
+    from apps.users.models import CustomUser
+
+    brand = build(Brand)
+    assert isinstance(brand, Brand)
+    submitted_by = build(django_apps.get_model("users", "customuser"))
+    assert isinstance(submitted_by, CustomUser)
+    return CatalogUpdateProposal.objects.create(
+        target_kind=CatalogUpdateProposal.TargetKind.BRAND,
+        brand=brand,
+        submitted_by=submitted_by,
+        base_values={"description": brand.description},
+        proposed_values={"description": "Admin smoke-test proposal"},
+    )
+
+
+def _wallet_repair() -> models.Model:
+    """Build an append-only repair row that satisfies its changed-balance constraint."""
+    from apps.wallet.models import Wallet, WalletRepair
+
+    wallet = build(Wallet)
+    assert isinstance(wallet, Wallet)
+    return WalletRepair.objects.create(
+        wallet=wallet,
+        previous_balance=0,
+        repaired_balance=1,
+        previous_held=0,
+        repaired_held=0,
+        reason="Admin smoke-test fixture",
+        key=f"admin-smoke-{next(_counter)}",
+    )
+
+
 # Builders for models whose columns depend on each other (constraints), which the
 # generic field-type builder cannot satisfy.
 CUSTOM_BUILDERS: dict[str, Callable[[], models.Model]] = {
     "firmwares.automatedbloglink": _automated_blog_link,
+    "firmwares.catalogupdateproposal": _catalog_update_proposal,
     "firmwares.firmwareshorteneroverride": _firmware_shortener_override,
+    "firmwares.downloadtoken": _download_token,
     "site_settings.editorprofile": _editor_profile,
+    "wallet.walletrepair": _wallet_repair,
 }
 
 

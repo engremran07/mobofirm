@@ -150,6 +150,7 @@ def validate_object_value(obj: models.Model, spec: FieldSpec, value: str) -> lis
         return [f"{spec.label} can have at most {spec.max_length} characters."]
     model = type(obj)
     field = model._meta.get_field(spec.name)
+    assert isinstance(field, models.Field)
     candidate = copy.copy(obj)
     setattr(candidate, spec.name, text)
     try:

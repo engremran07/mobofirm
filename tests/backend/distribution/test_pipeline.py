@@ -314,7 +314,7 @@ def test_unverified_firmware_is_never_shared(make_channel):
 def test_published_blog_posts_are_shared_once_and_automation_is_skipped(
     make_channel, django_capture_on_commit_callbacks, django_user_model
 ):
-    from apps.blog.models import Post, PostStatus
+    from apps.blog.models import Post, PostSource, PostStatus
 
     make_channel("webhook")
     author = django_user_model.objects.create_user(
@@ -334,7 +334,7 @@ def test_published_blog_posts_are_shared_once_and_automation_is_skipped(
             )
 
     post = publish("Human post")
-    publish("Machine post", is_ai_generated=True)
+    publish("Machine post", content_source=PostSource.AUTOMATED)
     jobs = ShareJob.objects.filter(content_kind="blog")
     assert [j.object_ref for j in jobs] == [f"post:{post.pk}"]
     assert jobs[0].url == f"{SITE}{post.get_absolute_url()}"

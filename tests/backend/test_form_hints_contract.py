@@ -47,11 +47,13 @@ def test_every_field_has_an_error_container_wired_to_the_control(template, name)
 
     assert f'id="id_{name}_errors"' in html
     assert 'role="alert"' in html and "data-field-error" in html
-    assert f"id_{name}_errors" in re.search(r'aria-describedby="([^"]*)"', html).group(
-        1
-    )
+    match = re.search(r'aria-describedby="([^"]*)"', html)
+    assert match is not None
+    assert f"id_{name}_errors" in match.group(1)
     # Empty and hidden until a message exists, so nothing is announced up front.
-    container = re.search(r"<div[^>]*data-field-error[^>]*>", html).group(0)
+    container_match = re.search(r"<div[^>]*data-field-error[^>]*>", html)
+    assert container_match is not None
+    container = container_match.group(0)
     assert " hidden" in container
 
 

@@ -1,7 +1,7 @@
 """Retractable navigation and HTMX-boosted navigation of the staff console, in a real browser.
 
 Covers the owner requirements for the sidebar (groups collapse/expand with aria-expanded/aria-controls, per-user state
-that survives reloads and HTMX navigation, collapse/expand all, filter, icon rail with tooltips, mobile drawer), the
+that survives reloads and HTMX navigation, collapse all, one-open-group behavior, filter, icon rail with tooltips, mobile drawer), the
 boosted content swap (no full reload, title/breadcrumbs/active link follow, preload on hover) and the dashboard
 widgets (error state with retry, automatic refresh paused in a hidden tab).
 Every test fails on console errors/warnings, CSP violations, external requests and native dialogs.
@@ -18,7 +18,7 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from playwright.sync_api import BrowserContext, Page, expect
 
-from tests.frontend.browser_support import chromium, login_cookie
+from tests.frontend.browser_support import box_of, chromium, login_cookie
 from tests.frontend.console_browser_support import (
     HOOKS,
     ConsoleServer,
@@ -81,6 +81,7 @@ def _group(page: Page, name: str):
 def _toggle(page: Page, name: str):
     return page.locator(f"{GROUPS} > button[data-nav-label='{name}']")
 
+
 def _expanded(page: Page) -> list[str]:
     return page.eval_on_selector_all(
         f"{GROUPS} > button",
@@ -89,7 +90,9 @@ def _expanded(page: Page) -> list[str]:
 
 
 # -- groups ------------------------------------------------------------------------------
-def test_nav_groups_collapse_expand_with_keyboard_and_persist_across_reloads(live_server):
+def test_nav_groups_collapse_expand_with_keyboard_and_persist_across_reloads(
+    live_server,
+):
     server = _server(live_server)
     with _session(server) as (page, probe, problems, _context):
         open_console(page, probe, server, "/admin/", problems)
@@ -119,39 +122,55 @@ def test_nav_groups_collapse_expand_with_keyboard_and_persist_across_reloads(liv
         assert set(_expanded(page)) == {"false"}
         page.reload(wait_until="load")
         assert set(_expanded(page)) == {"false"}
-        page.get_by_role("button", name="Expand all groups").click()
-        assert set(_expanded(page)) == {"true"}
+        _toggle(page, "Firmware").click()
+        assert _expanded(page).count("true") == 1
         page.reload(wait_until="load")
-        assert set(_expanded(page)) == {"true"}
+        assert _expanded(page).count("true") == 1
     _assert_clean(problems)
 
 
-def test_the_group_holding_the_current_page_is_open_and_only_one_group_stays_open(live_server):
+def test_the_group_holding_the_current_page_is_open_and_only_one_group_stays_open(
+    live_server,
+):
     server = _server(live_server)
     with _session(server) as (page, probe, problems, _context):
         open_console(page, probe, server, "/admin/firmwares/brand/", problems)
         expect(_toggle(page, "Catalog")).to_have_attribute("aria-expanded", "true")
         current = _group(page, "Catalog").get_by_role("link", name="Brands")
         expect(current).to_have_attribute("aria-current", "page")
-        assert page.locator("aside[data-console-sidebar] [aria-current='page']").count() == 1
+        assert (
+            page.locator("aside[data-console-sidebar] [aria-current='page']").count()
+            == 1
+        )
 
-        # Accordion is the default: opening another group retracts the previous one.
-        accordion = page.get_by_role("button", name="Keep only one group open")
-        expect(accordion).to_have_attribute("aria-pressed", "true")
+        # Opening another group always retracts the previous group.
+        expect(
+            page.get_by_role("button", name="Keep only one group open")
+        ).to_have_count(0)
         _toggle(page, "Firmware").click()
         expect(_toggle(page, "Firmware")).to_have_attribute("aria-expanded", "true")
         expect(_toggle(page, "Catalog")).to_have_attribute("aria-expanded", "false")
         _toggle(page, "Tools & guides").click()
         expect(_toggle(page, "Firmware")).to_have_attribute("aria-expanded", "false")
         assert _expanded(page).count("true") == 1
-
-        # Switching it off lets several groups stay open, and the choice persists.
-        accordion.click()
-        expect(accordion).to_have_attribute("aria-pressed", "false")
-        _toggle(page, "Firmware").click()
-        assert _expanded(page).count("true") == 2
+        page.evaluate(
+            """() => {
+              const sidebar = document.querySelector("aside[data-console-sidebar]");
+              const key = `mobofirm-console-nav-groups:${sidebar.dataset.consoleUser}`;
+              const state = Object.fromEntries(
+                [...sidebar.querySelectorAll("[data-console-nav-group]")]
+                  .map(group => [group.dataset.consoleNavGroup, true])
+              );
+              localStorage.setItem(key, JSON.stringify(state));
+              localStorage.setItem(
+                `mobofirm-console-nav-accordion:${sidebar.dataset.consoleUser}`,
+                "0"
+              );
+            }"""
+        )
         page.reload(wait_until="load")
-        expect(accordion).to_have_attribute("aria-pressed", "false")
+        assert _expanded(page).count("true") == 1
+        expect(_toggle(page, "Catalog")).to_have_attribute("aria-expanded", "true")
     _assert_clean(problems)
 
 
@@ -174,9 +193,15 @@ def test_filter_narrows_the_navigation_and_escape_restores_it(live_server):
         open_console(page, probe, server, "/admin/", problems)
         box = page.locator(FILTER)
         box.fill("chipsets")
-        chipsets = page.locator("aside[data-console-sidebar]").get_by_role("link", name="Chipsets")
+        chipsets = page.locator("aside[data-console-sidebar]").get_by_role(
+            "link", name="Chipsets"
+        )
         expect(chipsets).to_be_visible()
-        expect(page.locator("aside[data-console-sidebar]").get_by_role("link", name="Brands")).to_be_hidden()
+        expect(
+            page.locator("aside[data-console-sidebar]").get_by_role(
+                "link", name="Brands"
+            )
+        ).to_be_hidden()
         expect(_toggle(page, "Catalog")).to_have_attribute("aria-expanded", "true")
         assert page.locator(f"{GROUPS}:visible").count() == 1
 
@@ -189,17 +214,25 @@ def test_filter_narrows_the_navigation_and_escape_restores_it(live_server):
 
         box.fill("fir")
         box.press("ArrowDown")
-        expect(page.locator("aside[data-console-sidebar] a:focus, aside[data-console-sidebar] button:focus")).to_have_count(1)
+        expect(
+            page.locator(
+                "aside[data-console-sidebar] a:focus, aside[data-console-sidebar] button:focus"
+            )
+        ).to_have_count(1)
     _assert_clean(problems)
 
 
 # -- boosted navigation -------------------------------------------------------------------
-def test_boosted_navigation_swaps_only_the_content_and_keeps_the_sidebar_state(live_server):
+def test_boosted_navigation_swaps_only_the_content_and_keeps_the_sidebar_state(
+    live_server,
+):
     server = _server(live_server)
     with _session(server) as (page, probe, problems, _context):
         open_console(page, probe, server, "/admin/", problems)
         mark_no_reload(page)
-        page.locator("aside[data-console-sidebar]").evaluate("el => { el.dataset.survivor = 'yes'; }")
+        page.locator("aside[data-console-sidebar]").evaluate(
+            "el => { el.dataset.survivor = 'yes'; }"
+        )
         _toggle(page, "Catalog").click()
         _toggle(page, "Firmware").click()
         page.locator(FILTER).fill("brand")
@@ -209,21 +242,40 @@ def test_boosted_navigation_swaps_only_the_content_and_keeps_the_sidebar_state(l
         brands.hover()
         # the preload extension fetches the page on hover; the click reuses that response
         fetched: list[str] = []
-        page.on("request", lambda request: fetched.append(request.url) if request.url.endswith("/firmwares/brand/") else None)
+        page.on(
+            "request",
+            lambda request: (
+                fetched.append(request.url)
+                if request.url.endswith("/firmwares/brand/")
+                else None
+            ),
+        )
         brands.click()
         page.wait_for_url(re.compile(r"/admin/firmwares/brand/$"))
-        expect(page.locator(HOOKS["main"]).get_by_role("heading", level=1)).to_be_visible()
+        expect(
+            page.locator(HOOKS["main"]).get_by_role("heading", level=1)
+        ).to_be_visible()
 
-        assert not reloaded(page), "a sidebar click must swap the content, not reload the document"
+        assert not reloaded(page), (
+            "a sidebar click must swap the content, not reload the document"
+        )
         assert page.title() != dashboard_title
-        assert page.locator("aside[data-console-sidebar]").get_attribute("data-survivor") == "yes"
+        assert (
+            page.locator("aside[data-console-sidebar]").get_attribute("data-survivor")
+            == "yes"
+        )
         assert len(fetched) <= 1
         expect(brands).to_have_attribute("aria-current", "page")
-        assert page.locator("aside[data-console-sidebar] [aria-current='page']").count() == 1
+        assert (
+            page.locator("aside[data-console-sidebar] [aria-current='page']").count()
+            == 1
+        )
         expect(page.locator(FILTER)).to_have_value("brand")
         expect(_toggle(page, "Catalog")).to_have_attribute("aria-expanded", "true")
         expect(page.locator(HOOKS["main"])).to_be_focused()
-        assert page.locator("#console-main nav[aria-label]").count() >= 1  # breadcrumbs came with the swap
+        assert (
+            page.locator("#console-main nav[aria-label]").count() >= 1
+        )  # breadcrumbs came with the swap
 
         page.go_back()
         page.wait_for_url(re.compile(r"/admin/$"))
@@ -231,7 +283,9 @@ def test_boosted_navigation_swaps_only_the_content_and_keeps_the_sidebar_state(l
         expect(page).to_have_title(dashboard_title)
         assert not reloaded(page)
         _toggle(page, "Catalog").click()  # the restored sidebar still works
-        expect(page.locator("html")).to_have_attribute("data-console-sidebar", "expanded")
+        expect(page.locator("html")).to_have_attribute(
+            "data-console-sidebar", "expanded"
+        )
     _assert_clean(problems)
 
 
@@ -269,6 +323,7 @@ def test_navigation_works_without_javascript(live_server):
         expect(page.get_by_role("button", name="Collapse all groups")).to_be_hidden()
         context.close()
 
+
 # -- icon rail -----------------------------------------------------------------------------
 def test_icon_rail_shows_tooltips_and_a_group_icon_reopens_the_sidebar(live_server):
     server = _server(live_server)
@@ -278,8 +333,10 @@ def test_icon_rail_shows_tooltips_and_a_group_icon_reopens_the_sidebar(live_serv
         visible_first(page, HOOKS["sidebar_toggle"]).click()
         expect(html).to_have_attribute("data-console-sidebar", "mini")
         sidebar = page.locator(HOOKS["sidebar"])
-        assert sidebar.bounding_box()["width"] < 100
-        expect(page.locator("aside[data-console-sidebar] .c-nav-panel").first).to_be_hidden()
+        assert box_of(sidebar)["width"] < 100
+        expect(
+            page.locator("aside[data-console-sidebar] .c-nav-panel").first
+        ).to_be_hidden()
 
         catalog = _toggle(page, "Catalog")
         catalog.hover()
@@ -293,7 +350,7 @@ def test_icon_rail_shows_tooltips_and_a_group_icon_reopens_the_sidebar(live_serv
         catalog.click()
         expect(html).to_have_attribute("data-console-sidebar", "expanded")
         expect(_toggle(page, "Catalog")).to_have_attribute("aria-expanded", "true")
-        assert sidebar.bounding_box()["width"] > 200
+        assert box_of(sidebar)["width"] > 200
     _assert_clean(problems)
 
 
@@ -305,7 +362,9 @@ def test_rail_survives_boosted_navigation_and_reload(live_server):
         visible_first(page, HOOKS["sidebar_toggle"]).click()
         expect(html).to_have_attribute("data-console-sidebar", "mini")
         mark_no_reload(page)
-        page.locator("aside[data-console-sidebar]").get_by_role("link", name="Dashboard").click()
+        page.locator("aside[data-console-sidebar]").get_by_role(
+            "link", name="Dashboard"
+        ).click()
         page.wait_for_url(re.compile(r"/admin/$"))
         assert not reloaded(page)
         expect(html).to_have_attribute("data-console-sidebar", "mini")
@@ -332,7 +391,9 @@ def test_mobile_drawer_groups_work_and_following_a_link_closes_the_drawer(live_s
         page.wait_for_url(re.compile(r"/admin/firmwares/model/$"))
         expect(html).to_have_attribute("data-console-sidebar", "closed")
         assert not reloaded(page)
-        assert page.evaluate("() => document.documentElement.scrollWidth <= window.innerWidth")
+        assert page.evaluate(
+            "() => document.documentElement.scrollWidth <= window.innerWidth"
+        )
         toggle.click()
         expect(_toggle(page, "Catalog")).to_have_attribute("aria-expanded", "true")
     _assert_clean(problems)
@@ -346,7 +407,9 @@ def test_a_failing_widget_shows_an_error_with_retry_instead_of_a_skeleton(live_s
 
         def fail_then_pass(route):
             if failing["on"]:
-                route.fulfill(status=500, content_type="text/html", body="<h1>boom</h1>")
+                route.fulfill(
+                    status=500, content_type="text/html", body="<h1>boom</h1>"
+                )
             else:
                 route.continue_()
 
@@ -359,13 +422,19 @@ def test_a_failing_widget_shows_an_error_with_retry_instead_of_a_skeleton(live_s
         expect(widget.get_by_role("alert")).to_contain_text("couldn't load")
         failing["on"] = False
         widget.get_by_role("button", name="Try again").click()
-        expect(page.locator("#widget-health .c-queue, #widget-health .c-empty")).to_be_visible()
-        expect(page.locator("#widget-health")).not_to_have_attribute("data-state", "error")
+        expect(
+            page.locator("#widget-health .c-queue, #widget-health .c-empty")
+        ).to_be_visible()
+        expect(page.locator("#widget-health")).not_to_have_attribute(
+            "data-state", "error"
+        )
         # the 500 is the point of this test: it is the only expected problem
         problems.extend(probe.end())
         probe.begin()
         problems[:] = [
-            line for line in problems if "/console/widgets/health/" not in line and "500" not in line
+            line
+            for line in problems
+            if "/console/widgets/health/" not in line and "500" not in line
         ]
     _assert_clean(problems)
 
@@ -374,7 +443,14 @@ def test_widgets_refresh_on_their_own_and_pause_while_the_tab_is_hidden(live_ser
     server = _server(live_server)
     with _session(server) as (page, probe, problems, _context):
         calls: list[str] = []
-        page.on("request", lambda request: calls.append(request.url) if "/console/widgets/health/" in request.url else None)
+        page.on(
+            "request",
+            lambda request: (
+                calls.append(request.url)
+                if "/console/widgets/health/" in request.url
+                else None
+            ),
+        )
         page.clock.install()
         open_console(page, probe, server, "/admin/", problems)
         page.clock.resume()

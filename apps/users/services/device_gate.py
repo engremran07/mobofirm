@@ -57,15 +57,13 @@ _CHECK_ERRORS: Final[tuple[type[Exception], ...]] = (
 
 _MESSAGES: Final[dict[str, str]] = {
     "blocked_device": "This device is blocked. Contact support to unblock it.",
-    "device_key_required": (
-        "Device fingerprint is required. Allow device fingerprinting and try again."
-    ),
+    "device_key_required": "This device could not be identified. Try again.",
     "untrusted_new_device": (
         "This new device has not been approved. Use an existing trusted session "
         "to approve it or contact support."
     ),
     "revoked_device": (
-        "This browser registration was revoked. Contact an administrator."
+        "This device registration was revoked. Contact an administrator."
     ),
     "mfa_required": (
         "This device requires MFA, but verification is not currently available. "
@@ -91,10 +89,7 @@ _MESSAGES: Final[dict[str, str]] = {
         "The maximum number of devices has been reached. Contact an administrator "
         "to reset or revoke a registration."
     ),
-    "fallback_identity_blocked": (
-        "Device identity could not be verified. Allow device fingerprinting and "
-        "try again."
-    ),
+    "fallback_identity_blocked": ("Device identity could not be verified. Try again."),
     UNAVAILABLE: "Device security check could not be completed. Try again later.",
 }
 _DEFAULT_MESSAGE: Final[str] = "This device is not allowed to sign in. Contact support."
@@ -181,7 +176,7 @@ def evaluate_device_policy(
 def device_registration_prompt(
     enforcement_ctx: dict[str, Any] | None,
 ) -> dict[str, Any] | None:
-    """Session payload asking the user to register a new, untrusted browser."""
+    """Session payload asking the user to register a new, untrusted device."""
     if not enforcement_ctx:
         return None
     device = enforcement_ctx.get("device")
@@ -196,10 +191,10 @@ def device_registration_prompt(
     active_devices = context.get("current_device_count", 0)
     max_devices = context.get("max_devices", 3)
     return {
-        "device_name": device.display_name,
+        "device_name": f"{device.os_family} device"
+        if device.os_family
+        else "New device",
         "os_family": device.os_family,
-        "browser_family": device.browser_family,
         "active_devices": active_devices,
         "max_devices": max_devices,
-        "can_approve": active_devices < max_devices,
     }

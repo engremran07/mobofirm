@@ -24,6 +24,7 @@ from xml.etree import ElementTree as ET
 
 from django.apps import apps
 from django.conf import settings
+from django.db.models import Q
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.html import escape
@@ -158,7 +159,7 @@ def _aware(moment: datetime | None) -> datetime:
 
 def _byline(post: Any) -> str:
     author = getattr(post, "author", None)
-    if getattr(post, "is_ai_generated", False) or author is None:
+    if getattr(post, "content_source", "") == "automated" or author is None:
         return str(getattr(settings, "BLOG_EDITORIAL_NAME", "Mobofirm Editorial"))
     return str(getattr(author, "public_display_name", "") or _site())
 
@@ -271,7 +272,11 @@ def firmware_items(limit: int, *, brand: str = "", chipset: str = "") -> list[Fe
             continue
         rows = (
             model.objects.select_related(
-                "brand", "model", "variant", "model__chipset_ref"
+                "brand",
+                "model",
+                "variant",
+                "model__chipset_ref__vendor",
+                "variant__chipset_ref__vendor",
             )
             .filter(is_verified=True, is_active=True)
             .order_by("-created_at")
@@ -279,7 +284,10 @@ def firmware_items(limit: int, *, brand: str = "", chipset: str = "") -> list[Fe
         if brand:
             rows = rows.filter(brand__slug=brand)
         if chipset:
-            rows = rows.filter(model__chipset_ref__slug=chipset)
+            rows = rows.filter(
+                Q(model__chipset_ref__slug=chipset)
+                | Q(variant__chipset_ref__slug=chipset)
+            )
         for row in rows[:limit]:
             item = _firmware_item(row, firmware_type)
             if item is not None:
@@ -307,8 +315,14 @@ def items_for(spec: Spec, limit: int) -> list[FeedItem]:
     if spec.scope == "tag":
         return blog_items(limit, tag=spec.slug)
     if spec.scope in {"brand", "chipset"}:
-        kwargs = {spec.scope: spec.slug}
-        merged = blog_items(limit, **kwargs) + firmware_items(limit, **kwargs)
+        if spec.scope == "brand":
+            merged = blog_items(limit, brand=spec.slug) + firmware_items(
+                limit, brand=spec.slug
+            )
+        else:
+            merged = blog_items(limit, chipset=spec.slug) + firmware_items(
+                limit, chipset=spec.slug
+            )
         merged.sort(key=lambda item: item.published, reverse=True)
         return merged[:limit]
     if spec.scope == "news":

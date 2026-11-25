@@ -1,5 +1,3 @@
-import re
-
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from django.urls import reverse
@@ -25,7 +23,7 @@ class DeviceApprovalSecurityTests(TestCase):
         self.client.force_login(self.user)
         self.client.cookies["mobofirm_device"] = self.browser_key
         session = self.client.session
-        session["device_registration_prompt"] = {"can_approve": True}
+        session["device_registration_prompt"] = {"device_name": "Windows device"}
         session.save()
 
     def test_approval_is_not_performed_by_get(self):
@@ -39,24 +37,30 @@ class DeviceApprovalSecurityTests(TestCase):
         self.device.refresh_from_db()
         self.assertFalse(self.device.is_trusted)
 
-    def test_approval_form_posts_current_browser_key_with_csrf(self):
+    def test_browser_only_approval_is_rejected(self):
         page = self.client.get(reverse("devices:my_devices"))
 
         self.assertEqual(page.status_code, 200)
-        self.assertContains(
-            page,
-            f'action="{reverse("devices:acknowledge_new_device")}"',
-        )
-        self.assertContains(page, 'name="decision"')
-
-        csrf = re.search(
-            r'name="csrfmiddlewaretoken" value="([^"]+)"',
-            page.content.decode(),
-        )
-        assert csrf is not None
+        self.assertNotContains(page, "Approve this browser")
+        self.assertNotContains(page, "Register this browser only")
         response = self.client.post(
             reverse("devices:acknowledge_new_device"),
-            {"decision": "approve", "csrfmiddlewaretoken": csrf.group(1)},
+            {
+                "decision": "approve",
+                "csrfmiddlewaretoken": self.client.cookies["csrftoken"].value,
+            },
+        )
+
+        self.assertEqual(response.status_code, 403)
+        self.device.refresh_from_db()
+        self.assertFalse(self.device.is_trusted)
+
+    def test_dismissing_prompt_requires_csrf_and_does_not_approve(self):
+        self.client.get(reverse("devices:my_devices"))
+        csrf = self.client.cookies["csrftoken"].value
+        response = self.client.post(
+            reverse("devices:acknowledge_new_device"),
+            {"decision": "later", "csrfmiddlewaretoken": csrf},
         )
 
         self.assertRedirects(
@@ -65,7 +69,7 @@ class DeviceApprovalSecurityTests(TestCase):
             fetch_redirect_response=False,
         )
         self.device.refresh_from_db()
-        self.assertTrue(self.device.is_trusted)
+        self.assertFalse(self.device.is_trusted)
 
     def test_approval_post_requires_csrf(self):
         response = self.client.post(

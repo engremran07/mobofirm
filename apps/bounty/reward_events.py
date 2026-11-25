@@ -12,6 +12,7 @@ register_reward_event(
         key="bounty.fulfilled",
         label="Fulfil a bounty",
         app="bounty",
+        url_name="bounty:list",
         default_credits=0,
         dynamic_amount=True,
     )

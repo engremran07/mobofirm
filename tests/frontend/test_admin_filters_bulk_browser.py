@@ -66,7 +66,8 @@ def _rgb(value: str) -> tuple[int, int, int]:
 
 
 def _hex(value: str) -> str:
-    return "#%02x%02x%02x" % _rgb(value)
+    red, green, blue = _rgb(value)
+    return f"#{red:02x}{green:02x}{blue:02x}"
 
 
 def _open(browser, server: ConsoleServer, width: int, theme: str = "light"):
@@ -94,7 +95,9 @@ def test_filter_bar_is_above_the_results_table(live_server, width):
                 assert "Filters" in toggle.inner_text()
                 assert not page.locator("#c-cl-filters").is_visible()
                 toggle.click()
-                page.wait_for_function("() => document.querySelector('#c-cl-filters').hasAttribute('data-open')")
+                page.wait_for_function(
+                    "() => document.querySelector('#c-cl-filters').hasAttribute('data-open')"
+                )
                 viewport_height = page.viewport_size["height"]
                 # The sheet slides up (200 ms transition): wait until it has settled before measuring.
                 page.wait_for_function(
@@ -102,15 +105,25 @@ def test_filter_bar_is_above_the_results_table(live_server, width):
                     arg=viewport_height,
                 )
                 sheet = page.locator("#c-cl-filters").bounding_box()
-                assert sheet["y"] + sheet["height"] <= viewport_height + 1, "the sheet is anchored to the bottom"
+                assert sheet["y"] + sheet["height"] <= viewport_height + 1, (
+                    "the sheet is anchored to the bottom"
+                )
                 assert toggle.get_attribute("aria-expanded") == "true"
             else:
                 assert not toggle.is_visible()
                 bar = page.locator("#c-cl-filters").bounding_box()
-                assert bar["y"] + bar["height"] <= table_top + 1, "filters must sit above the table"
-                assert page.locator(".c-fctl").count() >= 5, "one control per list_filter"
-            dimensions = page.evaluate("() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]")
-            assert dimensions[0] <= dimensions[1] + 1, f"horizontal overflow at {width}px: {dimensions}"
+                assert bar["y"] + bar["height"] <= table_top + 1, (
+                    "filters must sit above the table"
+                )
+                assert page.locator(".c-fctl").count() >= 5, (
+                    "one control per list_filter"
+                )
+            dimensions = page.evaluate(
+                "() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]"
+            )
+            assert dimensions[0] <= dimensions[1] + 1, (
+                f"horizontal overflow at {width}px: {dimensions}"
+            )
         finally:
             problems.extend(probe.end())
             context.close()
@@ -124,14 +137,19 @@ def test_choosing_a_filter_updates_url_and_results_without_a_reload(live_server)
         try:
             mark_no_reload(page)
             rows_before = page.locator("input[data-console-row-select]").count()
-            status_filter = page.locator(".c-fctl", has=page.locator(".c-fctl__title", has_text="Is staff"))
+            status_filter = page.locator(
+                ".c-fctl", has=page.locator(".c-fctl__title", has_text="Is staff")
+            )
             status_filter.locator("[data-ui-trigger]").click()
             status_filter.locator("[role=option]", has_text="Yes").click()
             page.wait_for_url(re.compile(r"is_staff__exact=1"))
             page.wait_for_function(
-                "(before) => document.querySelectorAll('input[data-console-row-select]').length < before", arg=rows_before
+                "(before) => document.querySelectorAll('input[data-console-row-select]').length < before",
+                arg=rows_before,
             )
-            assert not reloaded(page), "HTMX must swap the results region, not reload the page"
+            assert not reloaded(page), (
+                "HTMX must swap the results region, not reload the page"
+            )
             chip = page.locator("#c-cl-chips .c-chip", has_text="Is staff")
             assert chip.count() == 1
             assert "result" in page.locator("#c-cl-status").inner_text()
@@ -142,12 +160,18 @@ def test_choosing_a_filter_updates_url_and_results_without_a_reload(live_server)
             page.wait_for_function("() => !location.search.includes('is_staff__exact')")
             assert page.locator("#c-cl-chips .c-chip").count() == 0
 
-            status_filter = page.locator(".c-fctl", has=page.locator(".c-fctl__title", has_text="Is staff"))
+            status_filter = page.locator(
+                ".c-fctl", has=page.locator(".c-fctl__title", has_text="Is staff")
+            )
             status_filter.locator("[data-ui-trigger]").click()
             status_filter.locator("[role=option]", has_text="Yes").click()
             page.wait_for_url(re.compile(r"is_staff__exact=1"))
-            page.locator(".c-fctl", has=page.locator(".c-fctl__title", has_text="Is active")).locator("[data-ui-trigger]").click()
-            page.locator("[data-ui-popover][data-open] [role=option]", has_text="Yes").click()
+            page.locator(
+                ".c-fctl", has=page.locator(".c-fctl__title", has_text="Is active")
+            ).locator("[data-ui-trigger]").click()
+            page.locator(
+                "[data-ui-popover][data-open] [role=option]", has_text="Yes"
+            ).click()
             page.wait_for_url(re.compile(r"is_active__exact=1"))
             page.locator("#c-cl-chips .c-chip--add", has_text="Clear all").click()
             page.wait_for_function("() => !location.search.includes('__exact')")
@@ -163,7 +187,9 @@ def test_listbox_filter_is_keyboard_operable(live_server):
     with chromium() as browser:
         context, page, probe, problems = _open(browser, server, 1280)
         try:
-            filt = page.locator(".c-fctl", has=page.locator(".c-fctl__title", has_text="Is staff"))
+            filt = page.locator(
+                ".c-fctl", has=page.locator(".c-fctl__title", has_text="Is staff")
+            )
             trigger = filt.locator("[data-ui-trigger]")
             trigger.focus()
             assert trigger.get_attribute("aria-haspopup") == "listbox"
@@ -174,18 +200,30 @@ def test_listbox_filter_is_keyboard_operable(live_server):
             options = filt.locator("[role=option]")
             assert options.count() >= 3
             # The selected (or first) option takes focus and exposes data-active.
-            assert page.evaluate("() => document.activeElement.getAttribute('role')") == "option"
+            assert (
+                page.evaluate("() => document.activeElement.getAttribute('role')")
+                == "option"
+            )
             assert filt.locator("[role=option][data-active]").count() == 1
             page.keyboard.press("End")
             last = options.count() - 1
-            assert page.evaluate("(i) => document.activeElement === document.querySelectorAll('.c-fctl[data-open] [role=option]')[i]", last)
+            assert page.evaluate(
+                "(i) => document.activeElement === document.querySelectorAll('.c-fctl[data-open] [role=option]')[i]",
+                last,
+            )
             page.keyboard.press("Home")
-            assert page.evaluate("() => document.activeElement === document.querySelector('.c-fctl[data-open] [role=option]')")
+            assert page.evaluate(
+                "() => document.activeElement === document.querySelector('.c-fctl[data-open] [role=option]')"
+            )
             page.keyboard.press("y")
-            assert page.evaluate("() => document.activeElement.textContent.trim().toLowerCase().startsWith('y')"), "type-ahead"
+            assert page.evaluate(
+                "() => document.activeElement.textContent.trim().toLowerCase().startsWith('y')"
+            ), "type-ahead"
             page.keyboard.press("Escape")
             assert trigger.get_attribute("aria-expanded") == "false"
-            assert page.evaluate("() => document.activeElement === document.querySelector('.c-fctl [data-ui-trigger]:focus')")
+            assert page.evaluate(
+                "() => document.activeElement === document.querySelector('.c-fctl [data-ui-trigger]:focus')"
+            )
             assert filt.locator("[data-ui-panel]").is_hidden()
             # Enter on the chosen option follows the filter link.
             page.keyboard.press("ArrowDown")
@@ -211,12 +249,16 @@ def test_bulk_bar_is_a_token_surface_with_aa_contrast(live_server, theme):
             page.locator("input[data-console-row-select]").nth(1).check()
             assert bar.is_visible()
             assert "2" in bar.locator("[data-console-selected-count]").inner_text()
-            assert bar.locator(".c-bulkbar__count").get_attribute("aria-live") == "polite"
+            assert (
+                bar.locator(".c-bulkbar__count").get_attribute("aria-live") == "polite"
+            )
 
             style = bar.evaluate(
                 "(el) => { const c = getComputedStyle(el); return {bg: c.backgroundColor, color: c.color, radius: parseFloat(c.borderRadius), height: el.getBoundingClientRect().height}; }"
             )
-            assert _hex(style["bg"]) == palette["surface-raised"], "bar surface comes from the token set"
+            assert _hex(style["bg"]) == palette["surface-raised"], (
+                "bar surface comes from the token set"
+            )
             assert _hex(style["color"]) == palette["text"]
             assert tokens.contrast(_hex(style["color"]), _hex(style["bg"])) >= 4.5
             assert style["radius"] < style["height"] / 2, "no pill shape"
@@ -225,8 +267,12 @@ def test_bulk_bar_is_a_token_surface_with_aa_contrast(live_server, theme):
             run = bar.locator("button[type=submit]")
             assert run.is_disabled(), "Run is disabled until an action is chosen"
             assert run.get_attribute("title"), "the disabled state explains itself"
-            run_style = run.evaluate("(el) => { const c = getComputedStyle(el); return {bg: c.backgroundColor, color: c.color}; }")
-            assert tokens.contrast(_hex(run_style["color"]), _hex(run_style["bg"])) >= 3.0, "disabled Run stays readable"
+            run_style = run.evaluate(
+                "(el) => { const c = getComputedStyle(el); return {bg: c.backgroundColor, color: c.color}; }"
+            )
+            assert (
+                tokens.contrast(_hex(run_style["color"]), _hex(run_style["bg"])) >= 3.0
+            ), "disabled Run stays readable"
             assert tokens.contrast(_hex(run_style["bg"]), _hex(style["bg"])) >= 1.0
 
             bar.locator("select[name=action]").select_option(index=1)

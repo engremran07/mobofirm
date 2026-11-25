@@ -1,8 +1,7 @@
-"""Device slot resets: freeing approved-browser slots for an account at its limit.
+"""Device slot resets: freeing approved-device slots for an account at its limit.
 
-A *slot reset* releases every approved browser of one account (``is_trusted`` goes
-back to false, so each browser shows up as "awaiting approval" and can be approved
-again within the limit). Nothing is deleted: the ``Device`` rows, their events and a
+A *slot reset* releases every approved device of one account (``is_trusted`` goes
+back to false, so each device must be verified again within the limit). Nothing is deleted: the ``Device`` rows, their events and a
 permanent :class:`DeviceSlotReset` row remain as the audit trail.
 
 Three methods, all audited and idempotent on a caller-supplied ``key``:
@@ -294,8 +293,8 @@ def _release(
     _notify_user(
         user.pk,
         "Browser slots reset",
-        f"{len(ids)} approved browser(s) were released ({reset.get_method_display()})."
-        " Approve the browsers you use again from Registered browsers.",
+        f"{len(ids)} approved device(s) were released ({reset.get_method_display()})."
+        " Verify the devices you use again from Registered devices.",
         reverse("devices:my_devices"),
     )
     return reset

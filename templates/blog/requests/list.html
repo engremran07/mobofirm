@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load ad_tags %}
 {% block title %}Method and guide requests | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block meta_description %}Requested flashing methods, unlock patterns, tricks and guides, with credit bounties for writers.{% endblock %}
 {% block content %}
@@ -34,6 +35,7 @@
           </div>
           <p class="guide-card__meta">{{ item.get_kind_display }}{% if item.label %} · {{ item.label }}{% endif %} · {{ item.solution_count }} published solution{{ item.solution_count|pluralize }}</p>
         </li>
+        {% ad_tile forloop.counter page_obj.object_list|length layout="guide" page="blog/requests/list.html" %}
       {% endfor %}
     </ul>
     {% include "components/pagination.html" with page_obj=page_obj %}

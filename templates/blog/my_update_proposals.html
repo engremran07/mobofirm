@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}My update proposals | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block content %}
+<div class="site-container py-4 py-lg-5">
+  {% include "components/breadcrumbs.html" with current="My update proposals" parent_label="My contributions" parent_url="/contributions/" %}
+  {% include "components/page_header.html" with eyebrow="My contributions" title="My update proposals" lead="Track corrections and improvements you have suggested for published articles." %}
+  {% if proposals %}
+    <div class="d-grid gap-3">
+      {% for proposal in proposals %}
+        <article class="surface-card p-3 p-md-4">
+          <div class="d-flex flex-wrap justify-content-between gap-2">
+            <h2 class="h5 mb-0"><a href="{{ proposal.post.get_absolute_url }}">{{ proposal.post.title }}</a></h2>
+            <span class="badge-ui badge-ui--{% if proposal.status == 'approved' %}free{% elif proposal.status == 'pending' %}warning{% else %}neutral{% endif %}">{{ proposal.get_status_display }}</span>
+          </div>
+          <p class="small muted mb-2">Submitted {{ proposal.created_at|date:"M j, Y H:i" }}{% if proposal.reviewed_at %} · Reviewed {{ proposal.reviewed_at|date:"M j, Y H:i" }}{% endif %}</p>
+          {% if proposal.review_reason %}<p class="mb-0"><strong>Reviewer note:</strong> {{ proposal.review_reason }}</p>{% endif %}
+        </article>
+      {% endfor %}
+    </div>
+    {% include "components/pagination.html" with page_obj=page_obj label="Update proposal pages" %}
+  {% else %}
+    {% url 'blog:post_list' as journal_url %}
+    {% include "components/empty_ui.html" with icon="file-pen-line" title="No update proposals yet" message="Open an article and choose Suggest an update to send a correction for review." action_label="Browse the journal" action_url=journal_url %}
+  {% endif %}
+</div>
+{% endblock %}

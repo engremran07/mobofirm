@@ -31,7 +31,7 @@ from apps.core.editor.sanitizer import sanitize_stored_html
 from apps.core.utils.managers import default_manager
 
 from .chipset_audit import FIRMWARE_TABLES
-from .chipsets import normalize_chipset
+from .chipsets import normalize_chipset, resolve_chipset_vendor
 from .constants import RESERVED_BRAND_SLUGS
 from .models import (
     Brand,
@@ -197,8 +197,31 @@ class ChipsetResource(_CatalogueResource):
     )
     fields = ("slug", "vendor", "family", "name", "aliases", "description")
 
+    def export_queryset(self, queryset: models.QuerySet) -> models.QuerySet:
+        return queryset.select_related("vendor")
+
     def export_row(self, obj: Chipset) -> dict[str, object]:
-        return {name: getattr(obj, name) for name in self.fields}
+        return {
+            name: obj.vendor.name if name == "vendor" else getattr(obj, name)
+            for name in self.fields
+        }
+
+    def create(self, data: Mapping[str, Any]) -> Chipset:
+        return super().create(
+            {**data, "vendor": resolve_chipset_vendor(str(data["vendor"]))}
+        )
+
+    def update(self, instance: Chipset, data: Mapping[str, Any]) -> Chipset:
+        return super().update(
+            instance,
+            {**data, "vendor": resolve_chipset_vendor(str(data["vendor"]))},
+        )
+
+    def changed(self, instance: Chipset, data: Mapping[str, Any]) -> bool:
+        if instance.vendor.name != data["vendor"]:
+            return True
+        fields = tuple(field for field in self.fields if field != "vendor")
+        return _differs(instance, data, fields)
 
     def clean_row(self, raw: Mapping[str, str]) -> dict[str, Any]:
         vendor = _text(raw, "vendor", limit=64, required=True)
@@ -345,11 +368,21 @@ class ModelResource(_CatalogueResource):
         return Model.objects.filter(brand=data["brand"], slug=data["slug"]).first()
 
     def create(self, data: Mapping[str, Any]) -> Model:
-        return Model.objects.create(
+        model = Model(
             brand=data["brand"],
             slug=data["slug"],
             **{name: data[name] for name in self.fields},
         )
+        model.full_clean()
+        model.save()
+        return model
+
+    def update(self, instance: Model, data: Mapping[str, Any]) -> Model:
+        for name in self.fields:
+            setattr(instance, name, data[name])
+        instance.full_clean()
+        instance.save()
+        return instance
 
 
 # ---------------------------------------------------------------------------

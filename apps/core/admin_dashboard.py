@@ -196,8 +196,6 @@ def compute_metrics() -> dict[str, Any]:
         "storage_total": total,
         "failed_seo_jobs": _count("seo.SEOJob", status="failed"),
         "pending_seo_jobs": _count("seo.SEOJob", status="pending"),
-        "failed_topics": _count("blog.AutoTopic", status="failed"),
-        "queued_topics": _count("blog.AutoTopic", status="queued"),
         "stale_posts": _stale_posts(),
         "pending_listings": _count("marketplace.Listing", status="pending"),
         "pending_sellers": _count("marketplace.SellerVerification", status="pending"),
@@ -379,12 +377,9 @@ def build_kpis(metrics: dict[str, Any], user: Any | None = None) -> list[Kpi]:
         Kpi(
             "queue",
             _("Failed background jobs"),
-            _sum(metrics["failed_seo_jobs"], metrics["failed_topics"]),
-            _("%(pending)s SEO jobs and %(topics)s topics are queued")
-            % {
-                "pending": metrics["pending_seo_jobs"] or 0,
-                "topics": metrics["queued_topics"] or 0,
-            },
+            metrics["failed_seo_jobs"],
+            _("%(pending)s SEO jobs are queued")
+            % {"pending": metrics["pending_seo_jobs"] or 0},
             "timer",
             _changelist("seo.SEOJob", "status__exact=failed"),
             "danger",

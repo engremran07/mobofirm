@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from unittest.mock import patch
 
+from django.contrib.auth import get_user_model
 from django.db import OperationalError
 from django.template import Context
 from django.test import Client, TestCase, override_settings
@@ -17,6 +18,7 @@ from apps.ads.models import (
     AffiliateProvider,
     Campaign,
     PlacementAssignment,
+    TemplateAdExclusion,
 )
 from apps.ads.services.rotation.engine import choose_creative
 from apps.ads.templatetags.ad_tags import render_ad_slot
@@ -47,13 +49,48 @@ class AdsApiTests(TestCase):
             product_url="https://example.test/accessory",
         )
 
+    def create_fill_ad(
+        self,
+        *,
+        template_reference: str = "",
+        creative_type: str = "banner",
+        html: str = "",
+    ):
+        campaign = Campaign.objects.create(name="Fill endpoint campaign")
+        placement = AdPlacement.objects.create(
+            name=f"Fill endpoint placement {AdPlacement.objects.count()}",
+            slug=f"fill-endpoint-{AdPlacement.objects.count()}",
+            code=f"fill-endpoint-{AdPlacement.objects.count()}",
+            template_reference=template_reference,
+        )
+        creative = AdCreative.objects.create(
+            campaign=campaign,
+            name="Fill endpoint creative",
+            creative_type=creative_type,
+            html=html,
+            image_url="https://example.test/banner.png",
+            click_url="https://example.test",
+        )
+        PlacementAssignment.objects.create(placement=placement, creative=creative)
+        return placement, creative
+
     def test_affiliate_click_updates_product_and_records_event(self):
         product = self.create_affiliate_product()
 
-        result = track_affiliate_click_sync(product_id=product.pk)
+        result = track_affiliate_click_sync(
+            product_id=product.pk,
+            page_url="https://example.test/article",
+            ip_address="203.0.113.17",
+            user_agent="private-user-agent",
+            session_id="private-session-key",
+        )
 
         self.assertEqual(result["status"], "success")
-        self.assertEqual(AffiliateClick.objects.count(), 1)
+        click = AffiliateClick.objects.get()
+        self.assertEqual(click.page_url, "https://example.test/article")
+        self.assertNotIn("ip_address", {field.name for field in click._meta.fields})
+        self.assertNotIn("user_agent", {field.name for field in click._meta.fields})
+        self.assertNotIn("session_id", {field.name for field in click._meta.fields})
         product.refresh_from_db()
         self.assertEqual(product.clicks, 1)
 
@@ -180,6 +217,48 @@ class AdsApiTests(TestCase):
         creative_data = payload["creative"]
         assert creative_data["creative"] == creative.pk
         assert creative_data["type"] == "banner"
+
+    @patch("apps.ads.views._has_ads_consent", return_value=True)
+    @patch("apps.ads.rewarded.user_is_ad_free", return_value=True)
+    def test_fill_ad_honors_user_ad_free_reward(self, _mock_ad_free, _mock_consent):
+        user = get_user_model().objects.create_user(
+            email="ad-free@example.test", username="ad-free"
+        )
+        self.client.force_login(user)
+        placement, _creative = self.create_fill_ad()
+
+        response = self.client.get(
+            reverse("ads:fill_ad"), {"placement": placement.slug}
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"ok": True, "skipped": "ads_not_eligible"})
+
+    @patch("apps.ads.views._has_ads_consent", return_value=True)
+    def test_fill_ad_respects_template_exclusions(self, _mock_consent):
+        excluded_template = "blog/post_detail.html"
+        placement, _creative = self.create_fill_ad(template_reference=excluded_template)
+        TemplateAdExclusion.objects.create(template_path=excluded_template)
+
+        response = self.client.get(
+            reverse("ads:fill_ad"), {"placement": placement.slug}
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {"ok": True, "skipped": "template_excluded"})
+
+    @patch("apps.ads.views._has_ads_consent", return_value=True)
+    def test_fill_ad_rejects_unvalidated_creative_markup(self, _mock_consent):
+        placement, _creative = self.create_fill_ad(
+            creative_type="html", html='<img src="x" onerror="alert(1)">'
+        )
+
+        response = self.client.get(
+            reverse("ads:fill_ad"), {"placement": placement.slug}
+        )
+
+        self.assertEqual(response.status_code, 422)
+        self.assertEqual(response.json(), {"ok": False, "error": "creative_rejected"})
 
     def test_click_requires_consent(self):
         placement = AdPlacement.objects.create(

@@ -11,7 +11,6 @@ from django.contrib.contenttypes.models import ContentType
 from django.db.models import Count, Q
 from django.utils.html import escape
 
-from apps.core import ai
 from apps.core.utils import feature_flags
 from apps.seo.models import InterlinkExclusion, LinkableEntity, LinkSuggestion
 
@@ -189,16 +188,7 @@ def refresh_linkable_entity(obj, title: str, url: str, keywords: str = ""):
         "entity_type": getattr(getattr(obj, "_meta", None), "model_name", "") or "",
         "is_active": True,
     }
-    # Optional embedding if enabled; a provider failure must not block the save.
     auto_linking = feature_flags.auto_linking_enabled()
-    if auto_linking:
-        try:
-            vec = ai.embed_text(f"{title}\n{keywords}")
-        except (OSError, ValueError, RuntimeError):
-            logger.warning("Embedding failed for %r; saved without it.", title)
-        else:
-            defaults["embedding"] = vec
-            defaults["vector"] = vec
     entity, _ = LinkableEntity.objects.update_or_create(
         content_type=ct,
         object_id=str(obj.pk),

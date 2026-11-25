@@ -11,6 +11,7 @@ from decimal import Decimal
 
 import pytest
 from django.db import IntegrityError, transaction
+from django.db.models.deletion import ProtectedError
 from django.utils import timezone
 
 from apps.firmwares import models as firmware_models
@@ -179,3 +180,15 @@ class TestDownloadTables:
 
         firmware.refresh_from_db()
         assert firmware.brand is None
+
+    def test_a_brand_with_catalog_models_cannot_be_deleted(self):
+        brand = Brand.objects.create(name="Protected", slug="protected")
+        model = firmware_models.Model.objects.create(
+            brand=brand, name="Protected Device", slug="protected-device"
+        )
+
+        with pytest.raises(ProtectedError):
+            brand.delete()
+
+        assert Brand.objects.filter(pk=brand.pk).exists()
+        assert firmware_models.Model.objects.filter(pk=model.pk).exists()

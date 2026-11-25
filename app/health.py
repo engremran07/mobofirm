@@ -1,3 +1,5 @@
+"""Liveness and readiness endpoints for runtime health checks."""
+
 import logging
 
 from django.core.cache import cache
@@ -23,6 +25,7 @@ def _version_payload() -> dict[str, object]:
 @never_cache
 @require_safe
 def liveness(_request):
+    """Return a successful response while the Django process is running."""
     return JsonResponse({"status": "ok", "version": build_info().version})
 
 

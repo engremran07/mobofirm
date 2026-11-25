@@ -75,7 +75,7 @@ function syncRecentToggles() {
 // "/" (or Ctrl/Cmd+K) focuses the header search unless the visitor is typing somewhere.
 export function initializeSearchShortcuts() {
   syncRecentToggles();
-  document.addEventListener("htmx:afterSwap", syncRecentToggles);
+  document.addEventListener("htmx:after:swap", syncRecentToggles);
   document.addEventListener("keydown", (event) => {
     if (event.defaultPrevented || event.altKey) return;
     const slash = event.key === "/" && !event.ctrlKey && !event.metaKey;

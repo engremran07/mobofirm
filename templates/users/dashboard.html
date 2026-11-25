@@ -19,6 +19,11 @@
       <div class="col-12 col-sm-6 col-lg-4">{% shop_dashboard_tile %}</div>
       <div class="col-12 col-sm-6 col-lg-4">{% url 'contributions:hub' as my_files_url %}{% include "components/dashboard_tile.html" with url=my_files_url label="My contributions" value=download_count icon="download" hint="Your firmware and blog contributions, downloads and quota" %}</div>
       <div class="col-12 col-sm-6 col-lg-4">{% marketplace_dashboard_tile %}</div>
+      {% if ecosystem.blog %}{% url 'blog:purchased' as articles_url %}<div class="col-12 col-sm-6 col-lg-4">{% include "components/dashboard_tile.html" with url=articles_url label="Purchased articles" value="Open" icon="book-open" hint="Continue reading articles in your library" %}</div>{% endif %}
+      {% if ecosystem.wallet %}{% url 'wallet:dashboard' as wallet_url %}<div class="col-12 col-sm-6 col-lg-4">{% include "components/dashboard_tile.html" with url=wallet_url label="Wallet" value="Manage" icon="coins" hint="Review your credits and wallet activity" %}</div>{% endif %}
+      {% if ecosystem.referral %}{% url 'referral:dashboard' as referral_url %}<div class="col-12 col-sm-6 col-lg-4">{% include "components/dashboard_tile.html" with url=referral_url label="Referrals" value="Open" icon="user-plus" hint="Manage your referral link and invited members" %}</div>{% endif %}
+      {% if ecosystem.bounty %}<div class="col-12 col-sm-6 col-lg-4">{% url 'bounty:mine' as my_bounties_url %}{% include "components/dashboard_tile.html" with url=my_bounties_url label="My bounties" icon="gift" hint="Track bounties you posted, claimed or won" %}</div>{% endif %}
+      {% if ecosystem.gamification %}<div class="col-12 col-sm-6 col-lg-4">{% url 'gamification:progress' as progress_url %}{% include "components/dashboard_tile.html" with url=progress_url label="My progress" icon="trophy" hint="Review your level, badges and contribution activity" %}</div>{% endif %}
     </div>
   </section>
   <nav class="d-flex flex-wrap gap-2 mb-4" aria-label="Account actions">
@@ -27,6 +32,8 @@
     <a class="btn btn-outline-secondary" href="{% url 'users:notifications' %}">Notifications</a>
     <a class="btn btn-outline-secondary" href="{% url 'users:notification_settings' %}">Notification settings</a>
     <a class="btn btn-outline-secondary" href="{% url 'users:mfa_setup' %}">Two-factor authentication</a>
+    {% if ecosystem.consent %}<a class="btn btn-outline-secondary" href="{% url 'consent:privacy_centre' %}">Privacy and cookies</a>{% endif %}
+    {% if ecosystem.gamification %}<a class="btn btn-outline-secondary" href="{% url 'gamification:badges' %}">Community badges</a>{% endif %}
   </nav>
   {% if announcements %}<section aria-labelledby="announcements-title"><h2 id="announcements-title" class="h4">Announcements</h2>{% for announcement in announcements %}<article class="surface-card p-3 mb-2"><h3 class="h5">{{ announcement.title }}</h3><p class="mb-0">{{ announcement.message|rich_text }}</p></article>{% endfor %}</section>{% endif %}
   {% if notifications %}<section class="mt-4" aria-labelledby="recent-notifications-title"><h2 id="recent-notifications-title" class="h4">Recent notifications</h2>{% for notification in notifications %}<p><a href="{% url 'users:notification_detail' pk=notification.pk %}">{{ notification.title }}</a> — {{ notification.message|truncatewords:20 }}</p>{% endfor %}</section>{% endif %}

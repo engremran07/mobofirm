@@ -50,7 +50,9 @@ def test_only_old_unreferenced_images_are_deleted(
 ) -> None:
     """Fresh and referenced images survive; stale orphans (and files) go."""
     fresh, kept, orphan = _image(0), _image(5), _image(5)
-    _reference(monkeypatch, kept.file.name)
+    kept_name = kept.file.name
+    assert kept_name is not None
+    _reference(monkeypatch, kept_name)
     stored = Path(orphan.file.path)
     assert stored.is_file()
     dry = cleanup_orphan_images(dry_run=True)

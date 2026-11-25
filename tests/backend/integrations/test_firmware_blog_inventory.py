@@ -8,7 +8,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from apps.blog.models import Post, PostStatus
+from apps.blog.models import Post, PostSource, PostStatus
 from apps.firmwares.blog_automation import FirmwareBlogService, get_automation_author
 from apps.firmwares.models import (
     AutomatedBlogLink,
@@ -60,7 +60,7 @@ class AutomatedModelBlogTests(CatalogTestCase):
         post = Post.objects.get(firmware_model=model)
         self.assertEqual(post.status, PostStatus.PUBLISHED)
         self.assertTrue(post.is_published)
-        self.assertTrue(post.is_ai_generated)
+        self.assertEqual(post.content_source, PostSource.AUTOMATED)
         self.assertEqual(post.author, get_automation_author())
         self.assertEqual(
             post.author.username,
@@ -168,7 +168,7 @@ class AutomatedModelBlogTests(CatalogTestCase):
         automated = Post.objects.get(firmware_model=model)
         self.assertNotEqual(automated.pk, manual.pk)
         manual.refresh_from_db()
-        self.assertFalse(manual.is_ai_generated)
+        self.assertEqual(manual.content_source, PostSource.EDITORIAL)
         self.assertEqual(manual.author, author)
 
 
@@ -230,7 +230,7 @@ class AutomatedBrandAndChipsetBlogTests(CatalogTestCase):
             )
             self.make_firmware(model, "variant-build.zip", variant=variant)
 
-        chipset = Chipset.objects.get(vendor="Qualcomm")
+        chipset = Chipset.objects.get(vendor__name="Qualcomm")
         link = AutomatedBlogLink.objects.get(kind="chipset", chipset=chipset)
         self.assertIn("variant-build.zip", link.post.body)
 
@@ -272,7 +272,9 @@ class AutomationDispatchTests(CatalogTestCase):
     def test_catch_up_task_and_command_create_missing_posts_idempotently(self):
         model = self.make_model(chipset="Unisoc T618")
         self.make_firmware(model, "catchup.zip")
-        self.assertFalse(Post.objects.filter(is_ai_generated=True).exists())
+        self.assertFalse(
+            Post.objects.filter(content_source=PostSource.AUTOMATED).exists()
+        )
 
         result = catchup_missing_blog_posts.run()
 

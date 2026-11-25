@@ -1,0 +1,27 @@
+{% comment %}
+  Brand models remain read-only in the inline; creation uses the model admin form
+  with the current brand preselected.
+{% endcomment %}{% load i18n admin_urls console_ui console_admin %}{% console_inline_rows inline_admin_formset as inline %}
+<section class="c-inline" id="{{ inline_admin_formset.formset.prefix }}-group" data-console-formset data-inline-type="tabular" aria-labelledby="{{ inline_admin_formset.formset.prefix }}-heading">
+{% include "console/crud/_inline_header.html" %}
+{% if inline_admin_formset.has_add_permission and original and original.models_total == 0 %}
+<a class="button" href="{% url 'admin:firmwares_model_add' %}?brand={{ original.pk }}">{% translate "Add model" %}</a>
+{% endif %}
+{{ inline_admin_formset.formset.management_form }}
+{{ inline_admin_formset.formset.non_form_errors }}
+<div class="c-table-wrap c-table-wrap--flow" role="region" tabindex="0" aria-labelledby="{{ inline_admin_formset.formset.prefix }}-heading">
+<table class="c-table">
+<thead><tr>
+<th scope="col">{% translate "Record" %}</th>
+{% for field in inline_admin_formset.fields %}{% if not field.widget.is_hidden %}<th scope="col" class="column-{{ field.name }}">{{ field.label|capfirst }}{% if field.required %}<span class="c-field__required">{% translate "required" %}</span>{% endif %}</th>{% endif %}{% endfor %}
+<th scope="col" class="c-table__actions"><span class="visually-hidden">{% translate "Actions" %}</span></th>
+</tr></thead>
+<tbody data-console-formset-rows>
+{% for iform in inline.rows %}{% include "console/crud/_inline_tabular_row.html" with prefix_index=forloop.counter0 %}{% endfor %}
+{% if inline.blank %}<template data-console-formset-template>{% include "console/crud/_inline_tabular_row.html" with iform=inline.blank prefix_index="__prefix__" is_blank=True %}</template>{% endif %}
+</tbody>
+</table>
+</div>
+<p class="u-muted u-text-sm mb-0" data-console-formset-empty{% if inline.rows %} hidden{% endif %}>{% translate "Nothing here yet." %}</p>
+{% include "console/crud/_inline_footer.html" %}
+</section>

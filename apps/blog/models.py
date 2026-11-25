@@ -39,6 +39,12 @@ class PostAccess(models.TextChoices):
     PAID = "paid", "Paid (credits)"
 
 
+class PostSource(models.TextChoices):
+    AUTOMATED = "automated", "Automated"
+    EDITORIAL = "editorial", "Editorial"
+    COMMUNITY_CONTRIBUTION = "community_contribution", "Community contribution"
+
+
 class Category(models.Model):
     name = models.CharField(max_length=100, unique=True)
     slug = models.SlugField(max_length=120, unique=True, blank=True)
@@ -174,9 +180,12 @@ class Post(models.Model):
     )
     reading_time = models.PositiveIntegerField(default=0, help_text="Minutes")
     version = models.PositiveIntegerField(default=1)
-    is_ai_generated = models.BooleanField(default=False)
-    ai_run_id = models.CharField(max_length=100, blank=True, default="")
-    ai_error = models.TextField(blank=True, default="")
+    content_source = models.CharField(
+        max_length=32,
+        choices=PostSource.choices,
+        default=PostSource.EDITORIAL,
+        db_index=True,
+    )
     allow_comments = models.BooleanField(default=True)
     noindex = models.BooleanField(
         default=False,
@@ -272,11 +281,6 @@ class Post(models.Model):
             "link issued before."
         ),
     )
-    is_community_contribution = models.BooleanField(
-        default=False,
-        db_index=True,
-        help_text="Submitted for review through the member 'Contribute a blog post' flow.",
-    )
     review_note = models.CharField(
         max_length=1000,
         blank=True,
@@ -300,6 +304,11 @@ class Post(models.Model):
             ),
             models.Index(Lower("slug"), name="blog_post_slug_ci_idx"),
         )
+
+    @property
+    def is_community_contribution(self) -> bool:
+        """Compatibility accessor backed by the canonical content source."""
+        return self.content_source == PostSource.COMMUNITY_CONTRIBUTION
 
     @classmethod
     def published(cls) -> QuerySet:
@@ -734,6 +743,65 @@ class PostRevision(models.Model):
         return f"Revision {self.created_at} for {self.post}"
 
 
+class PostUpdateProposalStatus(models.TextChoices):
+    PENDING = "pending", "Pending"
+    APPROVED = "approved", "Approved"
+    REJECTED = "rejected", "Rejected"
+    STALE = "stale", "Stale"
+
+
+class PostUpdateProposal(models.Model):
+    """Member-suggested field changes to a live, human-authored post."""
+
+    post = models.ForeignKey(
+        Post, on_delete=models.CASCADE, related_name="update_proposals"
+    )
+    submitted_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="blog_update_proposals",
+    )
+    base_version = models.PositiveIntegerField()
+    proposed_changes = models.JSONField(default=dict)
+    status = models.CharField(
+        max_length=12,
+        choices=PostUpdateProposalStatus.choices,
+        default=PostUpdateProposalStatus.PENDING,
+        db_index=True,
+    )
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="reviewed_blog_update_proposals",
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    review_reason = models.CharField(max_length=1000, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering: ClassVar[list[str]] = ["status", "-created_at", "-pk"]
+        constraints: ClassVar[tuple[models.UniqueConstraint, ...]] = (
+            models.UniqueConstraint(
+                fields=["post", "submitted_by"],
+                condition=models.Q(status=PostUpdateProposalStatus.PENDING),
+                name="blog_upp_open_uniq",
+            ),
+        )
+        indexes: ClassVar[tuple[models.Index, ...]] = (
+            models.Index(
+                fields=["status", "-created_at"], name="blog_upp_status_created_idx"
+            ),
+        )
+        verbose_name = "Post update proposal"
+        verbose_name_plural = "Post update proposals"
+
+    def __str__(self) -> str:
+        return f"Update proposal for {self.post} by {self.submitted_by}"
+
+
 class BlogSettings(SingletonModel):
     """
     Per-app settings for the Blog module.
@@ -855,39 +923,3 @@ class TagTranslation(models.Model):
 
     def __str__(self) -> str:
         return f"{self.tag} [{self.language}]"
-
-
-class AutoTopic(models.Model):
-    """
-    Queue for AI-generated blog posts.
-    """
-
-    STATUS_CHOICES: ClassVar[list[tuple[str, str]]] = [
-        ("queued", "Queued"),
-        ("running", "Running"),
-        ("succeeded", "Succeeded"),
-        ("failed", "Failed"),
-    ]
-
-    topic = models.CharField(max_length=240)
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default="queued")
-    ai_run_id = models.CharField(max_length=100, blank=True, default="")
-    last_error = models.TextField(blank=True, default="")
-    scheduled_for = models.DateTimeField(null=True, blank=True)
-    retry_count = models.PositiveIntegerField(default=0)
-    last_attempt_at = models.DateTimeField(null=True, blank=True)
-    post = models.ForeignKey(
-        "blog.Post", null=True, blank=True, on_delete=models.SET_NULL
-    )
-    created_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        ordering: ClassVar[list[str]] = ["-created_at"]
-        indexes = (models.Index(fields=["status"], name="blog_autotopic_status_idx"),)
-
-    def __str__(self) -> str:
-        return f"{self.topic} ({self.status})"

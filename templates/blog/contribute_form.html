@@ -17,10 +17,34 @@
   {% elif remaining_today is not None %}
     <p class="small muted">You can contribute {{ remaining_today }} more post{{ remaining_today|pluralize }} today.</p>
   {% endif %}
+  {% if open_bounties %}
+    <section class="surface-card p-3 p-md-4 mb-4" aria-labelledby="open-guide-bounties-title" data-testid="contribution-bounties">
+      <h2 class="h5" id="open-guide-bounties-title">Open guide bounties</h2>
+      <p class="muted">Choose an open request to contribute a solution, or write your own post below.</p>
+      <ul class="list-unstyled d-grid gap-2 mb-0">
+        {% for bounty in open_bounties %}
+          <li class="border rounded p-3">
+            <h3 class="h6 mb-1">{{ bounty.title }}</h3>
+            {% if bounty.label %}<p class="small muted mb-1">{{ bounty.label }}</p>{% endif %}
+            <p class="small mb-2">{{ bounty.credits }} credits{% if bounty.bounty_count > 1 %} across {{ bounty.bounty_count }} bount{{ bounty.bounty_count|pluralize:"y,ies" }}{% endif %}</p>
+            <a class="btn btn-sm btn-outline-primary" href="{{ bounty.url }}">View request and contribute</a>
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
+  {% if not editing_post %}<h2 class="h5">Write a new blog post</h2>{% endif %}
+  {% if not editing_post %}<p><a href="{% url 'blog:my_update_proposals' %}">Track my article update proposals</a></p>{% endif %}
   <form method="post" class="surface-card p-3 p-md-4" novalidate>
     {% csrf_token %}
     {% include "components/form_errors.html" with form=form %}
-    {% for field in form %}{% include "components/form_field.html" with field=field %}{% endfor %}
+    {% for field in form %}
+      {% include "components/form_field.html" with field=field %}
+      {% if field.name == "title" and not editing_post %}
+        <p id="contribution-title-check-indicator" class="small muted htmx-indicator" role="status">Checking existing public titles...</p>
+        <div id="contribution-title-matches" aria-live="polite" aria-atomic="true"></div>
+      {% endif %}
+    {% endfor %}
     {% if not seller %}<p class="small muted" data-contribute-access-note>Only approved sellers can offer paid posts{% if become_seller_url %} — <a href="{{ become_seller_url }}">Become a seller</a>{% endif %}</p>{% endif %}
     <div class="d-flex flex-wrap gap-2">
       <button class="btn btn-primary" type="submit">{% if editing_post %}Save changes{% else %}Submit for review{% endif %}</button>

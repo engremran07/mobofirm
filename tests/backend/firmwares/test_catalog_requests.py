@@ -5,11 +5,13 @@ from __future__ import annotations
 import pytest
 from django.contrib import admin
 from django.core.exceptions import PermissionDenied, ValidationError
+from django.db import IntegrityError, transaction
 from django.test import Client, RequestFactory
 from django.urls import reverse
 from rest_framework.test import APIClient
 
 from apps.firmwares import catalog_requests as service
+from apps.firmwares.chipsets import create_chipset_record
 from apps.firmwares.models import (
     Brand,
     BrandCreationRequest,
@@ -31,7 +33,7 @@ def client_for(user):
 
 @pytest.fixture(name="chipset")
 def chipset_fixture():
-    return Chipset.objects.create(
+    return create_chipset_record(
         vendor="MediaTek", name="Helio G99", slug="mediatek-helio-g99"
     )
 
@@ -106,6 +108,116 @@ class TestRequestPages:
         assert response.status_code == 302
         assert ModelCreationRequest.objects.get().chipset is None
 
+    def test_same_model_name_can_be_requested_for_another_chipset(
+        self, make_user, catalog, chipset
+    ):
+        other_chipset = create_chipset_record(
+            vendor="Qualcomm",
+            name="Snapdragon 8 Gen 3",
+            slug="qualcomm-snapdragon-8-gen-3",
+        )
+        Model.objects.create(
+            brand=catalog.brand,
+            name="Galaxy S24 Ultra",
+            slug="sm-s928b",
+            chipset_ref=chipset,
+        )
+
+        pending = service.submit_model_request(
+            make_user("second-chipset-model"),
+            brand=catalog.brand,
+            name="Galaxy S24 Ultra",
+            model_code="SM-S928U",
+            chipset=other_chipset,
+        )
+
+        assert pending.chipset == other_chipset
+        assert pending.model_code == "SM-S928U"
+
+    def test_same_model_name_and_chipset_are_still_duplicates(
+        self, make_user, catalog, chipset
+    ):
+        Model.objects.create(
+            brand=catalog.brand,
+            name="Galaxy S24 Ultra",
+            slug="sm-s928b",
+            chipset_ref=chipset,
+        )
+
+        with pytest.raises(service.CatalogRequestError, match="already exists"):
+            service.submit_model_request(
+                make_user("same-chipset-model"),
+                brand=catalog.brand,
+                name="Galaxy S24 Ultra",
+                chipset=chipset,
+            )
+
+    def test_pending_model_requests_are_unique_per_chipset(
+        self, make_user, catalog, chipset
+    ):
+        other_chipset = create_chipset_record(
+            vendor="Qualcomm",
+            name="Snapdragon 8 Gen 3",
+            slug="qualcomm-snapdragon-8-gen-3",
+        )
+        service.submit_model_request(
+            make_user("exynos-request"),
+            brand=catalog.brand,
+            name="Galaxy S24 Ultra",
+            chipset=chipset,
+        )
+        service.submit_model_request(
+            make_user("snapdragon-request"),
+            brand=catalog.brand,
+            name="Galaxy S24 Ultra",
+            chipset=other_chipset,
+        )
+
+        with pytest.raises(service.CatalogRequestError, match="already waiting"):
+            service.submit_model_request(
+                make_user("duplicate-exynos-request"),
+                brand=catalog.brand,
+                name="Galaxy S24 Ultra",
+                chipset=chipset,
+            )
+
+        assert (
+            ModelCreationRequest.objects.filter(
+                brand=catalog.brand, name="Galaxy S24 Ultra"
+            ).count()
+            == 2
+        )
+
+    def test_database_request_constraint_uses_chipset_identity(
+        self, make_user, catalog, chipset
+    ):
+        other_chipset = create_chipset_record(
+            vendor="Qualcomm",
+            name="Snapdragon 8 Gen 3",
+            slug="qualcomm-snapdragon-8-gen-3",
+        )
+        requester = make_user("db-model-request")
+        ModelCreationRequest.objects.create(
+            brand=catalog.brand,
+            name="Galaxy S24 Ultra",
+            chipset=chipset,
+            requested_by=requester,
+        )
+        ModelCreationRequest.objects.create(
+            brand=catalog.brand,
+            name="Galaxy S24 Ultra",
+            chipset=other_chipset,
+            requested_by=requester,
+        )
+
+        with pytest.raises(IntegrityError), transaction.atomic():
+            ModelCreationRequest.objects.create(
+                brand=catalog.brand,
+                name="galaxy s24 ultra",
+                chipset=chipset,
+                requested_by=requester,
+            )
+
     def test_a_variant_request_requires_brand_and_model(self, make_user, catalog):
         client = client_for(make_user("variant-requester"))
         url = reverse("firmwares:request_variant")
@@ -167,6 +279,34 @@ class TestRequestPages:
         assert response.status_code == 200
         assert "already exists" in response.content.decode()
 
+    def test_the_live_check_scopes_existing_models_to_the_selected_chipset(
+        self, make_user, catalog, chipset
+    ):
+        other_chipset = create_chipset_record(
+            vendor="Qualcomm",
+            name="Snapdragon 8 Gen 3",
+            slug="qualcomm-snapdragon-8-gen-3",
+        )
+        Model.objects.create(
+            brand=catalog.brand,
+            name="Galaxy S24 Ultra",
+            slug="sm-s928b",
+            chipset_ref=chipset,
+        )
+
+        response = client_for(make_user("chipset-live-check")).get(
+            reverse("firmwares:request_check"),
+            {
+                "kind": "model",
+                "name": "Galaxy S24 Ultra",
+                "brand": catalog.brand.pk,
+                "chipset": other_chipset.pk,
+            },
+        )
+
+        assert response.status_code == 200
+        assert "already exists" not in response.content.decode()
+
     def test_my_requests_lists_status_and_reviewer_reason(
         self, make_user, catalog, reviewer
     ):
@@ -211,6 +351,95 @@ class TestApproval:
         pending.refresh_from_db()
         assert pending.status == "approved"
         assert pending.reviewed_by == reviewer
+
+    def test_approving_model_request_rejects_an_existing_active_model_code(
+        self, make_user, catalog, reviewer
+    ):
+        Model.objects.create(
+            brand=catalog.brand,
+            name="Existing Phone",
+            slug="existing-phone",
+            model_code="SM-LOCKED",
+        )
+        pending = service.submit_model_request(
+            make_user("duplicate-model-code"),
+            brand=catalog.brand,
+            name="New Phone",
+            model_code="sm-locked",
+        )
+
+        with pytest.raises(ValidationError, match="already assigned"):
+            service.approve_model_request(pending, reviewer)
+
+        pending.refresh_from_db()
+        assert pending.status == "pending"
+        assert not Model.objects.filter(brand=catalog.brand, slug="sm-locked").exists()
+
+    def test_approving_variant_request_rejects_a_code_owned_by_another_model(
+        self, make_user, catalog, reviewer
+    ):
+        Model.objects.create(
+            brand=catalog.brand,
+            name="Other Phone",
+            slug="other-phone",
+            model_code="SM-LOCKED",
+        )
+        pending = service.submit_variant_request(
+            make_user("duplicate-variant-code"),
+            model=catalog.model,
+            identity=VariantIdentity(model_code="sm-locked"),
+        )
+
+        with pytest.raises(ValidationError, match="already assigned"):
+            service.approve_variant_request(pending, reviewer)
+
+        pending.refresh_from_db()
+        assert pending.status == "pending"
+        assert not Variant.objects.filter(
+            model=catalog.model, model_code="SM-LOCKED"
+        ).exists()
+
+    def test_approving_same_name_with_another_chipset_creates_a_sibling(
+        self, make_user, catalog, chipset, reviewer
+    ):
+        other_chipset = create_chipset_record(
+            vendor="Qualcomm",
+            name="Snapdragon 8 Gen 3",
+            slug="qualcomm-snapdragon-8-gen-3",
+        )
+        Model.objects.create(
+            brand=catalog.brand,
+            name="Galaxy S24 Ultra",
+            slug="sm-s928b",
+            model_code="SM-S928B",
+            chipset_ref=chipset,
+        )
+        pending = service.submit_model_request(
+            make_user("approved-sibling-model"),
+            brand=catalog.brand,
+            name="Galaxy S24 Ultra",
+            model_code="sm-s928u",
+            chipset=other_chipset,
+        )
+
+        sibling, created = service.approve_model_request(pending, reviewer)
+
+        assert created
+        assert (
+            sibling.name,
+            sibling.chipset_ref,
+            sibling.model_code,
+            sibling.slug,
+        ) == (
+            "Galaxy S24 Ultra",
+            other_chipset,
+            "SM-S928U",
+            "sm-s928u",
+        )
+        assert (
+            Model.objects.filter(brand=catalog.brand, name="Galaxy S24 Ultra").count()
+            == 2
+        )
 
     def test_approving_a_variant_request_creates_it_under_the_requested_model(
         self, make_user, catalog, reviewer

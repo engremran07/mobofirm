@@ -4,7 +4,7 @@ import logging
 import re
 import secrets
 from datetime import timedelta
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from django.apps import apps as django_apps
 from django.conf import settings
@@ -16,11 +16,7 @@ from django.utils import timezone
 from django.utils.crypto import salted_hmac
 
 from apps.core.utils.ip import get_client_ip
-
-if TYPE_CHECKING:
-    from apps.devices.models import BehaviorInsight
 from apps.devices.models import (
-    AppPolicy,
     Device,
     DeviceBrowserLink,
     DeviceConfig,
@@ -61,6 +57,17 @@ def hash_browser_key(key: str) -> str:
     return salted_hmac(
         "apps.devices.browser-profile.v1",
         key,
+        algorithm="sha256",
+    ).hexdigest()
+
+
+def hash_client_ip(ip: str | None) -> str:
+    """Return a keyed digest for transient IP-based risk comparisons."""
+    if not ip:
+        return ""
+    return salted_hmac(
+        "apps.devices.client-ip.v1",
+        ip.strip(),
         algorithm="sha256",
     ).hexdigest()
 
@@ -244,21 +251,21 @@ def attach_device_cookie(
 
 def get_effective_policy(request, user=None, service_name: str | None = None) -> Policy:
     """
-    Combine global DeviceConfig + AppPolicy into an effective policy snapshot.
+    Combine global device settings with the configured per-app policy snapshot.
     """
     config = DeviceConfig.get_solo()
     app_name = getattr(settings, "DEVICE_APP_NAME", "default")
-    try:
-        app_policy = AppPolicy.objects.get(name=app_name)
-    except AppPolicy.DoesNotExist:
-        app_policy = None
+    app_policies = config.app_policies if isinstance(config.app_policies, dict) else {}
+    configured_policy = app_policies.get(app_name, {})
+    app_policy = configured_policy if isinstance(configured_policy, dict) else {}
+    app_service_rules = app_policy.get("service_level_rules", {})
+    if not isinstance(app_service_rules, dict):
+        app_service_rules = {}
 
     policy: Policy = {
-        "basic_fp": bool(getattr(config, "basic_fingerprinting_enabled", True)),
-        "enhanced_fp": bool(getattr(config, "enhanced_fingerprinting_enabled", False)),
         "device_locking_mode": "none",
         "mfa_requirement": "none",
-        "ai_risk_scoring": bool(getattr(config, "ai_risk_scoring_enabled", False)),
+        "risk_scoring_enabled": bool(getattr(config, "risk_scoring_enabled", False)),
         "max_devices": get_device_limit(user),
         "monthly_quota": getattr(config, "monthly_device_quota", None),
         "yearly_quota": getattr(config, "yearly_device_quota", None),
@@ -274,25 +281,21 @@ def get_effective_policy(request, user=None, service_name: str | None = None) ->
         "service_rules": {},
     }
 
-    if app_policy:
-        policy.update(
-            {
-                "basic_fp": policy["basic_fp"] and app_policy.basic_fingerprinting,
-                "enhanced_fp": policy["enhanced_fp"]
-                and app_policy.enhanced_fingerprinting,
-                "device_locking_mode": app_policy.device_locking_mode
-                or policy["device_locking_mode"],
-                "mfa_requirement": app_policy.mfa_requirement
-                or policy["mfa_requirement"],
-                "ai_risk_scoring": policy["ai_risk_scoring"]
-                or app_policy.ai_risk_scoring,
-                "service_rules": app_policy.service_level_rules or {},
-                "monthly_quota": app_policy.monthly_device_quota
-                or policy["monthly_quota"],
-                "yearly_quota": app_policy.yearly_device_quota
-                or policy["yearly_quota"],
-            }
-        )
+    policy.update(
+        {
+            "device_locking_mode": app_policy.get("device_locking_mode")
+            or policy["device_locking_mode"],
+            "mfa_requirement": app_policy.get("mfa_requirement")
+            or policy["mfa_requirement"],
+            "risk_scoring_enabled": policy["risk_scoring_enabled"]
+            or bool(app_policy.get("risk_scoring_enabled", False)),
+            "service_rules": app_service_rules,
+            "monthly_quota": app_policy.get("monthly_device_quota")
+            or policy["monthly_quota"],
+            "yearly_quota": app_policy.get("yearly_device_quota")
+            or policy["yearly_quota"],
+        }
+    )
 
     # -----------------------------------------------------------------
     # SUPER ADMIN OVERRIDE (Unlimited Access)
@@ -392,16 +395,16 @@ def resolve_or_create_device(
     os_family, device_type = describe_platform(ua)
     display_name = f"{os_family} {device_type} · {browser_family}"
 
-    prev_event_ip = None
+    prev_event_ip_hash = None
     prev_country = None
     last_evt = (
         DeviceEvent.objects.filter(user=user)
         .order_by("-created_at")
-        .only("ip", "geo_region")
+        .only("ip_hash", "geo_region")
         .first()
     )
     if last_evt is not None:
-        prev_event_ip = last_evt.ip
+        prev_event_ip_hash = last_evt.ip_hash
         prev_country = last_evt.geo_region
 
     device = find_current_device(request, user)
@@ -473,7 +476,7 @@ def resolve_or_create_device(
     # score is recomputed for each sign-in so it cannot ratchet upwards forever.
     country = ident.get("country", "") or ""
     risk = 40 if is_new else 0
-    if prev_event_ip and ip and prev_event_ip != ip:
+    if prev_event_ip_hash and ip and prev_event_ip_hash != hash_client_ip(ip):
         risk += 15
     if prev_country and country and prev_country != country:
         risk += 15
@@ -497,10 +500,10 @@ def resolve_or_create_device(
 
 
 def approve_current_device(request, user) -> Device:
-    """Approve only the pending registration the requesting browser maps to.
+    """Approve the pending registration mapped to this client.
 
-    That is the browser's own fallback registration, or the registered OS it was
-    recognised on (see ``DeviceBrowserLink``).
+    Public browser-only approval is rejected by the HTTP view; verified OS identity
+    uses :func:`trust_pending_device` after the WebAuthn ceremony.
     """
     newly_trusted = False
     with transaction.atomic():
@@ -761,14 +764,14 @@ def _log_event(
     reason: str,
     ctx: dict,
 ) -> None:
+    client_ip = ctx.get("ip", "")
     payload = {
         "device": device,
         "user": user if getattr(user, "is_authenticated", False) else None,
         "event_type": event_type,
         "success": success,
         "reason": reason,
-        "ip": ctx.get("ip", ""),
-        "user_agent": ctx.get("user_agent", ""),
+        "ip_hash": hash_client_ip(client_ip),
         "geo_region": ctx.get("country", ""),
         "metadata": {
             "policy": ctx.get("policy_snapshot"),
@@ -789,7 +792,7 @@ def _log_event(
             f"device_{event_type}",
             user=payload.get("user"),
             device=device,
-            ip=payload.get("ip"),
+            ip=client_ip,
             metadata={
                 "success": success,
                 "reason": reason,
@@ -816,22 +819,11 @@ def _log_event(
             payload["user"],
             "New device awaiting approval",
             f"A new browser ({device_label}) signed in from "
-            f"{payload.get('ip') or 'unknown IP'}. It is not registered yet and "
+            f"{client_ip or 'unknown IP'}. It is not registered yet and "
             "uses a device slot only after you approve it.",
             level="info",
             channel="web",
         )
-
-    promote_from_device_event(
-        {
-            "device_identifier": str(device.pk) if device else None,
-            "ip": payload["ip"],
-            "user": payload["user"],
-            "event_type": event_type,
-            "success": success,
-            "reason": reason,
-        }
-    )
 
 
 def log_device_event(
@@ -859,7 +851,7 @@ def _emit_security_event(
             event_type="policy_violation",
             user=user,
             device=device,
-            ip=ip or "",
+            ip_hash=hash_client_ip(ip or ""),
             success=False,
             reason=event_type[:255],
             metadata=metadata or {},
@@ -884,11 +876,7 @@ def _notify_user_device_issue(
     from apps.users.services.notifications import send_notification
 
     ip = ctx.get("ip") or "unknown IP"
-    device_label = (
-        getattr(device, "display_name", None)
-        or getattr(device, "os_fingerprint", None)
-        or "device"
-    )
+    device_label = getattr(device, "display_name", None) or "device"
     if reason == "blocked_device":
         title = "Sign-in blocked"
         message = f"Your device ({device_label}) was blocked from signing in from {ip}. If this was you, review devices and unblock."
@@ -910,60 +898,4 @@ def _notify_user_device_issue(
         message=message,
         level="warning",
         channel="web",
-    )
-
-
-# ---------------------------------------------------------------------------
-# Risk and anomaly insights
-# ---------------------------------------------------------------------------
-
-
-def record_insight(
-    *,
-    related_user=None,
-    device_identifier: str | None = None,
-    related_ip: str | None = None,
-    severity: str = "low",
-    recommendation: str = "",
-    metadata: dict[str, Any] | None = None,
-) -> BehaviorInsight:
-    """Minimal ingestion point for risk/anomaly insights."""
-    from apps.devices.models import BehaviorInsight  # local to avoid circular
-
-    details = dict(metadata or {})
-    if device_identifier:
-        details["device_identifier"] = device_identifier
-    if related_ip:
-        details["ip"] = related_ip
-    return BehaviorInsight.objects.create(
-        related_user=related_user,
-        severity=severity,
-        recommendation=recommendation,
-        metadata=details,
-    )
-
-
-def promote_from_device_event(event: dict[str, Any]) -> BehaviorInsight | None:
-    """Flag failed or blocked device events; successful events create no insight."""
-    if event.get("success"):
-        return None
-    reason = str(event.get("reason") or "")
-    if reason in {"blocked_device", "policy_violation"}:
-        severity = "high"
-        recommendation = "Block or review device."
-    else:
-        severity = "medium"
-        recommendation = "Ask for MFA on next login."
-
-    user = event.get("user")
-    return record_insight(
-        related_user=user if getattr(user, "pk", None) else None,
-        device_identifier=event.get("device_identifier"),
-        related_ip=event.get("ip"),
-        severity=severity,
-        recommendation=recommendation,
-        metadata={
-            "event_type": event.get("event_type"),
-            "reason": reason,
-        },
     )

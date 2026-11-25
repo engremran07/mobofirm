@@ -63,7 +63,9 @@ def luminance(value: str) -> float:
 
 def contrast(foreground: str, background: str) -> float:
     """WCAG contrast ratio between two ``#rrggbb`` colours."""
-    lighter, darker = sorted((luminance(foreground), luminance(background)), reverse=True)
+    lighter, darker = sorted(
+        (luminance(foreground), luminance(background)), reverse=True
+    )
     return (lighter + 0.05) / (darker + 0.05)
 
 

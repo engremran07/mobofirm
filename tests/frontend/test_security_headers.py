@@ -57,13 +57,15 @@ class SecurityHeaderTests(TestCase):
 
     def test_htmx_indicator_styles_are_csp_compatible(self):
         frontend = PROJECT_ROOT / "frontend"
-        site_script = (frontend / "src" / "site.js").read_text(encoding="utf-8")
+        htmx_setup = (frontend / "src" / "shared" / "htmx.js").read_text(
+            encoding="utf-8"
+        )
         site_styles = "\n".join(
             path.read_text(encoding="utf-8")
             for path in sorted((frontend / "src" / "styles").rglob("*.scss"))
         )
 
-        self.assertIn("htmx.config.includeIndicatorStyles = false;", site_script)
+        self.assertIn("htmx.config.includeIndicatorCSS = false;", htmx_setup)
         self.assertIn(".htmx-indicator", site_styles)
         self.assertIn(".htmx-request", site_styles)
 

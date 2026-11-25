@@ -32,7 +32,7 @@ class Command(BaseCommand):
         if not usages:
             self.stdout.write("No chipset rows outside the allow-list.")
             return
-        vendors = sorted({usage.chipset.vendor or "(none)" for usage in usages})
+        vendors = sorted({usage.chipset.vendor.name or "(none)" for usage in usages})
         self.stdout.write("Vendors outside the allow-list: " + ", ".join(vendors))
         for usage in usages:
             chipset = usage.chipset

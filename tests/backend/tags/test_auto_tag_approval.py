@@ -35,7 +35,7 @@ class AutomatedTagApprovalTests(TestCase):
         self.assertEqual(attached, [])
         self.assertFalse(self.post.tags.exists())
         self.assertFalse(tag.is_curated)
-        self.assertTrue(tag.ai_suggested)
+        self.assertTrue(tag.is_suggested)
 
     @patch(
         "apps.tags.services.heuristics.suggest_tags_from_text",
@@ -59,7 +59,7 @@ class AutomatedTagApprovalTests(TestCase):
             name="Pending public tag",
             normalized_name="pending public tag",
             slug="pending-public-tag",
-            ai_suggested=True,
+            is_suggested=True,
             is_curated=False,
         )
 
@@ -77,7 +77,7 @@ class AutomatedTagApprovalTests(TestCase):
             name="Pending article tag",
             normalized_name="pending article tag",
             slug="pending-article-tag",
-            ai_suggested=True,
+            is_suggested=True,
             is_curated=False,
         )
         curated = Tag.objects.create(

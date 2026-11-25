@@ -35,8 +35,8 @@ class Tag(TimestampedModel, SoftDeleteModel):
     usage_count = models.PositiveIntegerField(default=0)
     co_occurrence = models.JSONField(default=dict, blank=True)
     is_active = models.BooleanField(default=True)
-    ai_suggested = models.BooleanField(
-        default=False, help_text="True if suggested by AI and not yet curated."
+    is_suggested = models.BooleanField(
+        default=False, help_text="True if suggested automatically and not yet curated."
     )
     is_curated = models.BooleanField(
         default=False, help_text="True if reviewed/approved by staff."
@@ -63,20 +63,20 @@ class Tag(TimestampedModel, SoftDeleteModel):
         default="",
         help_text="Cached materialized path for fast tree queries.",
     )
-    ai_score = models.FloatField(
-        default=0.0, help_text="Confidence when AI suggested this tag."
+    suggestion_score = models.FloatField(
+        default=0.0, help_text="Stored score for an automatic tag suggestion."
     )
     content_hash = models.CharField(
         max_length=64,
         blank=True,
         default="",
-        help_text="Last content hash used for AI suggestions.",
+        help_text="Last content hash used for deterministic suggestions.",
     )
     last_suggested_at = models.DateTimeField(null=True, blank=True)
     suggestions = models.JSONField(
         default=list,
         blank=True,
-        help_text="Recent AI suggestions with scores/rationales.",
+        help_text="Recent automatic suggestions with scores/rationales.",
     )
     importance = models.IntegerField(
         default=0, help_text="Boost for curated/priority tags."
@@ -129,7 +129,7 @@ class TagsSettings(SingletonModel):
     allow_public_suggestions = models.BooleanField(
         default=True, help_text="Allow authenticated users to suggest new tags."
     )
-    enable_ai_suggestions = models.BooleanField(
+    automatic_suggestions_enabled = models.BooleanField(
         default=True,
         help_text="Automatically create, attach and curate tags for published posts.",
     )

@@ -1,3 +1,5 @@
+"""Settings shared by local, test, and production environments."""
+
 import os
 from pathlib import Path
 from typing import Any
@@ -141,7 +143,9 @@ DATABASES: dict[str, dict[str, Any]] = {
 
 AUTH_PASSWORD_VALIDATORS = [
     {
-        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"
+        "NAME": (
+            "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"
+        )
     },
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
@@ -189,11 +193,6 @@ BLOG_COMMENTS_ENABLED = os.getenv("BLOG_COMMENTS_ENABLED", "false").lower() in {
     "true",
     "yes",
 }
-BLOG_TRANSLATION_LANGUAGES = [
-    code.strip()
-    for code in os.getenv("BLOG_TRANSLATION_LANGUAGES", "").split(",")
-    if code.strip()
-]
 ALLOW_USER_BLOG_POSTS = os.getenv("ALLOW_USER_BLOG_POSTS", "false").lower() in {
     "1",
     "true",
@@ -293,7 +292,8 @@ _google_client_id = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "").strip()
 _google_client_secret = os.getenv("GOOGLE_OAUTH_CLIENT_SECRET", "").strip()
 if bool(_google_client_id) != bool(_google_client_secret):
     raise RuntimeError(
-        "GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET must be configured together."
+        "GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET must be configured "
+        "together."
     )
 SOCIALACCOUNT_PROVIDERS = {}
 if _google_client_id and _google_client_secret:
@@ -394,10 +394,6 @@ CELERY_BEAT_SCHEDULE = {
         "task": "apps.blog.tasks.publish_due_scheduled_posts",
         "schedule": 60,
     },
-    "blog-process-queued-topics": {
-        "task": "apps.blog.tasks.process_queued_topics",
-        "schedule": 60 * 60,
-    },
     "tags-curate-suggested-tags": {
         "task": "apps.tags.tasks.curate_suggested_tags",
         "schedule": 24 * 60 * 60,
@@ -481,14 +477,6 @@ CELERY_BEAT_SCHEDULE = {
     "devices-purge-old-events": {
         "task": "apps.devices.tasks.purge_old_device_events",
         "schedule": 24 * 60 * 60,
-    },
-    "devices-expire-old-fingerprints": {
-        "task": "apps.devices.tasks.expire_old_fingerprints",
-        "schedule": 24 * 60 * 60,
-    },
-    "devices-cleanup-behavior-insights": {
-        "task": "apps.devices.tasks.cleanup_behavior_insights",
-        "schedule": 7 * 24 * 60 * 60,
     },
 }
 

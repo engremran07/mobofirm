@@ -4,6 +4,8 @@ from django.test import TestCase
 
 from apps.firmwares.chipsets import (
     NormalizedChipset,
+    canonical_vendor,
+    create_chipset_record,
     normalize_chipset,
     resolve_chipset,
     vendor_for,
@@ -81,6 +83,31 @@ class NormalizationTests(TestCase):
                 self.assertIsNone(resolve_chipset(raw))
         self.assertFalse(Chipset.objects.exists())
 
+    def test_rda_and_spreadtrum_resolve_to_unisoc_and_preserve_source_names(self):
+        self.assertEqual(canonical_vendor("RDA"), "Unisoc")
+        self.assertEqual(canonical_vendor("RDA Microelectronics"), "Unisoc")
+        self.assertEqual(canonical_vendor("Spreadtrum"), "Unisoc")
+        self.assertEqual(canonical_vendor("UNISOC"), "Unisoc")
+
+        spreadtrum = resolve_chipset("Spreadtrum SC9863A")
+        rda = resolve_chipset("RDA Microelectronics SC9863A")
+        unisoc = resolve_chipset("UNISOC SC9863A")
+
+        self.assertEqual(spreadtrum.pk, rda.pk)
+        self.assertEqual(spreadtrum.pk, unisoc.pk)
+        spreadtrum.refresh_from_db()
+        self.assertIn("Spreadtrum SC9863A", spreadtrum.aliases)
+        self.assertIn("RDA Microelectronics SC9863A", spreadtrum.aliases)
+        self.assertEqual(spreadtrum.vendor.name, "Unisoc")
+        self.assertTrue(
+            {"spreadtrum", "sprd", "rda", "rda microelectronics"}.issubset(
+                set(spreadtrum.vendor.aliases)
+            )
+        )
+
+        apple = resolve_chipset("Apple A17 Pro")
+        self.assertEqual(apple.vendor.os_family, "ios")
+
 
 class ResolutionTests(TestCase):
     def test_equivalent_spellings_resolve_to_one_chipset_and_remember_aliases(self):
@@ -96,7 +123,7 @@ class ResolutionTests(TestCase):
         self.assertEqual(len(first.aliases), len(set(first.aliases)))
 
     def test_alias_lookup_finds_a_chipset_with_a_different_normalised_name(self):
-        chipset = Chipset.objects.create(
+        chipset = create_chipset_record(
             vendor="MediaTek",
             name="Helio G99",
             slug="mediatek-helio-g99",
@@ -157,7 +184,7 @@ class ModelAndVariantReferenceTests(TestCase):
         self.assertEqual(model.chipset_ref_id, before)
 
     def test_a_reference_without_text_fills_the_display_text(self):
-        chipset = Chipset.objects.create(
+        chipset = create_chipset_record(
             vendor="Google", name="Tensor G3", slug="google-tensor-g3"
         )
 
@@ -179,9 +206,9 @@ class ModelAndVariantReferenceTests(TestCase):
             model=model, name="Global", slug="global", chipset="Snapdragon 680 4G"
         )
 
-        self.assertEqual(Chipset.objects.filter(vendor="Qualcomm").count(), 2)
+        self.assertEqual(Chipset.objects.filter(vendor__name="Qualcomm").count(), 2)
         variant.refresh_from_db()
-        self.assertEqual(_chipset_of(self, variant).vendor, "Qualcomm")
+        self.assertEqual(_chipset_of(self, variant).vendor.name, "Qualcomm")
 
     def test_deleting_a_chipset_keeps_the_device_and_its_text(self):
         model = Model.objects.create(
@@ -203,10 +230,10 @@ class ToolMatchingTests(TestCase):
         self.category = FlashingToolCategory.objects.create(
             name="Matching", slug="matching"
         )
-        self.mediatek = Chipset.objects.create(
+        self.mediatek = create_chipset_record(
             vendor="MediaTek", name="Helio G99", slug="mediatek-helio-g99"
         )
-        self.qualcomm = Chipset.objects.create(
+        self.qualcomm = create_chipset_record(
             vendor="Qualcomm", name="Snapdragon 680", slug="qualcomm-snapdragon-680"
         )
         self.mtk_tool = FlashingTool.objects.create(

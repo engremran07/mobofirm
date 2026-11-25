@@ -13,9 +13,9 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.blog.models import Post, PostStatus
+from apps.firmwares.chipsets import create_chipset_record
 from apps.firmwares.models import (
     Brand,
-    Chipset,
     EngineeringFirmware,
     FlashingGuideTemplate,
     FlashingTool,
@@ -41,14 +41,14 @@ def _world() -> dict[str, Any]:
     """Two brands, two chipsets, devices, firmware, a tool and a guide."""
     samsung = Brand.objects.create(name="Samsung", slug="samsung")
     xiaomi = Brand.objects.create(name="Xiaomi", slug="xiaomi")
-    d9200 = Chipset.objects.create(
+    d9200 = create_chipset_record(
         name="Dimensity 9200",
         slug="mediatek-dimensity-9200",
         vendor="MediaTek",
         aliases=["MT6985"],
         family="Dimensity",
     )
-    sd8 = Chipset.objects.create(
+    sd8 = create_chipset_record(
         name="Snapdragon 8 Gen 2",
         slug="qualcomm-snapdragon-8-gen-2",
         vendor="Qualcomm",

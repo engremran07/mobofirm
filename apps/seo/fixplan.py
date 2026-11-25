@@ -60,6 +60,7 @@ PLANS: dict[str, Plan] = {
             "noindex_in_sitemap",
             "thin_page",
             "inventory_conflict",
+            "indexable_route_missing_from_sitemap",
             "robots_blocked_in_sitemap",
         ),
         INDEXING,

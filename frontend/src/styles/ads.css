@@ -58,6 +58,38 @@
 .ad-zone--s320x100 .ad-zone__body { width: 320px; min-height: 100px; }
 .ad-zone--s320x50 .ad-zone__body { width: 320px; min-height: 50px; }
 
+/* Wide firmware pages can use the outer margins for reserved, non-overlapping rails. */
+.firmware-model-rail {
+  display: none;
+}
+
+.firmware-download-rail {
+  display: none;
+}
+
+@media (min-width: 1720px) {
+  .firmware-model-rail,
+  .firmware-download-rail {
+    position: fixed;
+    z-index: 20;
+    top: 50%;
+    display: block;
+    width: 180px;
+    margin: 0;
+    transform: translateY(-50%);
+  }
+
+  .firmware-model-rail--left,
+  .firmware-download-rail--left {
+    left: max(1rem, calc((100vw - 1320px) / 2 - 180px));
+  }
+
+  .firmware-model-rail--right,
+  .firmware-download-rail--right {
+    right: max(1rem, calc((100vw - 1320px) / 2 - 180px));
+  }
+}
+
 /* Wide units shrink on phones; the reserved height stays so the layout does not move. */
 @media (max-width: 767.98px) {
   .ad-zone--s728x90 .ad-zone__body,

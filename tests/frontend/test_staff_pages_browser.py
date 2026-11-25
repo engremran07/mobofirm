@@ -48,7 +48,7 @@ def staff_user(username: str):
 
 
 def seed_content(author) -> tuple[Tag, Tag, Tag, Comment, Comment]:
-    suggestion = Tag.objects.create(name="Browser suggestion", ai_suggested=True)
+    suggestion = Tag.objects.create(name="Browser suggestion", is_suggested=True)
     source = Tag.objects.create(name="Browser source", is_curated=True)
     target = Tag.objects.create(name="Browser target", is_curated=True)
     post = Post.objects.create(

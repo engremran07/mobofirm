@@ -32,6 +32,9 @@
     --bs-dropdown-header-padding-y: 0.375rem;
 
     max-inline-size: calc(100vw - 1rem);
+    max-block-size: calc(100dvh - 1rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
 
   .dropdown-menu.show { animation: c-pop var(--mf-duration-fast) var(--mf-ease-out); }

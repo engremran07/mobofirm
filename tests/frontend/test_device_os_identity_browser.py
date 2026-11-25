@@ -39,16 +39,14 @@ def signed_in_cookies(user, browser_key: str, *, pending: bool) -> dict[str, str
             user=user,
             browser_key_hash=hash_browser_key(browser_key),
             is_trusted=False,
-            display_name="Windows computer · Chrome",
+            display_name="Windows device",
             os_family="Windows",
             browser_family="Chrome",
         )
     session = client.session
     session["device_registration_prompt"] = {
-        "can_approve": True,
-        "device_name": "Windows computer · Chrome",
+        "device_name": "Windows device",
         "os_family": "Windows",
-        "browser_family": "Chrome",
         "active_devices": 0,
         "max_devices": 3,
     }
@@ -61,7 +59,7 @@ def signed_in_cookies(user, browser_key: str, *, pending: bool) -> dict[str, str
     }
 
 
-def open_page(browser, live_server, cookies, errors):
+def open_page(browser, live_server, cookies, errors, *, init_script: str = ""):
     context = browser.new_context(viewport={"width": 1365, "height": 900})
     context.add_cookies(
         [
@@ -82,6 +80,8 @@ def open_page(browser, live_server, cookies, errors):
     authenticator = cdp.send(
         "WebAuthn.addVirtualAuthenticator", {"options": VIRTUAL_PLATFORM_AUTHENTICATOR}
     )["authenticatorId"]
+    if init_script:
+        context.add_init_script(init_script)
     page.goto(f"{live_server.url}{reverse('devices:my_devices')}", wait_until="load")
     return context, page, cdp, authenticator
 
@@ -117,20 +117,14 @@ def test_register_computer_then_switch_browser_without_a_new_registration(live_s
         context, page, cdp, authenticator_id = open_page(
             browser, live_server, first_cookies, errors
         )
-        dialog = page.get_by_role("dialog", name="Review this computer")
-        register = dialog.get_by_role("button", name="Register this computer")
+        dialog = page.get_by_role("dialog", name="Register this device")
+        register = dialog.get_by_role("button", name="Register this device")
         register.wait_for(state="visible")
-        browser_only = dialog.get_by_role("button", name="Register this browser only")
-        assert browser_only.is_visible()
-        # The computer action is the primary one; the browser-only fallback is secondary.
         assert "btn-primary" in (register.get_attribute("class") or "")
-        assert "btn-primary" not in (browser_only.get_attribute("class") or "")
-        assert not dialog.get_by_role(
-            "button", name="Verify this computer"
-        ).is_visible()
+        assert not dialog.get_by_role("button", name="Verify this device").is_visible()
         register.click()
-        page.get_by_text("This computer is now registered to your account.").wait_for()
-        assert not page.get_by_role("dialog", name="Review this computer").is_visible()
+        page.get_by_text("This device is now registered to your account.").wait_for()
+        assert not page.get_by_role("dialog", name="Register this device").is_visible()
         credentials = cdp.send(
             "WebAuthn.getCredentials", {"authenticatorId": authenticator_id}
         )["credentials"]
@@ -146,15 +140,15 @@ def test_register_computer_then_switch_browser_without_a_new_registration(live_s
             "WebAuthn.addCredential",
             {"authenticatorId": authenticator_id, "credential": credentials[0]},
         )
-        dialog = page.get_by_role("dialog", name="Review this computer")
-        verify = dialog.get_by_role("button", name="Verify this computer")
+        dialog = page.get_by_role("dialog", name="Register this device")
+        verify = dialog.get_by_role("button", name="Verify this device")
         verify.wait_for(state="visible")
         assert "btn-primary" in (verify.get_attribute("class") or "")
         verify.click()
         page.get_by_text(
-            "This computer is recognised. No new registration is needed."
+            "This device is recognised. No new registration is needed."
         ).wait_for()
-        assert not page.get_by_role("dialog", name="Review this computer").is_visible()
+        assert not page.get_by_role("dialog", name="Register this device").is_visible()
         context.close()
         browser.close()
 
@@ -169,3 +163,58 @@ def test_register_computer_then_switch_browser_without_a_new_registration(live_s
         )
     )
     assert linked == {hash_browser_key(first_key), hash_browser_key(second_key)}
+
+
+@pytest.mark.django_db(transaction=True)
+def test_origin_error_explains_same_site_requirement_without_browser_fallback(
+    live_server,
+):
+    user = get_user_model().objects.create_user(
+        username="os-identity-origin-error",
+        email="os-identity-origin-error@example.com",
+        password="Pass-12345!",
+    )
+    EmailAddress.objects.create(
+        user=user, email=user.email, primary=True, verified=True
+    )
+    browser_key = "origin-error-browser-profile-key-for-playwright"
+    cookies = signed_in_cookies(user, browser_key, pending=True)
+    errors: list[str] = []
+    init_script = """
+        Object.defineProperty(navigator.credentials, "create", {
+            configurable: true,
+            value: () => Promise.reject(new DOMException("wrong origin", "SecurityError"))
+        });
+    """
+
+    with sync_playwright() as playwright:
+        try:
+            browser = playwright.chromium.launch()
+        except PlaywrightError as error:
+            pytest.fail(
+                "Chromium is required for the OS-identity browser check. Install it "
+                "with `.venv\\Scripts\\python.exe -m playwright install chromium`.\n"
+                f"{error}"
+            )
+
+        context, page, _, _ = open_page(
+            browser, live_server, cookies, errors, init_script=init_script
+        )
+        dialog = page.get_by_role("dialog", name="Register this device")
+        register = dialog.get_by_role("button", name="Register this device")
+        register.wait_for(state="visible")
+        register.click()
+        page.get_by_text(
+            "This site address cannot use the device credential. Use the same hostname "
+            "you registered with (localhost and 127.0.0.1 are different), and HTTPS "
+            "outside localhost. Browser-only registration is disabled."
+        ).wait_for()
+        assert (
+            dialog.get_by_role("button", name="Register this browser only").count() == 0
+        )
+        assert not errors
+        context.close()
+        browser.close()
+
+    device = Device.objects.get(user=user)
+    assert not device.is_trusted

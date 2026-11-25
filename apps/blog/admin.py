@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any, ClassVar
 
 from django import forms
@@ -18,7 +18,6 @@ from django.utils.translation import gettext_lazy as _
 
 from apps.core.admin_base import (
     BADGE_APPROVAL,
-    BADGE_JOB,
     ActionVariant,
     ConfirmForm,
     ModelAdmin,
@@ -46,7 +45,6 @@ from apps.core.editor.sanitizer import render_rich_text
 
 from . import freshness, guide_requests, shop_gateway
 from .models import (
-    AutoTopic,
     BlogSettings,
     Category,
     CategoryTranslation,
@@ -54,6 +52,7 @@ from .models import (
     Post,
     PostAccess,
     PostRevision,
+    PostSource,
     PostStatus,
     PostTranslation,
     TagTranslation,
@@ -68,7 +67,11 @@ BADGE_POST_STATUS: dict[str, str] = {
     PostStatus.PUBLISHED: "success",
     PostStatus.ARCHIVED: "danger",
 }
-BADGE_SOURCE: dict[str, str] = {"automated": "info", "manual": "success"}
+BADGE_SOURCE: dict[str, str] = {
+    PostSource.AUTOMATED: "info",
+    PostSource.EDITORIAL: "success",
+    PostSource.COMMUNITY_CONTRIBUTION: "warning",
+}
 BADGE_FRESHNESS: dict[str, str] = {
     "stale": "warning",
     "fresh": "success",
@@ -150,7 +153,7 @@ class CategoryAdmin(ModelAdmin):
     search_fields = ("name", "slug")
     list_filter = (("parent", RelatedDropdownFilter),)
     list_select_related = ("parent",)
-    prepopulated_fields: ClassVar[dict[str, tuple[str, ...]]] = {"slug": ("name",)}
+    prepopulated_fields: ClassVar[dict[str, Sequence[str]]] = {"slug": ("name",)}
 
 
 @admin.register(Post)
@@ -175,11 +178,10 @@ class PostAdmin(RichTextAdminMixin, ModelAdmin):
     list_filter = (
         FreshnessFilter,
         ("status", ChoicesDropdownFilter),
-        ("is_community_contribution", BooleanRadioFilter),
+        ("content_source", ChoicesDropdownFilter),
         ("access", ChoicesDropdownFilter),
         ("category", RelatedDropdownFilter),
         ("firmware_brand", RelatedDropdownFilter),
-        ("is_ai_generated", BooleanRadioFilter),
         ("allow_comments", BooleanRadioFilter),
         ("noindex", BooleanRadioFilter),
         ("updated_at", RangeDateTimeFilter),
@@ -191,9 +193,8 @@ class PostAdmin(RichTextAdminMixin, ModelAdmin):
         "body",
         "firmware_brand__name",
         "firmware_model__name",
-        "ai_run_id",
     )
-    prepopulated_fields: ClassVar[dict[str, tuple[str, ...]]] = {"slug": ("title",)}
+    prepopulated_fields: ClassVar[dict[str, Sequence[str]]] = {"slug": ("title",)}
     autocomplete_fields = ("category", "tags")
     raw_id_fields = (
         "author",
@@ -205,7 +206,7 @@ class PostAdmin(RichTextAdminMixin, ModelAdmin):
     readonly_fields = (
         "status",
         "is_published",
-        "is_community_contribution",
+        "content_source",
         "review_note",
         "published_at",
         "published_by",
@@ -256,7 +257,6 @@ class PostAdmin(RichTextAdminMixin, ModelAdmin):
                 "fields": (
                     "status",
                     "is_published",
-                    "is_community_contribution",
                     "review_note",
                     "publish_at",
                     "published_at",
@@ -280,9 +280,7 @@ class PostAdmin(RichTextAdminMixin, ModelAdmin):
                 "fields": (
                     "firmware_brand",
                     "firmware_model",
-                    "is_ai_generated",
-                    "ai_run_id",
-                    "ai_error",
+                    "content_source",
                 ),
             },
         ),
@@ -335,11 +333,9 @@ class PostAdmin(RichTextAdminMixin, ModelAdmin):
             return "stale", str(_("Stale · %(days)s days")) % {"days": days}
         return "fresh", str(_("Fresh"))
 
-    @display(description=_("Source"), ordering="is_ai_generated", label=BADGE_SOURCE)
+    @display(description=_("Source"), ordering="content_source", label=BADGE_SOURCE)
     def content_source(self, obj: Post) -> tuple[str, str]:
-        if obj.is_ai_generated:
-            return "automated", str(_("Automated"))
-        return "manual", str(_("Manual"))
+        return obj.content_source, obj.get_content_source_display()
 
     @display(description=_("Buyers"))
     def buyers(self, obj: Post | None) -> str:
@@ -844,48 +840,6 @@ class GuideRequestAdmin(NoAddModelAdmin):
                 item.pk, reviewer=request.user, reason=reason
             ),
             str(_("Request rejected.")),
-        )
-
-
-@admin.register(AutoTopic)
-class AutoTopicAdmin(ModelAdmin):
-    list_display = (
-        "topic",
-        "status_badge",
-        "post",
-        "retry_count",
-        "created_by",
-        "created_at",
-        "last_attempt_at",
-    )
-    list_filter = (
-        ("status", ChoicesDropdownFilter),
-        "retry_count",
-        ("created_at", RangeDateTimeFilter),
-    )
-    search_fields = ("topic", "post__title")
-    raw_id_fields = ("post", "created_by")
-    list_select_related = ("post", "created_by")
-    actions = ("requeue_selected",)
-
-    @display(description=_("Status"), ordering="status", label=BADGE_JOB)
-    def status_badge(self, obj: AutoTopic) -> tuple[str, str]:
-        return obj.status, obj.get_status_display()
-
-    @action(
-        description=_("Put selected failed topics back in the queue"),
-        permissions=["change"],
-    )
-    def requeue_selected(
-        self, request: HttpRequest, queryset: QuerySet[AutoTopic]
-    ) -> None:
-        updated = queryset.filter(status="failed").update(
-            status="queued", last_error=""
-        )
-        self.message_user(
-            request,
-            _("%(count)d failed topic(s) queued again.") % {"count": updated},
-            messages.SUCCESS if updated else messages.WARNING,
         )
 
 

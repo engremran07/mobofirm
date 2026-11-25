@@ -12,7 +12,7 @@
 //               the native <select> stays the submitted value and the no-JS fallback (hidden by CSS only when scripting is on)
 // Dialog        <dialog data-ui-dialog [data-ui-dialog="offcanvas"]> opened with [data-ui-dialog-open="id"], closed with [data-ui-dialog-close];
 //               the browser provides the focus trap and Escape; this module restores focus, sets data-open and closes on backdrop click.
-import { closePopover } from "./popover.js";
+import { closePopover, popoverPanel, popoverRoot } from "./popover.js";
 
 const emitChange = (element) => element.dispatchEvent(new Event("change", { bubbles: true }));
 
@@ -70,7 +70,7 @@ function syncSelect(select) {
   const root = select.closest("[data-ui-select]");
   if (!(root instanceof HTMLElement)) return;
   const label = root.querySelector("[data-ui-select-value]");
-  for (const option of root.querySelectorAll('[role="option"]')) {
+  for (const option of popoverPanel(root)?.querySelectorAll('[role="option"]') ?? []) {
     const on = option.dataset.value === select.value;
     option.setAttribute("aria-selected", String(on));
     option.toggleAttribute("data-selected", on);
@@ -89,9 +89,13 @@ export function scanSelects(root = document) {
 }
 
 function pickOption(option) {
-  const root = option.closest("[data-ui-select]");
+  const root = popoverRoot(option);
   const select = root?.querySelector("select");
-  if (!(root instanceof HTMLElement) || !(select instanceof HTMLSelectElement)) return;
+  if (
+    !(root instanceof HTMLElement)
+    || !root.hasAttribute("data-ui-select")
+    || !(select instanceof HTMLSelectElement)
+  ) return;
   select.value = option.dataset.value ?? "";
   syncSelect(select);
   emitChange(select);
@@ -127,11 +131,11 @@ function onClick(event) {
     selectRadio(group, radio);
     return;
   }
-  const option = event.target.closest("[data-ui-select] [role='option']");
-  if (option instanceof HTMLElement) {
+  const option = event.target.closest("[role='option']");
+  const optionRoot = option ? popoverRoot(option) : null;
+  if (option instanceof HTMLElement && optionRoot?.hasAttribute("data-ui-select")) {
     pickOption(option);
-    const root = option.closest("[data-ui-popover]");
-    if (root) closePopover(root);
+    closePopover(optionRoot);
     return;
   }
   const open = event.target.closest("[data-ui-dialog-open]");

@@ -134,7 +134,7 @@ def chipset_rows(*, only_missing: bool = False) -> list[GuideRow]:
     chipsets = chipset_class.objects.annotate(
         device_total=Count("models", filter=Q(models__is_active=True), distinct=True)
     ).filter(device_total__gt=0)
-    for chipset in chipsets.order_by("vendor", "name"):
+    for chipset in chipsets.order_by("vendor__name", "name"):
         guide = find_guide_post(chipset_pk=chipset.pk)
         tools = list(
             chipset.flashing_tools.filter(is_active=True).values_list(

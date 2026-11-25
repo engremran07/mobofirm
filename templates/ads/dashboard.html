@@ -41,6 +41,7 @@
 
 {% staff_grid wide=True %}
   {% staff_card title=_("Serving controls") ident="ads-controls-title" cell=True %}
+    {% if can_change_ads_settings %}
     <form method="post" action="{% url 'ads:toggle_settings' %}" class="d-flex flex-column gap-3">
       {% csrf_token %}
       {% staff_check ident="ads-enabled" name="ads_enabled" label=_("Ads enabled") checked=ads_enabled unchecked_value="0" %}
@@ -53,6 +54,9 @@
       {% endstaff_select %}
       <div>{% staff_button _("Save serving settings") tone="primary" %}</div>
     </form>
+    {% else %}
+      <p class="small text-body-secondary mb-0">{% translate "You need the change Ads settings permission to update serving controls." %}</p>
+    {% endif %}
   {% endstaff_card %}
 
   {% staff_card title=_("Test profile") ident="ads-profile-title" cell=True %}
@@ -115,11 +119,13 @@
             <td>{% for item in row.creatives %}<div>{{ item.creative }}{% if item.campaign %} <small class="text-body-secondary">({{ item.campaign }})</small>{% endif %}</div>{% empty %}<small class="text-body-secondary">{% translate "None assigned" %}</small>{% endfor %}</td>
             <td class="text-end">{{ stats.impressions }}</td><td class="text-end">{{ stats.clicks }}</td><td class="text-end">{{ stats.ctr }}%</td>
             <td>
+              {% if can_place %}
               <form method="post" action="{% url 'ads:toggle_settings' %}" class="d-flex flex-wrap gap-2">
                 {% csrf_token %}<input type="hidden" name="placement" value="{{ placement.pk }}">
                 {% if placement.is_enabled %}{% staff_button _("Disable") name="action" value="disable_placement" size="sm" %}{% else %}{% staff_button _("Enable") name="action" value="enable_placement" size="sm" %}{% endif %}
                 {% if placement.locked %}{% staff_button _("Unlock") name="action" value="toggle_lock" size="sm" %}{% else %}{% staff_button _("Lock") name="action" value="toggle_lock" size="sm" %}{% endif %}
               </form>
+              {% endif %}
             </td>
           </tr>
           {% endwith %}
@@ -131,7 +137,7 @@
   {% endif %}
 {% endstaff_section %}
 
-{% url 'admin:ads_campaign_add' as campaign_add_url %}
+{% if can_add_campaign %}{% url 'admin:ads_campaign_add' as campaign_add_url %}{% endif %}
 {% staff_section title=_("Campaigns") ident="campaigns-title" action_url=campaign_add_url action_label=_("New campaign") %}
   {% if campaigns %}
     {% staff_table label=_("Campaigns") %}
@@ -143,11 +149,13 @@
             <td>{{ campaign.get_type_display }}</td>
             <td>{% if campaign.is_active %}{% staff_badge _("Active") "success" %}{% else %}{% staff_badge _("Paused") "warning" %}{% endif %}{% if campaign.locked %} {% staff_badge _("Locked") %}{% endif %}</td>
             <td>
+              {% if can_change_campaigns %}
               <form method="post" action="{% url 'ads:toggle_settings' %}" class="d-flex flex-wrap gap-2">
                 {% csrf_token %}<input type="hidden" name="campaign" value="{{ campaign.pk }}">
                 {% if campaign.is_active %}{% staff_button _("Pause") name="action" value="disable_campaign" size="sm" %}{% else %}{% staff_button _("Activate") name="action" value="enable_campaign" size="sm" %}{% endif %}
                 {% if campaign.locked %}{% staff_button _("Unlock") name="action" value="toggle_campaign_lock" size="sm" %}{% else %}{% staff_button _("Lock") name="action" value="toggle_campaign_lock" size="sm" %}{% endif %}
               </form>
+              {% endif %}
             </td>
           </tr>
         {% endfor %}

@@ -8,12 +8,23 @@ paused (no wallet).
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Protocol
 
 from django.urls import NoReverseMatch, reverse
 
 from apps.core.app_service import AppService
 
 KIND = "guide"
+
+
+class GuideBounty(Protocol):
+    """Fields the blog needs from the bounty app's public summary."""
+
+    title: str
+    label: str
+    url: str
+    credits: int
+    bounty_count: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,3 +58,11 @@ def offer_for(request_id: int) -> BountyOffer:
         new_url=new_url,
         paused_reason=str(reason),
     )
+
+
+def open_guide_bounties(limit: int = 5) -> list[GuideBounty]:
+    """Public, bounded guide bounty summaries from the owning bounty contract."""
+    module = AppService.get("bounty")
+    if module is None:
+        return []
+    return module.open_guide_bounties(limit)

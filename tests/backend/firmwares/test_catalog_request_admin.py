@@ -13,6 +13,7 @@ from django.urls import reverse
 from apps.core import admin_dashboard
 from apps.core.signals import notification_send_requested
 from apps.firmwares import catalog_requests as service
+from apps.firmwares.chipsets import create_chipset_record
 from apps.firmwares.constants import RESERVED_BRAND_SLUGS
 from apps.firmwares.models import (
     Brand,
@@ -260,7 +261,7 @@ class TestApproveDialogs:
 
     def test_model_approval_keeps_brand_and_chipset(self, make_user, catalog, reviewer):
         """The model is created under the requested brand with its chipset."""
-        chipset = Chipset.objects.create(
+        chipset = create_chipset_record(
             vendor="MediaTek", name="Dimensity 9200", slug="mediatek-dimensity-9200"
         )
         pending = service.submit_model_request(
@@ -311,7 +312,7 @@ class TestApproveDialogs:
             DIALOG,
         )
 
-        assert Chipset.objects.filter(vendor="MediaTek").count() == 1
+        assert Chipset.objects.filter(vendor__name="MediaTek").count() == 1
         pending.refresh_from_db()
         assert pending.status == "approved"
 

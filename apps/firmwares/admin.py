@@ -19,7 +19,6 @@ from django.contrib.admin import register
 from django.contrib.admin.utils import unquote
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.db.models import Count, QuerySet
-from django.db.models import Model as DjangoModel
 from django.http import Http404, HttpRequest, HttpResponse
 from django.template.response import SimpleTemplateResponse
 from django.urls import URLPattern, path, reverse
@@ -60,7 +59,7 @@ from apps.core.admin_forms import (
 )
 from apps.core.editor.admin import RichTextAdminMixin
 
-from . import admin_access, admin_requests, admin_shortener
+from . import admin_access, admin_catalog_updates, admin_requests, admin_shortener
 from .admin_access import AccessChangeAdmin
 from .admin_io import (
     BrandResource,
@@ -79,6 +78,7 @@ from .models import (
     Brand,
     ChangelogEntry,
     Chipset,
+    ChipsetVendor,
     DownloadSession,
     DownloadToken,
     EngineeringFirmware,
@@ -104,6 +104,7 @@ from .models import (
     VerificationReport,
 )
 from .package_history import reset_free_allowance
+from .references import type_key_for
 from .services import (
     approve_pending_firmware,
     reject_pending_firmware,
@@ -112,6 +113,7 @@ from .services import (
 from .tool_categories import CategoryIndex
 from .tracking_models import (
     FirmwareDownloadAttempt,
+    FirmwareLinkReport,
     FirmwareStats,
     FirmwareView,
 )
@@ -193,20 +195,26 @@ def external_link(url: str) -> SafeString | str:
 # ---------------------------------------------------------------------------
 
 
+@register(ChipsetVendor)
+class ChipsetVendorAdmin(ModelAdmin):
+    list_display = ("name", "slug", "os_family", "default_flash_mode", "is_active")
+    list_filter = ("os_family", "is_active")
+    search_fields = ("name", "slug", "aliases")
+    readonly_fields = ("created_at", "updated_at")
+
+
 @register(Chipset)
 class ChipsetAdmin(ImportExportMixin, ModelAdmin):
     import_export_resource = ChipsetResource
     actions = EXPORT_ACTIONS
     actions_list = ("import_data", "export_data")
+    list_select_related = ("vendor",)
     list_display = ("display_name", "vendor", "family", "slug", "model_count")
     list_filter = (
         ("vendor", ChoicesDropdownFilter),
         ("family", ChoicesDropdownFilter),
     )
-    search_fields = ("name", "vendor", "family", "slug")
-    prepopulated_fields: ClassVar[dict[str, Sequence[str]]] = {
-        "slug": ("vendor", "name")
-    }
+    search_fields = ("name", "vendor__name", "family", "slug")
     readonly_fields = ("created_at", "updated_at")
 
     @display(description=_("Models"), ordering="models_total")
@@ -224,7 +232,7 @@ class AutomatedBlogLinkAdmin(NoAddModelAdmin):
         ("kind", ChoicesDropdownFilter),
         ("last_synced_at", RangeDateTimeFilter),
     )
-    list_select_related = ("brand", "model", "chipset", "post")
+    list_select_related = ("brand", "model", "chipset__vendor", "post")
     raw_id_fields = ("brand", "model", "chipset", "post")
     readonly_fields = ("content_hash", "last_synced_at", "created_at", "updated_at")
 
@@ -233,16 +241,13 @@ class BrandModelInline(TabularInline):
     model = Model
     fields = ("name", "slug", "model_code", "status", "is_active")
     readonly_fields = ("name", "slug", "model_code", "status", "is_active")
+    extra = 0
+    template = "admin/edit_inline/brand_model_tabular.html"
     show_change_link = True
     can_delete = False
     tab = True
     ordering = ("name",)
     verbose_name_plural = _("Models")
-
-    def has_add_permission(
-        self, request: HttpRequest, obj: DjangoModel | None = None
-    ) -> bool:
-        return False
 
 
 @register(Brand)
@@ -261,7 +266,12 @@ class BrandAdmin(ImportExportMixin, ModelAdmin):
     list_filter = ("is_featured", ("created_at", RangeDateTimeFilter))
     search_fields = ("name", "slug")
     prepopulated_fields: ClassVar[dict[str, Sequence[str]]] = {"slug": ("name",)}
-    readonly_fields = ("created_at", "updated_at", "website_link", "logo_link")
+    readonly_fields = (
+        "created_at",
+        "updated_at",
+        "website_link",
+        "logo_link",
+    )
     ordering = ("name",)
     inlines = (BrandModelInline,)
     fieldsets = (
@@ -277,6 +287,7 @@ class BrandAdmin(ImportExportMixin, ModelAdmin):
                     "website_url",
                     "website_link",
                     "logo_url",
+                    "logo_upload",
                     "logo_link",
                 ),
                 "classes": ["tab"],
@@ -416,7 +427,10 @@ class DeviceModelAdmin(ImportExportMixin, ModelAdmin):
         ),
         (
             _("Media"),
-            {"fields": ("image_url", "image_link"), "classes": ["tab"]},
+            {
+                "fields": ("image_upload", "image_url", "image_link"),
+                "classes": ["tab"],
+            },
         ),
         (
             _("Related"),
@@ -661,7 +675,12 @@ class VariantAdmin(ModelAdmin):
 # Catalogue creation requests: see ``admin_requests`` (registered on import)
 # ---------------------------------------------------------------------------
 
-REGISTERED_ADMIN_MODULES = (admin_requests, admin_access, admin_shortener)
+REGISTERED_ADMIN_MODULES = (
+    admin_catalog_updates,
+    admin_requests,
+    admin_access,
+    admin_shortener,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -742,9 +761,8 @@ class PendingFirmwareAdmin(NoAddModelAdmin):
         "source_type",
         "uploader",
         "decision_badge",
-        "ai_brand",
-        "ai_model",
-        "ai_category",
+        "uploaded_brand",
+        "uploaded_model",
         "package_format",
         "tier_badge",
         "reviewed_by",
@@ -754,17 +772,14 @@ class PendingFirmwareAdmin(NoAddModelAdmin):
         ("admin_decision", ChoicesDropdownFilter),
         ("access_tier", ChoicesDropdownFilter),
         ("source_type", ChoicesDropdownFilter),
-        ("extraction_status", ChoicesDropdownFilter),
-        ("ai_category", ChoicesDropdownFilter),
         ("package_format", ChoicesDropdownFilter),
         "is_password_protected",
         ("created_at", RangeDateTimeFilter),
     )
     search_fields = (
         "original_file_name",
-        "ai_brand",
-        "ai_model",
-        "ai_variant",
+        "uploaded_brand__name",
+        "uploaded_model__name",
         "chipset",
     )
     readonly_fields = (
@@ -819,11 +834,6 @@ class PendingFirmwareAdmin(NoAddModelAdmin):
                     "uploaded_model",
                     "uploaded_variant",
                     "package_format",
-                    "ai_brand",
-                    "ai_model",
-                    "ai_variant",
-                    "ai_category",
-                    "ai_subtype",
                 ),
                 "classes": ["tab"],
             },
@@ -852,7 +862,6 @@ class PendingFirmwareAdmin(NoAddModelAdmin):
                     "reviewed_at",
                     "routed_category",
                     "routed_object_id",
-                    "extraction_status",
                 ),
                 "classes": ["tab"],
             },
@@ -862,11 +871,9 @@ class PendingFirmwareAdmin(NoAddModelAdmin):
             {
                 "fields": (
                     "chipset",
-                    "partitions",
                     "metadata",
                     "is_password_protected",
                     "encrypted_password",
-                    "password_validation_status",
                 ),
                 "classes": ["tab"],
             },
@@ -1806,6 +1813,70 @@ class FirmwareDownloadAttemptAdmin(ReadOnlyModelAdmin):
     @display(description=_("Status"), ordering="status", label=BADGE_STATE)
     def status_badge(self, obj: FirmwareDownloadAttempt) -> str:
         return obj.status
+
+
+@register(FirmwareLinkReport)
+class FirmwareLinkReportAdmin(NoAddModelAdmin):
+    list_display = (
+        "id",
+        "reason",
+        "status",
+        "firmware_page",
+        "content_type",
+        "object_id",
+        "reporter",
+        "created_at",
+    )
+    list_filter = (
+        ("status", ChoicesDropdownFilter),
+        ("reason", ChoicesDropdownFilter),
+        ("created_at", RangeDateTimeFilter),
+    )
+    search_fields = (
+        "firmware_name",
+        "reporter__email",
+        "reporter__username",
+        "details",
+    )
+    readonly_fields = (
+        "content_type",
+        "object_id",
+        "reporter",
+        "reason",
+        "firmware_name",
+        "firmware_page",
+        "details",
+        "created_at",
+        "updated_at",
+    )
+    fields = (
+        "content_type",
+        "object_id",
+        "reporter",
+        "reason",
+        "firmware_name",
+        "firmware_page",
+        "details",
+        "status",
+        "staff_notes",
+        "created_at",
+        "updated_at",
+    )
+    date_hierarchy = "created_at"
+
+    @display(description=_("Firmware"))
+    def firmware_page(self, obj: FirmwareLinkReport) -> str:
+        firmware = obj.firmware
+        if firmware is None:
+            return f"{obj.firmware_name} (record removed)"
+        href = reverse(
+            "firmwares:firmware_detail",
+            kwargs={
+                "firmware_type": type_key_for(firmware),
+                "firmware_id": firmware.pk,
+            },
+        )
+        return format_html('<a href="{}">{}</a>', href, obj.firmware_name)
 
 
 @register(ServedDownload)

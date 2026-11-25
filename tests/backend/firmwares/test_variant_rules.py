@@ -6,6 +6,7 @@ from importlib import import_module
 
 import pytest
 from django.apps import apps as django_apps
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.test import Client
 from django.urls import reverse
@@ -15,6 +16,7 @@ from apps.firmwares.models import Brand, Model, Variant, VariantCreationRequest
 from apps.firmwares.variant_rules import (
     VariantIdentity,
     normalize_variant_code,
+    normalize_variant_codes,
     parse_memory,
     variant_is_required,
 )
@@ -34,6 +36,12 @@ from apps.firmwares.variant_rules import (
 def test_codes_are_trimmed_upper_cased_and_joined(raw, expected):
     """The same code never exists in two spellings."""
     assert normalize_variant_code(raw) == expected
+
+
+def test_model_codes_are_normalized_and_deduplicated_in_first_seen_order():
+    assert normalize_variant_codes(
+        [" sm-s928b ", "SM-S928U", "sm-s928b", "", None]
+    ) == ["SM-S928B", "SM-S928U"]
 
 
 @pytest.mark.parametrize(
@@ -76,6 +84,39 @@ def test_the_label_is_built_from_the_identifying_fields():
 class TestVariantModel:
     """Codes are normalised on save and unique per model ignoring case."""
 
+    def test_model_slug_defaults_to_primary_code_and_falls_back_to_name(self, catalog):
+        coded = Model.objects.create(
+            brand=catalog.brand,
+            name="Galaxy S24",
+            model_codes=["SM-S921U", "SM-S921B"],
+        )
+        unnamed_code = Model.objects.create(
+            brand=catalog.brand,
+            name="Galaxy S24",
+            model_code="SM-S921B",
+        )
+        uncoded = Model.objects.create(
+            brand=catalog.brand,
+            name="Galaxy S24",
+        )
+
+        assert coded.slug == "sm-s921u"
+        assert unnamed_code.slug == "sm-s921b"
+        assert uncoded.slug == "galaxy-s24"
+
+    def test_model_slug_is_regenerated_when_blank_and_saved_partially(self, catalog):
+        model = Model.objects.create(
+            brand=catalog.brand,
+            name="Galaxy S24",
+            slug="temporary",
+        )
+        model.slug = ""
+        model.model_code = "SM-S921B"
+        model.save(update_fields={"model_code"})
+
+        model.refresh_from_db()
+        assert model.slug == "sm-s921b"
+
     def test_the_code_is_normalised_on_save(self, catalog):
         """A lower-case code is stored upper-case."""
         variant = Variant.objects.create(
@@ -84,6 +125,86 @@ class TestVariantModel:
 
         variant.refresh_from_db()
         assert variant.model_code == "AI2401_A"
+
+    def test_model_variant_codes_follow_model_and_variant_codes(self, catalog):
+        catalog.model.model_code = "sm-a"
+        catalog.model.model_codes = ["sm-b", "SM-A"]
+        catalog.model.save(update_fields={"model_code", "model_codes"})
+        catalog.model.refresh_from_db()
+        assert catalog.model.variant_codes == ["SM-A", "SM-B"]
+
+        catalog.variant.model_code = "sm-c"
+        catalog.variant.save(update_fields={"model_code"})
+        catalog.model.refresh_from_db()
+        assert catalog.model.variant_codes == ["SM-A", "SM-B", "SM-C"]
+
+        catalog.variant.delete()
+        catalog.model.refresh_from_db()
+        assert catalog.model.variant_codes == ["SM-A", "SM-B"]
+        assert catalog.model.all_model_codes_display == "SM-A, SM-B"
+
+    def test_active_model_rejects_codes_claimed_by_another_active_model(self, catalog):
+        Model.objects.create(
+            brand=catalog.brand,
+            name="Other Phone",
+            slug="other-phone",
+            model_codes=["sm-x"],
+        )
+        candidate = Model(
+            brand=catalog.brand,
+            name="New Phone",
+            slug="new-phone",
+            variant_codes=[" SM-X "],
+        )
+
+        with pytest.raises(ValidationError, match="already assigned"):
+            candidate.full_clean()
+
+    def test_model_code_claims_ignore_inactive_models_and_other_brands(self, catalog):
+        Model.objects.create(
+            brand=catalog.brand,
+            name="Retired Phone",
+            slug="retired-phone",
+            model_code="SM-X",
+            is_active=False,
+        )
+        other_brand = Brand.objects.create(name="Other Brand", slug="other-brand")
+        Model.objects.create(
+            brand=other_brand,
+            name="Other Phone",
+            slug="other-phone",
+            model_code="SM-Y",
+        )
+
+        Model(
+            brand=catalog.brand,
+            name="New Phone",
+            slug="new-phone",
+            model_code="SM-X",
+        ).full_clean()
+        Model(
+            brand=catalog.brand,
+            name="Different Phone",
+            slug="different-phone",
+            model_code="SM-Y",
+        ).full_clean()
+
+    def test_variant_clean_rejects_a_code_owned_by_another_active_model(self, catalog):
+        Model.objects.create(
+            brand=catalog.brand,
+            name="Other Phone",
+            slug="other-phone",
+            model_code="SM-X",
+        )
+        variant = Variant(
+            model=catalog.model,
+            name="New Variant",
+            slug="new-variant",
+            model_code="sm-x",
+        )
+
+        with pytest.raises(ValidationError, match="already assigned"):
+            variant.full_clean()
 
     def test_a_code_cannot_repeat_within_a_model(self, catalog):
         """The database refuses a second variant with the same code (any case)."""
@@ -96,14 +217,19 @@ class TestVariantModel:
                 model=catalog.model, name="B", slug="b", model_code="ai2401"
             )
 
-    def test_the_same_code_is_allowed_under_another_model(self, catalog):
-        """Uniqueness is per model, not global."""
-        other = Model.objects.create(brand=catalog.brand, name="Other", slug="other")
+    def test_the_same_code_is_allowed_under_another_brand(self, catalog):
+        """A model-code claim is scoped to the brand."""
         Variant.objects.create(
             model=catalog.model, name="A", slug="a", model_code="AI2401"
         )
+        other_brand = Brand.objects.create(name="Other Brand", slug="other-brand")
+        other = Model.objects.create(
+            brand=other_brand, name="Other", slug="other", model_code="AI2401"
+        )
 
-        Variant.objects.create(model=other, name="A", slug="a", model_code="AI2401")
+        variant = Variant(model=other, name="A", slug="a", model_code="AI2401")
+        variant.full_clean()
+        variant.save()
 
         assert Variant.objects.filter(model_code="AI2401").count() == 2
 

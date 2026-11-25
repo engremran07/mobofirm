@@ -27,7 +27,7 @@ class SEOModel(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
     object_id = models.CharField(max_length=64)
     content_object = GenericForeignKey("content_type", "object_id")
     locked = models.BooleanField(default=False)
-    ai_generated = models.BooleanField(default=False)
+    is_generated = models.BooleanField(default=False)
 
     class Meta:
         unique_together = ("content_type", "object_id")
@@ -113,8 +113,6 @@ class LinkableEntity(TimestampedModel):
     entity_type = models.CharField(max_length=100, blank=True, default="")
     url = models.URLField()
     keywords = models.JSONField(default=list, blank=True)
-    embedding = models.BinaryField(null=True, blank=True)
-    vector = models.BinaryField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
 
     class Meta:

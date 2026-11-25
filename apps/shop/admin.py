@@ -774,7 +774,7 @@ class UserQuotaOverrideAdmin(ModelAdmin):
 
     def get_readonly_fields(
         self, request: HttpRequest, obj: UserQuotaOverride | None = None
-    ) -> Sequence[str]:
+    ) -> tuple[str, ...]:
         """The account of an existing override is fixed: change it by granting anew."""
         fields = tuple(super().get_readonly_fields(request, obj))
         return (*fields, "user") if obj is not None else fields

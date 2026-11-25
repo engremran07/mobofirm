@@ -52,8 +52,17 @@ class AuthSurfaceTests(TestCase):
             response,
             f'action="{reverse("users:account_logout")}"',
         )
+        self.assertContains(response, 'data-confirm-dialog="Sign out of your account?"')
         self.assertContains(response, 'name="csrfmiddlewaretoken"')
         self.assertContains(response, "Sign out")
+        for route_name in (
+            "users:dashboard",
+            "users:profile",
+            "wallet:dashboard",
+            "contributions:hub",
+            "users:notifications",
+        ):
+            self.assertContains(response, f'href="{reverse(route_name)}"')
 
     def test_profile_write_redirects_after_saving(self):
         self.client.force_login(self.user)
@@ -88,6 +97,10 @@ class AuthSurfaceTests(TestCase):
             page.content.decode(),
         )
         assert token is not None
+
+        rejected = csrf_client.post(reverse("users:account_logout"))
+        self.assertEqual(rejected.status_code, 403)
+        self.assertIn("_auth_user_id", csrf_client.session)
 
         response = csrf_client.post(
             reverse("users:account_logout"),

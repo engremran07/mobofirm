@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
 from django.contrib.auth.models import Permission
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -20,6 +23,7 @@ from tests.backend.ads.test_zones import make_user
 
 PAGE = "firmwares/library_hub.html"
 DETAIL = "blog/post_detail.html"
+MODEL_DETAIL = "firmwares/model_detail.html"
 
 
 def scan(path: str, **extra) -> AutoAdsScanResult:
@@ -48,9 +52,13 @@ class ZoneDeclarationTests(TestCase):
     def test_zones_come_from_the_page_and_the_layouts_it_extends(self):
         home = placement_manager.declared_zones(PAGE)
         detail = placement_manager.declared_zones(DETAIL)
+        model = placement_manager.declared_zones(MODEL_DETAIL)
+        download = placement_manager.declared_zones("firmwares/download.html")
 
         self.assertLessEqual({"header", "after_content", "footer"}, home)
         self.assertLessEqual({"sidebar", "in_content", "header"}, detail)
+        self.assertLessEqual({"left_rail", "right_rail"}, model)
+        self.assertLessEqual({"left_rail", "right_rail"}, download)
         self.assertNotIn("sidebar", home)
 
     def test_unknown_or_missing_templates_declare_nothing(self):
@@ -76,6 +84,74 @@ class ScannerPathTests(TestCase):
         paths = set(AutoAdsScanResult.objects.values_list("template_path", flat=True))
         self.assertIn(PAGE, paths)
         self.assertFalse([p for p in paths if "\\" in p])
+
+    def test_scanner_ignores_internal_and_non_page_templates(self):
+        templates = {
+            "base.html": "<html><body></body></html>",
+            "blog/post_detail.html": (
+                '{% extends "base.html" %}<article><div class="content">Post</div></article>'
+            ),
+            "shop/pricing.html": (
+                '{% extends "base.html" %}<article><div class="content">Pricing</div></article>'
+            ),
+            "console/dashboard.html": (
+                '{% extends "base.html" %}<article><div class="content">Staff</div></article>'
+            ),
+            "emails/receipt.html": '<article><div class="content">Email</div></article>',
+            "partials/card.html": (
+                '{% extends "base.html" %}<article><div class="content">Partial</div></article>'
+            ),
+            "components/dialog_page.html": (
+                '{% extends "base.html" %}<article><div class="content">Dialog</div></article>'
+            ),
+            "seo/dashboard.html": (
+                '{% extends "base.html" %}<article><div class="content">SEO staff</div></article>'
+            ),
+            "blog/admin/review.html": (
+                '{% extends "base.html" %}<article><div class="content">Staff review</div></article>'
+            ),
+            "internal/dashboard.html": (
+                '{% extends "base.html" %}<article><div class="content">Internal page</div></article>'
+            ),
+        }
+        with TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory) / "templates"
+            for name, contents in templates.items():
+                template = root / name
+                template.parent.mkdir(parents=True, exist_ok=True)
+                template.write_text(contents, encoding="utf-8")
+
+            with override_settings(BASE_DIR=temporary_directory):
+                result = scanner.scan_templates_for_placements()
+
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["scanned"], 2)
+        paths = set(AutoAdsScanResult.objects.values_list("template_path", flat=True))
+        self.assertEqual(paths, {"blog/post_detail.html", "shop/pricing.html"})
+
+    def test_scanner_counts_declared_zones_and_auto_slots_and_finds_page_rails(self):
+        contents = (
+            '{% extends "base.html" %}'
+            '{% ad_zone "left_rail" %}{% ad_zone "right_rail" %}'
+            '{% ad_tile tile %}<article><div class="content">Post</div></article>'
+        )
+        with TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory) / "templates"
+            template = root / "firmwares" / "download.html"
+            template.parent.mkdir(parents=True)
+            template.write_text(contents, encoding="utf-8")
+
+            with override_settings(BASE_DIR=temporary_directory):
+                result = scanner.scan_templates_for_placements()
+
+        self.assertEqual(result["status"], "success")
+        scan_result = AutoAdsScanResult.objects.get(
+            template_path="firmwares/download.html"
+        )
+        self.assertLessEqual(
+            {"left-rail", "right-rail"}, set(scan_result.viewport_zones)
+        )
+        self.assertTrue(scan_result.ad_density_warning)
 
 
 class ManagerAccessTests(ManagerBase):
@@ -424,6 +500,33 @@ class DiscoveryQueueTests(ManagerBase):
 
         self.assertEqual(AdPlacement.objects.filter(zone="sidebar").count(), 1)
 
+    def test_approval_rejects_a_template_that_no_longer_declares_the_zone(self):
+        private_scan = scan("emails/receipt.html")
+        discovery = ScanDiscovery.objects.create(
+            scan_result=private_scan,
+            placement_code="email-content-top",
+            placement_name="Email content top",
+            zone="above-fold",
+            confidence=80,
+        )
+
+        result = scanner.approve_discovery(discovery.pk, self.manager)
+
+        self.assertEqual(result, {"status": "error", "reason": "zone_not_declared"})
+        discovery.refresh_from_db()
+        self.assertEqual(discovery.status, "pending")
+        self.assertEqual(AdPlacement.objects.count(), 0)
+
+    def test_approval_rejects_a_template_excluded_after_scanning(self):
+        TemplateAdExclusion.objects.create(template_path=DETAIL)
+
+        result = scanner.approve_discovery(self.side.pk, self.manager)
+
+        self.assertEqual(result, {"status": "error", "reason": "template_excluded"})
+        self.side.refresh_from_db()
+        self.assertEqual(self.side.status, "pending")
+        self.assertEqual(AdPlacement.objects.count(), 0)
+
     def test_bulk_reject_dialog_lists_then_rejects_only_the_selected(self):
         url = reverse("ads:reject_discoveries") + f"?id={self.top.pk}&id={self.mid.pk}"
 
@@ -466,7 +569,9 @@ class DashboardTests(ManagerBase):
             with self.subTest(name):
                 policy = self.client.get(reverse(name))["Content-Security-Policy"]
                 self.assertNotIn("'unsafe-eval'", policy)
-                self.assertNotIn("'unsafe-inline'", policy.split("script-src")[1].split(";")[0])
+                self.assertNotIn(
+                    "'unsafe-inline'", policy.split("script-src")[1].split(";")[0]
+                )
 
     def test_public_pages_keep_the_strict_policy(self):
         policy = self.client.get("/")["Content-Security-Policy"]
@@ -517,6 +622,7 @@ class DashboardTests(ManagerBase):
 
         self.assertEqual(response.status_code, 200)
         self.assertNotContains(response, "Place ads on templates")
+        self.assertNotContains(response, "Save serving settings")
         self.assertContains(response, "change ad placement")
 
     def test_non_staff_cannot_open_it(self):
@@ -525,6 +631,9 @@ class DashboardTests(ManagerBase):
         self.assertEqual(self.client.get(reverse("ads:dashboard")).status_code, 302)
 
     def test_serving_controls_still_post_and_redirect(self):
+        self.manager.user_permissions.add(
+            Permission.objects.get(codename="change_adssettings")
+        )
         response = self.client.post(
             reverse("ads:toggle_settings"),
             {"ads_enabled": "1", "ad_networks_enabled": "0"},

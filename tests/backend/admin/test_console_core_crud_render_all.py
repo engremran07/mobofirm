@@ -20,7 +20,13 @@ from django.test import Client, RequestFactory
 from django.urls import reverse
 from django.utils import timezone
 
-from apps.core.admin_filters import FieldTextFilter, TextFilter
+from apps.core.admin_filters import (
+    FieldTextFilter,
+    RangeDateFilter,
+    RangeDateTimeFilter,
+    RangeNumericFilter,
+    TextFilter,
+)
 from tests.backend.admin.admin_model_factory import CannotBuild, admin_pk, build_row
 
 REGISTERED: list[type[models.Model]] = sorted(
@@ -127,7 +133,7 @@ def _filter_urls(model_admin, user, base: str) -> list[str]:
             query = choice["query_string"]
             if query and query != "?":
                 urls.append(f"{base}{query}")
-        if hasattr(spec, "name_from"):
+        if isinstance(spec, RangeDateFilter | RangeDateTimeFilter | RangeNumericFilter):
             sample = {
                 "date": "2024-01-01",
                 "datetime-local": "2024-01-01T10:30",

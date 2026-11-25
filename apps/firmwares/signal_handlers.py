@@ -15,6 +15,8 @@ from django.db import DatabaseError, transaction
 from django.db.models.signals import post_delete, post_save, pre_delete, pre_save
 from django.dispatch import receiver
 
+from .variant_rules import normalize_variant_code, normalize_variant_codes
+
 logger = logging.getLogger(__name__)
 
 # Targets collected while a bulk import runs (see ``batched_blog_sync``).
@@ -45,6 +47,7 @@ _BLOG_REFRESH_FIELDS = {
     "build_number",
     "android_version",
     "package_format",
+    "variant_code",
     "file_size",
 }
 
@@ -154,6 +157,27 @@ def _firmware_targets(firmware, *extra_model_ids) -> tuple[set, set, set]:
     return model_ids, brand_ids, chipset_ids - {None}
 
 
+def _sync_model_variant_codes(model_id) -> None:
+    """Keep the transitional model-level code list aligned with legacy variant rows."""
+    from .models import Model, Variant
+
+    model = (
+        Model.objects.filter(pk=model_id).values("model_code", "model_codes").first()
+    )
+    if model is None:
+        return
+    codes = normalize_variant_codes(
+        [
+            model["model_code"],
+            *(model["model_codes"] or []),
+            *Variant.objects.filter(model_id=model_id).values_list(
+                "model_code", flat=True
+            ),
+        ]
+    )
+    Model.objects.filter(pk=model_id).update(variant_codes=codes)
+
+
 @receiver(pre_save, sender=FIRMWARE_SENDERS[0])
 @receiver(pre_save, sender=FIRMWARE_SENDERS[1])
 @receiver(pre_save, sender=FIRMWARE_SENDERS[2])
@@ -248,6 +272,7 @@ def ensure_chipset_tool_categories(instance, raw=False, **kwargs):
 @receiver(post_save, sender="firmwares.Model")
 def handle_model_saved(instance, created, **kwargs):
     """Every model owns one post; saving the model refreshes it and its brand post."""
+    _sync_model_variant_codes(instance.pk)
     chipsets = {instance.chipset_ref_id} - {None}
     schedule_blog_sync(
         model_ids={instance.pk},
@@ -258,8 +283,46 @@ def handle_model_saved(instance, created, **kwargs):
 
 @receiver(post_save, sender="firmwares.Variant")
 def handle_variant_saved(instance, **kwargs):
+    from .models import (
+        EngineeringFirmware,
+        ModifiedFirmware,
+        OfficialFirmware,
+        OtherFirmware,
+        PendingFirmware,
+        ReadbackFirmware,
+        UnclassifiedFirmware,
+    )
+
+    code = normalize_variant_code(instance.model_code)
+    if not code and instance.model_id:
+        code = normalize_variant_code(instance.model.model_code)
+    _sync_model_variant_codes(instance.model_id)
+    if code:
+        for firmware_model in (
+            EngineeringFirmware,
+            ModifiedFirmware,
+            OfficialFirmware,
+            OtherFirmware,
+            ReadbackFirmware,
+            UnclassifiedFirmware,
+        ):
+            firmware_model.objects.filter(variant_id=instance.pk).exclude(
+                variant_code=code
+            ).update(variant_code=code)
+        PendingFirmware.objects.filter(uploaded_variant_id=instance.pk).exclude(
+            variant_code=code
+        ).update(variant_code=code)
     chipsets = {instance.chipset_ref_id} - {None}
     schedule_blog_sync(model_ids={instance.model_id}, chipset_ids=chipsets)
+
+
+@receiver(post_delete, sender="firmwares.Variant")
+def handle_variant_deleted(instance, **kwargs):
+    _sync_model_variant_codes(instance.model_id)
+    schedule_blog_sync(
+        model_ids={instance.model_id},
+        chipset_ids={instance.chipset_ref_id} - {None},
+    )
 
 
 @receiver(post_save, sender="firmwares.Chipset")

@@ -16,8 +16,8 @@ Both encodings are derived from the same object by :func:`content_type_for` and
 :func:`type_key_for`, and both are cleaned by
 :func:`apps.firmwares.firmware_cleanup.purge_firmware_references` when a firmware row
 is deleted, so a deleted file leaves no live row behind. Append-only history
-(:class:`AccessChangeLog`, audit outcomes) is kept on purpose and carries the file name
-it had.
+(:class:`AccessChangeLog`, audit outcomes, and external-link reports) is kept on
+purpose and carries the file name it had.
 
 Optional cross-app references (tags, SEO, comments, storage, shop) are those apps' own
 generic relations; they must clean up on the delete signal this app already sends.

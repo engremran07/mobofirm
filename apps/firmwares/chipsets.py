@@ -9,10 +9,13 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from django.db import IntegrityError, transaction
 from django.utils.text import slugify
+
+if TYPE_CHECKING:
+    from .models import Chipset
 
 MAX_RAW_LENGTH = 256
 
@@ -178,9 +181,56 @@ def canonical_vendor(label: str | None) -> str:
     return vendor_for(label)
 
 
+def resolve_chipset_vendor(label: str | None):
+    """Return the canonical vendor row for a supported or requested vendor label."""
+    from .models import ChipsetVendor
+
+    text = re.sub(r"\s+", " ", (label or "").strip())[:64]
+    if not text:
+        raise ValueError("A chipset vendor name is required.")
+    name = canonical_vendor(text) or text
+    aliases = sorted(
+        alias
+        for alias, canonical in _VENDOR_ALIASES.items()
+        if canonical == name and alias.casefold() != name.casefold()
+    )
+    if text.casefold() != name.casefold() and text not in aliases:
+        aliases.append(text)
+    base_slug = slugify(name)[:72]
+    if not base_slug:
+        raise ValueError("A chipset vendor name must contain letters or numbers.")
+    slug = base_slug
+    suffix = 2
+    while ChipsetVendor.objects.filter(slug=slug).exclude(name=name).exists():
+        slug = f"{base_slug[: 79 - len(str(suffix))]}-{suffix}"
+        suffix += 1
+    vendor, _created = ChipsetVendor.objects.get_or_create(
+        name=name,
+        defaults={
+            "slug": slug,
+            "aliases": aliases,
+            "os_family": "ios" if name == APPLE else "android",
+        },
+    )
+    if aliases:
+        known = {value.casefold() for value in vendor.aliases}
+        additions = [value for value in aliases if value.casefold() not in known]
+        if additions:
+            vendor.aliases = [*vendor.aliases, *additions]
+            vendor.save(update_fields=["aliases", "updated_at"])
+    return vendor
+
+
 def is_supported_vendor(label: str | None) -> bool:
     """True when the vendor label belongs to the phone/tablet SoC allow-list."""
     return bool(canonical_vendor(label))
+
+
+def create_chipset_record(*, vendor: str, **values: Any) -> Chipset:
+    """Create one chipset while resolving its canonical vendor record."""
+    from .models import Chipset
+
+    return Chipset.objects.create(vendor=resolve_chipset_vendor(vendor), **values)
 
 
 def vendor_for(raw: str | None) -> str:
@@ -207,10 +257,14 @@ def resolve_chipset(raw: str | None, *, create: bool = True):
     if normalized is None:
         return None
     raw_text = (raw or "").strip()
-    chipset = Chipset.objects.filter(slug=normalized.slug).first()
+    chipset = (
+        Chipset.objects.select_related("vendor").filter(slug=normalized.slug).first()
+    )
     if chipset is None:
         lowered = raw_text.lower()
-        for candidate in Chipset.objects.filter(vendor=normalized.vendor):
+        for candidate in Chipset.objects.select_related("vendor").filter(
+            vendor__name=normalized.vendor
+        ):
             if lowered in {str(alias).lower() for alias in candidate.aliases}:
                 chipset = candidate
                 break
@@ -219,7 +273,7 @@ def resolve_chipset(raw: str | None, *, create: bool = True):
             return None
         try:
             with transaction.atomic():
-                chipset = Chipset.objects.create(
+                chipset = create_chipset_record(
                     vendor=normalized.vendor,
                     family=normalized.family,
                     name=normalized.name,

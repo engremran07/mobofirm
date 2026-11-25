@@ -20,6 +20,7 @@ class ShareLink:
     label: str
     href: str
     icon: str
+    network: str
 
     @property
     def is_web(self) -> bool:
@@ -54,28 +55,36 @@ def share_links(url: str, title: str) -> list[ShareLink]:
             "X",
             f"https://x.com/intent/post?url={encoded_url}&text={encoded_text}",
             "share-2",
+            "x",
         ),
         ShareLink(
             "Facebook",
             f"https://www.facebook.com/sharer/sharer.php?u={encoded_url}",
             "share-2",
+            "facebook",
         ),
         ShareLink(
             "WhatsApp",
             f"https://wa.me/?text={_encode(f'{text} {url}'.strip())}",
             "message-circle",
+            "whatsapp",
         ),
         ShareLink(
             "Telegram",
             f"https://t.me/share/url?url={encoded_url}&text={encoded_text}",
             "send",
+            "telegram",
         ),
         ShareLink(
             "LinkedIn",
             f"https://www.linkedin.com/sharing/share-offsite/?url={encoded_url}",
             "share-2",
+            "linkedin",
         ),
         ShareLink(
-            "Email", f"mailto:?subject={encoded_text}&body={encoded_url}", "mail"
+            "Email",
+            f"mailto:?subject={encoded_text}&body={encoded_url}",
+            "mail",
+            "email",
         ),
     ]

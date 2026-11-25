@@ -32,7 +32,7 @@ class TagDialogTests(TestCase):
         self.author = user_model.objects.create_user(
             username="td-author", email="td-author@example.test"
         )
-        self.suggestion = Tag.objects.create(name="Odd suggestion", ai_suggested=True)
+        self.suggestion = Tag.objects.create(name="Odd suggestion", is_suggested=True)
         self.client.force_login(self.staff)
 
     def reject_url(self, tag: Tag | None = None) -> str:
@@ -53,7 +53,7 @@ class TagDialogTests(TestCase):
         self.assertEqual(response["HX-Redirect"], reverse("tags:manage"))
         self.suggestion.refresh_from_db()
         self.assertFalse(self.suggestion.is_curated or self.suggestion.is_active)
-        self.assertFalse(self.suggestion.ai_suggested)
+        self.assertFalse(self.suggestion.is_suggested)
 
     def test_rejected_suggestion_leaves_the_queue_and_is_never_auto_curated(self):
         self.client.post(self.reject_url(), **HTMX)

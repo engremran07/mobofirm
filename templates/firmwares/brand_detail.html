@@ -19,6 +19,7 @@
     <div class="cat-head__actions">
       <a class="btn btn-primary" href="{% url 'firmwares:browse' %}?brand={{ brand.slug|urlencode }}"><i data-lucide="download" aria-hidden="true"></i><span class="ms-1">Browse {{ brand.name }} firmware</span></a>
       <a class="btn btn-soft" href="{% url 'blog:brand_posts' brand_slug=brand.slug %}"><i data-lucide="newspaper" aria-hidden="true"></i><span class="ms-1">Articles and guides</span></a>
+      <a class="btn btn-ghost" href="{% url 'firmwares:propose_catalog_update' target_kind='brand' target_id=brand.pk %}">Suggest a correction</a>
       {% if brand_post %}<a class="btn btn-soft" href="{{ brand_post.get_absolute_url }}">{{ brand.name }} catalogue article</a>{% endif %}
       {% if brand.website_url %}<a class="btn btn-ghost" href="{{ brand.website_url }}" rel="noopener noreferrer" target="_blank">Manufacturer website <i data-lucide="external-link" aria-hidden="true"></i></a>{% endif %}
     </div>

@@ -23,7 +23,7 @@ slug_validator = RegexValidator(
 )
 privacy_url_validator = RegexValidator(
     r"^(/[^\s]*|https://[^\s]+)$",
-    _("Use a site path such as /pages/privacy/ or an https:// address."),
+    _("Use a site path such as /help/privacy/ or an https:// address."),
 )
 
 
@@ -80,7 +80,7 @@ class ConsentPolicy(models.Model):
     privacy_url = models.CharField(
         max_length=200,
         blank=True,
-        default="/pages/privacy/",
+        default="/help/privacy/",
         validators=[privacy_url_validator],
         help_text=_("Link to the full privacy policy."),
     )

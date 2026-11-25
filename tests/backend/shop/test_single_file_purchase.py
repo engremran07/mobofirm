@@ -330,7 +330,9 @@ class TestPages:
         )
 
         page = client.get(url)
-        token = re.search(r'name="request_id" value="([0-9a-f]{32})"', page.content.decode())
+        token = re.search(
+            r'name="request_id" value="([0-9a-f]{32})"', page.content.decode()
+        )
         assert token is not None
         done = client.post(url, {"request_id": token.group(1)})
 

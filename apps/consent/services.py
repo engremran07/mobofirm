@@ -409,7 +409,7 @@ def create_draft_policy(
                     or (base.banner_text if base else DEFAULT_BANNER_TEXT),
                     details_text=details_text
                     or (base.details_text if base else DEFAULT_DETAILS_TEXT),
-                    privacy_url=base.privacy_url if base else "/pages/privacy/",
+                    privacy_url=base.privacy_url if base else "/help/privacy/",
                 )
         except IntegrityError:
             logger.info("Consent policy version clash; retrying")

@@ -93,13 +93,20 @@ def firmware_content(
         return None
     brand = _name(getattr(firmware, "brand", None))
     model_obj = getattr(firmware, "model", None)
+    variant_obj = getattr(firmware, "variant", None)
     model = _name(model_obj)
-    variant = _name(getattr(firmware, "variant", None))
+    variant = _name(variant_obj)
     title = " ".join(part for part in (brand, model, variant) if part) or "New firmware"
+    model_chipset = getattr(model_obj, "chipset_ref", None)
+    variant_chipset = getattr(variant_obj, "chipset_ref", None)
+    chipset_ref = variant_chipset or model_chipset
     chipset = str(
-        getattr(firmware, "chipset", "") or getattr(model_obj, "chipset", "") or ""
+        getattr(firmware, "chipset", "")
+        or getattr(variant_chipset, "display_name", "")
+        or getattr(model_chipset, "display_name", "")
+        or getattr(model_obj, "chipset", "")
+        or getattr(variant_obj, "chipset", "")
     )
-    chipset_ref = getattr(model_obj, "chipset_ref", None)
     tier = str(getattr(firmware, "access_tier", "free") or "free")
     build = str(getattr(firmware, "build_number", "") or "")
     return Content(

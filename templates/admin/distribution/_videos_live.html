@@ -52,7 +52,15 @@
         <dl class="c-platform__facts">
           <dt>{% translate "Template" %}</dt><dd>{{ row.pack_label }} · v{{ job.template_version }} · {{ job.preset }} · {% blocktranslate with hook=job.hook %}hook {{ hook }}{% endblocktranslate %}</dd>
           {% if job.duration_ms %}<dt>{% translate "Length" %}</dt><dd>{{ job.duration_seconds }} · {{ job.size_bytes|filesizeformat }}</dd>{% endif %}
-          {% if job.error %}<dt>{% translate "Problem" %}</dt><dd>{{ job.error }}</dd>{% endif %}
+          {% if job.error %}
+            <dt>{% translate "Problem" %}</dt>
+            <dd>
+              <details class="c-video__diagnostic">
+                <summary>{% translate "Show render details" %}</summary>
+                <p class="mb-0 u-break">{{ job.error }}</p>
+              </details>
+            </dd>
+          {% endif %}
           {% if job.decision_note %}<dt>{% translate "Note" %}</dt><dd>{{ job.decision_note }}</dd>{% endif %}
         </dl>
         {% if can_edit %}

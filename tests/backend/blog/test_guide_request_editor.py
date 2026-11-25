@@ -41,7 +41,7 @@ def test_tried_and_description_use_the_editor_and_the_outcome_stays_plain() -> N
     """The long texts are editors; the one-sentence outcome is a plain input."""
     html = str(_form()["tried"]) + str(_form()["description"])
     assert html.count("data-mf-editor-config") == 2
-    assert '&quot;profile&quot;:&quot;guide_request&quot;' in html
+    assert "&quot;profile&quot;:&quot;guide_request&quot;" in html
     assert 'placeholder="e.g. Flashed the stock ROM' in html
     assert "data-mf-editor" not in str(_form()["expected_outcome"])
 
@@ -49,7 +49,7 @@ def test_tried_and_description_use_the_editor_and_the_outcome_stays_plain() -> N
 def test_submitted_markup_is_reduced_to_what_the_profile_allows() -> None:
     """Scripts, handlers and inline styles never survive the form."""
     dirty = (
-        f"<p onclick=\"x()\" style=\"color:red\">{TRIED}</p>"
+        f'<p onclick="x()" style="color:red">{TRIED}</p>'
         "<script>alert(1)</script><p><strong>Bold</strong> <em>step</em></p>"
     )
     form = _form(tried=dirty, description='<p>Hi <a href="javascript:x()">link</a></p>')

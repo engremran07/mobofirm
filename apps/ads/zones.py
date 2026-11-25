@@ -53,6 +53,18 @@ ZONES: tuple[Zone, ...] = (
         "300x250",
     ),
     Zone(
+        "left_rail",
+        "Left page rail",
+        "Tall desktop-only rail in the outer margin of a wide page.",
+        "160x600",
+    ),
+    Zone(
+        "right_rail",
+        "Right page rail",
+        "Tall desktop-only rail in the outer margin of a wide page.",
+        "160x600",
+    ),
+    Zone(
         "in_content",
         "In content",
         "Inside an article or detail page, between sections of the content.",

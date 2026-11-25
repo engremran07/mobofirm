@@ -1,3 +1,5 @@
+"""Developer-local settings layered over the shared base configuration."""
+
 import os
 
 from . import base

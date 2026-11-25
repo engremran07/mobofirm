@@ -1,3 +1,5 @@
+"""ASGI entry point for the Mobofirm Django project."""
+
 import os
 
 from django.core.asgi import get_asgi_application

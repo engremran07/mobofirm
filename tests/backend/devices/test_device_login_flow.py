@@ -63,7 +63,7 @@ def sign_in(member: Any, client: Client | None = None) -> Client:
     return client
 
 
-def approve(client: Client):
+def try_browser_only_approval(client: Client):
     return client.post(
         reverse("devices:acknowledge_new_device"),
         {
@@ -73,27 +73,26 @@ def approve(client: Client):
     )
 
 
-def test_new_browser_is_pending_until_approved_and_notifications_say_so(member):
+def test_new_browser_profile_remains_untrusted_without_a_device_credential(member):
     client = sign_in(member)
 
     device = Device.objects.get(user=member)
     assert not device.is_trusted
-    assert client.session["device_registration_prompt"]["can_approve"] is True
+    assert "device_registration_prompt" in client.session
     assert titles(member) == ["New device awaiting approval"]
     assert "is not registered yet" in Notification.objects.get().message
 
-    response = approve(client)
+    response = try_browser_only_approval(client)
 
-    assert response.status_code == 302
+    assert response.status_code == 403
     device.refresh_from_db()
-    assert device.is_trusted
-    assert "device_registration_prompt" not in client.session
-    assert titles(member) == ["New device awaiting approval", "Device registered"]
+    assert not device.is_trusted
+    assert "device_registration_prompt" in client.session
+    assert titles(member) == ["New device awaiting approval"]
 
 
 def test_the_same_browser_signing_in_again_is_not_a_new_device(member):
     client = sign_in(member)
-    approve(client)
     client.get(reverse("users:account_logout"))
     cookie = client.cookies[DEVICE_COOKIE_NAME].value
 
@@ -102,8 +101,8 @@ def test_the_same_browser_signing_in_again_is_not_a_new_device(member):
     sign_in(member, again)
 
     assert Device.objects.filter(user=member).count() == 1
-    assert "device_registration_prompt" not in again.session
-    assert titles(member) == ["New device awaiting approval", "Device registered"]
+    assert "device_registration_prompt" in again.session
+    assert titles(member) == ["New device awaiting approval"]
 
 
 def test_full_allowance_cannot_approve_and_never_claims_a_registration(
@@ -114,16 +113,55 @@ def test_full_allowance_cannot_approve_and_never_claims_a_registration(
 
     client = sign_in(member)
 
-    prompt = client.session["device_registration_prompt"]
-    assert prompt["can_approve"] is False
-    response = approve(client)
-    assert response.status_code == 302
-    assert response["Location"] == reverse("devices:my_devices")
+    response = try_browser_only_approval(client)
+    assert response.status_code == 403
     assert not Device.objects.get(
         user=member, browser_key_hash__gt="", is_trusted=False
     ).is_trusted
     assert active_devices_queryset(member).count() == 1
     assert "Device registered" not in titles(member)
+
+
+def test_platform_credential_can_be_verified_after_a_device_slot_is_freed(
+    member, approve_browsers, settings
+):
+    settings.SHOP_FREE_DEVICE_LIMIT = 1
+    approve_browsers(member, 1)
+    client = sign_in(member)
+    authenticator = PlatformAuthenticator()
+    csrf = csrf_token(client, reverse("devices:my_devices"))
+    options = post(
+        client, "os_options", {"purpose": "register"}, HTTP_X_CSRFTOKEN=csrf
+    ).json()
+
+    registered = post(
+        client,
+        "os_register",
+        authenticator.create(options),
+        HTTP_X_CSRFTOKEN=csrf,
+    )
+
+    assert registered.status_code == 200
+    assert registered.json()["approved"] is False
+    pending = Device.objects.get(user=member, os_credential_id_hash__gt="")
+    assert not pending.is_trusted
+
+    Device.objects.filter(user=member, is_trusted=True).update(is_trusted=False)
+    options = post(
+        client, "os_options", {"purpose": "verify"}, HTTP_X_CSRFTOKEN=csrf
+    ).json()
+    verified = post(
+        client,
+        "os_verify",
+        authenticator.get(options),
+        HTTP_X_CSRFTOKEN=csrf,
+    )
+
+    assert verified.status_code == 200
+    assert verified.json()["approved"] is True
+    pending.refresh_from_db()
+    assert pending.is_trusted
+    assert active_devices_queryset(member).count() == 1
 
 
 def test_os_registered_account_signs_in_from_another_browser_without_a_new_device(

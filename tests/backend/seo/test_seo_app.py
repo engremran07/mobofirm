@@ -15,6 +15,7 @@ from django.utils import timezone
 from apps.blog.models import Post, PostStatus
 from apps.core.models import AppRegistry
 from apps.core.utils import feature_flags
+from apps.firmwares.models import Brand, Model, OfficialFirmware
 from apps.pages.models import Page
 from apps.seo import models as seo_models
 from apps.seo import sitemap_registry
@@ -121,13 +122,47 @@ class SitemapRegistryTests(TestCase):
         self.assertIn("http://testserver/sitemap-pages-1.xml", locations)
         self.assertNotIn("http://testserver/sitemap-firmware-1.xml", locations)
 
+    def test_human_sitemap_is_live_categorized_and_excludes_private_routes(self):
+        brand = Brand.objects.create(name="Sitemap Brand", slug="sitemap-brand")
+        model = Model.objects.create(
+            brand=brand,
+            name="Sitemap Phone",
+            slug="sitemap-phone",
+            is_active=True,
+        )
+        OfficialFirmware.objects.create(
+            original_file_name="sitemap-firmware.zip",
+            stored_file_path="/firmware/sitemap-firmware.zip",
+            brand=brand,
+            model=model,
+            is_verified=True,
+        )
+
+        response = self.client.get(reverse("seo_public:human_sitemap"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Explore")
+        self.assertContains(response, "Devices and firmware")
+        self.assertContains(response, "Blog and community")
+        self.assertContains(response, "About")
+        self.assertContains(response, "Indexed post")
+        self.assertContains(response, "Sitemap Brand")
+        self.assertContains(response, "Sitemap Phone")
+        self.assertContains(response, "/site-map/")
+        self.assertNotContains(response, "/admin/")
+        self.assertNotContains(response, "/accounts/login/")
+        self.assertEqual(
+            self.client.head(reverse("seo_public:human_sitemap")).status_code,
+            200,
+        )
+
     def test_section_sitemap_contains_published_content_only(self):
         Page.objects.create(slug="draft-page", title="Draft", content="x")
 
         pages = self.client.get("/sitemap-pages-1.xml")
         blog = self.client.get("/sitemap-blog-1.xml")
 
-        self.assertContains(pages, "/pages/about/")
+        self.assertContains(pages, "/help/about/")
         self.assertNotContains(pages, "draft-page")
         self.assertContains(blog, "/blog/indexed-post/")
 
@@ -155,6 +190,19 @@ class SitemapRegistryTests(TestCase):
 
         self.assertEqual(self.client.get("/sitemap.xml").status_code, 404)
         self.assertNotContains(self.client.get("/robots.txt"), "Sitemap:")
+
+    def test_footer_links_to_xml_sitemap_only_when_sitemap_is_enabled(self):
+        response = self.client.get("/")
+        self.assertContains(
+            response,
+            f'<a href="{reverse("seo_public:sitemap")}">XML sitemap</a>',
+            html=True,
+        )
+
+        row = SEOSettings.get_solo()
+        row.sitemap_enabled = False
+        row.save()
+        self.assertNotContains(self.client.get("/"), "XML sitemap")
 
     def test_robots_txt_points_to_the_sitemap_and_blocks_private_areas(self):
         response = self.client.get("/robots.txt")
@@ -230,4 +278,4 @@ class SeoIntegrationTests(TestCase):
     def test_all_models_are_registered_in_the_admin(self):
         for model in (SEOSettings, Redirect, LinkableEntity, SEOModel):
             with self.subTest(model=model.__name__):
-                self.assertIn(model, admin.site._registry)
+                self.assertTrue(admin.site.is_registered(model))

@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-import io
-import stat
 import tempfile
-import zipfile
 from pathlib import Path
 from typing import Any
 from unittest.mock import patch
@@ -28,13 +25,7 @@ from apps.firmwares.models import (
 )
 from apps.firmwares.services import (
     FirmwareUploadError,
-    attempt_extraction,
     handle_upload,
-)
-
-AI_STUB = patch(
-    "apps.firmwares.ai_analysis.FirmwareAIAnalyzer._ai_based_analysis",
-    return_value={"confidence": 0.0, "method": "ai"},
 )
 
 
@@ -130,84 +121,27 @@ class UploadValidationTests(StorageTestCase):
 
 
 class ArchiveInspectionTests(StorageTestCase):
-    def build_zip(self, members):
-        buffer = io.BytesIO()
-        with zipfile.ZipFile(buffer, "w") as archive:
-            for info, data in members:
-                archive.writestr(info, data)
-        return buffer.getvalue()
-
-    def protected_pending(self, payload):
-        pending = self.upload(content=payload, is_password_protected=True)
-        return pending
-
-    def test_a_clean_archive_validates_without_extracting_anything(self):
-        payload = self.build_zip([("boot.img", b"boot"), ("system.img", b"system")])
-        pending = self.protected_pending(payload)
-
-        attempt_extraction(pending)
-
-        pending.refresh_from_db()
-        self.assertEqual(pending.extraction_status, "success")
-        self.assertEqual(pending.password_validation_status, "valid")
-        self.assertEqual(
-            sorted(
-                path.name for path in Path(pending.stored_file_path).parent.iterdir()
+    def test_upload_stores_archive_bytes_without_opening_or_inspecting_them(self):
+        payload = b"not a parsed archive"
+        with (
+            patch(
+                "zipfile.is_zipfile",
+                side_effect=AssertionError("upload must not inspect archive bytes"),
             ),
-            [Path(pending.stored_file_path).name],
-        )
+            patch(
+                "zipfile.ZipFile",
+                side_effect=AssertionError("upload must not open archive contents"),
+            ),
+        ):
+            pending = self.upload(
+                content=payload,
+                is_password_protected=True,
+                password="reviewer-provided-password",
+            )
 
-    def test_traversal_symlink_and_absolute_members_fail_validation(self):
-        link = zipfile.ZipInfo("link")
-        link.create_system = 3
-        link.external_attr = (stat.S_IFLNK | 0o777) << 16
-        cases = {
-            "traversal": [("../evil.txt", b"x")],
-            "sibling-prefix": [("../" + self.root.name + "-evil/x.txt", b"x")],
-            "absolute": [("/etc/passwd", b"x")],
-            "symlink": [(link, b"/etc/passwd")],
-        }
-        for label, members in cases.items():
-            with self.subTest(label=label):
-                pending = self.protected_pending(self.build_zip(members))
-
-                attempt_extraction(pending)
-
-                pending.refresh_from_db()
-                self.assertEqual(pending.extraction_status, "failed")
-                self.assertEqual(pending.password_validation_status, "invalid")
-
-    @override_settings(FIRMWARE_ZIP_MAX_MEMBERS=2)
-    def test_archives_with_too_many_members_fail_validation(self):
-        payload = self.build_zip([(f"part{i}.img", b"x") for i in range(3)])
-        pending = self.protected_pending(payload)
-
-        attempt_extraction(pending)
-
-        pending.refresh_from_db()
-        self.assertEqual(pending.extraction_status, "failed")
-
-    @override_settings(FIRMWARE_ZIP_MAX_TOTAL_BYTES=10)
-    def test_archives_that_expand_too_far_fail_validation(self):
-        payload = self.build_zip([("big.img", b"x" * 100)])
-        pending = self.protected_pending(payload)
-
-        attempt_extraction(pending)
-
-        pending.refresh_from_db()
-        self.assertEqual(pending.extraction_status, "failed")
-
-    def test_non_zip_protected_files_stay_pending_and_unprotected_ones_succeed(self):
-        protected = self.protected_pending(b"not a zip")
-        plain = self.upload(name="plain.zip", content=b"plain")
-
-        attempt_extraction(protected)
-        attempt_extraction(plain)
-
-        protected.refresh_from_db()
-        plain.refresh_from_db()
-        self.assertEqual(protected.extraction_status, "pending")
-        self.assertEqual(plain.extraction_status, "success")
+        self.assertEqual(Path(pending.stored_file_path).read_bytes(), payload)
+        self.assertEqual(pending.file_size, len(payload))
+        self.assertTrue(pending.encrypted_password)
 
 
 class UploadApiTests(StorageTestCase):
@@ -215,7 +149,10 @@ class UploadApiTests(StorageTestCase):
         self.api.force_authenticate(self.user)
         brand = Brand.objects.create(name="Upload Brand", slug="upload-brand")
 
-        with AI_STUB:
+        with patch(
+            "zipfile.ZipFile",
+            side_effect=AssertionError("upload must not inspect archive contents"),
+        ):
             response = self.api.post(
                 reverse("firmwares:firmware-upload"),
                 {

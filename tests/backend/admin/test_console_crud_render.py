@@ -25,11 +25,13 @@ REGISTERED: list[type[models.Model]] = sorted(
     admin.site._registry, key=lambda model: model._meta.label_lower
 )
 
-INLINE_SCRIPT = re.compile(r"<script\b(?![^>]*(?:\bsrc=|type=\"application/json\"))", re.I)
-INLINE_HANDLER = re.compile(r"<[a-z][^>]*\son[a-z]+\s*=", re.I)
-INLINE_STYLE = re.compile(r"<[a-z][^>]*\sstyle\s*=", re.I)
-POST_FORM = re.compile(r"<form\b[^>]*\bmethod=\"post\"", re.I)
-STOCK_ASSET = re.compile(r"/static/admin/(?:js|css)/", re.I)
+INLINE_SCRIPT = re.compile(
+    r"<script\b(?![^>]*(?:\bsrc=|type=\"application/json\"))", re.IGNORECASE
+)
+INLINE_HANDLER = re.compile(r"<[a-z][^>]*\son[a-z]+\s*=", re.IGNORECASE)
+INLINE_STYLE = re.compile(r"<[a-z][^>]*\sstyle\s*=", re.IGNORECASE)
+POST_FORM = re.compile(r"<form\b[^>]*\bmethod=\"post\"", re.IGNORECASE)
+STOCK_ASSET = re.compile(r"/static/admin/(?:js|css)/", re.IGNORECASE)
 NATIVE_DIALOG = re.compile(r"\b(?:confirm|alert|prompt)\(")
 
 
@@ -172,6 +174,7 @@ def test_popup_save_answers_with_the_popup_response_marker(client):
         {
             "name": "Popup Brand",
             "slug": "popup-brand",
+            "shortener_mode": "inherit",
             "_popup": "1",
             # The inline's management form, exactly as the rendered page posts it.
             "models-TOTAL_FORMS": "0",

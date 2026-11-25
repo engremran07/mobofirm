@@ -20,6 +20,7 @@ from apps.site_settings.services import get_site_settings
 
 from .inventory import build_inventory, locate, resolve_path
 from .models import CrawlRun, Issue, PageObservation
+from .policy import is_private_path
 from .rules import SCAN_CODES
 from .siteurls import is_absolute_http
 
@@ -388,18 +389,42 @@ def _head_mismatch(obs: PageObservation) -> list[Finding]:
 
 def analyze_inventory() -> list[Finding]:
     """Checks that need no HTTP: sitemap membership versus indexation policy."""
-    findings = [
-        Finding(
-            "inventory_conflict",
-            ERROR,
-            item.path,
-            f"Sitemap URL conflicts with policy: {conflict}.",
-            key=conflict,
-            details={"page_type": item.page_type, "reason": item.reason},
+    items = build_inventory()
+    findings: list[Finding] = []
+    for item in items:
+        findings.extend(
+            Finding(
+                "inventory_conflict",
+                ERROR,
+                item.path,
+                f"Sitemap URL conflicts with policy: {conflict}.",
+                key=conflict,
+                details={"page_type": item.page_type, "reason": item.reason},
+            )
+            for conflict in item.conflicts
         )
-        for item in build_inventory()
-        for conflict in item.conflicts
-    ]
+        canonical = urlsplit(item.canonical)
+        if (
+            item.source == "urlconf"
+            and item.indexable
+            and not item.in_sitemap
+            and not is_private_path(item.path)
+            and canonical.path == item.path
+            and not canonical.query
+        ):
+            findings.append(
+                Finding(
+                    "indexable_route_missing_from_sitemap",
+                    WARNING,
+                    item.path,
+                    "An indexable canonical static route is missing from the sitemap.",
+                    key=item.path,
+                    details={
+                        "page_type": item.page_type,
+                        "canonical": item.canonical,
+                    },
+                )
+            )
     if not get_site_settings().site_url:
         findings.append(
             Finding(
@@ -412,7 +437,13 @@ def analyze_inventory() -> list[Finding]:
     return findings
 
 
-INVENTORY_CODES = frozenset({"inventory_conflict", "site_url_missing"})
+INVENTORY_CODES = frozenset(
+    {
+        "indexable_route_missing_from_sitemap",
+        "inventory_conflict",
+        "site_url_missing",
+    }
+)
 
 
 def upsert_findings(run: CrawlRun | None, findings: list[Finding]) -> set[str]:

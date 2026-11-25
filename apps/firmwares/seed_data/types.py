@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, timedelta
 
-from apps.firmwares.models import FirmwarePackageFormat
+from apps.firmwares.package_formats import FirmwarePackageFormat
 
 
 @dataclass(frozen=True)

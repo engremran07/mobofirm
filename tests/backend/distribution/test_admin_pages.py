@@ -480,6 +480,8 @@ def test_distribution_is_a_top_level_sidebar_group(admin_client):
         "Campaign presets",
         "Content calendar",
         "Approval queue",
+        "Videos",
+        "Media library",
         "Share queue",
         "Link analytics",
         "Distribution log",

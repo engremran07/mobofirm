@@ -15,15 +15,14 @@
   "dependencies": {
     "@alpinejs/csp": "3.17.5",
     "admin-lte": "4.10.2",
-    "bootstrap": "5.3.8",
+    "bootstrap": "5.3.9",
     "htmx.org": "4.0.2",
-    "htmx2": "npm:htmx.org@2.0.11",
     "jquery": "3.7.1",
-    "lucide": "1.66.0",
+    "lucide": "1.77.0",
     "summernote": "0.9.1"
   },
   "devDependencies": {
-    "sass": "^1.108.1",
-    "vite": "8.3.5"
+    "sass": "1.108.2",
+    "vite": "8.3.8"
   }
 }

@@ -79,7 +79,7 @@ a.surface-card:hover,
   box-shadow: var(--mf-shadow);
 }
 
-.surface-card a {
+.surface-card a:not(.btn) {
   color: inherit;
   text-decoration: none;
 }
@@ -327,10 +327,6 @@ a.surface-card:hover,
     box-shadow: var(--mf-shadow);
   }
 
-  /* Without JavaScript the navigation is always visible and in normal flow. */
-  html:not(.js) .mobile-nav-toggle {
-    display: none !important;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -164,7 +164,8 @@ export function registerCombobox(Alpine) {
       return true;
     },
     onBeforeRequest(event) {
-      if (event.target !== this.$refs.input) return;
+      const ctx = event.detail.ctx;
+      if (ctx.sourceElement !== this.$refs.input) return;
       const forced = this.forceRequest;
       this.forceRequest = false;
       const hasSelection = this.mode === "pick" && this.value !== "" && this.text === this.selectedLabel;
@@ -179,14 +180,15 @@ export function registerCombobox(Alpine) {
       this.loading = true;
     },
     onConfigRequest(event) {
-      if (event.target !== this.$refs.input || !this.dependsParam) return;
-      event.detail.parameters[`filter.${this.dependsParam}`] = this.parentValue();
+      const ctx = event.detail.ctx;
+      if (ctx.sourceElement !== this.$refs.input || !this.dependsParam) return;
+      ctx.request.body.set(`filter.${this.dependsParam}`, this.parentValue());
     },
     onAfterRequest(event) {
-      if (event.target === this.$refs.input) this.loading = false;
+      if (event.detail.ctx.sourceElement === this.$refs.input) this.loading = false;
     },
     onResults(event) {
-      if (event.detail.target !== this.$refs.list) return;
+      if (event.detail.ctx.target !== this.$refs.list) return;
       this.recentShown = false;
       const count = this.options().length;
       this.activeIndex = -1;

@@ -7,7 +7,14 @@ from django.test import TestCase
 from django.urls import reverse
 from django.utils import timezone
 
-from apps.blog.models import BlogSettings, Category, Post, PostStatus
+from apps.blog.models import (
+    BlogSettings,
+    Category,
+    Post,
+    PostAccess,
+    PostSource,
+    PostStatus,
+)
 from apps.tags.models import Tag
 
 
@@ -99,6 +106,66 @@ class JournalListingTests(JournalTestCase):
             self.assertIn(match.title, titles)
             self.assertNotIn(other.title, titles)
 
+    def test_access_filter_covers_free_featured_and_paid_posts(self):
+        featured = self.make_post("Featured access article", access=PostAccess.FEATURED)
+        paid = self.make_post("Paid access article", access=PostAccess.PAID)
+
+        for access, expected, excluded in (
+            (PostAccess.FREE, self.post, (featured, paid)),
+            (PostAccess.FEATURED, featured, (self.post, paid)),
+            (PostAccess.PAID, paid, (self.post, featured)),
+        ):
+            with self.subTest(access=access):
+                response = self.client.get(
+                    reverse("blog:post_list"), {"access": access}
+                )
+                titles = {card.title for card in response.context["cards"]}
+                self.assertIn(expected.title, titles)
+                self.assertTrue(all(post.title not in titles for post in excluded))
+                self.assertEqual(response.context["filters"].access, access)
+
+        invalid = self.client.get(reverse("blog:post_list"), {"access": "gold"})
+        self.assertEqual(invalid.context["filters"].access, "")
+        invalid_titles = {card.title for card in invalid.context["cards"]} | (
+            {invalid.context["lead"].title}
+            if invalid.context["lead"] is not None
+            else set()
+        )
+        self.assertEqual(
+            invalid_titles,
+            {self.post.title, featured.title, paid.title},
+        )
+
+    def test_sort_filter_exposes_newest_oldest_and_popular_orders(self):
+        now = timezone.now()
+        oldest = self.make_post(
+            "Oldest article",
+            publish_at=now - timedelta(days=3),
+            published_at=now - timedelta(days=3),
+            views_count=1,
+        )
+        popular = self.make_post(
+            "Most popular article",
+            publish_at=now - timedelta(days=2),
+            published_at=now - timedelta(days=2),
+            views_count=100,
+        )
+
+        expectations = (
+            ("recent", self.post.title),
+            ("oldest", oldest.title),
+            ("popular", popular.title),
+        )
+        for sort, first_title in expectations:
+            with self.subTest(sort=sort):
+                response = self.client.get(reverse("blog:post_list"), {"sort": sort})
+                self.assertEqual(response.status_code, 200)
+                self.assertEqual(response.context["cards"][0].title, first_title)
+                self.assertEqual(response.context["filters"].sort, sort)
+        self.assertIn(("recent", "Newest"), response.context["sort_options"])
+        self.assertIn(("oldest", "Oldest"), response.context["sort_options"])
+        self.assertIn(("popular", "Most popular"), response.context["sort_options"])
+
     def test_pagination_keeps_the_active_filters(self):
         category = Category.objects.create(name="Guides")
         for index in range(15):
@@ -130,7 +197,7 @@ class JournalListingTests(JournalTestCase):
 
     def test_only_public_tags_are_rendered_on_cards_and_in_the_cloud(self):
         public = Tag.objects.create(name="Public topic", is_curated=True)
-        hidden = Tag.objects.create(name="Hidden topic", ai_suggested=True)
+        hidden = Tag.objects.create(name="Hidden topic", is_suggested=True)
         self.post.tags.add(public, hidden)
 
         response = self.client.get(reverse("blog:post_list"))
@@ -153,7 +220,9 @@ class JournalListingTests(JournalTestCase):
 
         self.assertFalse(hasattr(settings, "LOCAL_DEMO_PREVIEWS_ENABLED"))
         generated = self.make_post(
-            "Generated review post", status=PostStatus.IN_REVIEW, is_ai_generated=True
+            "Generated review post",
+            status=PostStatus.IN_REVIEW,
+            content_source=PostSource.AUTOMATED,
         )
 
         response = self.client.get(reverse("blog:post_list"))
@@ -237,9 +306,9 @@ class ArticleDetailTests(JournalTestCase):
 
     def test_views_are_counted_once_per_session(self):
         url = self.post.get_absolute_url()
-        browser = {"HTTP_USER_AGENT": "Mozilla/5.0 (X11; Linux) Firefox/130"}
-        self.client.get(url, **browser)
-        self.client.get(url, **browser)
+        browser = {"User-Agent": "Mozilla/5.0 (X11; Linux) Firefox/130"}
+        self.client.get(url, headers=browser)
+        self.client.get(url, headers=browser)
 
         self.post.refresh_from_db()
         self.assertEqual(self.post.views_count, 1)

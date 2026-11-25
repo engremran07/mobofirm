@@ -40,8 +40,12 @@ def seeded_pages(request):
     )
     return {
         "article": post.get_absolute_url(),
-        "firmware": reverse("firmwares:firmware_detail", args=["official", firmware.pk]),
-        "download": reverse("firmwares:firmware_download", args=["official", firmware.pk]),
+        "firmware": reverse(
+            "firmwares:firmware_detail", args=["official", firmware.pk]
+        ),
+        "download": reverse(
+            "firmwares:firmware_download", args=["official", firmware.pk]
+        ),
     }
 
 
@@ -90,6 +94,14 @@ def test_share_links_copy_and_layout_on_articles_and_firmware(
                     link.get_attribute("target") == "_blank"
                     and link.get_attribute("rel") == "noopener noreferrer"
                 ), (kind, name)
+
+            brand_colors = {
+                network: share.locator(
+                    f'[data-share-network="{network}"] .icon'
+                ).evaluate("(icon) => getComputedStyle(icon).color")
+                for network in ("x", "facebook", "whatsapp", "telegram", "linkedin")
+            }
+            assert len(set(brand_colors.values())) == len(brand_colors), brand_colors
 
             # Copy link: the canonical URL lands on the clipboard and a toast confirms.
             share.get_by_role("button", name="Copy link").click()

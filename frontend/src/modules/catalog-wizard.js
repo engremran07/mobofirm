@@ -81,7 +81,7 @@ export function initializeCatalogWizard() {
     window.cancelAnimationFrame(pending);
     pending = window.requestAnimationFrame(() => update(form));
   };
-  ["input", "change", "combobox:select", "combobox:clear", "htmx:afterSwap"].forEach((name) => {
+  ["input", "change", "combobox:select", "combobox:clear", "htmx:after:swap"].forEach((name) => {
     form.addEventListener(name, schedule);
   });
   update(form);

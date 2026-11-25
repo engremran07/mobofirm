@@ -15,17 +15,13 @@ from django.utils import timezone
 
 from apps.ads.api import track_affiliate_click_sync
 from apps.ads.models import (
-    AdCreative,
     AdEvent,
     AdNetwork,
-    AdPlacement,
     AdsSettings,
     AffiliateProduct,
     AffiliateProvider,
-    PlacementAssignment,
 )
 from apps.ads.services import scanner
-from apps.ads.services.ai_optimizer import analyze_performance
 
 logger = logging.getLogger(__name__)
 
@@ -132,123 +128,6 @@ def scan_blog_post_content(self, post_id: int) -> dict[str, Any]:
         raise self.retry(exc=exc, countdown=30)
 
 
-# ==================== AI OPTIMIZATION TASKS ====================
-
-
-@shared_task(
-    acks_late=True,
-    soft_time_limit=600,
-    time_limit=900,
-)
-def ai_optimize_ad_placements() -> dict[str, Any]:
-    """
-    Use AI to analyze ad performance and optimize placements.
-
-    This task:
-    1. Analyzes click-through rates, revenue, and user engagement
-    2. Identifies underperforming placements
-    3. Suggests placement adjustments
-    4. Optionally auto-applies low-risk optimizations
-    """
-    try:
-        settings_obj = AdsSettings.get_solo()
-        if not settings_obj.ai_optimization_enabled:
-            return {"status": "skipped", "reason": "ai_optimization_disabled"}
-
-        # Get performance metrics for last 7 days
-        week_ago = timezone.now() - timedelta(days=7)
-
-        placement_metrics = []
-        for placement in AdPlacement.objects.filter(is_active=True, is_enabled=True):
-            impressions = AdEvent.objects.filter(
-                placement=placement, event_type="impression", created_at__gte=week_ago
-            ).count()
-
-            clicks = AdEvent.objects.filter(
-                placement=placement, event_type="click", created_at__gte=week_ago
-            ).count()
-
-            ctr = (clicks / impressions * 100) if impressions > 0 else 0
-
-            placement_metrics.append(
-                {
-                    "placement_id": placement.pk,
-                    "placement_name": placement.name,
-                    "impressions": impressions,
-                    "clicks": clicks,
-                    "ctr": ctr,
-                }
-            )
-
-        # Get creative-level metrics
-        creative_metrics = []
-        for assignment in PlacementAssignment.objects.filter(
-            is_active=True, is_enabled=True
-        ).select_related("creative"):
-            creative = assignment.creative
-            impressions = AdEvent.objects.filter(
-                creative=creative, event_type="impression", created_at__gte=week_ago
-            ).count()
-
-            clicks = AdEvent.objects.filter(
-                creative=creative, event_type="click", created_at__gte=week_ago
-            ).count()
-
-            ctr = (clicks / impressions * 100) if impressions > 0 else 0
-
-            creative_metrics.append(
-                {
-                    "creative_id": creative.id,
-                    "ctr": ctr,
-                    "impressions": impressions,
-                }
-            )
-
-        # Run AI analysis
-        suggestions = analyze_performance(creative_metrics)
-
-        # Auto-apply safe optimizations if enabled
-        applied = []
-        if settings_obj.ai_optimize_creatives:
-            for suggestion in suggestions:
-                if suggestion.get("action") == "pause" and suggestion.get(
-                    "creative_id"
-                ):
-                    # Pause underperforming creatives (safe operation)
-                    try:
-                        creative = AdCreative.objects.get(
-                            id=suggestion["creative_id"],
-                            locked=False,  # Don't touch locked creatives
-                        )
-                        creative.is_enabled = False
-                        creative.save(update_fields=["is_enabled"])
-                        applied.append(
-                            {
-                                "creative_id": suggestion["creative_id"],
-                                "action": "paused",
-                                "reason": suggestion.get("reason", "Low CTR"),
-                            }
-                        )
-                        logger.info(
-                            "AI paused creative %s: %s",
-                            creative.pk,
-                            suggestion.get("reason"),
-                        )
-                    except AdCreative.DoesNotExist:
-                        pass
-
-        return {
-            "status": "success",
-            "placement_metrics": placement_metrics,
-            "suggestions": suggestions,
-            "applied": applied,
-        }
-
-    except DatabaseError as e:
-        logger.exception("AI optimization failed")
-        return {"status": "error", "error": str(e)}
-
-
 # ==================== AD NETWORK SYNC TASKS ====================
 
 
@@ -348,7 +227,6 @@ def ads_hourly_tasks() -> None:
 def ads_daily_tasks() -> None:
     """Run all daily ads tasks."""
     cleanup_old_events.delay()
-    ai_optimize_ad_placements.delay()
     sync_ad_networks.delay()
     sync_affiliate_products.delay()
 
@@ -437,7 +315,7 @@ def _sync_amazon_products(provider, settings_obj) -> dict[str, Any]:
         return {"status": "paapi_disabled", "products_added": 0, "products_updated": 0}
 
     access_key = settings_obj.amazon_paapi_access_key
-    secret_key = settings_obj.amazon_paapi_secret_key
+    secret_key = settings_obj.get_amazon_paapi_secret_key()
     partner_tag = settings_obj.amazon_paapi_partner_tag
     region = settings_obj.amazon_paapi_region
     marketplace = settings_obj.amazon_paapi_marketplace
@@ -945,13 +823,11 @@ def track_affiliate_click(
     Track affiliate link click for analytics.
     Called via API endpoint when user clicks affiliate product link.
     """
+    del ip_address, user_agent, session_id
     result = track_affiliate_click_sync(
         product_id=product_id,
         user_id=user_id,
         page_url=page_url,
-        ip_address=ip_address,
-        user_agent=user_agent,
-        session_id=session_id,
     )
     if result["status"] == "error":
         raise self.retry(exc=DatabaseError(result["error"]))
@@ -961,7 +837,7 @@ def track_affiliate_click(
 @shared_task
 def update_affiliate_product_rankings() -> dict[str, Any]:
     """
-    Update AI relevance scores for affiliate products.
+    Update deterministic relevance scores for affiliate products.
     Based on click-through rates, conversion data, and targeting accuracy.
     """
     try:
@@ -1009,8 +885,8 @@ def update_affiliate_product_rankings() -> dict[str, Any]:
                 base_score -= 30
 
             # Cap score between 0-100
-            product.ai_relevance_score = max(0, min(100, base_score))
-            product.save(update_fields=["ai_relevance_score"])
+            product.relevance_score = max(0, min(100, base_score))
+            product.save(update_fields=["relevance_score"])
             updated += 1
 
         logger.info("Updated relevance scores for %d products", updated)

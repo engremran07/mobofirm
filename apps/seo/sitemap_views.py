@@ -18,6 +18,7 @@ from django.http import (
     HttpResponse,
     HttpResponsePermanentRedirect,
 )
+from django.shortcuts import render
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.views.decorators.http import require_http_methods
@@ -27,6 +28,7 @@ from apps.site_settings.services import get_site_settings
 
 from . import sitemap_build, wellknown
 from .httpcache import CACHE_CONTROL, conditional
+from .human_sitemap import build_human_sitemap
 from .models import SEOSettings
 from .robots import build_robots, sitemap_enabled
 from .sitemap_registry import get_sitemaps
@@ -40,6 +42,20 @@ TEXT = "text/plain; charset=utf-8"
 SITEMAP_HEADERS = {"X-Robots-Tag": "noindex"}
 
 safe = require_http_methods(["GET", "HEAD"])
+
+
+@require_app_enabled("seo")
+@safe
+def human_sitemap(request: HttpRequest) -> HttpResponse:
+    """Categorized, live sitemap for visitors, built from public route inventory."""
+    return render(
+        request,
+        "core/site_map.html",
+        {
+            "site_name": get_site_settings().site_name,
+            "sections": build_human_sitemap(request),
+        },
+    )
 
 
 def _enabled_row() -> SEOSettings:

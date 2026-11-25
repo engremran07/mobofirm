@@ -59,7 +59,18 @@
     border-block-end: 1px solid var(--mf-border);
 
     @supports (backdrop-filter: blur(1px)) {
-      backdrop-filter: saturate(1.4) blur(12px);
+      isolation: isolate;
+      background: transparent;
+
+      &::before {
+        position: absolute;
+        z-index: -1;
+        inset: 0;
+        background: var(--mf-header-bg);
+        backdrop-filter: saturate(1.4) blur(12px);
+        content: "";
+        pointer-events: none;
+      }
     }
   }
 
@@ -317,7 +328,7 @@
   html:not(.js) .c-nav-tools,
   html:not(.js) .c-nav-toggle .nav-arrow { display: none; }
 
-  // Tools above the menu: filter box, collapse all, expand all, accordion switch
+  // Tools above the menu: filter box and collapse all
   .c-nav-tools {
     display: flex;
     flex: none;

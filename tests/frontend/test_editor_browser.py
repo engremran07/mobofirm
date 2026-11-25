@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from typing import Literal
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -33,7 +34,7 @@ def _context(
     cookies: dict[str, str],
     *,
     width: int = 1365,
-    scheme: str = "light",
+    scheme: Literal["light", "dark"] = "light",
 ) -> BrowserContext:
     context = browser.new_context(
         viewport={"width": width, "height": 900}, color_scheme=scheme
@@ -240,7 +241,7 @@ def test_dark_mode_and_mobile_layout(live_server) -> None:
     assert not failures, failures
 
 
-def _journal() -> tuple[object, dict[str, str]]:
+def _journal() -> tuple[Post, dict[str, str]]:
     """A published article with open comments and a signed-in reader's cookie."""
     user_model = get_user_model()
     author = user_model.objects.create_user(

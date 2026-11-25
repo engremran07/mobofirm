@@ -26,6 +26,7 @@
         <span aria-hidden="true">·</span>{% content_stats post %}
         {% if comments_open %}<span aria-hidden="true">·</span><a href="#comments"><i data-lucide="message-circle" class="icon" aria-hidden="true"></i> {{ comment_count }} comment{{ comment_count|pluralize }}</a>{% endif %}
         {% if can_edit %}<a class="btn btn-soft btn-sm ms-auto" href="{% url 'blog:post_create' %}?edit={{ post.slug }}"><i data-lucide="pencil" class="icon" aria-hidden="true"></i> Edit</a>{% endif %}
+        {% if can_propose_update %}<a class="btn btn-outline-secondary btn-sm{% if not can_edit %} ms-auto{% endif %}" href="{% url 'blog:propose_update' slug=post.slug %}">Suggest an update</a>{% endif %}
       </div>
     </header>
     {% if cover %}

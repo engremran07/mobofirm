@@ -291,21 +291,28 @@ function onSubmit(event) {
 }
 
 function onHtmxConfirm(event) {
-  const { elt, target, issueRequest, question } = event.detail;
-  const submitter = event.detail.triggeringEvent?.submitter;
-  const source =
-    (submitter instanceof Element ? submitter.closest("[data-confirm-dialog]") : null) ??
-    elt.closest("[data-confirm-dialog]");
+  const { ctx, issueRequest, dropRequest } = event.detail;
+  const source = ctx.sourceElement.closest("[data-confirm-dialog]");
+  const question = ctx.confirm;
   const discards =
     hasUnsavedChanges() &&
-    target instanceof Element &&
-    [...dirtyForms].some((form) => !elt.closest("form")?.isSameNode(form) && target.contains(form));
+    ctx.target instanceof Element &&
+    [...dirtyForms].some(
+      (form) =>
+        !ctx.sourceElement.closest("form")?.isSameNode(form) && ctx.target.contains(form),
+    );
   if (!source && !question && !discards) return;
   event.preventDefault();
   (async () => {
-    if ((source || question) && !(await confirmDialog(confirmOptions(source, question)))) return;
-    if (discards && !(await confirmDiscard())) return;
-    issueRequest(true);
+    if ((source || question) && !(await confirmDialog(confirmOptions(source, question)))) {
+      dropRequest();
+      return;
+    }
+    if (discards && !(await confirmDiscard())) {
+      dropRequest();
+      return;
+    }
+    issueRequest();
   })();
 }
 
@@ -503,11 +510,11 @@ export function initializeAppDialogs() {
   });
   document.addEventListener("htmx:confirm", onHtmxConfirm);
   document.addEventListener("dialog:close", onDialogClose);
-  document.addEventListener("htmx:afterRequest", (event) => {
-    if (!event.detail.successful) pendingOpener = null;
+  document.addEventListener("htmx:after:request", (event) => {
+    if (!event.detail.ctx.response?.raw?.ok) pendingOpener = null;
   });
-  document.addEventListener("htmx:beforeSwap", (event) => {
-    const target = event.detail.target;
+  document.addEventListener("htmx:before:swap", (event) => {
+    const target = event.detail.ctx.target;
     if (target instanceof HTMLDialogElement && openers.has(target)) {
       pendingOpener = openers.get(target);
     }

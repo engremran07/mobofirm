@@ -8,6 +8,7 @@ These checks read the built stylesheet, so run ``vite build`` after changing SCS
 from __future__ import annotations
 
 from datetime import timedelta
+from typing import Literal
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -20,7 +21,7 @@ from tests.frontend.browser_support import ready, watch
 from tests.frontend.catalog_browser_support import locked_chromium, seed_catalog
 
 WIDTHS = (360, 768, 1280, 1920)
-SCHEMES = ("light", "dark")
+SCHEMES: tuple[Literal["light"], Literal["dark"]] = ("light", "dark")
 TITLE_LIMIT_PX = 48.5
 HOME_LIMIT_PX = 40.5
 MAX_LINES_AT_PHONE = 4
@@ -144,7 +145,9 @@ def test_public_routes_keep_sane_headings_and_never_overflow(
                         if heading["spills"]:
                             problems.append(f"{label}: h1 spills out of its box")
                         if width == 360 and heading["lines"] > MAX_LINES_AT_PHONE:
-                            problems.append(f"{label}: h1 wraps to {heading['lines']} lines")
+                            problems.append(
+                                f"{label}: h1 wraps to {heading['lines']} lines"
+                            )
                 context.close()
 
     assert not problems, "\n".join(problems)

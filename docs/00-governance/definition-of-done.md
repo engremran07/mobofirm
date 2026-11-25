@@ -21,7 +21,7 @@ This definition applies to backend changes and governance deliverables. Product 
 
 ## Frontend and admin gate
 
-The product owner has approved the initial frontend direction and stack: Django templates, Bootstrap, HTMX, Alpine's CSP-safe runtime, Lucide, and Vite. Within it the owner approved htmx 4.0.2 and AdminLTE 4.10.2 (on Bootstrap 5.3.8) for the staff console (`docs/05-frontend/admin-console.md`; the public site stays on htmx 2.0.11) and Summernote 0.9.1 + jQuery 3.7.1 as the legacy rich-text editor. The user-facing frontend and admin panel share one hybrid, centralized design system and canonical shared static asset source while retaining distinct shells. App-specific additions are namespaced extensions, never copies of shared assets. Final visual identity and detailed design calibration remain subject to review. Large design files are split at the repository file budgets.
+The product owner has approved the frontend direction and stack: Django templates, Bootstrap 5.3.9, htmx 4.0.2, Alpine's CSP-safe runtime, Lucide 1.77.0, and Vite. Public and staff shells share the htmx runtime; the staff console uses AdminLTE 4.10.2. Summernote 0.9.1 + jQuery 3.7.1 remains the approved legacy rich-text editor (`docs/05-frontend/admin-console.md` and `docs/05-frontend/editor.md`). The user-facing frontend and admin panel share one hybrid, centralized design system and canonical shared static asset source while retaining distinct shells. App-specific additions are namespaced extensions, never copies of shared assets. Final visual identity and detailed design calibration remain subject to review. Large design files are split at the repository file budgets.
 
 ## Completion report
 

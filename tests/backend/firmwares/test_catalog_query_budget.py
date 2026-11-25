@@ -13,6 +13,7 @@ from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
 from apps.firmwares.catalog import PUBLIC_FIRMWARE_TYPES
+from apps.firmwares.chipsets import create_chipset_record
 from apps.firmwares.models import Brand, Chipset, Model, Variant
 
 PAGES = {
@@ -39,9 +40,8 @@ class Context:
 def grow(count: int, start: int = 0) -> None:
     """Make sure the catalogue holds ``count`` models (with variants and firmware)."""
     brand, _ = Brand.objects.get_or_create(name="Budget Brand", slug=Context.slug)
-    Chipset.objects.get_or_create(
-        vendor="Budget", name="SoC", slug=Context.chipset_slug
-    )
+    if not Chipset.objects.filter(slug=Context.chipset_slug).exists():
+        create_chipset_record(vendor="Budget", name="SoC", slug=Context.chipset_slug)
     for index in range(start, count):
         model = Model.objects.create(
             brand=brand,

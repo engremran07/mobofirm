@@ -30,6 +30,7 @@ from . import catalog
 from .models import AutomatedBlogLink, Brand, Chipset, FlashingTool, Model
 from .package_formats import APPLE_BRAND_SLUGS, vendor_for_device, vendor_summary
 from .tool_matcher import get_chipset_family, get_primary_flash_tool_name
+from .variant_rules import normalize_variant_codes
 
 logger = logging.getLogger(__name__)
 
@@ -268,10 +269,13 @@ def _firmware_sections(
             )
         parts.append(
             format_html(
+                '<div class="article-table" role="region" tabindex="0" '
+                'aria-label="{} firmware files"><div class="article-table--firmware">'
                 "<h3>{} firmware ({})</h3>"
                 '<table class="table"><thead><tr><th>File</th><th>Variant</th>'
                 "<th>Build</th><th>Android</th><th>Package</th><th>Size</th>"
-                "<th>Download</th></tr></thead><tbody>{}</tbody></table>{}",
+                "<th>Download</th></tr></thead><tbody>{}</tbody></table>{}</div></div>",
+                label,
                 label,
                 len(items),
                 rows,
@@ -364,10 +368,16 @@ def _model_chipsets(model: Model) -> list[Chipset]:
     chipsets: dict[int, Chipset] = {}
     if model.chipset_ref is not None:
         chipsets[model.chipset_ref.pk] = model.chipset_ref
-    for variant in model.variants.select_related("chipset_ref"):
+    for variant in model.variants.select_related("chipset_ref__vendor"):
         if variant.chipset_ref is not None:
             chipsets[variant.chipset_ref.pk] = variant.chipset_ref
-    return list(chipsets.values())
+    return sorted(
+        chipsets.values(),
+        key=lambda chipset: (
+            chipset.vendor.name.casefold(),
+            chipset.name.casefold(),
+        ),
+    )
 
 
 class FirmwareBlogService:
@@ -414,18 +424,50 @@ class FirmwareBlogService:
             device = f"{device} ({marketing})"
         chipsets = _model_chipsets(model)
         firmwares = catalog.get_all_firmwares_for_model(model)
-
-        alt_names = [
-            value
-            for value in (
-                marketing,
-                model.model_code,
+        variants = list(model.variants.order_by("model_code", "name"))
+        variant_codes = tuple(
+            normalize_variant_codes(
+                [
+                    *model.variant_codes,
+                    model.model_code,
+                    *(model.model_codes or ()),
+                    *(variant.model_code for variant in variants),
+                ]
             )
-            if value
-        ]
+        )
+        regions = tuple(
+            dict.fromkeys(
+                value.strip()
+                for value in (
+                    *(model.regions or ()),
+                    *(variant.region for variant in variants),
+                )
+                if value and value.strip()
+            )
+        )
+        board_ids = tuple(
+            dict.fromkeys(
+                variant.board_id.strip()
+                for variant in variants
+                if variant.board_id and variant.board_id.strip()
+            )
+        )
+        carriers = tuple(
+            dict.fromkeys(
+                variant.carrier.strip()
+                for variant in variants
+                if variant.carrier and variant.carrier.strip()
+            )
+        )
+
+        alt_names = [marketing] if marketing else []
         spec_rows = [
-            ("Model code", model.all_model_codes_display),
+            ("Variant codes", ", ".join(variant_codes)),
+            ("Also known as", model.also_known_as),
             ("Codename", model.codename),
+            ("Regions", ", ".join(regions)),
+            ("Board ID", ", ".join(board_ids)),
+            ("Carriers", ", ".join(carriers)),
             ("Launch OS", model.os_version),
             ("Display", model.display_size),
             ("Battery", model.battery),
@@ -459,24 +501,66 @@ class FirmwareBlogService:
                 ),
             )
         chipset_text = chipsets[0].display_name if chipsets else model.chipset
+        siblings = Model.objects.filter(
+            brand=brand, name=model.name, is_active=True
+        ).exclude(pk=model.pk)
+        if model.chipset_ref_id:
+            siblings = siblings.exclude(chipset_ref_id=model.chipset_ref_id)
+        elif model.chipset:
+            siblings = siblings.exclude(chipset__iexact=model.chipset)
+        else:
+            siblings = siblings.exclude(chipset="")
+        sibling_links = format_html_join(
+            ", ",
+            '<a href="{}">{} ({})</a>',
+            (
+                (
+                    reverse(
+                        "firmwares:model_detail",
+                        kwargs={
+                            "brand_slug": brand.slug,
+                            "model_slug": sibling.slug,
+                        },
+                    ),
+                    sibling.display_name,
+                    (
+                        sibling.chipset_ref.display_name
+                        if sibling.chipset_ref is not None
+                        else sibling.chipset
+                    ),
+                )
+                for sibling in siblings.select_related("chipset_ref__vendor").order_by(
+                    "chipset_ref__vendor__name", "chipset_ref__name", "slug"
+                )
+                if sibling.chipset_ref_id or sibling.chipset
+            ),
+        )
+        sibling_section = (
+            format_html("<h3>Related chipset variants</h3><p>{}</p>", sibling_links)
+            if sibling_links
+            else ""
+        )
         body = format_html(
             "<h2>Download {} firmware — all variants</h2>"
             "<p>Approved firmware files for <strong>{}</strong>{}. "
             "This list updates automatically when firmware is added, approved or removed.</p>"
-            '<h3>Device details</h3><table class="table"><tbody>{}{}</tbody></table>'
+            '<h3>Device details</h3><table class="table"><tbody>{}{}</tbody></table>{}'
             "<h3>Firmware downloads by category</h3>{}{}{}{}",
             device,
             device,
             f" (also known as {', '.join(alt_names)})" if alt_names else "",
             spec_html,
             chipset_html,
+            sibling_section,
             _firmware_sections(firmwares, cap=MODEL_FILE_CAP),
             _tools_section(brand, chipsets),
             guide_section(device, chipset_text, brand.name),
             SAFETY_NOTE,
         )
-        title = f"{device} Firmware Download — All Variants"
-        seo_title = f"{brand.name} {model.name} Firmware Download"
+        chipset_label = ", ".join(chipset.display_name for chipset in chipsets)
+        chipset_suffix = f" {chipset_label}" if chipset_label else ""
+        title = f"{device}{chipset_suffix} — All Variants Firmwares & Flashing Guide"
+        seo_title = f"{brand.name} {model.name}{chipset_suffix} Firmware"
         if len(seo_title) > 60:
             seo_title = f"{brand.name} {model.name} Firmware"[:60]
         tag_names = [brand.name, f"{brand.name} {model.name}"]
@@ -488,13 +572,18 @@ class FirmwareBlogService:
         tag_names += ["Firmware", "Download"]
         return Draft(
             title=title[:200],
-            summary=f"Download {device} firmware for all variants."[:1000],
-            body=str(body),
-            slug_base=slugify(f"{brand.slug}-{model.slug}-firmware-download"),
-            seo_title=seo_title,
-            seo_description=f"Download {brand.name} {model.name} firmware files for all variants."[
-                :160
+            summary=f"Download {device}{chipset_suffix} firmware for all variants."[
+                :1000
             ],
+            body=str(body),
+            slug_base=slugify(
+                f"{brand.slug}-{model.slug}-{chipset_label}-all-variants-firmwares"
+            ),
+            seo_title=seo_title,
+            seo_description=(
+                f"Download {brand.name} {model.name}{chipset_suffix} firmware files "
+                "for all variants."
+            )[:160],
             category=cls.ensure_model_category(model),
             brand=brand,
             model=model,
@@ -511,8 +600,9 @@ class FirmwareBlogService:
         )
         chipsets = list(
             Chipset.objects.filter(models__brand=brand)
+            .select_related("vendor")
             .distinct()
-            .order_by("vendor", "name")[:20]
+            .order_by("vendor__name", "name")[:20]
         )
         model_list = format_html_join(
             "",
@@ -655,7 +745,9 @@ class FirmwareBlogService:
         post.category = draft.category
         post.firmware_brand = draft.brand
         post.firmware_model = draft.model
-        post.is_ai_generated = True
+        from apps.blog.models import PostSource
+
+        post.content_source = PostSource.AUTOMATED
 
     @classmethod
     def _sync(cls, kind: str, target, draft: Draft):
@@ -740,7 +832,9 @@ class FirmwareBlogService:
         for owner in (firmware.model if firmware.model_id else None, firmware.variant):
             if owner is not None and owner.chipset_ref_id:
                 chipset_ids.add(owner.chipset_ref_id)
-        for chipset in Chipset.objects.filter(pk__in=chipset_ids):
+        for chipset in Chipset.objects.filter(pk__in=chipset_ids).select_related(
+            "vendor"
+        ):
             posts.append(cls.sync_chipset_post(chipset))
         return [post for post in posts if post is not None]
 
@@ -755,7 +849,7 @@ class FirmwareBlogService:
             cls._safe(cls.sync_brand_post, brand, counts, "brands")
             for model in Model.objects.filter(brand=brand):
                 cls._safe(cls.sync_model_post, model, counts, "models")
-        chipsets = Chipset.objects.all()
+        chipsets = Chipset.objects.select_related("vendor")
         if brand_slug:
             chipsets = chipsets.filter(models__brand__slug=brand_slug).distinct()
         for chipset in chipsets:

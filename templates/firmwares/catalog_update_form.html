@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block title %}Suggest a catalog correction | {{ site_name|default:"Mobofirm" }}{% endblock %}
+{% block content %}
+<div class="site-container cat-page">
+  <div class="row justify-content-center">
+    <div class="col-12 col-lg-8 col-xl-7">
+      {% include "components/page_header.html" with eyebrow="Catalog contribution" title="Suggest a correction" lead="Your proposed metadata stays unchanged on the public catalog until an authorized reviewer approves it." %}
+      <section class="cat-panel mb-4" aria-label="Catalog item">
+        <p class="section-eyebrow mb-1">{{ target_kind|title }}</p>
+        <h2 class="h4 mb-0">{{ target }}</h2>
+      </section>
+      <form method="post" class="cat-panel">
+        {% csrf_token %}
+        {% include "components/form_errors.html" with form=form %}
+        {% for field in form %}
+          {% include "components/form_field.html" with field=field %}
+        {% endfor %}
+        <div class="d-flex flex-wrap gap-2 mt-3">
+          <button class="btn btn-primary" type="submit">Submit for review</button>
+          <a class="btn btn-ghost" href="{{ status_url }}">My catalog proposals</a>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

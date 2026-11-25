@@ -2,7 +2,7 @@
 Flashing guide auto-generation service.
 
 Generates blog posts from FlashingGuideTemplate + Brand/Model combinations.
-Uses templates with placeholder substitution and optional AI enrichment.
+Uses templates with placeholder substitution.
 """
 
 from __future__ import annotations
@@ -13,8 +13,6 @@ from typing import TYPE_CHECKING, Any
 import markdown
 from django.db import transaction
 from django.utils.text import slugify
-
-from apps.core.ai_client import AiClientError
 
 from .models import (
     Brand,
@@ -278,50 +276,17 @@ def _render_template(
     )
 
 
-def _try_ai_enrich(
-    title: str,
-    body: str,
-    brand_name: str,
-    guide_type: str,
-) -> tuple[str, str]:
-    """Optionally enrich guide content with AI. Returns (title, body)."""
-    try:
-        from apps.core import ai_client
-
-        prompt = f"""You are a firmware expert. Improve this flashing guide article.
-Make it more engaging, add technical tips, warnings, and troubleshooting advice.
-Keep the same structure but enrich the content.
-
-Title: {title}
-Brand: {brand_name}
-Guide Type: {guide_type}
-
-Current Body:
-{body[:3000]}
-
-Return the improved body text only (Markdown format). Keep it under 2000 words."""
-
-        enriched = ai_client.generate_answer(question=prompt, user=None)
-        if enriched and len(enriched) > 200:
-            return title, enriched
-    except (AiClientError, OSError, ValueError) as e:
-        logger.debug("AI enrichment skipped: %s", e)
-    return title, body
-
-
 @transaction.atomic
 def generate_guide_for_brand_model(
     template: FlashingGuideTemplate,
     brand: Brand,
     model_obj: Model | None = None,
-    *,
-    use_ai: bool = False,
 ) -> GeneratedFlashingGuide | None:
     """
     Generate a single blog post from a guide template for a brand/model.
     Returns the GeneratedFlashingGuide record, or None if already exists.
     """
-    from apps.blog.models import Post, PostStatus
+    from apps.blog.models import Post, PostSource, PostStatus
 
     if brand.slug in APPLE_BRAND_SLUGS and template.guide_type not in APPLE_GUIDE_TYPES:
         # Apple devices are restored with Apple's own tools; bootloader, root, custom
@@ -379,10 +344,6 @@ def generate_guide_for_brand_model(
         guide_type_display,
     )
 
-    # AI enrichment
-    if use_ai:
-        title, body = _try_ai_enrich(title, body, brand_name, template.guide_type)
-
     # Templates are authored in Markdown; the post body is sanitised HTML
     body = markdown.markdown(body, extensions=["sane_lists"])
 
@@ -404,7 +365,7 @@ def generate_guide_for_brand_model(
         status=PostStatus.DRAFT,
         firmware_brand=brand,
         firmware_model=model_obj,
-        is_ai_generated=use_ai,
+        content_source=PostSource.AUTOMATED,
         publish_at=None,
         published_at=None,
         is_published=False,
@@ -450,7 +411,6 @@ def generate_guide_for_brand_model(
 def generate_guides_for_template(
     template: FlashingGuideTemplate,
     *,
-    use_ai: bool = False,
     limit: int = 50,
 ) -> list[GeneratedFlashingGuide]:
     """
@@ -473,16 +433,14 @@ def generate_guides_for_template(
 
         if models_qs.exists():
             for device_model in models_qs[:limit]:
-                guide = generate_guide_for_brand_model(
-                    template, brand, device_model, use_ai=use_ai
-                )
+                guide = generate_guide_for_brand_model(template, brand, device_model)
                 if guide:
                     results.append(guide)
                     if len(results) >= limit:
                         return results
         else:
             # Generate brand-level guide only
-            guide = generate_guide_for_brand_model(template, brand, None, use_ai=use_ai)
+            guide = generate_guide_for_brand_model(template, brand, None)
             if guide:
                 results.append(guide)
                 if len(results) >= limit:

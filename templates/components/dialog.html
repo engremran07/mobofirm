@@ -17,7 +17,7 @@
   @cancel="onCancel" @close="onClosed" @input="onInput" @keydown="trapFocus" @mousedown="rememberPress" @click="onBackdrop">
   {% if dialog_action %}
   <form method="post" action="{{ dialog_action }}" class="app-dialog__form" novalidate
-    {% if dialog_hx %}hx-post="{{ dialog_action }}" hx-target="closest dialog" hx-swap="outerHTML" hx-disabled-elt="find button[type=submit]"{% endif %}
+    {% if dialog_hx %}hx-post="{{ dialog_action }}" hx-target="closest dialog" hx-swap="outerHTML" hx-disable="find button[type=submit]"{% endif %}
     {% if unsaved_guard %}data-unsaved-guard{% endif %}>
     {% csrf_token %}
   {% else %}

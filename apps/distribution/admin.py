@@ -292,6 +292,12 @@ class ChannelAdmin(ModelAdmin):
             ("videos/", staff_views.videos_page, "videos"),
             ("videos/new/", staff_views.video_create, "video_create"),
             ("videos/bulk/", staff_views.video_bulk, "video_bulk"),
+            ("media-library/", staff_views.media_library, "media_library"),
+            (
+                "media-library/bulk/",
+                staff_views.media_library_bulk,
+                "media_library_bulk",
+            ),
             ("videos/<int:pk>/render/", staff_views.video_render, "video_render"),
             (
                 "videos/<int:pk>/<slug:decision>/decide/",

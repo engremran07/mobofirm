@@ -18,5 +18,6 @@ register_spend_sink(
         app="blog",
         default_credits=0,
         derived=True,
+        url_name="blog:post_list",
     )
 )

@@ -24,7 +24,7 @@ from typing import Any
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 
-from apps.core.utils.crypto_keys import (
+from apps.core.crypto import (
     fernet_key_problem,
     passphrase_problems,
     split_keys,

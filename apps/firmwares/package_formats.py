@@ -225,7 +225,8 @@ def _effective_vendor(vendor: str, brand_slug: str) -> str:
 
 def vendor_of_chipset(chipset: Any) -> str:
     """Canonical vendor of a ``Chipset`` row (or ``""``)."""
-    return canonical_vendor(getattr(chipset, "vendor", "")) if chipset else ""
+    value = getattr(chipset, "vendor", "") if chipset else ""
+    return canonical_vendor(getattr(value, "name", value))
 
 
 def vendor_for_device(

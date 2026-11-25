@@ -26,9 +26,9 @@ from apps.core.search import (
     search_grouped,
     unregister,
 )
+from apps.firmwares.chipsets import create_chipset_record
 from apps.firmwares.models import (
     Brand,
-    Chipset,
     FlashingTool,
     FlashingToolCategory,
     Model,
@@ -46,7 +46,7 @@ User = get_user_model()
 @pytest.fixture(name="catalog")
 def build_catalog():
     brand = Brand.objects.create(name="Zephyrix", slug="zephyrix")
-    chipset = Chipset.objects.create(
+    chipset = create_chipset_record(
         vendor="Quantum", family="Qx", name="Qx 900", slug="quantum-qx-900"
     )
     model = Model.objects.create(

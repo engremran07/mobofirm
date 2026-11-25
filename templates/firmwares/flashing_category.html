@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% load ad_tags %}
 {% block title %}{{ category.name }} flashing tools and guides | {{ site_name|default:"Mobofirm" }}{% endblock %}
 {% block meta_description %}{{ category.description|default:category.name|truncatechars:155 }}{% endblock %}
 {% block content %}
@@ -30,7 +31,7 @@
   {% if guides %}
     <section class="cat-section" aria-labelledby="category-guides-title">
       <div class="cat-section__head"><h2 id="category-guides-title" class="cat-section__title">Guides</h2>{% if guide_total > 12 %}<a href="{{ guides_url }}">All {{ guide_total }} guides</a>{% endif %}</div>
-      <div class="card-grid">{% for guide in guides %}{% include "firmwares/includes/guide_card.html" with guide=guide %}{% endfor %}</div>
+      <div class="card-grid">{% for guide in guides %}{% include "firmwares/includes/guide_card.html" with guide=guide %}{% ad_tile forloop.counter guides|length layout="card" tile="card-ui--article" page="firmwares/flashing_category.html" %}{% endfor %}</div>
     </section>
   {% endif %}
 </div>

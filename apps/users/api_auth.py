@@ -192,6 +192,12 @@ class LoginSerializer(_InputSerializer):
 
 class SignupSerializer(_InputSerializer):
     email = serializers.EmailField(max_length=254)
+    referral_code = serializers.CharField(
+        max_length=20,
+        required=False,
+        allow_blank=True,
+        trim_whitespace=True,
+    )
     password1 = serializers.CharField(
         max_length=128, trim_whitespace=False, write_only=True
     )
@@ -244,6 +250,16 @@ class ApiSignupView(_DjangoRequestAPIView):
         payload = SignupSerializer(data=request.data)
         if not payload.is_valid():
             return Response(payload.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        referral_code = str(payload.validated_data.get("referral_code") or "").strip()
+        if referral_code:
+            from apps.referral import services
+
+            if not services.capture_code(django_request, referral_code):
+                return Response(
+                    {"referral_code": ["That referral code is invalid or inactive."]},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         form = SignupForm(data=payload.validated_data)
         if not form.is_valid():

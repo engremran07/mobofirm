@@ -126,8 +126,8 @@ class SeoReadOnlyAdmin(NoAddModelAdmin):
 
 @register(SEOModel)
 class SEOModelAdmin(ModelAdmin):
-    list_display = ("content_type", "object_id", "locked", "ai_generated", "updated_at")
-    list_filter = ("locked", "ai_generated", ("updated_at", RangeDateTimeFilter))
+    list_display = ("content_type", "object_id", "locked", "is_generated", "updated_at")
+    list_filter = ("locked", "is_generated", ("updated_at", RangeDateTimeFilter))
     search_fields = ("object_id",)
 
 
@@ -163,7 +163,6 @@ class LinkableEntityAdmin(ModelAdmin):
     list_display = ("title", "entity_type", "url", "is_active", "updated_at")
     list_filter = (("entity_type", ChoicesDropdownFilter), "is_active")
     search_fields = ("title", "url")
-    exclude = ("embedding", "vector")
 
 
 @register(LinkSuggestion)

@@ -1,5 +1,5 @@
 {# Contract: node (apps.comments.selectors.CommentNode). Includes itself for replies. #}
-{% load editor_tags %}
+{% load comment_tags editor_tags %}
 <li class="comment comment--d{{ node.depth }}{% if node.is_pending %} comment--pending{% endif %}" id="comment-{{ node.comment.pk }}">
   <span class="avatar avatar--v{{ node.variant }}" aria-hidden="true">{{ node.initials }}</span>
   <div class="comment__main">
@@ -10,7 +10,7 @@
         {% if node.comment.edited_at %}<span class="comment__edited">edited</span>{% endif %}
         {% if node.is_pending %}{% include "components/badge.html" with variant="warning" label="Awaiting review" icon="clock" %}{% endif %}
       </header>
-      <div class="comment__body">{{ node.comment.body|rich_text }}</div>
+      <div class="comment__body">{% comment_rich_text node.comment.body %}</div>
     </div>
     {% if user.is_authenticated and not node.is_pending %}
       <div class="comment__actions">

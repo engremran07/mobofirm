@@ -1,3 +1,5 @@
+"""Isolated test settings that avoid developer and production services."""
+
 import os
 from importlib import import_module
 

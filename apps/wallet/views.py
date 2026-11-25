@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
@@ -15,7 +17,7 @@ from django.views.decorators.http import (
 )
 from django.views.decorators.vary import vary_on_headers
 
-from apps.core.app_service import AppService
+from apps.core.app_service import AppService, app_enabled, registry_flag_names
 from apps.core.decorators import require_app_enabled
 from apps.core.search import list_search_context, search_queryset
 from apps.users.decorators import email_verification_required
@@ -33,6 +35,14 @@ from .models import (
 )
 
 LEDGER_PAGE_SIZE = 20
+
+
+@dataclass(frozen=True)
+class EarnMethod:
+    """A wallet rule paired with its owning app's available destination."""
+
+    rule: RewardRule
+    url: str
 
 
 def _base_context(request: HttpRequest, tab: str) -> dict[str, object]:
@@ -101,12 +111,30 @@ def ledger(request: HttpRequest) -> HttpResponse:
     return render(request, template, context)
 
 
+def _earn_url(rule: RewardRule) -> str:
+    event = registry.reward_events().get(rule.event_key)
+    if event is None or rule.app != event.app:
+        return ""
+    if event.url_name:
+        if event.app not in registry_flag_names() or not app_enabled(event.app):
+            return ""
+        return reverse(event.url_name)
+    if rule.event_key == "ads.rewarded_view_completed" and app_enabled("ads"):
+        ads = AppService.get("ads")
+        offer = ads.rewarded_offer("credits") if ads is not None else {}
+        return str(offer.get("url", "")) if offer.get("enabled") else ""
+    return ""
+
+
 @login_required
 @require_app_enabled("wallet")
 @require_GET
 def earn(request: HttpRequest) -> HttpResponse:
     context = _base_context(request, "earn")
-    context["rules"] = RewardRule.objects.filter(enabled=True).order_by("app", "label")
+    context["rules"] = [
+        EarnMethod(rule, _earn_url(rule))
+        for rule in RewardRule.objects.filter(enabled=True).order_by("app", "label")
+    ]
     promotions = AppService.get("promotions")
     context["offers"] = (
         promotions.offers_for_user(request.user) if promotions is not None else []
@@ -129,9 +157,11 @@ def spend(request: HttpRequest) -> HttpResponse:
             amount = amount if personal is None else personal
         rows.append(
             {
+                "sink_key": price.sink_key,
                 "label": price.label,
                 "credits": amount,
                 "derived": bool(sink and sink.derived),
+                "url": reverse(sink.url_name) if sink and sink.url_name else "",
             }
         )
     context["prices"] = rows

@@ -11,7 +11,7 @@
     </div>
   </header>
   <form class="filter-bar cat-filters" method="get" action="{% url 'firmwares:universal_search' %}"
-        hx-get="{% url 'firmwares:universal_search' %}" hx-trigger="input changed delay:250ms from:find input, search, submit"
+        hx-get="{% url 'firmwares:universal_search' %}" hx-trigger="input changed delay:250ms from:#search-query, search from:#search-query, submit"
         hx-target="#search-results" hx-swap="innerHTML" hx-push-url="true" hx-sync="this:replace" hx-indicator="#device-search-indicator">
     <div class="cat-filters__field cat-filters__field--search"><label class="visually-hidden" for="search-query">Search</label><i data-lucide="search" aria-hidden="true"></i><input id="search-query" class="form-control" type="search" name="q" value="{{ query }}" maxlength="100" autocomplete="off" enterkeyhint="search" data-live-search placeholder="Model, codename, model code, or brand"></div>
     <div class="cat-filters__actions"><button class="btn btn-primary" type="submit">Search</button></div>

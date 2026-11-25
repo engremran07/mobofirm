@@ -18,9 +18,18 @@
     </div>
     <div class="cat-head__actions">
       <a class="btn btn-primary" href="{% url 'firmwares:browse' %}?chipset={{ chipset.slug|urlencode }}"><i data-lucide="download" aria-hidden="true"></i><span class="ms-1">Browse {{ chipset.name }} firmware</span></a>
+      <a class="btn btn-ghost" href="{% url 'firmwares:propose_catalog_update' target_kind='chipset' target_id=chipset.pk %}">Suggest a correction</a>
       {% if chipset_post %}<a class="btn btn-soft" href="{{ chipset_post.get_absolute_url }}">Chipset article</a>{% endif %}
     </div>
   </header>
+
+  {% if chipset.vendor|lower == "unisoc" %}
+  <aside class="alert alert-info mt-3" role="note" aria-labelledby="chipset-alias-title">
+    <h2 class="h6 mb-1" id="chipset-alias-title">About UNISOC naming</h2>
+    <p class="mb-1">RDA Microelectronics merged with Spreadtrum Communications; the combined company rebranded as UNISOC in 2018. These historical names are also recognized in chipset search.</p>
+    {% if chipset.aliases %}<p class="small mb-0"><strong>Known source names:</strong> {% for alias in chipset.aliases|slice:":5" %}<span class="badge text-bg-light me-1">{{ alias }}</span>{% endfor %}</p>{% endif %}
+  </aside>
+  {% endif %}
 
   {% if categories %}
   <section class="cat-section" aria-labelledby="chipset-categories-title">

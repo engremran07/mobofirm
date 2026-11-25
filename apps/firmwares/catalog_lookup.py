@@ -169,9 +169,14 @@ def model_query(name: str) -> Q:
     )
 
 
-def find_model(brand: Brand, name: str) -> Model | None:
-    """The model of ``brand`` matching ``name``, if any."""
-    return Model.objects.filter(model_query(name), brand=brand).first()
+def find_model(
+    brand: Brand, name: str, *, chipset: Chipset | None = None
+) -> Model | None:
+    """The matching brand/model identity, optionally limited to a chipset."""
+    models = Model.objects.filter(model_query(name), brand=brand)
+    if chipset is not None:
+        models = models.filter(chipset_ref=chipset)
+    return models.first()
 
 
 def variant_query(name: str, code: str = "") -> Q:
@@ -195,7 +200,12 @@ def find_chipset(vendor: str, name: str) -> Chipset | None:
     """The chipset with this vendor and name (or slug); any vendor when blank."""
     key = slugify(f"{vendor} {name}")
     if vendor:
-        condition = (Q(vendor__iexact=vendor) & Q(name__iexact=name)) | Q(slug=key)
+        from .chipsets import canonical_vendor
+
+        canonical = canonical_vendor(vendor) or vendor
+        condition = (Q(vendor__name__iexact=canonical) & Q(name__iexact=name)) | Q(
+            slug=key
+        )
     else:
         condition = Q(name__iexact=name) | Q(slug=key)
     return Chipset.objects.filter(condition).first()
@@ -207,6 +217,7 @@ def check_existing(
     *,
     brand: Brand | None = None,
     model: Model | None = None,
+    chipset: Chipset | None = None,
     vendor: str = "",
     code: str = "",
 ) -> ExistenceCheck:
@@ -224,7 +235,11 @@ def check_existing(
     if kind == "chipset":
         return _check_chipset(" ".join((vendor or "").split()), value)
     if kind == "model":
-        return _check_model(brand, value) if brand is not None else ExistenceCheck()
+        return (
+            _check_model(brand, value, chipset=chipset)
+            if brand is not None
+            else ExistenceCheck()
+        )
     if model is None:
         return ExistenceCheck()
     return _check_variant(model, value, variant_code)
@@ -257,7 +272,7 @@ def _check_brand(value: str) -> ExistenceCheck:
 def _check_chipset(vendor: str, value: str) -> ExistenceCheck:
     similar = Chipset.objects.filter(
         _loose(value) | Q(family__icontains=value)
-    ).order_by("vendor", "name")
+    ).order_by("vendor__name", "name")
     return _result(
         find_chipset(vendor, value),
         similar,
@@ -265,17 +280,26 @@ def _check_chipset(vendor: str, value: str) -> ExistenceCheck:
     )
 
 
-def _check_model(brand: Brand, value: str) -> ExistenceCheck:
-    similar = Model.objects.filter(
+def _check_model(
+    brand: Brand, value: str, *, chipset: Chipset | None = None
+) -> ExistenceCheck:
+    models = Model.objects.filter(
         _loose(value)
         | Q(marketing_name__icontains=value)
         | Q(model_code__icontains=value),
         brand=brand,
-    ).order_by("name")
+    )
     pending = ModelCreationRequest.objects.filter(
         status="pending", brand=brand, name__iexact=value
     )
-    return _result(find_model(brand, value), similar, pending)
+    if chipset is not None:
+        models = models.filter(chipset_ref=chipset)
+        pending = pending.filter(chipset=chipset)
+    return _result(
+        find_model(brand, value, chipset=chipset),
+        models.order_by("name"),
+        pending,
+    )
 
 
 def _check_variant(model: Model, value: str, code: str) -> ExistenceCheck:

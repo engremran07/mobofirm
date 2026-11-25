@@ -4,8 +4,8 @@ status: active_engineering_baseline
 product_status: draft_unapproved
 frontend_status: foundation_approved_visual_calibration_open
 approved_frontend_stack:
-  public: django_templates_bootstrap_htmx_2.0.11_alpine_csp_lucide_vite
-  staff_console: adminlte_4.10.2_bootstrap_5.3.8_htmx_4.0.2_alpinejs_csp_3.17.5_lucide_vite
+  public: django_templates_bootstrap_5.3.9_htmx_4.0.2_alpine_csp_lucide_1.77.0_vite
+  staff_console: adminlte_4.10.2_bootstrap_5.3.9_htmx_4.0.2_alpinejs_csp_3.17.5_lucide_1.77.0_vite
   legacy_editor: summernote_0.9.1_jquery_3.7.1
   decision_record: .agents/policies/approval-matrix.yaml
 owners:

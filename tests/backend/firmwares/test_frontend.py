@@ -9,12 +9,15 @@ from apps.blog.models import Post, PostStatus
 from apps.firmwares.models import (
     Brand,
     FirmwarePackageFormat,
+    FirmwareSourceType,
     FlashingTool,
     FlashingToolCategory,
     Model,
     OfficialFirmware,
     UnclassifiedFirmware,
 )
+from apps.firmwares.references import ref_kwargs
+from apps.firmwares.tracking_models import FirmwareLinkReport
 
 
 class FirmwareFrontendTests(TestCase):
@@ -35,6 +38,19 @@ class FirmwareFrontendTests(TestCase):
             brand=self.brand,
             model=self.model,
             is_verified=is_verified,
+        )
+
+    def create_external_firmware(
+        self, name: str = "external-build.zip"
+    ) -> OfficialFirmware:
+        return OfficialFirmware.objects.create(
+            original_file_name=name,
+            source_type=FirmwareSourceType.EXTERNAL,
+            stored_file_path="",
+            external_url="https://downloads.example.invalid/firmware.zip",
+            brand=self.brand,
+            model=self.model,
+            is_verified=True,
         )
 
     def test_homepage_renders_live_catalog_data(self):
@@ -134,6 +150,159 @@ class FirmwareFrontendTests(TestCase):
         self.assertContains(response, "Guides for this device")
         self.assertContains(response, live_post.title)
         self.assertNotContains(response, future_post.title)
+
+    def test_external_firmware_has_a_report_form_and_badge(self):
+        external = self.create_external_firmware()
+        local = self.create_firmware("local-build.zip", is_verified=True)
+
+        external_page = self.client.get(
+            reverse(
+                "firmwares:firmware_detail",
+                kwargs={"firmware_type": "official", "firmware_id": external.pk},
+            )
+        )
+        local_page = self.client.get(
+            reverse(
+                "firmwares:firmware_detail",
+                kwargs={"firmware_type": "official", "firmware_id": local.pk},
+            )
+        )
+
+        self.assertContains(external_page, "External download")
+        self.assertContains(external_page, "Report a broken download link")
+        self.assertContains(
+            external_page,
+            f'action="{reverse("firmwares:firmware_link_report", kwargs={"firmware_type": "official", "firmware_id": external.pk})}"',
+            html=False,
+        )
+        self.assertNotContains(local_page, "Report a broken download link")
+
+    def test_external_link_report_is_csrf_protected_bounded_and_admin_visible(self):
+        external = self.create_external_firmware("reported-build.zip")
+        client = Client(enforce_csrf_checks=True)
+        detail_url = reverse(
+            "firmwares:firmware_detail",
+            kwargs={"firmware_type": "official", "firmware_id": external.pk},
+        )
+        report_url = reverse(
+            "firmwares:firmware_link_report",
+            kwargs={"firmware_type": "official", "firmware_id": external.pk},
+        )
+        client.get(detail_url)
+        csrf = client.cookies["csrftoken"].value
+
+        rejected = client.post(report_url, {"reason": "broken"})
+        self.assertEqual(rejected.status_code, 403)
+        self.assertFalse(FirmwareLinkReport.objects.exists())
+
+        submitted = client.post(
+            report_url,
+            {
+                "reason": FirmwareLinkReport.Reason.REMOVED,
+                "details": "The host returns a not found page.",
+                "csrfmiddlewaretoken": csrf,
+            },
+        )
+        self.assertEqual(submitted.status_code, 302)
+        report = FirmwareLinkReport.objects.get()
+        self.assertEqual(report.firmware, external)
+        self.assertEqual(report.firmware_name, "reported-build.zip")
+        self.assertIsNone(report.reporter)
+
+        superuser = get_user_model().objects.create_superuser(
+            username="firmware-link-report-admin",
+            email="firmware-link-report-admin@example.com",
+            password="firmware-link-admin-test-password",
+        )
+        client.force_login(superuser)
+        admin_page = client.get(
+            reverse("admin:firmwares_firmwarelinkreport_changelist")
+        )
+        self.assertEqual(admin_page.status_code, 200)
+        self.assertContains(admin_page, "reported-build.zip")
+        details_page = client.get(
+            reverse(
+                "admin:firmwares_firmwarelinkreport_change",
+                args=[report.pk],
+            )
+        )
+        self.assertEqual(details_page.status_code, 200)
+        self.assertContains(details_page, "The host returns a not found page.")
+
+    def test_internal_firmware_cannot_receive_an_external_link_report(self):
+        local = self.create_firmware("local-build.zip", is_verified=True)
+        response = self.client.post(
+            reverse(
+                "firmwares:firmware_link_report",
+                kwargs={"firmware_type": "official", "firmware_id": local.pk},
+            ),
+            {"reason": "broken"},
+        )
+
+        self.assertEqual(response.status_code, 404)
+        self.assertFalse(FirmwareLinkReport.objects.exists())
+
+    def test_external_link_report_rejects_invalid_reason_and_oversized_details(self):
+        external = self.create_external_firmware("bounded-report.zip")
+        report_url = reverse(
+            "firmwares:firmware_link_report",
+            kwargs={"firmware_type": "official", "firmware_id": external.pk},
+        )
+
+        invalid_reason = self.client.post(
+            report_url, {"reason": "not-a-supported-reason"}
+        )
+        oversized_details = self.client.post(
+            report_url,
+            {
+                "reason": FirmwareLinkReport.Reason.BROKEN,
+                "details": "x" * 1001,
+            },
+        )
+
+        self.assertEqual(invalid_reason.status_code, 302)
+        self.assertEqual(oversized_details.status_code, 302)
+        self.assertFalse(FirmwareLinkReport.objects.exists())
+
+    def test_a_reporter_cannot_create_duplicate_open_reports(self):
+        external = self.create_external_firmware("duplicate-report.zip")
+        reporter = get_user_model().objects.create_user(
+            username="link-report-member",
+            email="link-report-member@example.com",
+            password="link-report-test-password",
+        )
+        self.client.force_login(reporter)
+        report_url = reverse(
+            "firmwares:firmware_link_report",
+            kwargs={"firmware_type": "official", "firmware_id": external.pk},
+        )
+        data = {"reason": FirmwareLinkReport.Reason.BROKEN}
+
+        first = self.client.post(report_url, data)
+        second = self.client.post(report_url, data)
+
+        self.assertEqual(first.status_code, 302)
+        self.assertEqual(second.status_code, 302)
+        self.assertEqual(
+            FirmwareLinkReport.objects.filter(
+                reporter=reporter, status=FirmwareLinkReport.Status.OPEN
+            ).count(),
+            1,
+        )
+
+    def test_external_link_report_keeps_its_file_snapshot_after_record_deletion(self):
+        external = self.create_external_firmware("removed-record.zip")
+        report = FirmwareLinkReport.objects.create(
+            **ref_kwargs(external),
+            firmware_name=external.original_file_name,
+            reason=FirmwareLinkReport.Reason.REMOVED,
+        )
+
+        external.delete()
+
+        report.refresh_from_db()
+        self.assertIsNone(report.firmware)
+        self.assertEqual(report.firmware_name, "removed-record.zip")
 
     def test_unreviewed_firmware_cannot_be_opened_or_downloaded(self):
         firmware = self.create_firmware("pending-build.zip", is_verified=False)

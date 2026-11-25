@@ -15,7 +15,8 @@ from django.utils import timezone
 
 from apps.blog.models import Category, Post, PostAccess, PostStatus
 from apps.core.search import get_provider, search, search_items
-from apps.firmwares.models import Brand, Chipset
+from apps.firmwares.chipsets import create_chipset_record
+from apps.firmwares.models import Brand
 from apps.marketplace.models import Listing, SellerProfile
 from apps.marketplace.pickers import search_options
 from apps.tags.models import Tag
@@ -53,7 +54,7 @@ def test_tag_list_filters_with_synonyms_typos_and_fragment() -> None:
     """Topics filter server-side; typos are corrected; HTMX gets the grid only."""
     Tag.objects.create(name="Bootloader unlock", is_curated=True)
     Tag.objects.create(name="Fastboot", is_curated=True)
-    Tag.objects.create(name="Hidden idea", ai_suggested=True)
+    Tag.objects.create(name="Hidden idea", is_suggested=True)
     client = Client()
     url = reverse("tags:list")
     page = client.get(url, {"q": "bootloader"})
@@ -174,7 +175,7 @@ def test_marketplace_pickers_use_the_engine_and_skip_selected() -> None:
     """Seller speciality pickers share ranking, typos and browse lists."""
     samsung = Brand.objects.create(name="Samsung", slug="samsung")
     Brand.objects.create(name="Xiaomi", slug="xiaomi")
-    chip = Chipset.objects.create(
+    chip = create_chipset_record(
         vendor="Qualcomm", family="Snapdragon", name="Snapdragon 8 Gen 2", slug="sd8"
     )
     assert [o.label for o in search_options("brands", "samung", [])] == ["Samsung"]

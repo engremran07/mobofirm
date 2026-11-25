@@ -97,7 +97,14 @@ FEATURES: tuple[Feature, ...] = (
         tags=frozenset(
             {"table", "thead", "tbody", "tfoot", "tr", "th", "td", "caption"}
         ),
-        classes=frozenset({TABLE_CLASS}),
+        classes=frozenset(
+            {
+                TABLE_CLASS,
+                "article-table",
+                "article-table--facts",
+                "article-table--firmware",
+            }
+        ),
     ),
     Feature("links", "Links", GROUP_INSERT, tags=frozenset({"a"})),
     Feature(

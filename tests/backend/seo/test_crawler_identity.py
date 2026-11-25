@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import dataclasses
+from collections.abc import Mapping
 from typing import ClassVar
 from unittest import mock
 
+from django.contrib.sessions.backends.signed_cookies import SessionStore
+from django.core.handlers.wsgi import WSGIRequest
 from django.test import RequestFactory, TestCase, override_settings
 from django.urls import reverse
 
@@ -114,8 +117,19 @@ class CrawlerIdentityTests(TestCase):
             browser_fetcher().fetch(f"{SITE}/", method="POST")
 
 
+def request_with_environ(
+    environ: Mapping[str, object], headers: Mapping[str, str] | None = None
+) -> WSGIRequest:
+    """A GET request whose WSGI environ carries ``environ`` (not network headers)."""
+    request = RequestFactory().get("/", headers=headers)
+    request.META.update(environ)
+    return request
+
+
 @override_settings(SITE_URL=SITE, ALLOWED_HOSTS=HOSTS)
 class ExternalRequestsAreNotTrustedTests(TestCase):
+    data: ClassVar[Catalog]
+
     @classmethod
     def setUpTestData(cls):
         cls.data = make_catalog()
@@ -125,12 +139,14 @@ class ExternalRequestsAreNotTrustedTests(TestCase):
         return self.data.post.views_count
 
     def test_the_identity_is_an_environ_entry_not_a_header(self):
-        factory = RequestFactory()
-
-        self.assertFalse(is_internal_crawl(factory.get("/")))
-        self.assertTrue(is_internal_crawl(factory.get("/", **internal_crawl_environ())))
-        self.assertFalse(is_internal_crawl(factory.get("/", **{ENVIRON_KEY: "guess"})))
-        self.assertFalse(is_internal_crawl(factory.get("/", **{ENVIRON_KEY: True})))
+        self.assertFalse(is_internal_crawl(RequestFactory().get("/")))
+        self.assertTrue(
+            is_internal_crawl(request_with_environ(internal_crawl_environ()))
+        )
+        self.assertFalse(
+            is_internal_crawl(request_with_environ({ENVIRON_KEY: "guess"}))
+        )
+        self.assertFalse(is_internal_crawl(request_with_environ({ENVIRON_KEY: True})))
 
     def test_a_network_header_carrying_the_real_secret_is_ignored(self):
         secret = internal_crawl_environ()[ENVIRON_KEY]
@@ -154,27 +170,27 @@ class ExternalRequestsAreNotTrustedTests(TestCase):
 
     def test_a_forged_environ_value_does_not_suppress_counting(self):
         before = self.views()
+        self.client.defaults[ENVIRON_KEY] = "forged"
 
         self.client.get(
-            self.data.post.get_absolute_url(),
-            HTTP_USER_AGENT=BROWSER,
-            **{ENVIRON_KEY: "forged"},
+            self.data.post.get_absolute_url(), headers={"User-Agent": BROWSER}
         )
 
         self.assertEqual(self.views(), before + 1)
 
     def test_should_count_is_silent_for_the_internal_identity_only(self):
-        factory = RequestFactory()
-        internal = factory.get("/", HTTP_USER_AGENT=BROWSER, **internal_crawl_environ())
-        visitor = factory.get("/", HTTP_USER_AGENT=BROWSER)
-        visitor.session = {}
+        internal = request_with_environ(
+            internal_crawl_environ(), headers={"User-Agent": BROWSER}
+        )
+        visitor = RequestFactory().get("/", headers={"User-Agent": BROWSER})
+        visitor.session = SessionStore()
 
         self.assertFalse(should_count(internal, "post", 1))
         self.assertTrue(should_count(visitor, "post", 1))
 
     def test_ad_impressions_and_referral_clicks_are_suppressed_for_the_crawler(self):
         factory = RequestFactory()
-        internal = factory.get("/", **internal_crawl_environ())
+        internal = request_with_environ(internal_crawl_environ())
         external = factory.get("/")
         external.user = mock.Mock(is_authenticated=False)
         creative = mock.Mock()

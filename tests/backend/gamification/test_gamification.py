@@ -18,8 +18,12 @@ from apps.gamification.constants import (
     BOUNTY_FULFILLED,
     COMMENT_APPROVED,
     FIRMWARE_APPROVED,
+    METRIC_EVENT_COUNTS,
+    METRIC_STREAK,
+    METRIC_XP_TOTAL,
 )
 from apps.gamification.models import (
+    METRIC_CHOICES,
     Badge,
     Level,
     UserBadge,
@@ -38,8 +42,8 @@ def fresh_cache():
     cache.clear()
 
 
-@pytest.fixture
-def make_user(django_user_model):
+@pytest.fixture(name="make_user")
+def _make_user_factory(django_user_model):
     def build(name: str, **extra):
         return django_user_model.objects.create_user(
             username=name,
@@ -52,8 +56,8 @@ def make_user(django_user_model):
     return build
 
 
-@pytest.fixture
-def alice(make_user):
+@pytest.fixture(name="alice")
+def _alice_user(make_user):
     return make_user("alice")
 
 
@@ -81,6 +85,13 @@ def test_defaults_are_seeded_without_overwriting_admin_edits():
     XPRule.objects.filter(event_key=FIRMWARE_APPROVED).update(xp=99)
     services.sync_defaults()
     assert XPRule.objects.get(event_key=FIRMWARE_APPROVED).xp == 99
+
+
+def test_badge_metric_choices_cover_all_event_counts():
+    choice_keys = {key for key, _label in METRIC_CHOICES}
+    fixed_metrics = {METRIC_XP_TOTAL, METRIC_STREAK}
+
+    assert choice_keys - fixed_metrics == set(METRIC_EVENT_COUNTS)
 
 
 def test_award_is_idempotent_and_mirrors_reputation(alice):
@@ -344,8 +355,8 @@ def test_api_contract(alice):
     assert "First upload" in [b.name for b in api.badges_of(alice)]
 
 
-@pytest.fixture
-def staff_client(db) -> Client:
+@pytest.fixture(name="staff_client")
+def _staff_client() -> Client:
     admin = get_user_model().objects.create_superuser(
         username="gam-admin", email="gam-admin@example.com", password=PASSWORD
     )

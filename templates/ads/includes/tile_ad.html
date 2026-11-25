@@ -7,6 +7,14 @@
     <p class="tag-card__desc"><span class="ad-tile__label">Sponsored</span>{% if text %} · {{ text }}{% endif %}</p>
   </div>
 </li>
+{% elif layout == "guide" %}
+<li class="guide-card guide-card--sponsored" data-ad-tile data-ad-zone="{{ zone }}"{% if test %} data-ad-test="{{ test }}"{% else %} data-placement="{{ placement }}"{% endif %}>
+  <div class="guide-card__top">
+    <h3 class="guide-card__title">{% if href %}<a href="{{ href }}" rel="sponsored noopener nofollow" target="_blank">{{ title }}</a>{% else %}{{ title }}{% endif %}</h3>
+    <span class="badge-ui">Sponsored</span>
+  </div>
+  {% if raw %}<div class="ad-tile__raw">{{ raw }}</div>{% elif text %}<p class="guide-card__meta">{{ text }}</p>{% endif %}
+</li>
 {% elif layout == "card" %}
 <article class="card-ui {{ tile }} card-ui--sponsored" data-ad-tile data-ad-zone="{{ zone }}"{% if test %} data-ad-test="{{ test }}"{% else %} data-placement="{{ placement }}"{% endif %} aria-label="Sponsored">
   <div class="card-ui__body">

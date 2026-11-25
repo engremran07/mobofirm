@@ -7,7 +7,7 @@ from django.utils import timezone
 from playwright.sync_api import Error as PlaywrightError
 from playwright.sync_api import sync_playwright
 
-from apps.blog.models import Post, PostStatus
+from apps.blog.models import Post, PostSource, PostStatus
 from apps.firmwares.models import Brand, Model
 from tests.frontend.browser_support import collect_console
 
@@ -125,7 +125,7 @@ def test_editorial_workspace_shows_automated_and_manual_posts(live_server):
         body="<p>Automatically created content awaiting review.</p>",
         author=staff,
         status=PostStatus.IN_REVIEW,
-        is_ai_generated=True,
+        content_source=PostSource.AUTOMATED,
     )
     client = Client()
     client.force_login(staff)

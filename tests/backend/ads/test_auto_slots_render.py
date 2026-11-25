@@ -10,6 +10,7 @@ import pytest
 from django.contrib.auth.models import AnonymousUser, Permission
 from django.template import Context, Template
 from django.urls import reverse
+from django.utils import timezone
 from django.utils.safestring import mark_safe
 
 from apps.ads.models import (
@@ -23,6 +24,7 @@ from apps.ads.models import (
 )
 from apps.ads.services import placement_manager
 from apps.ads.services import zones as zone_service
+from apps.blog.models import GuideRequest, Post, PostStatus
 from apps.blog.rendering import render_article
 
 pytestmark = pytest.mark.django_db
@@ -604,6 +606,68 @@ def test_brand_list_gets_a_same_class_ad_tile_after_the_eighth_tile(client, _til
     }
 
 
+def test_journal_feed_gets_an_in_feed_sponsored_card(
+    client, campaign, django_user_model
+):
+    placement = make_placement(
+        "between_items",
+        "blog/post_list.html",
+        [make_creative(campaign, "journal")],
+    )
+    placement.auto_first_after = 8
+    placement.auto_every = 8
+    placement.save(update_fields=["auto_first_after", "auto_every"])
+    author = django_user_model.objects.create_user(
+        username="ad-journal-author", email="ad-journal-author@example.test"
+    )
+    published = timezone.now()
+    for index in range(10):
+        Post.objects.create(
+            title=f"Journal article {index}",
+            body="<p>A public article body long enough to render.</p>",
+            author=author,
+            status=PostStatus.PUBLISHED,
+            publish_at=published,
+            published_at=published,
+        )
+
+    response = client.get(reverse("blog:post_list"), HTTP_USER_AGENT=DESKTOP)
+
+    assert response.status_code == 200
+    html = response.content.decode()
+    post_cards = list(re.finditer('class="post-card post-card--free"', html))
+    assert len(post_cards) == 9
+    ad_position = html.index("data-ad-tile")
+    assert post_cards[7].start() < ad_position < post_cards[8].start()
+    assert html.count("data-ad-tile") == 1
+
+
+def test_guide_request_feed_uses_a_list_item_sponsored_tile(
+    client, campaign, django_user_model
+):
+    make_placement(
+        "between_items",
+        "blog/requests/list.html",
+        [make_creative(campaign, "guides")],
+    )
+    requester = django_user_model.objects.create_user(
+        username="ad-guide-requester", email="ad-guide-requester@example.test"
+    )
+    for index in range(10):
+        GuideRequest.objects.create(
+            requester=requester,
+            title=f"Approved guide request {index}",
+            status=GuideRequest.Status.APPROVED,
+        )
+
+    response = client.get(reverse("blog:request_list"), HTTP_USER_AGENT=DESKTOP)
+
+    assert response.status_code == 200
+    html = response.content.decode()
+    assert 'class="guide-card guide-card--sponsored"' in html
+    assert html.count("data-ad-tile") == 1
+
+
 def test_brand_list_orphan_rule_and_minimum(client, _tile_ads):
     make_brands(8)
     assert (
@@ -705,6 +769,15 @@ def test_empty_listings_render_no_ad(client, _tile_ads):
         ("firmwares/browse.html", "between_items"),
         ("tags/list.html", "between_items"),
         ("firmwares/library_hub.html", "between_items"),
+        ("blog/post_list.html", "between_items"),
+        ("blog/archive.html", "between_items"),
+        ("blog/brand_posts.html", "between_items"),
+        ("blog/model_posts.html", "between_items"),
+        ("blog/chipset_posts.html", "between_items"),
+        ("blog/requests/list.html", "between_items"),
+        ("firmwares/model_detail.html", "between_items"),
+        ("firmwares/flashing_guides.html", "between_items"),
+        ("firmwares/flashing_category.html", "between_items"),
     ],
 )
 def test_the_placement_manager_detects_the_automatic_zones(page, zone):

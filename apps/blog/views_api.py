@@ -23,11 +23,8 @@ from apps.blog.access import (
 )
 from apps.blog.models import Post, PostDraft, PostLike
 from apps.blog.rendering import render_article
-from apps.blog.services import ai_editor
 from apps.blog.views_manage import WORKFLOW_ACTIONS, run_workflow
-from apps.core import ai_client
 from apps.core.utils.logging import log_event
-from apps.users.services.rate_limit import allow_action
 
 logger = logging.getLogger(__name__)
 
@@ -134,64 +131,6 @@ def post_preview(request: HttpRequest) -> JsonResponse:
             "summary": request.POST.get("summary", ""),
         }
     )
-
-
-@login_required
-@require_POST
-def api_ai_assist(request: HttpRequest) -> JsonResponse:
-    """Editor AI helpers: titles, summaries, rewrites, outlines, SEO text and tags."""
-    if not can_author_posts(request.user):
-        raise Http404
-    if not allow_action(f"blog:ai:{request.user.pk}", 20, window_seconds=60):
-        return JsonResponse({"ok": False, "error": "rate_limited"}, status=429)
-    action = request.POST.get("action") or ""
-    text = request.POST.get("text") or ""
-    context = request.POST.get("context") or ""
-    if not action:
-        return JsonResponse({"ok": False, "error": "missing_action"}, status=400)
-    source = text or context
-    try:
-        if action == "generate_title":
-            return JsonResponse(
-                {
-                    "ok": True,
-                    "suggestion": ai_client.generate_title(text, request.user)[:240],
-                }
-            )
-        if action == "summarize":
-            return JsonResponse(
-                {
-                    "ok": True,
-                    "suggestion": ai_client.summarize_text(source, request.user),
-                }
-            )
-        if action == "improve":
-            return JsonResponse(
-                {
-                    "ok": True,
-                    "suggestion": ai_editor.rewrite_paragraph(source, tone="concise"),
-                }
-            )
-        if action == "suggest_seo":
-            return JsonResponse(
-                {
-                    "ok": True,
-                    "suggestion": ai_client.generate_seo_description(
-                        source, request.user
-                    ),
-                }
-            )
-        if action == "outline":
-            return JsonResponse(
-                {"ok": True, "suggestion": ai_editor.suggest_outline(source)}
-            )
-        if action == "suggest_tags":
-            return JsonResponse({"ok": True, **ai_editor.suggest_tags(source)})
-    except PermissionDenied as error:
-        return JsonResponse({"ok": False, "error": str(error)}, status=403)
-    except ValidationError as error:
-        return JsonResponse({"ok": False, "error": error.messages}, status=400)
-    return JsonResponse({"ok": False, "error": "unknown_action"}, status=400)
 
 
 @login_required

@@ -12,6 +12,7 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 from apps.bounty import services, targets
 from apps.bounty.forms import ClaimForm, PostBountyForm, ReportForm
 from apps.bounty.models import Bounty
+from apps.core.decorators import require_app_enabled
 from apps.users.request_user import current_user
 
 STATUS_FILTERS = (
@@ -28,6 +29,7 @@ KIND_FILTERS = (
 )
 
 
+@require_app_enabled("bounty")
 @require_GET
 def bounty_list(request: HttpRequest) -> HttpResponse:
     status = request.GET.get("status", "open")
@@ -69,6 +71,7 @@ def bounty_list(request: HttpRequest) -> HttpResponse:
     )
 
 
+@require_app_enabled("bounty")
 @require_GET
 def bounty_detail(request: HttpRequest, pk: int) -> HttpResponse:
     bounty = get_object_or_404(
@@ -111,6 +114,7 @@ def bounty_detail(request: HttpRequest, pk: int) -> HttpResponse:
     )
 
 
+@require_app_enabled("bounty")
 @login_required
 @require_http_methods(["GET", "POST"])
 def bounty_create(request: HttpRequest) -> HttpResponse:
@@ -172,13 +176,17 @@ def bounty_create(request: HttpRequest) -> HttpResponse:
     )
 
 
+@require_app_enabled("bounty")
 @login_required
 @require_POST
 def bounty_claim(request: HttpRequest, pk: int) -> HttpResponse:
     bounty = get_object_or_404(Bounty, pk=pk)
     form = ClaimForm(request.POST)
+    if not form.is_valid():
+        messages.error(request, "Please check the claim note and try again.")
+        return redirect("bounty:detail", pk=pk)
     try:
-        services.claim(bounty, request.user, form.data.get("note", ""))
+        services.claim(bounty, request.user, form.cleaned_data["note"])
     except services.BountyError as error:
         messages.error(request, str(error))
     else:
@@ -189,6 +197,7 @@ def bounty_claim(request: HttpRequest, pk: int) -> HttpResponse:
     return redirect("bounty:detail", pk=pk)
 
 
+@require_app_enabled("bounty")
 @login_required
 @require_http_methods(["GET", "POST"])
 def bounty_report(request: HttpRequest, pk: int) -> HttpResponse:
@@ -205,6 +214,7 @@ def bounty_report(request: HttpRequest, pk: int) -> HttpResponse:
     return render(request, "bounty/report.html", {"bounty": bounty, "form": form})
 
 
+@require_app_enabled("bounty")
 @login_required
 @require_GET
 def my_bounties(request: HttpRequest) -> HttpResponse:

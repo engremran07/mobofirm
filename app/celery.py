@@ -1,3 +1,5 @@
+"""Celery application configuration for Mobofirm."""
+
 import os
 
 from celery import Celery

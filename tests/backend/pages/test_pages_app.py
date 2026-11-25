@@ -123,8 +123,14 @@ class PageVisibilityTests(TestCase):
         self.assertContains(response, "About")
         self.assertNotContains(response, "Hidden page")
 
-    def test_cms_pages_live_under_pages_prefix_and_no_home_landing_route(self):
-        self.assertEqual(self.public.get_absolute_url(), "/pages/about/")
+    def test_cms_pages_live_under_help_prefix_and_legacy_urls_redirect(self):
+        self.assertEqual(self.public.get_absolute_url(), "/help/about/")
+        self.assertEqual(self.client.get("/pages/").status_code, 301)
+        self.assertEqual(self.client.get("/pages/")["Location"], "/help/")
+        self.assertEqual(
+            self.client.get("/pages/about/?from=legacy")["Location"],
+            "/help/about/?from=legacy",
+        )
         with self.assertRaises(NoReverseMatch):
             reverse("pages:home_landing")
 

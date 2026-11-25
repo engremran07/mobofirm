@@ -19,10 +19,9 @@ from django.utils import timezone
 from django.utils.text import slugify
 
 from apps.blog.models import Post, PostStatus
-from apps.firmwares.chipsets import SUPPORTED_CHIPSET_VENDORS
+from apps.firmwares.chipsets import SUPPORTED_CHIPSET_VENDORS, create_chipset_record
 from apps.firmwares.models import (
     Brand,
-    Chipset,
     FlashingGuideTemplate,
     FlashingTool,
     FlashingToolCategory,
@@ -61,7 +60,7 @@ def make_tool(legacy, slug, **extra):
 
 
 def make_chipset(vendor, family, name):
-    return Chipset.objects.create(
+    return create_chipset_record(
         vendor=vendor,
         family=family,
         name=name,
@@ -111,8 +110,22 @@ class TestSync:
         }
         assert vendors.get(vendor="Apple").children.count() == 2
         assert vendors.get(vendor="Qualcomm").children.get().family == "Snapdragon"
-        assert all(cat.is_auto for cat in FlashingToolCategory.objects.all())
-        assert report.created == FlashingToolCategory.objects.count()
+        generated_kinds = (
+            Kind.CHIPSET_VENDOR,
+            Kind.CHIPSET_FAMILY,
+            Kind.OS_TYPE,
+            Kind.BRAND,
+        )
+        assert all(
+            category.is_auto
+            for category in FlashingToolCategory.objects.filter(
+                kind__in=generated_kinds
+            )
+        )
+        assert (
+            report.created
+            == FlashingToolCategory.objects.filter(kind__in=generated_kinds).count()
+        )
 
     def test_os_categories_are_only_the_supported_systems(self):
         sync_reference_categories()

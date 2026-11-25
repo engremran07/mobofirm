@@ -3,79 +3,6 @@
 // on inline scripts or styles (strict CSP).
 import { showToast } from "./toasts.js";
 
-const MODAL_OPEN = "dialog[open]:modal";
-
-function anotherModalIsOpen(except) {
-  return [...document.querySelectorAll(MODAL_OPEN)].some((dialog) => dialog !== except);
-}
-
-// ---- Command palette -------------------------------------------------------------
-let paletteOpener = null;
-
-function palette() {
-  const dialog = document.getElementById("command-palette");
-  return dialog instanceof HTMLDialogElement ? dialog : null;
-}
-
-export function openPalette(opener = document.activeElement) {
-  const dialog = palette();
-  if (!dialog || dialog.open || anotherModalIsOpen(dialog)) return;
-  paletteOpener = opener instanceof HTMLElement ? opener : null;
-  dialog.showModal();
-  document.getElementById("palette-search")?.focus();
-}
-
-export function closePalette() {
-  const dialog = palette();
-  if (dialog?.open) dialog.close();
-}
-
-function initializePalette() {
-  const dialog = palette();
-  // Capture phase: Ctrl/Cmd+K belongs to the palette even if another module also
-  // listens for it (modules/search.js focuses the header search on "/" and as a fallback
-  // when no palette is rendered).
-  document.addEventListener(
-    "keydown",
-    (event) => {
-      const combo = (event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey;
-      if (!dialog || !combo || event.key.toLowerCase() !== "k") return;
-      // The rich-text editor uses Ctrl+K for links; leave it alone there.
-      if (event.target instanceof Element && event.target.closest(".note-editor, [contenteditable='true']")) {
-        return;
-      }
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      if (dialog.open) closePalette();
-      else openPalette();
-    },
-    true,
-  );
-  document.addEventListener("click", (event) => {
-    if (!(event.target instanceof Element)) return;
-    const trigger = event.target.closest("[data-command-palette-open]");
-    if (trigger) {
-      openPalette(trigger);
-      return;
-    }
-    if (dialog?.open && event.target.closest("[data-cmdk-close]")) closePalette();
-  });
-  if (!dialog) return;
-  // Backdrop: a press that starts and ends on the dialog element itself closes it.
-  let pressedOnBackdrop = false;
-  dialog.addEventListener("mousedown", (event) => {
-    pressedOnBackdrop = event.target === dialog;
-  });
-  dialog.addEventListener("click", (event) => {
-    if (event.target === dialog && pressedOnBackdrop) closePalette();
-    pressedOnBackdrop = false;
-  });
-  dialog.addEventListener("close", () => {
-    if (paletteOpener?.isConnected) paletteOpener.focus({ preventScroll: true });
-    paletteOpener = null;
-  });
-}
-
 // ---- Mega menu -------------------------------------------------------------------
 function closeMega(except = null) {
   for (const item of document.querySelectorAll("[data-nav-item][data-open='true']")) {
@@ -112,6 +39,40 @@ function initializeMega() {
     if (!item || item.dataset.open !== "true") return;
     if (!(event.relatedTarget instanceof Node) || !item.contains(event.relatedTarget)) closeMega();
   });
+}
+
+// ---- Public account menu ---------------------------------------------------------
+function initializeAccountMenu() {
+  const closeOutside = (target) => {
+    const activeMenu =
+      target instanceof Element ? target.closest(".site-account-menu") : null;
+    for (const menu of document.querySelectorAll(".site-account-menu[open]")) {
+      if (menu !== activeMenu) menu.removeAttribute("open");
+    }
+  };
+
+  document.addEventListener("click", (event) => closeOutside(event.target));
+  document.addEventListener("focusin", (event) => closeOutside(event.target));
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Escape") return;
+    const menu = document.querySelector(".site-account-menu[open]");
+    if (!menu) return;
+    menu.removeAttribute("open");
+    menu.querySelector("summary")?.focus();
+  });
+}
+
+// Keep link groups open on wide screens and compact on narrow and medium screens.
+// The open attributes in the template preserve the full navigation without JavaScript.
+function initializeFooterGroups() {
+  const groups = document.querySelectorAll("[data-footer-group]");
+  if (!groups.length) return;
+  const compact = window.matchMedia("(max-width: 1199.98px)");
+  const sync = () => {
+    for (const group of groups) group.open = !compact.matches;
+  };
+  sync();
+  compact.addEventListener("change", sync);
 }
 
 // ---- Tabs ------------------------------------------------------------------------
@@ -175,19 +136,45 @@ function initializeReveal() {
     });
   };
   scan(document);
-  document.addEventListener("htmx:afterSwap", (event) => {
-    scan(event.target instanceof Element ? event.target : document);
+  document.addEventListener("htmx:after:swap", (event) => {
+    const target = event.detail.ctx.target;
+    scan(target instanceof Element ? target : document);
   });
 }
 
 function initializeHeaderState() {
   const header = document.querySelector(".site-header");
   if (!header) return;
+  const movementThreshold = 12;
+  const hideAfter = 96;
+  let anchorY = Math.max(0, window.scrollY);
   let queued = false;
   const update = () => {
     queued = false;
-    header.dataset.scrolled = String(window.scrollY > 8);
+    const scrollY = Math.max(0, window.scrollY);
+    header.dataset.scrolled = String(scrollY > 8);
+
+    const navigationOpen = header.querySelector(
+      "[data-nav-item][data-open='true'], .mobile-nav-toggle[aria-expanded='true']",
+    );
+    if (scrollY <= 8 || header.contains(document.activeElement) || navigationOpen) {
+      header.removeAttribute("data-header-hidden");
+      anchorY = scrollY;
+      return;
+    }
+
+    if (scrollY - anchorY > movementThreshold) {
+      if (scrollY > hideAfter) header.setAttribute("data-header-hidden", "true");
+      anchorY = scrollY;
+    } else if (anchorY - scrollY > movementThreshold) {
+      header.removeAttribute("data-header-hidden");
+      anchorY = scrollY;
+    }
   };
+  header.addEventListener("focusin", () => {
+    header.removeAttribute("data-header-hidden");
+    anchorY = Math.max(0, window.scrollY);
+  });
   window.addEventListener(
     "scroll",
     () => {
@@ -295,8 +282,9 @@ export function withViewTransition(update) {
 const optimisticState = new WeakMap();
 
 function initializeOptimistic() {
-  document.addEventListener("htmx:beforeRequest", (event) => {
-    const source = event.detail.elt instanceof Element ? event.detail.elt.closest("[data-optimistic]") : null;
+  document.addEventListener("htmx:before:request", (event) => {
+    const elt = event.detail.ctx.sourceElement;
+    const source = elt instanceof Element ? elt.closest("[data-optimistic]") : null;
     if (!source) return;
     const attribute = source.dataset.optimisticToggle;
     const previous = attribute ? source.getAttribute(attribute) : null;
@@ -305,13 +293,15 @@ function initializeOptimistic() {
     source.classList.add("is-pending");
     source.setAttribute("aria-busy", "true");
   });
-  document.addEventListener("htmx:afterRequest", (event) => {
-    const source = event.detail.elt instanceof Element ? event.detail.elt.closest("[data-optimistic]") : null;
+  document.addEventListener("htmx:after:request", (event) => {
+    const ctx = event.detail.ctx;
+    const elt = ctx.sourceElement;
+    const source = elt instanceof Element ? elt.closest("[data-optimistic]") : null;
     const state = source ? optimisticState.get(source) : null;
     if (!source || !state) return;
     source.classList.remove("is-pending");
     source.removeAttribute("aria-busy");
-    if (!event.detail.successful && state.attribute) {
+    if (!ctx.response?.raw?.ok && state.attribute) {
       if (state.previous === null) source.removeAttribute(state.attribute);
       else source.setAttribute(state.attribute, state.previous);
     }
@@ -328,7 +318,7 @@ const loadingCounts = new WeakMap();
 
 function loadingTargets(detail) {
   const targets = new Set();
-  const elt = detail.elt;
+  const elt = detail.sourceElement;
   if (elt instanceof Element) targets.add(elt);
   const target = detail.target;
   if (target instanceof Element && target.matches(".skeleton-host")) targets.add(target);
@@ -336,14 +326,14 @@ function loadingTargets(detail) {
 }
 
 function initializeLoading() {
-  document.addEventListener("htmx:beforeRequest", (event) => {
-    for (const element of loadingTargets(event.detail)) {
+  document.addEventListener("htmx:before:request", (event) => {
+    for (const element of loadingTargets(event.detail.ctx)) {
       loadingCounts.set(element, (loadingCounts.get(element) ?? 0) + 1);
       element.setAttribute("data-loading", "");
     }
   });
-  document.addEventListener("htmx:afterRequest", (event) => {
-    for (const element of loadingTargets(event.detail)) {
+  document.addEventListener("htmx:after:request", (event) => {
+    for (const element of loadingTargets(event.detail.ctx)) {
       const count = (loadingCounts.get(element) ?? 1) - 1;
       loadingCounts.set(element, count);
       if (count <= 0) element.removeAttribute("data-loading");
@@ -352,8 +342,9 @@ function initializeLoading() {
 }
 
 export function initializeUi() {
-  initializePalette();
   initializeMega();
+  initializeAccountMenu();
+  initializeFooterGroups();
   initializeTabs();
   initializeReveal();
   initializeHeaderState();

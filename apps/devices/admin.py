@@ -36,18 +36,13 @@ from apps.core.admin_filters import (
 from apps.devices import slots
 from apps.devices.dialogs import DeclineSlotRequestForm, ResetSlotsForm
 from apps.devices.models import (
-    AppPolicy,
-    BehaviorInsight,
     Device,
     DeviceBrowserLink,
     DeviceConfig,
     DeviceEvent,
-    DeviceFingerprint,
     DeviceResetAllowance,
     DeviceSlotRequest,
     DeviceSlotReset,
-    RegistryEvent,
-    TrustScore,
 )
 from apps.devices.services import mark_device_trusted
 
@@ -56,25 +51,6 @@ BADGE_DEVICE_STATE: dict[str, str] = {
     "blocked": "danger",
     "revoked": "warning",
     "pending": "info",
-}
-BADGE_TRUST_LEVEL: dict[str, str] = {
-    DeviceFingerprint.TrustLevel.UNKNOWN: "info",
-    DeviceFingerprint.TrustLevel.LOW: "danger",
-    DeviceFingerprint.TrustLevel.MEDIUM: "warning",
-    DeviceFingerprint.TrustLevel.HIGH: "success",
-    DeviceFingerprint.TrustLevel.TRUSTED: "success",
-}
-BADGE_SEVERITY: dict[str, str] = {
-    BehaviorInsight.Severity.LOW: "info",
-    BehaviorInsight.Severity.MEDIUM: "warning",
-    BehaviorInsight.Severity.HIGH: "danger",
-    BehaviorInsight.Severity.CRITICAL: "danger",
-}
-BADGE_INSIGHT_STATUS: dict[str, str] = {
-    BehaviorInsight.Status.OPEN: "warning",
-    BehaviorInsight.Status.APPROVED: "success",
-    BehaviorInsight.Status.REJECTED: "danger",
-    BehaviorInsight.Status.RESOLVED: "success",
 }
 BADGE_SUCCESS: dict[str, str] = {"ok": "success", "failed": "danger"}
 
@@ -88,8 +64,8 @@ class DeviceEventInline(TabularInline):
 
     model = DeviceEvent
     tab = True
-    fields = ("created_at", "event_type", "success", "reason", "ip")
-    readonly_fields = ("created_at", "event_type", "success", "reason", "ip")
+    fields = ("created_at", "event_type", "success", "reason")
+    readonly_fields = ("created_at", "event_type", "success", "reason")
     can_delete = False
     ordering = ("-created_at",)
     verbose_name_plural = _("Events")
@@ -398,8 +374,7 @@ class DeviceConfigAdmin(SingletonModelAdmin):
                     "registrations per rolling 30 days / 365 days. The price of a paid "
                     "slot reset is under Credits economy → Credit prices (“Reset "
                     "registered-browser slots”); a package can override it "
-                    "(Pricing → Packages → Basic info). Old "
-                    "machine-fingerprint records remain historical."
+                    "(Pricing → Packages → Basic info)."
                 ),
             },
         ),
@@ -408,8 +383,18 @@ class DeviceConfigAdmin(SingletonModelAdmin):
             {"fields": ("strict_new_device_login", "require_mfa_on_new_device")},
         ),
         (
+            _("Per-app policy overrides"),
+            {
+                "fields": ("app_policies",),
+                "description": _(
+                    "Optional JSON object keyed by app name; each value can override "
+                    "device-locking, MFA, risk-scoring, quota, and service rules."
+                ),
+            },
+        ),
+        (
             _("Risk analysis"),
-            {"fields": ("ai_risk_scoring_enabled", "risk_mfa_threshold")},
+            {"fields": ("risk_scoring_enabled", "risk_mfa_threshold")},
         ),
     )
 
@@ -422,33 +407,6 @@ class DeviceConfigAdmin(SingletonModelAdmin):
         return _is_superuser(request)
 
 
-@admin.register(AppPolicy)
-class AppPolicyAdmin(ModelAdmin):
-    list_display = (
-        "name",
-        "device_locking_mode",
-        "mfa_requirement",
-        "enhanced_fingerprinting",
-        "ai_risk_scoring",
-        "monthly_device_quota",
-        "yearly_device_quota",
-    )
-    search_fields = ("name",)
-
-    def has_change_permission(
-        self, request: HttpRequest, obj: AppPolicy | None = None
-    ) -> bool:
-        return _is_superuser(request)
-
-    def has_delete_permission(
-        self, request: HttpRequest, obj: AppPolicy | None = None
-    ) -> bool:
-        return _is_superuser(request)
-
-    def has_add_permission(self, request: HttpRequest) -> bool:
-        return _is_superuser(request)
-
-
 @admin.register(DeviceEvent)
 class DeviceEventAdmin(NoAddModelAdmin):
     list_display = (
@@ -458,7 +416,6 @@ class DeviceEventAdmin(NoAddModelAdmin):
         "device",
         "outcome",
         "reason",
-        "ip",
     )
     list_filter = (
         ("event_type", ChoicesDropdownFilter),
@@ -468,10 +425,8 @@ class DeviceEventAdmin(NoAddModelAdmin):
     search_fields = (
         "user__email",
         "user__username",
-        "device__os_fingerprint",
+        "device__display_name",
         "reason",
-        "ip",
-        "user_agent",
     )
     raw_id_fields = ("user", "device")
     list_select_related = ("user", "device__user")
@@ -627,110 +582,3 @@ class DeviceResetAllowanceAdmin(ReadOnlyModelAdmin):
     search_fields = ("user__email", "user__username", "key")
     raw_id_fields = ("user",)
     list_select_related = ("user",)
-
-
-@admin.register(DeviceFingerprint)
-class DeviceFingerprintAdmin(ReadOnlyModelAdmin):
-    list_display = (
-        "fingerprint_hash",
-        "trust_badge",
-        "browser",
-        "os",
-        "device_type",
-        "is_bot",
-        "visit_count",
-        "last_seen",
-    )
-    list_filter = (
-        ("trust_level", ChoicesDropdownFilter),
-        ("is_bot", BooleanRadioFilter),
-        "device_type",
-    )
-    search_fields = ("fingerprint_hash", "browser", "os", "ip")
-    readonly_fields = (
-        "fingerprint_hash",
-        "signals",
-        "browser",
-        "os",
-        "device_type",
-        "ip",
-        "country",
-        "trust_level",
-        "is_bot",
-        "user",
-        "first_seen",
-        "last_seen",
-        "visit_count",
-    )
-
-    @display(description=_("Trust"), ordering="trust_level", label=BADGE_TRUST_LEVEL)
-    def trust_badge(self, obj: DeviceFingerprint) -> tuple[str, str]:
-        return obj.trust_level, obj.get_trust_level_display()
-
-
-@admin.register(TrustScore)
-class TrustScoreAdmin(ModelAdmin):
-    list_display = (
-        "fingerprint",
-        "score",
-        "signals_passed",
-        "signals_failed",
-        "last_updated",
-    )
-    raw_id_fields = ("fingerprint",)
-    list_select_related = ("fingerprint",)
-    readonly_fields = ("last_updated",)
-
-
-@admin.register(RegistryEvent)
-class RegistryEventAdmin(ModelAdmin):
-    list_display = ("fingerprint", "action", "user", "ip", "created_at")
-    list_filter = (
-        ("action", ChoicesDropdownFilter),
-        ("created_at", RangeDateTimeFilter),
-    )
-    search_fields = ("fingerprint__fingerprint_hash", "ip")
-    raw_id_fields = ("fingerprint", "user")
-    list_select_related = ("fingerprint", "user")
-    readonly_fields = ("created_at",)
-
-
-@admin.register(BehaviorInsight)
-class BehaviorInsightAdmin(ModelAdmin):
-    list_display = (
-        "fingerprint",
-        "severity_badge",
-        "status_badge",
-        "related_user",
-        "created_at",
-    )
-    list_filter = (
-        ("severity", ChoicesDropdownFilter),
-        ("status", ChoicesDropdownFilter),
-    )
-    search_fields = ("fingerprint__fingerprint_hash", "recommendation")
-    raw_id_fields = ("fingerprint", "related_user")
-    list_select_related = ("fingerprint", "related_user")
-    readonly_fields = ("created_at", "updated_at")
-    actions = ("mark_resolved",)
-
-    @display(description=_("Severity"), ordering="severity", label=BADGE_SEVERITY)
-    def severity_badge(self, obj: BehaviorInsight) -> tuple[str, str]:
-        return obj.severity, obj.get_severity_display()
-
-    @display(description=_("Status"), ordering="status", label=BADGE_INSIGHT_STATUS)
-    def status_badge(self, obj: BehaviorInsight) -> tuple[str, str]:
-        return obj.status, obj.get_status_display()
-
-    @action(description=_("Mark selected insights as resolved"), permissions=["change"])
-    def mark_resolved(
-        self, request: HttpRequest, queryset: QuerySet[BehaviorInsight]
-    ) -> None:
-        updated = queryset.exclude(status=BehaviorInsight.Status.RESOLVED).update(
-            status=BehaviorInsight.Status.RESOLVED, updated_at=timezone.now()
-        )
-        self.message_user(
-            request,
-            _("%(count)d insight(s) resolved.") % {"count": updated},
-            messages.SUCCESS if updated else messages.WARNING,
-        )

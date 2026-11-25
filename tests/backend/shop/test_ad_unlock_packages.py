@@ -6,6 +6,7 @@ from decimal import Decimal
 
 import pytest
 from django.core.exceptions import ValidationError
+from django.db import models
 from django.urls import reverse
 
 from apps.shop.admin import PackageTierAdmin
@@ -37,7 +38,9 @@ class TestFieldsAndRules:
             "unlock_cooldown_seconds",
             "unlock_daily_cap",
         ):
-            assert PackageTier._meta.get_field(name).help_text
+            field = PackageTier._meta.get_field(name)
+            assert isinstance(field, models.Field)
+            assert field.help_text
 
     @pytest.mark.parametrize("field", ["unlock_ads_free", "unlock_ads_featured"])
     def test_at_least_one_ad_is_required(self, field):

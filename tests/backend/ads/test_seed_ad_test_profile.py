@@ -39,6 +39,39 @@ class SeedAdTestProfileTests(TestCase):
         self.assertLessEqual(
             {"header", "sidebar", "in_content", "after_content", "footer"}, zones
         )
+        feed_pages = {
+            "blog/post_list.html",
+            "blog/archive.html",
+            "blog/brand_posts.html",
+            "blog/model_posts.html",
+            "blog/chipset_posts.html",
+            "blog/requests/list.html",
+            "firmwares/model_detail.html",
+            "firmwares/flashing_guides.html",
+            "firmwares/flashing_category.html",
+        }
+        self.assertTrue(
+            feed_pages
+            <= set(
+                AdPlacement.objects.filter(zone="between_items").values_list(
+                    "template_reference", flat=True
+                )
+            )
+        )
+        rail_placements = set(
+            AdPlacement.objects.filter(
+                zone__in={"left_rail", "right_rail"}
+            ).values_list("template_reference", "zone")
+        )
+        self.assertTrue(
+            {
+                ("firmwares/model_detail.html", "left_rail"),
+                ("firmwares/model_detail.html", "right_rail"),
+                ("firmwares/download.html", "left_rail"),
+                ("firmwares/download.html", "right_rail"),
+            }
+            <= rail_placements
+        )
         self.assertFalse(AdPlacement.objects.filter(is_enabled=True).exists())
         self.assertEqual(
             AdPlacement.objects.count(), PlacementAssignment.objects.count()

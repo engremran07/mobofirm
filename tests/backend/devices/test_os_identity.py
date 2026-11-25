@@ -479,6 +479,9 @@ def test_wrong_origin_is_rejected(user, authenticator):
     )
 
     assert_rejected(response, 403, "origin_not_allowed")
+    assert response.json()["message"] == (
+        "This site address cannot be used for device registration."
+    )
 
 
 def test_configured_origin_is_accepted(user, authenticator, settings):
@@ -718,7 +721,7 @@ def test_endpoints_are_rate_limited(user, monkeypatch):
 # --- UI contract -------------------------------------------------------------------
 
 
-def test_devices_page_offers_computer_registration_until_the_os_is_recognised(
+def test_devices_page_offers_device_registration_until_the_os_is_recognised(
     user, authenticator
 ):
     client = browser(user)
@@ -728,10 +731,10 @@ def test_devices_page_offers_computer_registration_until_the_os_is_recognised(
     after = client.get(reverse("devices:my_devices"))
 
     assert b"data-device-os" in before.content
-    assert b"Register this computer" in before.content
+    assert b"Register this device" in before.content
     assert b"data-device-os" not in after.content
-    assert b"This computer" in after.content
-    assert b"Registered computer (all browsers)" in after.content
+    assert b"Current device" in after.content
+    assert b"Platform credential registered" in after.content
 
 
 def test_devices_page_asks_to_verify_when_an_os_is_already_registered(
@@ -742,7 +745,7 @@ def test_devices_page_asks_to_verify_when_an_os_is_already_registered(
     page = browser(user).get(reverse("devices:my_devices"))
 
     assert b'data-mode="verify"' in page.content
-    assert b"Verify this computer" in page.content
+    assert b"Verify this device" in page.content
 
 
 def test_admin_labels_computer_and_browser_registrations(

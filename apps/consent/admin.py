@@ -76,11 +76,11 @@ class ConsentPolicyAdmin(ModelAdmin):
 
     def get_fields(
         self, request: HttpRequest, obj: ConsentPolicy | None = None
-    ) -> list[str]:
-        base = ["title", "banner_text", "details_text", "privacy_url"]
+    ) -> tuple[str, ...]:
+        base = ("title", "banner_text", "details_text", "privacy_url")
         if obj is None:
             return base
-        return ["version", *base, "categories_summary", "is_active", "published_at"]
+        return ("version", *base, "categories_summary", "is_active", "published_at")
 
     def get_readonly_fields(
         self, request: HttpRequest, obj: ConsentPolicy | None = None
@@ -89,7 +89,9 @@ class ConsentPolicyAdmin(ModelAdmin):
         base = tuple(self.readonly_fields)
         return (*base, *locked) if obj is not None and obj.is_published else base
 
-    def get_changeform_initial_data(self, request: HttpRequest) -> dict[str, str]:
+    def get_changeform_initial_data(
+        self, request: HttpRequest
+    ) -> dict[str, str | list[str]]:
         active = ConsentPolicy.objects.filter(is_active=True).first()
         if active is None:
             return {}

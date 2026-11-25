@@ -105,6 +105,8 @@ def _attributes(policy: Policy) -> dict[str, set[str]]:
     attributes: dict[str, set[str]] = {}
     if policy.classes:
         attributes["*"] = {"class"}
+    if "article-table" in policy.classes:
+        attributes["div"] = {"role", "tabindex", "aria-label"}
     if "a" in policy.tags:
         attributes["a"] = {"href", "title"}
     if "img" in policy.tags:

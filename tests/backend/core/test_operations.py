@@ -223,8 +223,6 @@ class CelerySchedulingTests(SimpleTestCase):
         for key in (
             "core-cleanup-old-data",
             "devices-purge-old-events",
-            "devices-expire-old-fingerprints",
-            "devices-cleanup-behavior-insights",
         ):
             with self.subTest(entry=key):
                 self.assertIn(schedule[key]["task"], app.tasks)

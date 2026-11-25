@@ -114,14 +114,18 @@ def test_range_filters_render_a_dialog_with_a_get_form(template, input_type):
     assert '<input type="hidden" name="q" value="firmware">' in html
 
 
-@pytest.mark.parametrize("template", ["console/filters/text.html", "console/filters/field_text.html"])
+@pytest.mark.parametrize(
+    "template", ["console/filters/text.html", "console/filters/field_text.html"]
+)
 def test_text_filters_render_a_dialog_with_a_labelled_search_input(template):
     spec = SimpleNamespace(parameter_name="title__icontains", value="flash")
     html = _render(template, spec=spec, choices=[RANGE_CHOICE], title="Title")
 
     _contract(html, "dialog")
     assert 'name="title__icontains"' in html and 'value="flash"' in html
-    assert re.search(r'<label class="visually-hidden" for="filter-status-text">Title</label>', html)
+    assert re.search(
+        r'<label class="visually-hidden" for="filter-status-text">Title</label>', html
+    )
     assert '<input type="hidden" name="q" value="firmware">' in html
     assert "Clear" in html
 
@@ -140,7 +144,9 @@ def test_staff_pages_with_filter_forms_share_the_filter_bar_chrome():
     ):
         source = Path("templates", template).read_text(encoding="utf-8")
         assert 'class="c-fbar c-fbar--form"' in source, template
-        assert "align-items-end" not in source, f"{template} still hand-builds its filter row"
+        assert "align-items-end" not in source, (
+            f"{template} still hand-builds its filter row"
+        )
 
 
 def test_bulk_action_select_is_a_listbox_over_the_native_select():
@@ -151,7 +157,9 @@ def test_bulk_action_select_is_a_listbox_over_the_native_select():
                 value="b",
                 auto_id="id_action",
                 label="Action",
-                field=SimpleNamespace(choices=[("", "- Select -"), ("b", "Delete"), ("c", "Archive")]),
+                field=SimpleNamespace(
+                    choices=[("", "- Select -"), ("b", "Delete"), ("c", "Archive")]
+                ),
             ),
             "label": "Action",
         },
@@ -160,17 +168,21 @@ def test_bulk_action_select_is_a_listbox_over_the_native_select():
     assert 'role="listbox"' in html and 'aria-haspopup="listbox"' in html
     assert html.count('role="option"') == 3
     assert html.count("data-selected") == 1 and 'data-value="b"' in html
-    assert 'aria-controls="id_action-listbox"' in html and 'id="id_action-listbox"' in html
+    assert (
+        'aria-controls="id_action-listbox"' in html and 'id="id_action-listbox"' in html
+    )
 
 
 def test_filter_bar_ids_stay_stable_for_the_htmx_out_of_band_swap():
     from pathlib import Path
 
-    changelist = Path("templates/console/crud/_changelist.html").read_text(encoding="utf-8")
+    changelist = Path("templates/console/crud/_changelist.html").read_text(
+        encoding="utf-8"
+    )
     hx = Path("templates/console/crud/_hx_list.html").read_text(encoding="utf-8")
 
     assert 'id="c-cl-filters"' in changelist and "data-ui-sheet" in changelist
     assert "#c-cl-filters:outerMorph" in hx
     assert 'id="c-cl-status"' in changelist and 'aria-live="polite"' in changelist
-    assert 'data-console-clear-selection' in changelist
+    assert "data-console-clear-selection" in changelist
     assert "c-drawer" not in changelist

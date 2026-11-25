@@ -6,10 +6,12 @@ from typing import Any
 
 from django.shortcuts import get_object_or_404
 from django.urls import reverse
+from django.utils.decorators import method_decorator
 from django.utils.translation import gettext_lazy as _
 
 from apps.bounty import services
 from apps.bounty.models import Bounty
+from apps.core.decorators import require_app_enabled
 from apps.core.dialogs import DialogError, DialogForm, DialogView
 
 
@@ -29,6 +31,7 @@ class CancelBountyDialog(DialogView):
 
     bounty: Bounty
 
+    @method_decorator(require_app_enabled("bounty"))
     def dispatch(self, request: Any, *args: Any, **kwargs: Any):
         self.bounty = get_object_or_404(Bounty, pk=kwargs["pk"])
         return super().dispatch(request, *args, **kwargs)

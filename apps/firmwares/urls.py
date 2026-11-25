@@ -24,6 +24,7 @@ from .public_views import (
     firmware_download_start,
     library_hub,
     model_detail,
+    report_external_firmware_link,
     serve_local_file,
     universal_search,
 )
@@ -50,6 +51,10 @@ from .views import (
     ModerationView,
     PendingFirmwareViewSet,
     VariantCreationRequestViewSet,
+)
+from .views_catalog_updates import (
+    my_catalog_update_proposals,
+    propose_catalog_update,
 )
 from .views_flashing import (
     flashing_category,
@@ -100,6 +105,16 @@ urlpatterns = [
     path("tools/category/<slug:slug>/", flashing_category, name="flashing_category"),
     path("tools/<slug:slug>/", flashing_tool_detail, name="flashing_tool_detail"),
     path("guides/", flashing_guides, name="flashing_guides"),
+    path(
+        "catalog-updates/mine/",
+        my_catalog_update_proposals,
+        name="my_catalog_update_proposals",
+    ),
+    path(
+        "catalog-updates/<slug:target_kind>/<int:target_id>/",
+        propose_catalog_update,
+        name="propose_catalog_update",
+    ),
     # Admin/upload endpoints
     path("contribute/", upload_page, name="contribute"),
     # Legacy addresses: GET redirects (301) to Contribute / My contributions.
@@ -127,6 +142,11 @@ urlpatterns = [
         "file/<str:firmware_type>/<uuid:firmware_id>/",
         firmware_detail,
         name="firmware_detail",
+    ),
+    path(
+        "file/<str:firmware_type>/<uuid:firmware_id>/report/",
+        report_external_firmware_link,
+        name="firmware_link_report",
     ),
     path(
         "file/<str:firmware_type>/<uuid:firmware_id>/download/",

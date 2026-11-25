@@ -77,6 +77,30 @@ def _overflow(page: Page) -> dict[str, int]:
 
 
 @pytest.mark.django_db(transaction=True)
+def test_shared_htmx_runtime_is_v4_and_blocks_inline_expression_handlers(live_server):
+    failures: list[str] = []
+    with chromium() as browser:
+        page = browser.new_page()
+        _watch(page, failures)
+        page.goto(f"{live_server.url}/", wait_until="load")
+        _ready(page)
+        result = page.evaluate(
+            """() => {
+                window.inlineExpressionRan = false;
+                const button = document.createElement("button");
+                button.setAttribute("hx-on:click", "window.inlineExpressionRan = true");
+                document.body.append(button);
+                htmx.process(button);
+                button.click();
+                button.remove();
+                return {version: htmx.version, ran: window.inlineExpressionRan};
+            }"""
+        )
+        assert result == {"version": "4.0.2", "ran": False}
+    assert not failures, "\n".join(failures)
+
+
+@pytest.mark.django_db(transaction=True)
 def test_public_routes_have_no_console_or_csp_errors_or_horizontal_overflow(
     live_server,
 ):
@@ -104,23 +128,67 @@ def test_public_routes_have_no_console_or_csp_errors_or_horizontal_overflow(
 
 
 @pytest.mark.django_db(transaction=True)
-def test_header_stays_on_two_rows_without_overlap_at_the_lg_breakpoint(live_server):
+@pytest.mark.parametrize("width", (992, 1024, 1280, 1365))
+def test_header_uses_one_row_without_overlap_at_desktop_widths(live_server, width):
     with chromium() as browser:
-        page = browser.new_page(viewport={"width": 992, "height": 800})
+        page = browser.new_page(viewport={"width": width, "height": 800})
         page.goto(f"{live_server.url}/", wait_until="load")
         _ready(page)
 
         nav = page.locator("#primary-navigation")
         search = page.locator("#site-search")
         assert nav.is_visible() and search.is_visible()
-        for label in ("Firmware", "Brands", "Chipsets", "Tools & Guides", "Blog"):
+        for label in ("Firmware", "Tools & Guides", "Journal", "Community", "Pricing"):
             assert nav.get_by_role("link", name=label).is_visible()
-        nav_box = nav.bounding_box()
-        search_box = search.bounding_box()
-        assert nav_box and search_box
-        assert nav_box["y"] >= search_box["y"] + search_box["height"] - 1
+        top_level = nav.locator(":scope > .nav-item, :scope > .site-nav-link")
+        boxes = top_level.evaluate_all(
+            """items => items
+                .map(item => {
+                    const rect = item.getBoundingClientRect();
+                    return {y: rect.y, height: rect.height};
+                })
+                .filter(box => box.height > 0)"""
+        )
+        assert len(boxes) == 5
+        assert max(box["y"] for box in boxes) - min(box["y"] for box in boxes) <= 4
+        assert page.locator(".site-header").evaluate(
+            "element => element.getBoundingClientRect().height <= 65"
+        )
         assert not page.locator("button[aria-label='Toggle navigation']").is_visible()
-        assert _overflow(page)["document"] <= 992 + 1
+        assert _overflow(page)["document"] <= width + 1
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("width", (390, 1365))
+def test_header_hides_on_down_scroll_and_returns_on_up_scroll(live_server, width):
+    failures: list[str] = []
+    with chromium() as browser:
+        page = browser.new_page(viewport={"width": width, "height": 800})
+        _watch(page, failures)
+        page.goto(f"{live_server.url}/", wait_until="load")
+        _ready(page)
+        header = page.locator(".site-header")
+        max_scroll = page.evaluate(
+            "() => document.documentElement.scrollHeight - window.innerHeight"
+        )
+        assert max_scroll > 120
+
+        page.evaluate("window.scrollTo(0, Math.min(320, document.body.scrollHeight))")
+        page.wait_for_function(
+            "() => document.querySelector('.site-header')?.dataset.headerHidden === 'true'",
+            timeout=5_000,
+        )
+        page.evaluate("window.scrollTo(0, 0)")
+        page.wait_for_function(
+            "() => !document.querySelector('.site-header')?.hasAttribute('data-header-hidden')",
+            timeout=5_000,
+        )
+
+        page.locator(".site-header .site-brand:visible").first.focus()
+        page.evaluate("window.scrollTo(0, 160)")
+        page.wait_for_function("() => window.scrollY >= 120", timeout=5_000)
+        expect(header).not_to_have_attribute("data-header-hidden", "true")
+    assert not failures, "\n".join(failures)
 
 
 @pytest.mark.django_db(transaction=True)
@@ -141,10 +209,9 @@ def test_keyboard_navigation_skip_link_and_current_page_state(live_server):
             page.keyboard.press("Tab")
             reached.append(page.evaluate("document.activeElement.textContent.trim()"))
         assert {"Brands", "Chipsets", "Blog"} <= set(reached)
-        assert (
-            page.locator("#primary-navigation [aria-current='page']").inner_text()
-            == "Brands"
-        )
+        current_navigation = page.locator("#primary-navigation [aria-current]")
+        assert current_navigation.inner_text() == "Firmware"
+        assert current_navigation.get_attribute("aria-current") == "location"
 
         page.set_viewport_size({"width": 390, "height": 844})
         toggle = page.get_by_role("button", name="Toggle navigation")
@@ -167,8 +234,73 @@ def test_navigation_is_available_without_javascript(live_server):
 
         assert not page.locator(".mobile-nav-toggle").is_visible()
         mobile = page.locator("#mobile-navigation")
-        assert mobile.get_by_role("link", name="Brands").is_visible()
-        assert mobile.get_by_role("link", name="Tools & Guides").is_visible()
+        firmware_group = mobile.locator("details").filter(has_text="Firmware")
+        firmware_group.locator("summary").click()
+        assert firmware_group.get_by_role("link", name="Brands").is_visible()
+        assert mobile.get_by_text("Tools & Guides", exact=True).is_visible()
+        groups = page.locator(".site-footer [data-footer-group]")
+        expect(groups).to_have_count(3)
+        assert groups.evaluate_all("items => items.every(item => item.open)")
+        assert (
+            page.locator(".site-footer")
+            .get_by_role("link", name="Firmware catalogue")
+            .is_visible()
+        )
+
+
+@pytest.mark.django_db(transaction=True)
+def test_footer_groups_reduce_mobile_height_and_expand_on_desktop(
+    live_server, tmp_path
+):
+    failures: list[str] = []
+    with chromium() as browser:
+        page = browser.new_page(viewport={"width": 360, "height": 800})
+        _watch(page, failures)
+        page.goto(f"{live_server.url}/", wait_until="load")
+        _ready(page)
+        consent_banner = page.locator(".consent-banner")
+        if consent_banner.is_visible():
+            consent_banner.get_by_role("button", name="Reject optional").click()
+            expect(consent_banner).to_be_hidden()
+        footer = page.locator(".site-footer")
+        groups = footer.locator("[data-footer-group]")
+        expect(groups).to_have_count(3)
+        assert groups.evaluate_all("items => items.every(item => !item.open)")
+
+        height = footer.evaluate(
+            "element => Math.ceil(element.getBoundingClientRect().height)"
+        )
+        assert height <= 560, f"collapsed mobile footer is {height}px tall"
+        assert _overflow(page)["document"] <= 361
+        footer.screenshot(path=str(tmp_path / "footer-mobile.png"))
+
+        first = groups.nth(0)
+        first.locator("summary").focus()
+        page.keyboard.press("Enter")
+        expect(first).to_have_attribute("open", "")
+        expect(first.get_by_role("link", name="Firmware catalogue")).to_be_visible()
+
+        page.set_viewport_size({"width": 1365, "height": 900})
+        assert groups.evaluate_all("items => items.every(item => item.open)")
+
+        page.set_viewport_size({"width": 1024, "height": 768})
+        assert groups.evaluate_all("items => items.every(item => !item.open)")
+        tablet_height = footer.evaluate(
+            "element => Math.ceil(element.getBoundingClientRect().height)"
+        )
+        assert tablet_height <= 460, f"compact tablet footer is {tablet_height}px tall"
+
+        page.set_viewport_size({"width": 1365, "height": 900})
+        assert groups.evaluate_all("items => items.every(item => item.open)")
+        expect(footer.get_by_role("link", name="Firmware catalogue")).to_be_visible()
+        desktop_height = footer.evaluate(
+            "element => Math.ceil(element.getBoundingClientRect().height)"
+        )
+        assert desktop_height <= 500, (
+            f"expanded desktop footer is {desktop_height}px tall"
+        )
+        footer.screenshot(path=str(tmp_path / "footer-desktop.png"))
+    assert not failures, "\n".join(failures)
 
 
 @pytest.mark.django_db(transaction=True)
@@ -203,7 +335,10 @@ def test_blocked_storage_does_not_break_the_frontend(live_server):
         _watch(page, failures)
         page.goto(f"{live_server.url}/", wait_until="load")
         _ready(page)
-        page.locator("button[data-theme-toggle]:visible").first.click()
+        consent_banner = page.locator(".consent-banner")
+        if consent_banner.is_visible():
+            consent_banner.get_by_role("button", name="Reject optional").click()
+        page.locator(".site-footer button[data-theme-set='dark']").click()
         assert page.locator("html").get_attribute("data-bs-theme") == "dark"
     assert not failures, failures
 
@@ -225,16 +360,14 @@ def _registration_state() -> tuple[str, str]:
         is_trusted=False,
         browser_family="Chrome",
         os_family="Windows",
-        display_name="Windows computer · Chrome",
+        display_name="Windows device",
     )
     client = Client()
     client.force_login(user)
     session = client.session
     session["device_registration_prompt"] = {
-        "can_approve": True,
         "device_name": device.display_name,
         "os_family": device.os_family,
-        "browser_family": device.browser_family,
         "active_devices": 0,
         "max_devices": 3,
     }
@@ -271,7 +404,7 @@ def test_device_dialog_escape_closes_it_and_leaves_the_page_usable(live_server):
         page.goto(f"{live_server.url}{reverse('devices:my_devices')}")
         _ready(page)
 
-        dialog = page.get_by_role("dialog", name="Review this computer")
+        dialog = page.get_by_role("dialog", name="Register this device")
         assert dialog.is_visible()
         assert page.locator(".device-registration-backdrop").count() == 0
         assert dialog.evaluate("element => element.matches(':modal')")

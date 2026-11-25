@@ -41,7 +41,7 @@ class FirmwareChipsetsSitemap(_FirmwareSitemap):
     priority = 0.6
 
     def items(self):
-        return Chipset.objects.order_by("vendor", "name")
+        return Chipset.objects.order_by("vendor__name", "name")
 
     def lastmod(self, obj: Chipset):
         return getattr(obj, "updated_at", None)

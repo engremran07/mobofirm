@@ -11,6 +11,7 @@ register_reward_event(
         key=PROFILE_COMPLETED_EVENT,
         label="Completed your profile",
         app="users",
+        url_name="users:profile",
         default_credits=10,
     )
 )

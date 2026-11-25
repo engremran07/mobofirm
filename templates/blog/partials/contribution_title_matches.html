@@ -1,0 +1,14 @@
+{% if error %}
+  <p class="small text-danger" role="alert">{{ error }}</p>
+{% elif matches %}
+  <div class="small" role="status">
+    <p class="mb-1">Possible related public content. This check is advisory; you can still submit for staff review.</p>
+    <ul class="mb-0">
+      {% for match in matches %}
+        <li><span>{{ match.kind_label }}:</span> <a href="{{ match.url }}">{{ match.title }}</a></li>
+      {% endfor %}
+    </ul>
+  </div>
+{% else %}
+  <p class="small muted" role="status">No related public titles were returned. You can still submit for review.</p>
+{% endif %}

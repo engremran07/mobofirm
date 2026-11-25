@@ -42,14 +42,14 @@ def test_banner_is_rendered_for_an_undecided_visitor(client):
 
 
 def test_banner_links_the_privacy_policy_only_while_the_page_is_published(client):
-    assert 'href="/pages/privacy/"' not in client.get("/").content.decode()
+    assert 'href="/help/privacy/"' not in client.get("/").content.decode()
 
     seed_pages(site_name="Mobofirm", contact_email="legal@example.com")
     cache.clear()
     html = client.get("/").content.decode()
     banner = html.split('id="consent-banner-title"')[1].split("</section>")[0]
 
-    assert 'href="/pages/privacy/"' in banner
+    assert 'href="/help/privacy/"' in banner
 
 
 def test_banner_disappears_after_a_choice_and_is_remembered(client):

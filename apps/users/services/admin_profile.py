@@ -13,8 +13,7 @@ def get_user_profile(user_id: str) -> dict[str, Any]:
     Aggregate user profile data for admin views:
     - CustomUser base fields
     - allauth EmailAddress + SocialAccount (if installed)
-    - Devices + recent events
-    - Behavior insights (risk)
+    - Devices + recent audit events
     """
     profile: dict[str, Any] = {
         "user": None,
@@ -22,7 +21,6 @@ def get_user_profile(user_id: str) -> dict[str, Any]:
         "social_accounts": [],
         "devices": [],
         "device_events": [],
-        "risk_insights": [],
     }
 
     user = User.objects.filter(pk=user_id).first()
@@ -62,7 +60,9 @@ def get_user_profile(user_id: str) -> dict[str, Any]:
             Device.objects.filter(user=user)
             .order_by("-last_seen_at")
             .values(
-                "os_fingerprint",
+                "display_name",
+                "os_family",
+                "browser_family",
                 "is_blocked",
                 "is_trusted",
                 "last_seen_at",
@@ -77,24 +77,5 @@ def get_user_profile(user_id: str) -> dict[str, Any]:
     except DatabaseError:
         profile["devices"] = []
         profile["device_events"] = []
-
-    # Risk insights
-    try:
-        from apps.devices.models import BehaviorInsight
-
-        profile["risk_insights"] = list(
-            BehaviorInsight.objects.filter(related_user_id=user.pk)
-            .order_by("-created_at")[:20]
-            .values(
-                "severity",
-                "status",
-                "recommendation",
-                "fingerprint_id",
-                "metadata",
-                "created_at",
-            )
-        )
-    except DatabaseError:
-        profile["risk_insights"] = []
 
     return profile

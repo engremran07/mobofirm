@@ -1,4 +1,4 @@
-"""Device-owned dialogs: freeing a browser slot (core only provides the dialog shell).
+"""Device-owned dialogs: freeing a device slot (core only provides the dialog shell).
 
 User dialogs (``DialogView``): ask staff, pay credits, use a rewarded-ad reset. Staff
 forms (console action dialogs) are at the bottom.
@@ -123,7 +123,7 @@ class PayCreditsDialog(SlotDialog):
     form_class = RequestKeyForm
     template_name = "devices/dialogs/pay_credits.html"
     dialog_id = "pay-slot-reset-dialog"
-    dialog_title = _("Free your browser slots")
+    dialog_title = _("Free your device slots")
     confirm_label = _("Pay and reset")
     success_message = _(
         "Slots reset. Approve the browsers you want to keep from this page."

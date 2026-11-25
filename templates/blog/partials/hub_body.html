@@ -1,11 +1,12 @@
 {# Hub body: the entity's own post leads, followed by related articles. Context: lead, cards, page_obj, total. #}
+{% load ad_tags %}
 <div class="journal-layout">
   <div class="journal-main">
     {% if lead %}{% include "blog/partials/lead_story.html" with card=lead %}{% endif %}
     {% if cards %}
       <h2 class="section-heading">More articles <span class="muted">({{ total }})</span></h2>
       <div class="post-grid">
-        {% for card in cards %}{% include "blog/partials/post_card.html" with card=card %}{% endfor %}
+        {% for card in cards %}{% include "blog/partials/post_card.html" with card=card %}{% ad_tile forloop.counter cards|length layout="card" tile="post-card" page=ad_page %}{% endfor %}
       </div>
       {% include "components/pagination.html" with page_obj=page_obj label="Article pages" %}
     {% elif not lead %}

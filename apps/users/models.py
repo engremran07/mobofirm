@@ -34,65 +34,8 @@ from django.utils.text import slugify
 from solo.models import SingletonModel
 
 # ===========================================================================
-# Abstract Base Models (dissolved from apps.core)
+# Shared abstract models are owned by apps.core.
 # ===========================================================================
-
-
-class TimestampedModel(models.Model):
-    """Minimal timestamp mixin — created_at + updated_at only."""
-
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-
-    class Meta:
-        abstract = True
-
-
-class SoftDeleteModel(models.Model):
-    """Opt-in soft-delete. Call obj.soft_delete(user) instead of obj.delete()."""
-
-    is_deleted = models.BooleanField(default=False, db_index=True)
-    deleted_at = models.DateTimeField(null=True, blank=True)
-    deleted_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="%(class)s_deleted",
-    )
-
-    class Meta:
-        abstract = True
-
-    def soft_delete(self, user=None, commit: bool = True) -> None:
-        self.is_deleted = True
-        self.deleted_at = timezone.now()
-        if user and not self.deleted_by:
-            self.deleted_by = user
-        if commit:
-            self.save(update_fields=["is_deleted", "deleted_at", "deleted_by"])
-
-
-class AuditFieldsModel(models.Model):
-    """Adds created_by / updated_by FKs to AUTH_USER_MODEL."""
-
-    created_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="%(class)s_created",
-    )
-    updated_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="%(class)s_updated",
-    )
-
-    class Meta:
-        abstract = True
 
 
 logger = logging.getLogger(__name__)

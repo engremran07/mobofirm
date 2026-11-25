@@ -259,7 +259,10 @@ class RewardedAdConfig(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
         DEVICE_RESET = "device_reset", "Device slot reset"
         DOWNLOAD_BONUS = "download_bonus", "Extra downloads"
         AD_FREE = "ad_free", "Ad-free period"
-        DOWNLOAD_UNLOCK = "download_unlock", "Download unlock (counts toward a file unlock)"
+        DOWNLOAD_UNLOCK = (
+            "download_unlock",
+            "Download unlock (counts toward a file unlock)",
+        )
 
     name = models.CharField(max_length=100, unique=True)
     placement = models.ForeignKey(
@@ -374,7 +377,9 @@ class RewardedAdView(TimestampedModel):
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name="rewarded_ad_views",
     )
     config = models.ForeignKey(
@@ -419,8 +424,6 @@ class RewardedAdView(TimestampedModel):
     is_flagged = models.BooleanField(default=False, db_index=True)
 
     # Request Info
-    ip_address = models.GenericIPAddressField(null=True, blank=True)
-    user_agent = models.TextField(blank=True, default="")
     page_url = models.URLField(blank=True, default="")
 
     class Meta:
@@ -438,7 +441,7 @@ class RewardedAdView(TimestampedModel):
         )
 
     def __str__(self) -> str:
-        return f"{self.user} - {self.config} @ {self.created_at}"
+        return f"{self.user or 'Erased account'} - {self.config} @ {self.created_at}"
 
 
 class RewardedAdGrant(TimestampedModel):
@@ -454,7 +457,9 @@ class RewardedAdGrant(TimestampedModel):
 
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name="rewarded_ad_grants",
     )
     view = models.OneToOneField(
@@ -517,16 +522,16 @@ class AutoAdsScanResult(TimestampedModel):
         default=dict,
         help_text="Analysis of content structure (headings, paragraphs, etc.).",
     )
-    ai_recommendation = models.TextField(
+    recommendation = models.TextField(
         blank=True,
         default="",
-        help_text="AI-generated recommendation for this template.",
+        help_text="Recommendation generated from the template scan.",
     )
     score = models.DecimalField(
         max_digits=5,
         decimal_places=2,
         default=0,
-        help_text="AI confidence score for recommendations.",
+        help_text="Deterministic score for the scan recommendation.",
     )
     applied = models.BooleanField(default=False)
     applied_at = models.DateTimeField(null=True, blank=True)
@@ -1001,12 +1006,11 @@ class AffiliateProduct(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
     conversions = models.PositiveIntegerField(default=0)
     revenue = models.DecimalField(max_digits=12, decimal_places=2, default=0)
 
-    # AI Optimization
-    ai_relevance_score = models.DecimalField(
+    relevance_score = models.DecimalField(
         max_digits=5,
         decimal_places=2,
         default=0,
-        help_text="AI-calculated relevance score for targeting.",
+        help_text="Deterministic relevance score for targeting.",
     )
 
     # Metadata from API
@@ -1014,7 +1018,7 @@ class AffiliateProduct(TimestampedModel, SoftDeleteModel, AuditFieldsModel):
 
     class Meta:
         unique_together = ("provider", "external_id")
-        ordering: ClassVar[list[str]] = ["-ai_relevance_score", "-rating", "name"]
+        ordering: ClassVar[list[str]] = ["-relevance_score", "-rating", "name"]
         indexes = (
             models.Index(fields=["asin"]),
             models.Index(fields=["product_type", "is_enabled"]),
@@ -1083,7 +1087,7 @@ class AffiliateProductMatch(TimestampedModel):
         choices=[
             ("auto", "Auto-matched"),
             ("manual", "Manually assigned"),
-            ("ai", "AI recommended"),
+            ("recommended", "Deterministically recommended"),
         ],
         default="auto",
     )
@@ -1140,9 +1144,6 @@ class AffiliateClick(TimestampedModel):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True
     )
-    session_id = models.CharField(max_length=100, blank=True, default="")
-    ip_address = models.GenericIPAddressField(null=True, blank=True)
-    user_agent = models.TextField(blank=True, default="")
 
     # Geolocation
     country = models.CharField(max_length=5, blank=True, default="")
@@ -1746,12 +1747,10 @@ class AdEvent(TimestampedModel):
         creative (ForeignKey): Which creative was served (null if deleted).
         campaign (ForeignKey): Which campaign this event belongs to (null if deleted).
         user (ForeignKey): Which user triggered this event (null for anonymous).
-        request_meta (JSONField): HTTP request metadata useful for analytics
-            (referrer, user_agent excerpt, IP geo, etc.).
+        request_meta (JSONField): Consent-scoped metadata with keyed IP and UA digests.
         page_url (URLField): URL of page where ad appeared.
         referrer_url (URLField): HTTP Referer header value.
-        user_agent (TextField): Full User-Agent string for device/browser detection.
-        session_id (CharField): Session identifier for grouping user actions.
+        request_meta (JSONField): Consent-scoped metadata with keyed IP and UA digests.
         site_domain (CharField): Which domain served this event (multi-domain support).
         consent_granted (BooleanField): Whether user had consented to tracking
             (GDPR/privacy compliance marker).
@@ -1771,8 +1770,6 @@ class AdEvent(TimestampedModel):
         ...     user=user,
         ...     page_url="https://example.com/blog/article",
         ...     referrer_url="https://google.com/search?q=...",
-        ...     user_agent=request.META.get("HTTP_USER_AGENT"),
-        ...     session_id=request.session.session_key,
         ...     site_domain="example.com",
         ...     consent_granted=user_consent.has_analytics
         ... )
@@ -1834,8 +1831,6 @@ class AdEvent(TimestampedModel):
     request_meta = models.JSONField(default=dict, blank=True)
     page_url = models.URLField(blank=True, default="")
     referrer_url = models.URLField(blank=True, default="")
-    user_agent = models.TextField(blank=True, default="")
-    session_id = models.CharField(max_length=128, blank=True, default="")
     site_domain = models.CharField(max_length=100, blank=True, default="")
     consent_granted = models.BooleanField(
         default=False, help_text="True if user consented to ads tracking."
@@ -1868,7 +1863,7 @@ class AdsSettings(SingletonModel):
     - Rewarded ads (video ads users watch for rewards)
     - Native ads, in-feed ads, in-article ads
     - Header bidding integration
-    - AI-powered optimization
+    - deterministic template-based placement scanning
     """
 
     # ==================== MASTER CONTROLS ====================
@@ -1894,7 +1889,7 @@ class AdsSettings(SingletonModel):
     # ==================== AUTO ADS CONFIGURATION ====================
     auto_ads_enabled = models.BooleanField(
         default=False,
-        help_text="Enable AI-powered automatic ad placement (page-level ads).",
+        help_text="Enable automatic ad placement in supported page zones.",
     )
     auto_ads_scan_interval = models.PositiveIntegerField(
         default=24,
@@ -1948,7 +1943,7 @@ class AdsSettings(SingletonModel):
 
     # Ezoic
     ezoic_enabled = models.BooleanField(
-        default=False, help_text="Enable Ezoic AI ad optimization."
+        default=False, help_text="Enable Ezoic optimization."
     )
     ezoic_site_id = models.CharField(max_length=50, blank=True, default="")
 
@@ -2017,31 +2012,6 @@ class AdsSettings(SingletonModel):
             ("recommendation", "Recommendation Widget"),
         ],
         default="card",
-    )
-
-    # ==================== AI OPTIMIZATION ====================
-    ai_optimization_enabled = models.BooleanField(
-        default=False,
-        help_text="Enable AI-powered ad placement and creative optimization.",
-    )
-    ai_model_provider = models.CharField(
-        max_length=50,
-        choices=[
-            ("internal", "Internal Heuristics"),
-            ("openai", "OpenAI GPT"),
-            ("anthropic", "Anthropic Claude"),
-            ("custom", "Custom Model"),
-        ],
-        default="internal",
-    )
-    ai_optimize_placements = models.BooleanField(
-        default=True, help_text="AI suggests optimal placement locations."
-    )
-    ai_optimize_creatives = models.BooleanField(
-        default=True, help_text="AI optimizes creative selection based on performance."
-    )
-    ai_optimize_bidding = models.BooleanField(
-        default=False, help_text="AI adjusts floor prices and bidding strategies."
     )
 
     # Consent is owned by apps.consent: ads are measured and personalised only after
@@ -2117,8 +2087,10 @@ class AdsSettings(SingletonModel):
     amazon_paapi_access_key = models.CharField(
         max_length=100, blank=True, default="", help_text="Amazon PA-API Access Key ID."
     )
-    amazon_paapi_secret_key = models.CharField(
-        max_length=100, blank=True, default="", help_text="Amazon PA-API Secret Key."
+    amazon_paapi_secret_key = models.TextField(
+        blank=True,
+        default="",
+        help_text="Fernet-encrypted Amazon PA-API secret key.",
     )
     amazon_paapi_partner_tag = models.CharField(
         max_length=50,
@@ -2164,6 +2136,27 @@ class AdsSettings(SingletonModel):
         default="www.amazon.com",
         help_text="Amazon marketplace domain.",
     )
+
+    def set_amazon_paapi_secret_key(self, plaintext: str) -> None:
+        """Encrypt the PA-API secret before it is stored."""
+        if not plaintext:
+            self.amazon_paapi_secret_key = ""
+            return
+        from apps.firmwares.crypto import encrypt_password
+
+        self.amazon_paapi_secret_key = encrypt_password(plaintext)
+
+    def get_amazon_paapi_secret_key(self) -> str:
+        """Return the PA-API secret, or an empty string if it cannot be decrypted."""
+        if not self.amazon_paapi_secret_key:
+            return ""
+        try:
+            from apps.firmwares.crypto import decrypt_password
+
+            return decrypt_password(self.amazon_paapi_secret_key)
+        except _DECRYPT_ERRORS:
+            logger.warning("AdsSettings.get_amazon_paapi_secret_key: decryption failed")
+            return ""
 
     # ==================== METADATA ====================
     custom_config = models.JSONField(

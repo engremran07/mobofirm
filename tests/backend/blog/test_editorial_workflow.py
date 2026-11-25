@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import timedelta
-from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Permission
@@ -48,6 +47,32 @@ class EditorialTestCase(TestCase):
 
 
 class EditorialPermissionTests(EditorialTestCase):
+    def test_manage_posts_filters_by_canonical_content_source(self):
+        from apps.blog.models import PostSource
+
+        automated = Post.objects.create(
+            title="Automated inventory post",
+            body="<p>Automatically refreshed catalog content.</p>",
+            author=self.author,
+            content_source=PostSource.AUTOMATED,
+        )
+        Post.objects.create(
+            title="Community submission",
+            body="<p>Member submitted content for editorial review.</p>",
+            author=self.member,
+            content_source=PostSource.COMMUNITY_CONTRIBUTION,
+        )
+        self.client.force_login(self.author)
+
+        response = self.client.get(
+            reverse("blog:manage_posts"), {"source": PostSource.AUTOMATED}
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, automated.title)
+        self.assertNotContains(response, "Community submission")
+        self.assertContains(response, 'value="automated" selected')
+
     def test_members_cannot_reach_the_workspace_unless_user_posting_is_enabled(self):
         self.client.force_login(self.member)
         self.assertEqual(self.client.get(reverse("blog:manage_posts")).status_code, 404)
@@ -113,7 +138,7 @@ class EditorialPermissionTests(EditorialTestCase):
 
     def test_form_only_offers_public_tags(self):
         public = Tag.objects.create(name="Offered", is_curated=True)
-        Tag.objects.create(name="Not offered", ai_suggested=True)
+        Tag.objects.create(name="Not offered", is_suggested=True)
         self.client.force_login(self.author)
 
         response = self.client.get(reverse("blog:post_create"))
@@ -267,14 +292,6 @@ class JsonApiTests(EditorialTestCase):
         self.assertEqual((second["action"], second["likes_count"]), ("unliked", 0))
         self.assertFalse(PostLike.objects.exists())
 
-    def test_ai_assist_errors_do_not_leak_internals_and_are_rate_limited(self):
-        url = reverse("blog:api_ai_assist")
-        self.client.force_login(self.author)
-
-        self.assertEqual(self.client.post(url, {}).status_code, 400)
-        self.assertEqual(self.client.post(url, {"action": "nope"}).status_code, 400)
-        with patch("apps.blog.views_api.allow_action", return_value=False):
-            self.assertEqual(
-                self.client.post(url, {"action": "outline", "text": "x"}).status_code,
-                429,
-            )
+    def test_removed_ai_assist_endpoint_is_not_routable(self):
+        response = self.client.post("/blog/api/ai/assist/", {"action": "outline"})
+        self.assertEqual(response.status_code, 404)

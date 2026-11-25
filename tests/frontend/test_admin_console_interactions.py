@@ -11,6 +11,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterator
 from contextlib import contextmanager
+from unittest.mock import patch
 
 import pytest
 from django.contrib import admin
@@ -18,6 +19,7 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 from playwright.sync_api import BrowserContext, Page, expect
 
+from apps.ads.models import AdPlacement, Campaign
 from apps.firmwares.models import ChangelogEntry
 from apps.tags.models import Tag
 from tests.frontend.browser_support import chromium, login_cookie
@@ -113,8 +115,93 @@ def test_sidebar_is_an_off_canvas_drawer_on_a_phone(live_server):
         expect(toggle).to_be_focused()
 
         toggle.click()
-        page.locator("[data-console-sidebar-overlay]").click(position={"x": 350, "y": 400})
+        page.locator("[data-console-sidebar-overlay]").click(
+            position={"x": 350, "y": 400}
+        )
         expect(html).to_have_attribute("data-console-sidebar", "closed")
+    _assert_clean(problems)
+
+
+def test_ads_dashboard_hides_mutations_from_staff_without_model_permissions(
+    live_server,
+):
+    """Hide ad mutations and explain the missing permission to read-only staff."""
+    viewer = get_user_model().objects.create_user(
+        username="ads-dashboard-viewer",
+        email="ads-dashboard-viewer@example.test",
+        email_verified_at=timezone.now(),
+        is_staff=True,
+    )
+    AdPlacement.objects.create(
+        name="Viewer placement",
+        code="viewer-placement",
+        slug="viewer-placement",
+    )
+    Campaign.objects.create(name="Viewer campaign")
+    server = ConsoleServer(live_server.url, viewer, login_cookie(viewer))
+
+    with _session(server) as (page, probe, problems, _context):
+        open_console(page, probe, server, "/ads/dashboard/", problems)
+        expect(page.get_by_role("button", name="Save serving settings")).to_have_count(
+            0
+        )
+        expect(page.get_by_role("button", name="Disable")).to_have_count(0)
+        expect(page.get_by_role("button", name="Pause")).to_have_count(0)
+        expect(page.get_by_role("link", name="New campaign")).to_have_count(0)
+        expect(
+            page.get_by_text(
+                "You need the change Ads settings permission to update serving controls."
+            )
+        ).to_be_visible()
+    _assert_clean(problems)
+
+
+def test_account_menu_exposes_personal_links_and_confirms_logout(live_server):
+    """Keep account links within the viewport and confirm the logout action."""
+    server = _server(live_server)
+    with _session(server) as (page, probe, problems, _context):
+        open_console(page, probe, server, "/admin/", problems)
+        menu = page.locator(".app-header [data-ui-popover]")
+        trigger = menu.locator("[data-ui-trigger]")
+        trigger.click()
+        panel = page.locator("[data-ui-panel][data-ui-open][role='menu']")
+        expect(panel).to_be_visible()
+        trigger_box = trigger.bounding_box()
+        panel_box = panel.bounding_box()
+        viewport_size = page.viewport_size
+        assert (
+            trigger_box is not None
+            and panel_box is not None
+            and viewport_size is not None
+        )
+        assert panel_box["x"] >= 8
+        assert panel_box["x"] + panel_box["width"] <= viewport_size["width"] - 8
+        assert 0 <= panel_box["y"] - (trigger_box["y"] + trigger_box["height"]) <= 12
+        assert page.evaluate(
+            "() => document.documentElement.scrollWidth <= window.innerWidth"
+        )
+
+        for label in (
+            "My dashboard",
+            "My profile",
+            "My wallet",
+            "My contributions",
+            "Notifications",
+        ):
+            expect(panel.get_by_role("menuitem", name=label)).to_be_visible()
+
+        sign_out = panel.get_by_role("menuitem", name="Sign out")
+        expect(sign_out).to_have_attribute(
+            "data-console-confirm", "Sign out of your account?"
+        )
+        sign_out.click()
+        confirmation = page.locator("[data-console-confirm-dialog]")
+        expect(confirmation).to_be_visible()
+        expect(confirmation.get_by_role("heading", name="Sign out?")).to_be_visible()
+        confirmation.get_by_role("button", name="Cancel").click()
+        expect(confirmation).to_have_count(0)
+        assert menu.get_attribute("data-open") is None
+        expect(menu.locator("[data-ui-trigger]")).to_be_visible()
     _assert_clean(problems)
 
 
@@ -154,10 +241,8 @@ def test_command_palette_opens_with_ctrl_k_searches_and_jumps(live_server):
 def small_pages_fixture():
     """Show 3 rows per page so a handful of rows exercises pagination."""
     model_admin = admin.site.get_model_admin(Tag)
-    original = model_admin.list_per_page
-    model_admin.list_per_page = 3
-    yield
-    model_admin.list_per_page = original
+    with patch.object(model_admin, "list_per_page", 3):
+        yield
 
 
 @pytest.mark.usefixtures("small_pages")
@@ -165,16 +250,25 @@ def test_changelist_search_filter_sort_and_pagination_never_reload_the_page(
     live_server,
 ):
     server = _server(live_server)
-    names = ["Alpha tag", "Bravo tag", "Charlie tag", "Delta tag", "Echo tag", "Fox tag"]
+    names = [
+        "Alpha tag",
+        "Bravo tag",
+        "Charlie tag",
+        "Delta tag",
+        "Echo tag",
+        "Fox tag",
+    ]
     for name in names:
         _tag(name, is_curated=name.startswith(("A", "B")))
     hx_requests: list[str] = []
     with _session(server) as (page, probe, problems, _context):
         page.on(
             "request",
-            lambda request: hx_requests.append(request.url)
-            if request.headers.get("hx-request") == "true"
-            else None,
+            lambda request: (
+                hx_requests.append(request.url)
+                if request.headers.get("hx-request") == "true"
+                else None
+            ),
         )
         open_console(page, probe, server, "/admin/tags/tag/", problems)
         mark_no_reload(page)
@@ -240,13 +334,16 @@ def test_row_selection_shows_the_bulk_bar_with_a_live_count(live_server):
 def _row_menu(page, pk, action):
     """The row's action-menu button and one of its items (row actions live in a menu, closed until opened)."""
     item = page.locator(f"a[hx-get$='/{pk}/{action}/']").first
-    trigger = page.locator("[data-ui-popover]", has=item).locator("[data-ui-trigger]").first
+    trigger_name = item.evaluate(
+        "(item) => item.closest('tr').querySelector('[data-ui-trigger]').getAttribute('aria-label')"
+    )
+    trigger = page.get_by_role("button", name=trigger_name, exact=True)
     return trigger, item
 
 
 def test_row_action_dialog_can_be_cancelled_then_confirmed(live_server):
     server = _server(live_server)
-    tag = _tag("Dialog subject", ai_suggested=True, is_curated=False)
+    tag = _tag("Dialog subject", is_suggested=True, is_curated=False)
     with _session(server) as (page, probe, problems, _context):
         open_console(page, probe, server, "/admin/tags/tag/", problems)
         dialog = page.locator(HOOKS["dialog_host"])
@@ -270,9 +367,122 @@ def test_row_action_dialog_can_be_cancelled_then_confirmed(live_server):
     assert tag.is_curated
 
 
+def test_row_dropdown_is_clamped_inside_a_short_mobile_viewport(live_server):
+    server = _server(live_server)
+    for index in range(24):
+        _tag(f"Viewport menu filler {index:02d}")
+    tag = _tag("ZZ viewport menu", is_suggested=True, is_curated=False)
+    with _session(server, width=390) as (page, probe, problems, _context):
+        page.set_viewport_size({"width": 390, "height": 420})
+        open_console(page, probe, server, "/admin/tags/tag/", problems)
+        row = page.locator("#result_list tbody tr").filter(has_text=tag.name)
+        expect(row).to_be_visible()
+        page.evaluate(
+            """row => window.scrollTo(
+              0,
+              row.getBoundingClientRect().top + window.scrollY - window.innerHeight + 20
+            )""",
+            row.element_handle(),
+        )
+        trigger, _item = _row_menu(page, tag.pk, "approve")
+        trigger.click()
+        panel = page.locator("[data-ui-panel][data-ui-open]")
+        expect(panel).to_be_visible()
+        trigger_box = trigger.bounding_box()
+        panel_box = panel.bounding_box()
+        assert trigger_box is not None and panel_box is not None
+        below_gap = abs(panel_box["y"] - (trigger_box["y"] + trigger_box["height"]))
+        above_gap = abs(panel_box["y"] + panel_box["height"] - trigger_box["y"])
+        assert min(below_gap, above_gap) <= 12, (
+            f"trigger={trigger_box}, panel={panel_box}, "
+            f"inline_style={panel.get_attribute('style')}, "
+            f"scroll_y={page.evaluate('window.scrollY')}"
+        )
+
+        box = panel.bounding_box()
+        assert box is not None
+        assert box["x"] >= 8
+        assert box["y"] >= 8
+        assert box["x"] + box["width"] <= 390 - 8
+        assert box["y"] + box["height"] <= 420 - 8
+    _assert_clean(problems)
+
+
+def test_fixed_listbox_stays_anchored_inside_a_transformed_container(live_server):
+    server = _server(live_server)
+    with _session(server) as (page, probe, problems, _context):
+        open_console(page, probe, server, "/admin/", problems)
+        page.evaluate(
+            """() => {
+              const host = document.createElement("div");
+              host.className = "c-card";
+              host.style.transform = "translateX(96px)";
+              const root = document.createElement("div");
+              root.className = "c-select";
+              root.dataset.uiSelect = "";
+              root.dataset.uiPopover = "";
+              const select = document.createElement("select");
+              const option = new Option("Second choice", "second");
+              select.add(new Option("First choice", "first"));
+              select.add(option);
+              const trigger = document.createElement("button");
+              trigger.type = "button";
+              trigger.className = "c-select__btn";
+              trigger.dataset.uiTrigger = "";
+              trigger.setAttribute("aria-haspopup", "listbox");
+              trigger.setAttribute("aria-expanded", "false");
+              const label = document.createElement("span");
+              label.dataset.uiSelectValue = "";
+              label.textContent = "First choice";
+              trigger.append(label);
+              const panel = document.createElement("div");
+              panel.className = "c-fpanel";
+              panel.dataset.uiPanel = "";
+              panel.dataset.uiFixed = "";
+              panel.id = "transformed-listbox";
+              panel.hidden = true;
+              const list = document.createElement("ul");
+              list.setAttribute("role", "listbox");
+              for (const item of [["first", "First choice"], ["second", "Second choice"]]) {
+                const row = document.createElement("li");
+                row.setAttribute("role", "presentation");
+                const choice = document.createElement("button");
+                choice.type = "button";
+                choice.setAttribute("role", "option");
+                choice.dataset.value = item[0];
+                choice.textContent = item[1];
+                row.append(choice);
+                list.append(row);
+              }
+              panel.append(list);
+              root.append(select, trigger, panel);
+              host.append(root);
+              document.querySelector("#console-main").prepend(host);
+            }"""
+        )
+        trigger = page.locator(".c-select__btn").last
+        trigger.click()
+        panel = page.locator("#transformed-listbox")
+        expect(panel).to_be_visible()
+        trigger_box = trigger.bounding_box()
+        panel_box = panel.bounding_box()
+        assert trigger_box is not None and panel_box is not None
+        assert abs(panel_box["x"] - trigger_box["x"]) <= 8
+        assert abs(panel_box["y"] - (trigger_box["y"] + trigger_box["height"])) <= 12
+        assert page.evaluate(
+            "() => document.documentElement.scrollWidth <= window.innerWidth"
+        )
+
+        panel.get_by_role("option", name="Second choice").click()
+        expect(trigger).to_contain_text("Second choice")
+        expect(page.locator(".c-select select").last).to_have_value("second")
+        expect(panel).to_be_hidden()
+    _assert_clean(problems)
+
+
 def test_dialog_traps_focus_closes_on_escape_and_returns_focus(live_server):
     server = _server(live_server)
-    tag = _tag("Focus subject", ai_suggested=True, is_curated=False)
+    tag = _tag("Focus subject", is_suggested=True, is_curated=False)
     with _session(server) as (page, probe, problems, _context):
         open_console(page, probe, server, "/admin/tags/tag/", problems)
         dialog = page.locator(HOOKS["dialog_host"])
@@ -437,9 +647,7 @@ def test_leaving_a_dirty_form_asks_in_an_app_dialog_not_a_browser_one(live_serve
         confirm.get_by_role("button", name="Keep editing").click()
         expect(confirm).to_be_hidden()
         assert page.url.endswith(f"/admin/tags/tag/{tag.pk}/change/")
-        expect(page.locator("#id_name")).to_have_value(
-            "Guarded tag, edited"
-        )
+        expect(page.locator("#id_name")).to_have_value("Guarded tag, edited")
 
         page.locator("[data-console-sidebar] a[href='/admin/']").first.click()
         page.locator(HOOKS["confirm_ok"]).click()

@@ -1,5 +1,5 @@
 {% extends "admin/staff_page.html" %}
-{% load i18n staff_ui editor_tags %}
+{% load i18n staff_ui comment_tags %}
 {% block page_body %}
 {% if not can_moderate %}{% staff_notice tone="warning" %}{% translate "You can review the queue, but deciding needs the “change comment” permission." %}{% endstaff_notice %}{% endif %}
 {% blocktranslate count counter=pending_comments|length asvar queue_count %}{{ counter }} waiting{% plural %}{{ counter }} waiting{% endblocktranslate %}
@@ -11,7 +11,7 @@
         <h3 class="h6 mb-1"><a id="comment-{{ comment.pk }}-title" href="{{ comment.post.get_absolute_url }}#comment-{{ comment.pk }}">{{ comment.post.title }}</a></h3>
         <p class="small text-body-secondary mb-0">{% translate "by" %} {{ comment.user.public_display_name }} · <time datetime="{{ comment.created_at|date:'c' }}">{{ comment.created_at|date:"M j, Y H:i" }}</time> · {% translate "risk" %} {{ comment.toxicity_score }}</p>
       </div>
-      <div class="d-flex flex-column gap-2">{{ comment.body|rich_text }}</div>
+      <div class="d-flex flex-column gap-2">{% comment_rich_text comment.body %}</div>
       {% if comment.moderation_flags.moderation.reasons %}
         <p class="small text-body-secondary mb-0">{% translate "Flagged for:" %} {{ comment.moderation_flags.moderation.reasons|join:", " }}</p>
       {% endif %}

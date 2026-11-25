@@ -247,10 +247,10 @@ AUDIT_JS = r"""
 
 THEME_JS = """
 (mode) => {
-  window.localStorage.setItem('%s', mode);
-  window.dispatchEvent(new StorageEvent('storage', {key: '%s', newValue: mode}));
+  window.localStorage.setItem('__KEY__', mode);
+  window.dispatchEvent(new StorageEvent('storage', {key: '__KEY__', newValue: mode}));
 }
-""" % (THEME_KEY, THEME_KEY)
+""".replace("__KEY__", THEME_KEY)
 
 
 @dataclass
@@ -293,6 +293,7 @@ def serialize_requests(live_server: LiveServer) -> None:
     """
     httpd = live_server.thread.httpd
     app = httpd.get_app()
+    assert app is not None, "the live server has no WSGI application yet"
     lock = threading.Lock()
 
     def serialized(environ, start_response):
@@ -547,7 +548,9 @@ def check_status(
 ) -> PageResult:
     """Routes that are not a page to look at (POST-only, redirects, JSON)."""
     result = PageResult(group, label, path, "status", list(expected))
-    response = context.request.get(f"{base}{path}", max_redirects=0, fail_on_status_code=False)
+    response = context.request.get(
+        f"{base}{path}", max_redirects=0, fail_on_status_code=False
+    )
     result.status = response.status
     if response.status not in expected:
         result.problems.append(f"HTTP {response.status}, expected {list(expected)}")
@@ -591,9 +594,7 @@ def check_fragment(
         marker in lowered for marker in ("<form", "dialog", "modal")
     ):
         result.problems.append("dialog fragment has no form/dialog/modal markup")
-    if "<script" in lowered and not re.search(
-        r"<script[^>]*application/json", lowered
-    ):
+    if "<script" in lowered and not re.search(r"<script[^>]*application/json", lowered):
         result.problems.append("fragment carries an executable <script>")
     if re.search(r"<[a-z][^>]*\son[a-z]+\s*=", body, re.IGNORECASE):
         result.problems.append("fragment carries an inline event handler")
@@ -615,7 +616,9 @@ def write_results(
 ) -> Path:
     """Write the JSON report; a subset run never overwrites the full-crawl report."""
     path = (
-        RESULTS_PATH.with_name("crawl-results-partial.json") if partial else RESULTS_PATH
+        RESULTS_PATH.with_name("crawl-results-partial.json")
+        if partial
+        else RESULTS_PATH
     )
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {

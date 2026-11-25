@@ -255,9 +255,14 @@ def _style_list_editable(cl: ChangeList) -> None:
     if formset is None:
         return
     for form in formset.forms:
-        for field in form.fields.values():
+        for name, field in form.fields.items():
             _style_widget(field.widget)
             _as_switch(field.widget)
+            inner = _unwrap(field.widget)
+            if "aria-label" not in inner.attrs:
+                inner.attrs["aria-label"] = str(
+                    field.label or name.replace("_", " ").title()
+                )
 
 
 def _row_urls(

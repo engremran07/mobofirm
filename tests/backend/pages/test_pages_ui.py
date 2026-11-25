@@ -129,7 +129,7 @@ class SeedPagesTests(TestCase):
             self.assertEqual(response.status_code, 200, slug)
         footer = self.client.get(reverse("home")).content.decode()
         for slug in ("about", "contact", "faq", "how-to-flash", "dmca", "advertise"):
-            self.assertIn(f'href="/pages/{slug}/"', footer)
+            self.assertIn(f'href="/help/{slug}/"', footer)
 
     def test_every_seed_definition_has_a_unique_slug(self):
         slugs = [page.slug for page in seed.SEED_PAGES]
@@ -160,6 +160,7 @@ class PageTemplateTests(TestCase):
         response = self.client.get(self.page.get_absolute_url())
 
         self.assertContains(response, 'aria-label="Breadcrumb"')
+        self.assertContains(response, 'href="/help/">Help</a>', html=False)
         self.assertContains(response, 'href="#section-one"')
         self.assertContains(response, "On this page")
         self.assertContains(response, "Last updated")
@@ -185,7 +186,7 @@ class PageTemplateTests(TestCase):
 
     def test_footer_lists_only_published_information_pages(self):
         html = self.client.get(reverse("home")).content.decode()
-        self.assertNotIn('href="/pages/about/"', html)
+        self.assertNotIn('href="/help/about/"', html)
 
         Page.objects.create(
             slug="about", title="About", status="published", content="x"
@@ -193,10 +194,10 @@ class PageTemplateTests(TestCase):
         cache.clear()
         html = self.client.get(reverse("home")).content.decode()
 
-        self.assertIn('href="/pages/about/"', html)
-        self.assertNotIn('href="/pages/contact/"', html)
+        self.assertIn('href="/help/about/"', html)
+        self.assertNotIn('href="/help/contact/"', html)
         for slug in ("privacy", "terms", "consent"):
-            self.assertNotIn(f'href="/pages/{slug}/"', html)
+            self.assertNotIn(f'href="/help/{slug}/"', html)
 
 
 class PublishedSlugCacheTests(TestCase):
@@ -277,7 +278,7 @@ class HomepageWidgetTests(TestCase):
         response = self.client.get(reverse("home"))
 
         self.assertNotContains(response, "Fresh from the library")
-        self.assertNotContains(response, 'href="/pages/"')
+        self.assertNotContains(response, 'href="/help/"')
 
     def test_pages_index_lists_the_same_widgets(self):
         response = self.client.get(reverse("pages:index"))

@@ -11,14 +11,7 @@ from django.core.exceptions import ImproperlyConfigured
 from django.test import override_settings
 
 from apps.core.checks import check_runtime_config, check_runtime_config_for_deploy
-from apps.core.runtime_config import (
-    env_bool,
-    env_csv,
-    env_int,
-    runtime_config,
-    validate_runtime_config,
-)
-from apps.core.utils.crypto_keys import (
+from apps.core.crypto import (
     derive_fernet,
     fernet_key_problem,
     multi_fernet,
@@ -27,6 +20,14 @@ from apps.core.utils.crypto_keys import (
     rotate_token,
     split_keys,
 )
+from apps.core.runtime_config import (
+    env_bool,
+    env_csv,
+    env_int,
+    runtime_config,
+    validate_runtime_config,
+)
+from apps.core.utils.crypto_keys import multi_fernet as legacy_multi_fernet
 
 STRONG_PASSPHRASE = "q7Zk-Lm3vN8xR2tYb5Wc9HdPf4GjS6aE"
 
@@ -236,6 +237,10 @@ def test_key_lists_are_split_and_trimmed():
     assert split_keys(" a , b ,, c ") == ["a", "b", "c"]
     assert split_keys("") == []
     assert split_keys(None) == []
+
+
+def test_legacy_crypto_keys_import_remains_compatible():
+    assert legacy_multi_fernet is multi_fernet
 
 
 def test_fernet_key_problems_are_described_without_the_key():

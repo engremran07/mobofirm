@@ -10,6 +10,7 @@
       <p class="muted mb-0">Drafts, submissions, scheduled and published articles. Automated posts refresh themselves; review them here.</p>
     </div>
     <div class="d-flex gap-2">
+      {% if can_moderate %}<a class="btn btn-outline-secondary" href="{% url 'blog:update_proposal_queue' %}">Update proposals</a>{% endif %}
       {% if can_manage_all %}<a class="btn btn-outline-secondary" href="{% url 'blog:category_create' %}">New category</a>{% endif %}
       <a class="btn btn-primary" href="{% url 'blog:post_create' %}">Write a post</a>
     </div>
@@ -31,8 +32,9 @@
         <label class="form-label" for="editorial-source">Source</label>
         <select class="form-select" id="editorial-source" name="source">
           <option value="">All sources</option>
-          <option value="manual"{% if source_filter == "manual" %} selected{% endif %}>Manual</option>
+          <option value="editorial"{% if source_filter == "editorial" %} selected{% endif %}>Editorial</option>
           <option value="automated"{% if source_filter == "automated" %} selected{% endif %}>Automated</option>
+          <option value="community_contribution"{% if source_filter == "community_contribution" %} selected{% endif %}>Community contribution</option>
         </select>
       </div>
       <div class="col-12 col-md-2"><button class="btn btn-primary w-100" type="submit">Apply filters</button></div>
@@ -65,7 +67,7 @@
               <th scope="row">{% if post.is_live %}<a href="{{ post.get_absolute_url }}">{{ post.title }}</a>{% else %}{{ post.title }}{% endif %}</th>
               {% if can_manage_all %}<td>{{ post.author.public_display_name }}</td>{% endif %}
               <td><span class="badge-ui badge-ui--{% if post.status == 'published' %}free{% elif post.status == 'review' %}warning{% elif post.status == 'scheduled' %}verified{% endif %}">{{ post.get_status_display }}</span></td>
-              <td>{% if post.is_ai_generated %}Automated{% else %}Manual{% endif %}</td>
+              <td>{{ post.get_content_source_display }}</td>
               <td><time datetime="{{ post.updated_at|date:'c' }}">{{ post.updated_at|date:"M j, Y" }}</time></td>
               <td>
                 <div class="d-flex flex-wrap gap-2 align-items-center">

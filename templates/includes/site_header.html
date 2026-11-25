@@ -1,7 +1,6 @@
-{% load wallet_tags %}
 <header class="site-header">
-  <div class="site-container py-2" x-data="{ mobileOpen: false }" @keydown.escape.window="mobileOpen = false">
-    <div class="d-flex align-items-center gap-3">
+  <div class="site-container site-header__container" x-data="mobileNav" @keydown.escape.window="close">
+    <div class="site-header__row">
       <a class="site-brand d-inline-flex align-items-center gap-2 flex-shrink-0" href="{% url 'home' %}" aria-label="{{ site_name|default:'Mobofirm' }} home">
         {% if site_settings.logo_url %}
           <img class="site-logo-light" src="{{ site_settings.logo_url }}" alt="" height="32">
@@ -11,66 +10,43 @@
         {% endif %}
         <span>{{ site_name|default:"Mobofirm" }}</span>
       </a>
+      <nav id="primary-navigation" class="site-primary-nav d-none d-lg-flex align-items-center" aria-label="Main navigation">
+        {% include "includes/nav_mega.html" %}
+      </nav>
       <div class="site-header-search d-none d-lg-block flex-grow-1">
         {% include "includes/site_search.html" with search_id="site-search" %}
       </div>
       <div class="site-header-actions d-none d-lg-flex">
-        <button class="btn btn-outline-secondary btn-icon" type="button" data-command-palette-open aria-haspopup="dialog" aria-keyshortcuts="Control+K Meta+K" aria-label="Open the command menu" title="Command menu (Ctrl+K)">
-          <i data-lucide="command" aria-hidden="true"></i>
-        </button>
-        <button class="btn btn-outline-secondary btn-icon" type="button" data-theme-toggle aria-label="Switch to dark theme">
-          <i data-lucide="moon" data-theme-icon="dark" aria-hidden="true"></i>
-          <i data-lucide="sun" data-theme-icon="light" aria-hidden="true"></i>
-        </button>
         {% if user.is_authenticated %}
-          {% wallet_balance_chip %}
-          <a class="btn btn-outline-secondary" href="{% url 'users:dashboard' %}">
-            <i data-lucide="user-round" aria-hidden="true"></i><span class="ms-1">Account</span>
-          </a>
-          <form method="post" action="{% url 'users:account_logout' %}" class="d-inline">
-            {% csrf_token %}
-            <button class="btn btn-outline-secondary" type="submit">Sign out</button>
-          </form>
+          {% include "includes/account_menu.html" %}
         {% else %}
           <a class="btn btn-primary" href="{% url 'users:account_login' %}">Sign in</a>
-          <a class="btn btn-outline-secondary" href="{% url 'users:account_signup' %}">Create account</a>
+          <a class="btn btn-outline-secondary site-header-signup" href="{% url 'users:account_signup' %}">Create account</a>
         {% endif %}
       </div>
-      <button class="btn btn-outline-secondary btn-icon d-lg-none ms-auto" type="button" data-command-palette-open aria-haspopup="dialog" aria-label="Open the command menu">
-        <i data-lucide="search" aria-hidden="true"></i>
-      </button>
-      <button class="btn btn-outline-secondary btn-icon d-lg-none mobile-nav-toggle" type="button"
-              @click="mobileOpen = !mobileOpen"
-              :aria-expanded="mobileOpen.toString()"
+      <button class="btn btn-outline-secondary btn-icon d-lg-none ms-auto mobile-nav-toggle" type="button"
+              @click="toggle"
+              :aria-expanded="expandedAttr"
               aria-controls="mobile-navigation"
               aria-label="Toggle navigation">
         <i data-lucide="menu" aria-hidden="true"></i>
       </button>
     </div>
-    <nav id="primary-navigation" class="site-primary-nav d-none d-lg-flex align-items-center gap-4 pt-2" aria-label="Main navigation">
-      {% include "includes/nav_mega.html" %}
-    </nav>
     <nav id="mobile-navigation" class="mobile-nav-panel d-lg-none mt-3" aria-label="Mobile navigation"
-         x-cloak :hidden="!mobileOpen">
+         x-cloak :hidden="isClosed">
       <div class="d-grid gap-3">
         {% include "includes/site_search.html" with search_id="site-search-mobile" %}
         {% include "includes/nav_links.html" %}
+        <button type="button" class="btn btn-outline-secondary btn-icon" data-theme-toggle aria-label="Switch theme">
+          <i data-lucide="moon" data-theme-icon="dark" aria-hidden="true"></i>
+          <i data-lucide="sun" data-theme-icon="light" aria-hidden="true"></i>
+        </button>
         {% if user.is_authenticated %}
-          {% wallet_balance_chip %}
-          <a class="site-nav-link" href="{% url 'users:dashboard' %}">Account</a>
-          <form method="post" action="{% url 'users:account_logout' %}">
-            {% csrf_token %}
-            <button class="btn btn-outline-secondary w-100 text-start" type="submit">Sign out</button>
-          </form>
+          {% include "includes/account_menu.html" %}
         {% else %}
           <a class="site-nav-link" href="{% url 'users:account_login' %}">Sign in</a>
           <a class="site-nav-link" href="{% url 'users:account_signup' %}">Create account</a>
         {% endif %}
-        <button class="btn btn-outline-secondary text-start" type="button" data-theme-toggle aria-label="Switch to dark theme">
-          <i data-lucide="moon" data-theme-icon="dark" aria-hidden="true"></i>
-          <i data-lucide="sun" data-theme-icon="light" aria-hidden="true"></i>
-          <span class="ms-1">Toggle theme</span>
-        </button>
       </div>
     </nav>
   </div>

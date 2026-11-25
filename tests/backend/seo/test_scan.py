@@ -134,7 +134,7 @@ class ScanRunTests(TestCase):
     def test_removed_pages_have_their_issues_resolved(self):
         catalog = make_catalog()
         scan.run_scan()
-        url = "/pages/about/"
+        url = "/help/about/"
         self.assertIsNotNone(open_issue("page_thin_content", url))
         catalog.page.delete()
 
@@ -150,7 +150,7 @@ class ScanRunTests(TestCase):
     def test_ignored_issues_stay_ignored_when_they_reproduce(self):
         make_catalog()
         scan.run_scan()
-        issue = open_issue("page_thin_content", "/pages/about/")
+        issue = open_issue("page_thin_content", "/help/about/")
         assert issue is not None
         issue.status = Issue.Status.IGNORED
         issue.save()
@@ -248,7 +248,7 @@ class MetadataRuleTests(TestCase):
 
         scan.run_scan()
 
-        issue = open_issue("description_missing", "/pages/about/")
+        issue = open_issue("description_missing", "/help/about/")
         assert issue is not None
         self.assertFalse(issue.fixable)
         self.assertEqual(issue.suggestion, {})
@@ -277,7 +277,7 @@ class MetadataRuleTests(TestCase):
 
         scan.run_scan()
 
-        issue = open_issue("noindex_public_content", "/pages/about/")
+        issue = open_issue("noindex_public_content", "/help/about/")
         assert issue is not None
         self.assertTrue(issue.fixable)
         self.assertEqual(issue.seo_field, "noindex")
@@ -463,14 +463,14 @@ class ContentRuleTests(TestCase):
 
     def test_page_thin_content(self):
         scan.run_scan()
-        self.assertIn("page_thin_content", codes_for("/pages/about/"))
+        self.assertIn("page_thin_content", codes_for("/help/about/"))
         page = self.catalog.page
         page.content = LONG_BODY
         page.save()
 
         scan.run_scan()
 
-        self.assertNotIn("page_thin_content", codes_for("/pages/about/"))
+        self.assertNotIn("page_thin_content", codes_for("/help/about/"))
 
 
 def _job(key: str, url: str, pk: str = "1", public: bool = False) -> SEOJob:

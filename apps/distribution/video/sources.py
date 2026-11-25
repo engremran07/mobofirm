@@ -130,6 +130,9 @@ def _post_extras(
 
 
 def from_content(item: content_module.Content) -> Source:
+    minutes: int
+    points: tuple[str, ...]
+    steps: tuple[str, ...]
     minutes, points, steps = (0, (), ())
     if item.kind == "blog":
         minutes, points, steps = _post_extras(item.object_ref, item.gated, item.summary)

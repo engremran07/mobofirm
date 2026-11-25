@@ -1,13 +1,48 @@
 from __future__ import annotations
 
 import logging
+import re
+from collections.abc import Callable
 from typing import Any
+
+from django.db import DatabaseError
 
 from apps.ads.models import AdCreative, AdEvent, AdPlacement, Campaign
 from apps.core.utils import feature_flags
 from apps.core.utils.logging import log_event
+from apps.users.services.consent import hash_ip, hash_ua
 
 logger = logging.getLogger(__name__)
+
+_DIGEST_RE = re.compile(r"^[0-9a-f]{64}$")
+
+
+def _digest_identifier(value: object, digest: Callable[[str], str]) -> str:
+    if not isinstance(value, str) or not value:
+        return ""
+    return value if _DIGEST_RE.fullmatch(value) else digest(value)
+
+
+def _safe_request_meta(values: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "ip_hash": _digest_identifier(values.get("ip_hash", values.get("ip")), hash_ip),
+        "user_agent_hash": _digest_identifier(
+            values.get("user_agent_hash", values.get("user_agent")), hash_ua
+        ),
+        "referrer": values.get("referrer", "")
+        if isinstance(values.get("referrer", ""), str)
+        else "",
+        "page_url": values.get("page_url", "")
+        if isinstance(values.get("page_url", ""), str)
+        else "",
+        "site": values.get("site", "")
+        if isinstance(values.get("site", ""), str)
+        else "",
+        "correlation_id": values.get("correlation_id", "")
+        if isinstance(values.get("correlation_id", ""), str)
+        else "",
+        "consent_granted": bool(values.get("consent_granted", False)),
+    }
 
 
 def record_event(
@@ -26,6 +61,7 @@ def record_event(
         # Respect consent: do not record if explicitly denied.
         if meta.get("consent_granted") is False:
             return
+        safe_meta = _safe_request_meta(meta)
 
         payload = {
             "event_type": event_type,
@@ -33,13 +69,11 @@ def record_event(
             "creative": creative,
             "campaign": campaign,
             "user": user,
-            "request_meta": meta,
-            "page_url": meta.get("page_url", ""),
-            "referrer_url": meta.get("referrer", ""),
-            "user_agent": meta.get("user_agent", ""),
-            "session_id": meta.get("session_id", ""),
-            "site_domain": meta.get("site", ""),
-            "consent_granted": bool(meta.get("consent_granted", False)),
+            "request_meta": safe_meta,
+            "page_url": safe_meta["page_url"],
+            "referrer_url": safe_meta["referrer"],
+            "site_domain": safe_meta["site"],
+            "consent_granted": safe_meta["consent_granted"],
         }
         AdEvent.objects.create(**payload)
         log_event(
@@ -52,5 +86,5 @@ def record_event(
             campaign=getattr(campaign, "id", None),
             correlation_id=meta.get("correlation_id"),
         )
-    except Exception:
-        logger.warning("record_event failed", exc_info=True)
+    except DatabaseError:
+        logger.warning("record_event failed: database unavailable", exc_info=True)

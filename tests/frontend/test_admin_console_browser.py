@@ -10,6 +10,7 @@ from django.utils import timezone
 from playwright.sync_api import expect
 
 from apps.blog.models import Post, PostStatus
+from apps.firmwares.models import Brand
 from tests.frontend.browser_support import chromium, login_cookie, watch
 from tests.frontend.console_browser_support import (
     HOOKS,
@@ -71,9 +72,7 @@ def test_every_sidebar_page_loads_cleanly_in_light_and_dark_at_every_width(
 def test_post_workflow_from_dashboard_to_published(live_server):
     user = _superuser()
     posts = [
-        Post.objects.create(
-            title=title, body=f"<p>Body for {title}.</p>", author=user
-        )
+        Post.objects.create(title=title, body=f"<p>Body for {title}.</p>", author=user)
         for title in ("Browser admin post", "Second browser post", "Dialog draft")
     ]
     first, second, draft = posts
@@ -152,3 +151,56 @@ def test_post_workflow_from_dashboard_to_published(live_server):
         "status", flat=True
     )
     assert set(statuses) == {PostStatus.PUBLISHED}
+
+
+def test_empty_brand_change_offers_prefilled_model_add(live_server):
+    user = _superuser()
+    brand = Brand.objects.create(name="Browser brand", slug="browser-brand")
+    server = ConsoleServer(live_server.url, user, login_cookie(user))
+    problems: list[str] = []
+
+    with chromium() as browser:
+        context = server.context(browser)
+        page = context.new_page()
+        probe = Probe(origin=server.url)
+        probe.attach(page)
+        probe.begin()
+        open_console(
+            page,
+            probe,
+            server,
+            f"/admin/firmwares/brand/{brand.pk}/change/#c-tab-4",
+            problems,
+        )
+
+        expect(page.get_by_role("link", name="Add model")).to_be_visible()
+        page.get_by_role("tab", name="Catalogue details").click()
+        expect(page.locator('input[name="logo_upload"]')).to_be_visible()
+        page.get_by_role("tab", name="Metadata").click()
+        page.get_by_role("tab", name="Models").click()
+
+        for width in (390, 768, 1365):
+            page.set_viewport_size({"width": width, "height": 900})
+            viewport, document = page.evaluate(
+                "() => [document.documentElement.clientWidth, "
+                "document.documentElement.scrollWidth]"
+            )
+            assert document <= viewport + 1
+
+        page.get_by_role("link", name="Add model").click()
+        page.wait_for_url("**/admin/firmwares/model/add/**")
+        expect(page.locator("#id_brand")).to_have_value(str(brand.pk))
+        page.get_by_role("tab", name="Media").click()
+        expect(page.locator('input[name="image_upload"]')).to_be_visible()
+        for width in (390, 768, 1365):
+            page.set_viewport_size({"width": width, "height": 900})
+            viewport, document = page.evaluate(
+                "() => [document.documentElement.clientWidth, "
+                "document.documentElement.scrollWidth]"
+            )
+            assert document <= viewport + 1
+
+        problems.extend(probe.end())
+        context.close()
+
+    assert not problems, "\n".join(problems)

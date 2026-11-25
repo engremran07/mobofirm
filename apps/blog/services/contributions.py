@@ -41,7 +41,7 @@ from apps.blog.access import (
     can_author_posts,
     is_approved_seller,
 )
-from apps.blog.models import Category, Post, PostAccess, PostStatus
+from apps.blog.models import Category, Post, PostAccess, PostSource, PostStatus
 from apps.blog.services import workflow
 from apps.blog.services.history import PostHistoryService
 from apps.core.editor import sanitize_stored_html
@@ -162,7 +162,9 @@ def resolve_access(user: Any, data: ContributionData) -> tuple[str, Decimal | No
 def contributions_today(user: Any) -> int:
     since = timezone.now() - timedelta(days=1)
     return Post.objects.filter(
-        author=user, is_community_contribution=True, created_at__gte=since
+        author=user,
+        content_source=PostSource.COMMUNITY_CONTRIBUTION,
+        created_at__gte=since,
     ).count()
 
 
@@ -174,7 +176,7 @@ def _existing_duplicate(user: Any, data: ContributionData) -> Post | None:
     cleaned = sanitize_stored_html(data.body)
     candidates = Post.objects.filter(
         author=user,
-        is_community_contribution=True,
+        content_source=PostSource.COMMUNITY_CONTRIBUTION,
         status=PostStatus.IN_REVIEW,
         title=data.title.strip(),
     )
@@ -207,7 +209,7 @@ def submit(user: Any, data: ContributionData) -> SubmitResult:
             access=access,
             proposed_price=price,
             status=PostStatus.DRAFT,
-            is_community_contribution=True,
+            content_source=PostSource.COMMUNITY_CONTRIBUTION,
         )
         try:
             post.full_clean(exclude=["slug", "author"])

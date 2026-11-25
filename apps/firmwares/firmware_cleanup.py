@@ -5,7 +5,8 @@ none of them is a database foreign key, so nothing cascades. The firmware
 ``post_delete`` signal calls :func:`purge_firmware_references`, the one place that
 knows every table.
 A test deletes a file of each type with a row in every table and fails when a new
-referring table is not cleaned here.
+live-reference table is not cleaned here. Append-only reports keep a filename
+snapshot so staff can retain the audit history after a firmware row is removed.
 """
 
 from __future__ import annotations
@@ -25,9 +26,9 @@ def purge_firmware_references(firmware: Any) -> dict[str, int]:
     Tokens (with their sessions and gate logs), views, download attempts and daily
     stats, the served-download library rows and the shortener rows go. A pending
     access-change request is withdrawn (the file it asked about is gone); the
-    append-only access history (:class:`AccessChangeLog`) and the shortener audit
-    outcomes stay on purpose, with the file name they carried. Running it again is a
-    no-op.
+    append-only access history (:class:`AccessChangeLog`), shortener audit outcomes
+    and external-link reports stay on purpose, with the file name they carried.
+    Running it again is a no-op.
     """
     ref = ref_kwargs(firmware)
     key = {"firmware_type": type_key_for(firmware), "firmware_id": firmware.pk}

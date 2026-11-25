@@ -197,7 +197,9 @@ def flashing_tool_detail(request: HttpRequest, slug: str) -> HttpResponse:
         {
             "tool": tool,
             "brands": tool.supported_brands.all().order_by("name"),
-            "chipsets": tool.chipsets.all().order_by("vendor", "name"),
+            "chipsets": tool.chipsets.select_related("vendor").order_by(
+                "vendor__name", "name"
+            ),
             "related_guides": _published_guides().filter(
                 template__recommended_tools=tool
             )[:5],

@@ -17,27 +17,27 @@ register = template.Library()
 
 @register.inclusion_tag("devices/includes/os_identity.html", takes_context=True)
 def device_os_identity(context: template.Context) -> dict[str, Any]:
-    """Offer "Register/Verify this computer" unless this OS is already recognised.
+    """Offer "Register/Verify this device" unless this OS is already recognised.
 
-    The partial stays hidden until the script confirms a platform authenticator
-    exists; without one (or without JavaScript) the per-browser fallback form is the
-    only path.
+    New device registrations require an operating-system platform credential; a
+    browser-only registration is not offered as a fallback.
     """
     hidden: dict[str, Any] = {"show": False}
     request = context.get("request")
     user = getattr(request, "user", None)
     if request is None or user is None or not user.is_authenticated:
         return hidden
-    if not os_identity.os_identity_enabled():
-        return hidden
     current = find_current_device(request, user)
     if current is not None and (
-        current.is_blocked or current.revoked_at is not None or current.is_os_identity
+        current.is_blocked
+        or current.revoked_at is not None
+        or (current.is_os_identity and current.is_trusted)
     ):
         return hidden
     return {
         "show": True,
         "mode": "verify" if user_has_os_registration(user) else "register",
+        "enabled": os_identity.os_identity_enabled(),
         "csrf_token": context.get("csrf_token", ""),
     }
 

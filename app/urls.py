@@ -1,3 +1,5 @@
+"""Root URL configuration for Mobofirm."""
+
 from django.conf import settings
 from django.conf.urls.static import static
 from django.contrib import admin
@@ -44,9 +46,23 @@ urlpatterns = [
     path("comments/", include("apps.comments.urls")),
     path("", include("apps.seo.urls_root")),
     path("seo/", include("apps.seo.urls")),
-    path("pages/", include("apps.pages.urls")),
+    path("help/", include("apps.pages.urls")),
+    path(
+        "pages/",
+        RedirectView.as_view(
+            pattern_name="pages:index", permanent=True, query_string=True
+        ),
+        name="legacy_pages_index",
+    ),
+    path(
+        "pages/<slug:slug>/",
+        RedirectView.as_view(
+            pattern_name="pages:page", permanent=True, query_string=True
+        ),
+        name="legacy_pages_detail",
+    ),
     path("storage/", include("apps.storage.urls")),
-    # Pricing (the shop app) lives under /pricing/; every old /shop/... address redirects.
+    # Pricing (the shop app) lives under /pricing/; old /shop/... addresses redirect.
     path("pricing/", include("apps.shop.urls")),
     re_path(r"^shop/", views.legacy_shop_redirect),
     path("marketplace/", include("apps.marketplace.urls")),

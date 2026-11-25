@@ -18,8 +18,6 @@ from apps.core.admin_pages import render_admin_page
 from apps.devices import os_identity, slots
 from apps.devices.models import Device, DeviceEvent
 from apps.devices.services import (
-    DevicePolicyError,
-    approve_current_device,
     find_current_device,
     get_device_registration_summary,
 )
@@ -53,15 +51,15 @@ _OS_ERROR_MESSAGES = {
     "challenge_missing": "This check expired. Try again.",
     "challenge_expired": "This check expired. Try again.",
     "challenge_mismatch": "This check expired. Try again.",
-    "origin_not_allowed": "This site address cannot be used for computer registration.",
-    "rp_id_mismatch": "This computer was registered under a different site address.",
-    "bad_signature": "This computer could not be verified.",
-    "unknown_credential": "This computer is not registered to your account.",
-    "sign_count_regressed": "This computer could not be verified.",
+    "origin_not_allowed": "This site address cannot be used for device registration.",
+    "rp_id_mismatch": "This device was registered under a different site address.",
+    "bad_signature": "This device could not be verified.",
+    "unknown_credential": "This device is not registered to your account.",
+    "sign_count_regressed": "This device could not be verified.",
     "blocked_device": "This device is blocked. Contact an administrator.",
     "revoked_device": "This device registration was revoked. Contact an administrator.",
-    "no_credentials": "No computer is registered to your account yet.",
-    "disabled": "Computer registration is not enabled.",
+    "no_credentials": "No device is registered to your account yet.",
+    "disabled": "Device credential registration is not enabled.",
     "limit_reached": "Too many pending device registrations. Contact an administrator.",
     "monthly_device_quota": "The monthly device registration quota is reached.",
     "yearly_device_quota": "The yearly device registration quota is reached.",
@@ -77,14 +75,6 @@ def my_devices(request: HttpRequest) -> HttpResponse:
         Device.objects.filter(user_id=request.user.pk).order_by("-last_seen_at")
     )
     at_limit = summary["active_devices"] >= summary["max_devices"]
-    can_approve_current = bool(
-        current_device is not None
-        and (current_device.browser_key_hash or current_device.os_credential_id_hash)
-        and not current_device.is_trusted
-        and not current_device.is_blocked
-        and current_device.revoked_at is None
-        and not at_limit
-    )
     return render(
         request,
         "devices/my_devices.html",
@@ -92,7 +82,6 @@ def my_devices(request: HttpRequest) -> HttpResponse:
             "devices": devices,
             "current_device": current_device,
             "options": slots.slot_options(request.user) if at_limit else None,
-            "can_approve_current": can_approve_current,
             **summary,
         },
     )
@@ -123,30 +112,12 @@ def device_events(request: HttpRequest) -> HttpResponse:
     )
 
 
-# ---------------------------------------------------------------------
-# Device payload API (collect JS fingerprint and store in session)
-# ---------------------------------------------------------------------
-
-
-@require_POST
-@csrf_protect
-def device_payload_view(request: HttpRequest) -> JsonResponse:
-    """Retired endpoint: device registration no longer collects JS fingerprints."""
-    return JsonResponse(
-        {
-            "ok": False,
-            "error": "Browser-trait fingerprint collection is disabled.",
-        },
-        status=410,
-    )
-
-
 @require_POST
 @csrf_protect
 @login_required
 def acknowledge_new_device(request: HttpRequest) -> HttpResponse:
-    """Approve or defer the browser profile represented by this request's cookie."""
-    decision = request.POST.get("decision", "approve")
+    """Dismiss the reminder; device approval requires a platform credential."""
+    decision = request.POST.get("decision", "later")
     next_url = request.POST.get("next", "")
     if not url_has_allowed_host_and_scheme(
         next_url,
@@ -155,39 +126,15 @@ def acknowledge_new_device(request: HttpRequest) -> HttpResponse:
     ):
         next_url = ""
 
-    if decision == "later":
-        request.session.pop("device_registration_prompt", None)
-        messages.info(
-            request, "This browser remains unregistered until you approve it."
+    if decision != "later":
+        return HttpResponse(
+            "Device registration requires a platform credential.", status=403
         )
-        return redirect(next_url or "users:dashboard")
-    if decision != "approve":
-        return JsonResponse({"ok": False, "error": "Invalid decision."}, status=400)
-
-    try:
-        approve_current_device(request, request.user)
-    except DevicePolicyError as exc:
-        if exc.reason == "limit_reached":
-            messages.error(
-                request,
-                "Your approved-device allowance is full. Free a slot below: ask "
-                "staff, pay credits or watch a rewarded ad.",
-            )
-        elif exc.reason == "blocked_device":
-            messages.error(
-                request, "This browser is blocked. Contact an administrator."
-            )
-        elif exc.reason == "revoked_device":
-            messages.error(
-                request,
-                "This browser registration was revoked. Contact an administrator.",
-            )
-        else:
-            messages.error(request, "This browser registration could not be approved.")
-        return redirect(next_url or "devices:my_devices")
-
     request.session.pop("device_registration_prompt", None)
-    messages.success(request, "This browser profile is now registered to your account.")
+    messages.info(
+        request,
+        "This device remains unregistered until its platform credential is verified.",
+    )
     return redirect(next_url or "users:dashboard")
 
 
@@ -202,7 +149,7 @@ def _os_error(reason: str) -> JsonResponse:
             "ok": False,
             "error": reason,
             "message": _OS_ERROR_MESSAGES.get(
-                reason, "This computer could not be registered. Try again."
+                reason, "This device could not be registered. Try again."
             ),
         },
         status=_OS_ERROR_STATUS.get(reason, 400),
@@ -268,7 +215,7 @@ def os_options(request: HttpRequest) -> JsonResponse:
 @require_POST
 @csrf_protect
 def os_register(request: HttpRequest) -> JsonResponse:
-    """Register this operating system from a freshly created platform credential."""
+    """Register this device from a freshly created platform credential."""
     payload, failure = _os_request_payload(request)
     if failure is not None:
         return failure
@@ -278,12 +225,12 @@ def os_register(request: HttpRequest) -> JsonResponse:
         return _os_error(exc.reason)
     if result.approved:
         request.session.pop("device_registration_prompt", None)
-        message = "This computer is now registered to your account."
+        message = "This device is now registered to your account."
         messages.success(request, message)
     else:
         message = (
-            "This computer was recorded, but your approved-device allowance is "
-            "full. Free a slot, then approve it from your devices page."
+            "This device credential was saved, but your device allowance is full. "
+            "Free a slot, then verify this device from your devices page."
         )
         messages.error(request, message)
     return JsonResponse(
@@ -300,7 +247,7 @@ def os_register(request: HttpRequest) -> JsonResponse:
 @require_POST
 @csrf_protect
 def os_verify(request: HttpRequest) -> JsonResponse:
-    """Recognise this browser as running on an already registered operating system."""
+    """Recognise this device with its registered platform credential."""
     payload, failure = _os_request_payload(request)
     if failure is not None:
         return failure
@@ -310,11 +257,9 @@ def os_verify(request: HttpRequest) -> JsonResponse:
         return _os_error(exc.reason)
     if device.is_trusted:
         request.session.pop("device_registration_prompt", None)
-        message = "This computer is recognised. No new registration is needed."
+        message = "This device is recognised. No new registration is needed."
         messages.success(request, message)
     else:
-        message = (
-            "This computer is recognised but not approved yet. Approve it to use it."
-        )
+        message = "The device credential is valid, but your device allowance is full. Free a slot, then verify this device again."
         messages.info(request, message)
     return JsonResponse({"ok": True, "approved": device.is_trusted, "message": message})

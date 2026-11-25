@@ -162,7 +162,7 @@ def tag_detail(request: HttpRequest, slug: str) -> HttpResponse:
 def manage_tags(request: HttpRequest) -> HttpResponse:
     _require_tag_staff(request.user)
     suggestions = Tag.objects.filter(
-        is_curated=False, is_deleted=False, merge_into__isnull=True, ai_suggested=True
+        is_curated=False, is_deleted=False, merge_into__isnull=True, is_suggested=True
     ).order_by("-created_at")[:50]
     top_tags = with_live_post_counts(
         Tag.objects.filter(is_active=True, is_deleted=False, merge_into__isnull=True)
@@ -170,7 +170,7 @@ def manage_tags(request: HttpRequest) -> HttpResponse:
     totals = Tag.objects.filter(is_deleted=False).aggregate(
         total=Count("pk"),
         curated=Count("pk", filter=Q(is_curated=True)),
-        pending=Count("pk", filter=Q(is_curated=False, ai_suggested=True)),
+        pending=Count("pk", filter=Q(is_curated=False, is_suggested=True)),
     )
     return render_admin_page(
         request,
@@ -200,9 +200,9 @@ def review_tag(request: HttpRequest) -> HttpResponse:
     if decision == "approve":
         tag.is_curated = True
         tag.is_active = True
-        tag.ai_suggested = False
+        tag.is_suggested = False
         tag.save(
-            update_fields=["is_curated", "is_active", "ai_suggested", "updated_at"]
+            update_fields=["is_curated", "is_active", "is_suggested", "updated_at"]
         )
         from apps.tags.tasks import reattach_curated_tag
 

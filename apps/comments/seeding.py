@@ -7,7 +7,7 @@ from collections.abc import Callable, Sequence
 from django.contrib.auth.base_user import AbstractBaseUser
 from django.core.management.base import CommandError
 
-from apps.blog.models import Post
+from apps.blog.models import Post, PostSource
 from apps.comments.models import Comment
 from apps.comments.services import submit_comment
 from apps.comments.services.comment_service import clean_body
@@ -26,7 +26,7 @@ def _post_for(seed: CommentSeed) -> Post | None:
     return Post.objects.filter(
         firmware_model__brand__slug=seed.brand,
         firmware_model__slug=seed.model,
-        is_ai_generated=True,
+        content_source=PostSource.AUTOMATED,
     ).first()
 
 

@@ -9,8 +9,8 @@ const adminOut = fileURLToPath(new URL("./static/build/admin/", import.meta.url)
 const entry = (path) => fileURLToPath(new URL(path, import.meta.url));
 
 // Two independent builds share this file:
-//   `vite build`               -> public site, static/build/*          (htmx 2, stable names)
-//   `vite build --mode admin`  -> staff console, static/build/admin/*  (htmx 4, hashed names + manifest)
+//   `vite build`               -> public site, static/build/*
+//   `vite build --mode admin`  -> staff console, static/build/admin/* (hashed names + manifest)
 // The public build must never wipe the admin output, so it cleans its own files only.
 const cleanPublicOutput = () => ({
   name: "clean-public-build",
@@ -22,7 +22,7 @@ const cleanPublicOutput = () => ({
   },
 });
 
-// Bootstrap upgrade seam (5.3.8 -> 6.0.0)
+// Bootstrap upgrade seam
 // ---------------------------------------------------------------------------
 // Bootstrap is imported from exactly two places and nowhere else:
 //   * frontend/src/admin/styles/_bootstrap.scss      (SCSS partial list)
@@ -47,11 +47,6 @@ const publicConfig = {
   base: "./",
   publicDir: false,
   plugins: [cleanPublicOutput()],
-  resolve: {
-    // The public bundle is written against htmx 2 events/attributes (htmx:afterSwap, htmx:confirm, ...);
-    // htmx 4 renamed them, so `htmx.org` maps to the pinned 2.x alias here. The console uses htmx 4.
-    alias: [{ find: /^htmx\.org$/, replacement: "htmx2" }],
-  },
   build: {
     outDir: buildRoot,
     emptyOutDir: false,
@@ -61,8 +56,6 @@ const publicConfig = {
         tokens: entry("./frontend/src/styles/tokens.scss"),
         site: entry("./frontend/src/site.js"),
         "theme-init": entry("./frontend/src/theme-init.js"),
-        seo: entry("./frontend/src/styles/seo.css"),
-        "seo-sitemap": entry("./frontend/src/styles/seo-sitemap.css"),
         editor: entry("./frontend/src/editor.js"),
         "editor-core": entry("./frontend/src/editor-core.js"),
       },

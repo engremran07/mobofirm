@@ -213,12 +213,12 @@ class TestSeedGuards:
 
 
 @pytest.fixture(name="seeded_slice")
-def build_seeded_slice(request: pytest.FixtureRequest) -> str:
+def build_seeded_slice() -> str:
     """Two brands seeded end to end (the on-commit automation must run)."""
-    request.getfixturevalue("transactional_db")
     return _run("seed_platform", confirm=True, limit_brands=2)
 
 
+@pytest.mark.django_db(transaction=True)
 class TestSeedPlatformSlice:
     def test_catalogue_review_and_automation(self, seeded_slice):
         assert Brand.objects.count() == 2
@@ -255,13 +255,13 @@ class TestSeedPlatformSlice:
         ):
             links = AutomatedBlogLink.objects.filter(kind=kind)
             assert links.count() == expected, kind
-        duplicated = (
-            Post.objects.filter(is_ai_generated=True, firmware_model__isnull=False)
-            .values("firmware_model")
-            .annotate(total=Count("pk"))
-            .filter(total__gt=1)
+        model_links = AutomatedBlogLink.objects.filter(kind="model").select_related(
+            "post"
         )
-        assert not duplicated.exists()
+        assert {link.model_id for link in model_links} == set(
+            Model.objects.values_list("pk", flat=True)
+        )
+        assert all(link.post.firmware_model_id == link.model_id for link in model_links)
         for model in Model.objects.all():
             post = AutomatedBlogLink.objects.get(kind="model", model=model).post
             assert post.is_live

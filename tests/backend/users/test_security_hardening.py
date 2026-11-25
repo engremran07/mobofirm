@@ -120,16 +120,17 @@ class DrfAuthenticationSurfaceTests(TestCase):
 
         self.assertIn(response.status_code, {401, 403})
 
-    def test_unlisted_endpoints_ignore_token_credentials(self):
+    def test_staff_device_audit_page_ignores_token_credentials(self):
         staff = make_user("staff-api@example.com", "staffapi", is_staff=True)
         token = Token.objects.create(user=staff)
 
         response = APIClient().get(
-            reverse("devices:behavior-insights-list"),
+            reverse("devices:device_events"),
             HTTP_AUTHORIZATION=f"Token {token.key}",
         )
 
-        self.assertIn(response.status_code, {401, 403})
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(response["Location"].startswith(reverse("admin:login")))
 
     def test_login_issues_a_fresh_token_each_time_and_drops_the_old_one(self):
         client = APIClient()

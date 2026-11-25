@@ -117,8 +117,8 @@ def test_theme_mode_and_contrast_persist_across_reloads(live_server):
 
 
 @pytest.mark.django_db(transaction=True)
-def test_command_palette_opens_with_the_shortcut_and_reuses_site_search(live_server):
-    """Ctrl+K opens a modal palette whose search is the shared combobox."""
+def test_public_command_palette_is_removed_and_global_search_remains(live_server):
+    """Public pages have no command menu; the shared search still works."""
     brand = Brand.objects.create(name="Zephyrix", slug="zephyrix")
     Model.objects.create(
         brand=brand, name="Zephyrix Nova 5", slug="zephyrix-nova-5", model_code="ZX-5"
@@ -128,42 +128,21 @@ def test_command_palette_opens_with_the_shortcut_and_reuses_site_search(live_ser
         page = browser.new_page(viewport={"width": 1440, "height": 900})
         watch(page, failures)
         _prepare(page, live_server)
-        dialog = page.locator("#command-palette")
-        assert not dialog.is_visible()
+        assert page.locator("#command-palette").count() == 0
+        assert page.locator("[data-command-palette-open]").count() == 0
 
         page.keyboard.press("Control+k")
-        expect(dialog).to_be_visible()
-        assert dialog.evaluate("element => element.matches(':modal')")
-        assert page.evaluate("document.activeElement.id") == "palette-search"
-        assert dialog.locator("[role='combobox']").count() == 1
+        search = page.locator("#site-search")
+        expect(search).to_be_focused()
 
         page.keyboard.type("Zephyrix", delay=30)
-        options = page.locator("#palette-search-results [role='option']")
+        options = page.locator("#site-search-results [role='option']")
         expect(options.first).to_be_visible(timeout=5_000)
-
-        # Escape closes the suggestions, then clears the query, then the palette.
-        for _ in range(3):
-            page.keyboard.press("Escape")
-        expect(dialog).not_to_be_visible()
-
-        page.locator("button[data-command-palette-open]:visible").first.click()
-        expect(dialog).to_be_visible()
-        dialog.locator("a.cmdk__item", has_text="Brands").click()
-        page.wait_for_url(f"**{reverse('firmwares:brand_list')}")
+        page.set_viewport_size({"width": 360, "height": 640})
+        page.get_by_role("button", name="Toggle navigation").click()
+        assert page.locator("#site-search-mobile").is_visible()
+        assert page.locator("#command-palette").count() == 0
     assert not failures, failures
-
-
-@pytest.mark.django_db(transaction=True)
-def test_palette_is_contained_on_a_phone(live_server):
-    """The palette fits a 360px viewport and closes from its backdrop."""
-    with chromium() as browser:
-        page = browser.new_page(viewport={"width": 360, "height": 640})
-        _prepare(page, live_server)
-        page.locator("button[data-command-palette-open]:visible").first.click()
-        box = page.locator("#command-palette").bounding_box()
-        assert box and box["x"] >= 0 and box["x"] + box["width"] <= 360
-        page.mouse.click(5, 635)
-        expect(page.locator("#command-palette")).not_to_be_visible()
 
 
 @pytest.mark.django_db(transaction=True)

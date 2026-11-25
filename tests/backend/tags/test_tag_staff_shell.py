@@ -29,7 +29,7 @@ class TagStaffPageShellTests(TestCase):
         )
         self.source = Tag.objects.create(name="Boot loader", is_curated=True)
         self.target = Tag.objects.create(name="Bootloader", is_curated=True)
-        self.suggestion = Tag.objects.create(name="Odd idea", ai_suggested=True)
+        self.suggestion = Tag.objects.create(name="Odd idea", is_suggested=True)
         provider = KeywordProvider.objects.create(name="Shell manual")
         KeywordSuggestion.objects.create(
             provider=provider, keyword="odin flash", score=0.8

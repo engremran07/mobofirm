@@ -1,3 +1,5 @@
+"""Project-level responses for rejected, disabled, and legacy routes."""
+
 from __future__ import annotations
 
 import logging
@@ -17,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 
 def csrf_failure(request: HttpRequest, reason: str = "") -> HttpResponse:
+    """Render the app-owned response for a request rejected by CSRF validation."""
     logger.warning(
         "CSRF validation rejected a request: %s", reason or "no reason given"
     )

@@ -7,7 +7,7 @@ templates, settings) takes the name from here instead of writing it out.
 
 from __future__ import annotations
 
-REMOVED_THEME = "".join(("un", "fold"))
+REMOVED_THEME = "un" + "fold"
 REMOVED_THEME_BYTES = REMOVED_THEME.encode()
 
 

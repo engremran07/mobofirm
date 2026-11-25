@@ -32,7 +32,7 @@ def _staff(username: str, *, permission: str = "") -> Client:
 
 @pytest.fixture(name="suggestion")
 def suggestion_fixture() -> Tag:
-    return Tag.objects.create(name="Console suggestion", ai_suggested=True)
+    return Tag.objects.create(name="Console suggestion", is_suggested=True)
 
 
 @pytest.mark.django_db
@@ -51,7 +51,7 @@ def test_get_renders_the_dialog_fragment_and_never_changes_data(suggestion):
     assert "hx-post=" in html
     assert "HX-Request" in response["Vary"]
     suggestion.refresh_from_db()
-    assert suggestion.ai_suggested and suggestion.is_active
+    assert suggestion.is_suggested and suggestion.is_active
 
 
 @pytest.mark.django_db
@@ -78,7 +78,7 @@ def test_post_closes_the_dialog_and_applies_the_change(suggestion):
     assert response.status_code == 204
     assert "dialog:close" in json.loads(response["HX-Trigger"])
     suggestion.refresh_from_db()
-    assert not suggestion.ai_suggested and not suggestion.is_active
+    assert not suggestion.is_suggested and not suggestion.is_active
 
 
 @pytest.mark.django_db
@@ -99,7 +99,7 @@ def test_staff_without_the_permission_cannot_open_or_submit(suggestion):
     assert client.get(url, headers=HTMX).status_code == 403
     assert client.post(url, headers=HTMX).status_code == 403
     suggestion.refresh_from_db()
-    assert suggestion.ai_suggested and suggestion.is_active
+    assert suggestion.is_suggested and suggestion.is_active
 
 
 @pytest.mark.django_db
@@ -120,4 +120,4 @@ def test_post_needs_a_csrf_token(suggestion):
 
     assert response.status_code == 403
     suggestion.refresh_from_db()
-    assert suggestion.ai_suggested
+    assert suggestion.is_suggested

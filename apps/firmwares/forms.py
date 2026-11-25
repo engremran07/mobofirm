@@ -119,7 +119,7 @@ class ModelRequestForm(forms.Form):
 
     brand = _hidden_choice(Brand.objects.all(), "Choose the brand from the list.")
     chipset = forms.ModelChoiceField(
-        queryset=Chipset.objects.all(),
+        queryset=Chipset.objects.select_related("vendor"),
         widget=forms.HiddenInput,
         required=False,
         error_messages={"invalid_choice": "Choose the chipset from the list."},

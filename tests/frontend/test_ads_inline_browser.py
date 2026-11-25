@@ -31,6 +31,7 @@ WIDTHS = (360, 768, 1280)
 BANNER = "section.consent-banner"
 BRAND_PAGE = "firmwares/brand_list.html"
 POST_PAGE = "blog/post_detail.html"
+JOURNAL_PAGE = "blog/post_list.html"
 CLS_PROBE = """
 window.__cls = 0;
 new PerformanceObserver((list) => {
@@ -106,6 +107,43 @@ def seed() -> str:
         publish_at=timezone.now() - timedelta(minutes=5),
     )
     return reverse("blog:post_detail", kwargs={"slug": post.slug})
+
+
+def seed_journal_feed() -> None:
+    row = AdsSettings.get_solo()
+    row.ads_enabled = True
+    row.excluded_user_roles = ""
+    row.save()
+    campaign = Campaign.objects.create(name="Journal house", type="house")
+    creative = AdCreative.objects.create(
+        campaign=campaign,
+        name="Journal offer",
+        creative_type="native",
+        html='<p class="ad-zone__house">Journal partner offer</p>',
+    )
+    placement = AdPlacement.objects.create(
+        name="Journal feed",
+        code="journal-feed",
+        slug="journal-feed",
+        template_reference=JOURNAL_PAGE,
+        zone="between_items",
+        auto_first_after=8,
+        auto_every=8,
+    )
+    PlacementAssignment.objects.create(placement=placement, creative=creative)
+    author = get_user_model().objects.create_user(
+        username="journal-ad-author", email="journal-ad-author@example.test"
+    )
+    published = timezone.now() - timedelta(minutes=5)
+    for number in range(10):
+        Post.objects.create(
+            title=f"Journal feed article {number}",
+            body="<p>Public article content for the sponsored feed test.</p>",
+            author=author,
+            status=PostStatus.PUBLISHED,
+            publish_at=published,
+            published_at=published,
+        )
 
 
 def accept_consent(page, live_server) -> None:
@@ -191,5 +229,42 @@ def test_in_article_slots_sit_between_paragraphs_with_reserved_space(live_server
             dimensions = overflow(page)
             assert dimensions["document"] <= dimensions["viewport"] + 1, width
             assert page.evaluate("window.__cls") < 0.1, f"layout shift at {width}px"
+
+    assert not failures, "\n".join(failures)
+
+
+@pytest.mark.django_db(transaction=True)
+def test_journal_feed_tile_is_after_eight_cards_and_requires_consent(live_server):
+    seed_journal_feed()
+    failures: list[str] = []
+    with chromium() as browser:
+        page = browser.new_page(viewport={"width": 1280, "height": 900})
+        watch(page, failures)
+        journal_url = f"{live_server.url}{reverse('blog:post_list')}"
+        page.goto(journal_url)
+        ready(page)
+        expect(page.locator("[data-ad-tile]")).to_have_count(0)
+
+        accept_consent(page, live_server)
+        for width in WIDTHS:
+            page.set_viewport_size({"width": width, "height": 900})
+            page.goto(journal_url)
+            ready(page)
+            tile = page.locator("[data-ad-tile]")
+            expect(tile).to_have_count(1)
+            expect(tile.get_by_text("Sponsored")).to_be_visible()
+            expect(tile.get_by_text("Journal partner offer")).to_be_visible()
+            cards_before = page.evaluate(
+                """() => {
+                    const ad = document.querySelector("[data-ad-tile]");
+                    return [...document.querySelectorAll(".post-card")].filter(
+                      (card) => card.compareDocumentPosition(ad)
+                        & Node.DOCUMENT_POSITION_FOLLOWING
+                    ).length;
+                }"""
+            )
+            assert cards_before == 8
+            dimensions = overflow(page)
+            assert dimensions["document"] <= dimensions["viewport"] + 1, width
 
     assert not failures, "\n".join(failures)

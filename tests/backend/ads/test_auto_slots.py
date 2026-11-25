@@ -7,6 +7,7 @@ from html.parser import HTMLParser
 
 import pytest
 
+from apps.ads.models import AdPlacement
 from apps.ads.services import auto_slots
 from apps.ads.services.auto_slots import (
     AutoRule,
@@ -112,13 +113,9 @@ def test_tile_slots_respect_the_page_budget():
 
 
 def test_rule_for_uses_defaults_and_clamps_unsafe_placement_values():
-    class Placement:
-        auto_first_after = 0
-        auto_every = 0
-        auto_max = 0
-        auto_min_items = 0
-
-    placement = Placement()
+    placement = AdPlacement(
+        auto_first_after=0, auto_every=0, auto_max=0, auto_min_items=0
+    )
     assert rule_for(None, auto_slots.IN_ARTICLE) == RULE
     assert rule_for(placement, auto_slots.IN_ARTICLE) == RULE
     placement.auto_first_after = 1  # would put an ad in the first paragraph
@@ -142,7 +139,9 @@ def test_scan_blocks_reports_top_level_elements_only():
 
 def test_scan_blocks_offsets_slice_exactly_the_source():
     html = '<p title="a>b">one</p>\n<p>two</p>'
-    first, second = scan_blocks(html)
+    blocks = scan_blocks(html)
+    assert blocks is not None
+    first, second = blocks
 
     assert html[first.start : first.end] == '<p title="a>b">one</p>'
     assert html[second.start : second.end] == "<p>two</p>"
@@ -151,6 +150,7 @@ def test_scan_blocks_offsets_slice_exactly_the_source():
 def test_scan_blocks_handles_crlf_line_endings():
     html = "<p>one</p>\r\n<p>two\r\nlines</p>\r\n<p>three</p>"
     blocks = scan_blocks(html)
+    assert blocks is not None
 
     assert [html[b.start : b.end] for b in blocks] == [
         "<p>one</p>",
@@ -178,6 +178,7 @@ def test_scripts_and_comments_do_not_create_paragraphs():
         "<!-- <p>comment</p> --><style>p{}</style><p>real two</p>"
     )
     blocks = scan_blocks(html)
+    assert blocks is not None
 
     assert [b.tag for b in blocks] == ["p", "script", "style", "p"]
     assert auto_slots.paragraph_count(blocks) == 2
@@ -186,7 +187,10 @@ def test_scripts_and_comments_do_not_create_paragraphs():
 def test_empty_and_image_only_paragraphs_are_not_text_paragraphs():
     html = '<p>&nbsp;</p><p><img src="x.png" alt=""></p><p></p><p>text</p>'
 
-    assert auto_slots.paragraph_count(scan_blocks(html)) == 1
+    blocks = scan_blocks(html)
+    assert blocks is not None
+
+    assert auto_slots.paragraph_count(blocks) == 1
 
 
 # --------------------------------------------------------------- insertion ----

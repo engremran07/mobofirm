@@ -10,6 +10,7 @@ register_reward_event(
         key=BADGE_EARNED_REWARD_KEY,
         label="Earn a badge",
         app="gamification",
+        url_name="gamification:badges",
         default_credits=0,
         dynamic_amount=True,
     )

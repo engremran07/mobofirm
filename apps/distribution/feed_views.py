@@ -115,7 +115,7 @@ def feed(request: HttpRequest, key: str, fmt: str) -> HttpResponse:
 def public_feeds() -> list[dict[str, object]]:
     """The feeds a visitor may subscribe to (fixed ones that are on and available)."""
     off = set(FeedConfig.objects.filter(enabled=False).values_list("key", flat=True))
-    rows = []
+    rows: list[dict[str, object]] = []
     for key, title, description in feeds.FIXED:
         if key in off or (key == feeds.NEWS_KEY and not feeds.news_available()):
             continue

@@ -158,7 +158,7 @@ def _service_call(request: HttpRequest, form: Any, call) -> HttpResponse | None:
 CHECK_INCLUDES = {
     "brand": "this",
     "chipset": "[name='vendor']",
-    "model": "[name='brand']",
+    "model": "[name='brand'], [name='chipset']",
     "variant": "[name='brand'], [name='model']",
 }
 
@@ -317,11 +317,21 @@ def request_check(request: HttpRequest) -> HttpResponse:
     if kind is None:
         return render(request, "firmwares/requests/_check.html", {"check": None})
     name = _text(request, "name")
-    brand_id, model_id = _int(request, "brand"), _int(request, "model")
+    brand_id, model_id, chipset_id = (
+        _int(request, "brand"),
+        _int(request, "model"),
+        _int(request, "chipset"),
+    )
     brand = Brand.objects.filter(pk=brand_id).first() if brand_id else None
     model = Model.objects.filter(pk=model_id).first() if model_id else None
+    chipset = Chipset.objects.filter(pk=chipset_id).first() if chipset_id else None
     check = requests_service.check_existing(
-        kind, name, brand=brand, model=model, vendor=_text(request, "vendor")
+        kind,
+        name,
+        brand=brand,
+        model=model,
+        chipset=chipset,
+        vendor=_text(request, "vendor"),
     )
     return render(
         request,

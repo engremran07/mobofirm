@@ -11,6 +11,8 @@ from django.apps import apps
 from django.db import models, transaction
 from django.db.models.signals import post_delete, post_save, pre_save
 
+from apps.core.utils.feature_flags import reset_cache
+
 from . import jobs
 from .contentsources import ContentSource, content_sources
 from .managers import default_manager
@@ -18,6 +20,11 @@ from .services.internal_linking.engine import refresh_linkable_entity
 
 logger = logging.getLogger(__name__)
 _previous = threading.local()
+
+
+def _seo_settings_saved(sender: type[models.Model], **kwargs: Any) -> None:
+    """Feature flags are cached briefly; settings writes must invalidate them."""
+    reset_cache()
 
 
 def _state(source: ContentSource, instance: Any) -> tuple[str, bool]:
@@ -85,6 +92,12 @@ def _deleted(sender: type[models.Model], instance: Any, **kwargs: Any) -> None:
 
 def connect_content_sources() -> None:
     """Connect observers for every registered source whose model is installed."""
+    seo_settings = apps.get_model("seo", "seosettings")
+    post_save.connect(
+        _seo_settings_saved,
+        sender=seo_settings,
+        dispatch_uid="seo-settings-feature-cache",
+    )
     for label in content_sources():
         try:
             model = apps.get_model(label)

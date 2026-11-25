@@ -16,7 +16,8 @@ Three scanning modes:
 3. **Discovery approval** (admin-triggered):
    Converts approved ``ScanDiscovery`` records into live ``AdPlacement`` entries.
 
-Admin templates, error pages, and base layouts are **always excluded**.
+Admin, console, email, partial, component, error, and base templates are **always
+excluded**. Public page scans must directly extend ``base.html``.
 """
 
 from __future__ import annotations
@@ -41,6 +42,14 @@ EXCLUDED_DIRS: set[str] = {
     "layouts",
     "base",
     "errors",
+    "console",
+    "emails",
+    "partials",
+    "fragments",
+    "components",
+    "ads",
+    "seo",
+    "analytics",
     "account",  # allauth account templates
 }
 
@@ -55,13 +64,17 @@ PUBLIC_DIRS: set[str] = {
     "bounty",
     "tags",
     "users",
-    "components",
     "core",
-    "ads",
-    "consent",
+    "shop",
+    "marketplace",
+    "wallet",
+    "search",
+    "comments",
+    "promotions",
+    "gamification",
+    "referral",
     "distribution",
-    "seo",
-    "analytics",
+    "consent",
 }
 
 # Regex: existing ad slot references in templates
@@ -69,6 +82,8 @@ AD_SLOT_PATTERN = re.compile(
     r"(?:ads:slot|<!--\s*ad-slot:|{%\s*render_ad_slot\s+['\"])(?P<name>[\w\-\s]+)",
     re.IGNORECASE,
 )
+AD_ZONE_PATTERN = re.compile(r"""{%\s*ad_zone\s+["'](?P<name>[^"']+)["']""")
+AUTO_SLOT_PATTERN = re.compile(r"{%\s*(?:ad_article_body|ad_tile)\b", re.IGNORECASE)
 
 # Django template tags for inheritance/include analysis
 EXTENDS_PATTERN = re.compile(
@@ -108,6 +123,8 @@ NEGATIVE_PATTERNS: dict[str, re.Pattern[str]] = {
 
 # Viewport zone classification
 ZONE_PATTERNS: dict[str, re.Pattern[str]] = {
+    "left-rail": re.compile(r"""{%\s*ad_zone\s+["']left_rail["']""", re.IGNORECASE),
+    "right-rail": re.compile(r"""{%\s*ad_zone\s+["']right_rail["']""", re.IGNORECASE),
     "above-fold": re.compile(
         r'class="[^"]*(?:hero|banner|header|jumbotron|masthead)[^"]*"', re.IGNORECASE
     ),
@@ -287,12 +304,10 @@ def scan_templates_for_placements() -> dict[str, Any]:
         relative = path.relative_to(templates_dir)
         top_dir = relative.parts[0] if len(relative.parts) > 1 else ""
 
-        # Skip excluded directories
-        if top_dir in EXCLUDED_DIRS:
-            continue
-
-        # Skip fragments (standalone HTMX snippets — too small for ads)
-        if "fragments" in relative.parts:
+        # Restrict scanning to known public sections, including nested page paths.
+        if top_dir not in PUBLIC_DIRS or any(
+            part in EXCLUDED_DIRS for part in relative.parts[:-1]
+        ):
             continue
 
         relative_path = relative.as_posix()
@@ -305,6 +320,9 @@ def scan_templates_for_placements() -> dict[str, Any]:
         try:
             text = path.read_text(encoding="utf-8", errors="ignore")
         except OSError:
+            continue
+
+        if "base.html" not in _extract_extends_chain(text):
             continue
 
         scanned += 1
@@ -331,7 +349,11 @@ def scan_templates_for_placements() -> dict[str, Any]:
         viewport_zones = _detect_viewport_zones(text)
 
         # ── Existing ad slots count (ad density) ──
-        existing_slots = len(AD_SLOT_PATTERN.findall(text))
+        existing_slots = (
+            len(AD_SLOT_PATTERN.findall(text))
+            + len(AD_ZONE_PATTERN.findall(text))
+            + len(AUTO_SLOT_PATTERN.findall(text))
+        )
         ad_density_warning = existing_slots >= 3
 
         # ── Classify template type ──
@@ -458,7 +480,8 @@ def approve_discovery(discovery_id: int, user: Any) -> dict[str, Any]:
     Approve a single ``ScanDiscovery`` and create the corresponding
     ``AdPlacement`` record.
     """
-    from apps.ads.models import AdPlacement, ScanDiscovery
+    from apps.ads.models import AdPlacement, ScanDiscovery, TemplateAdExclusion
+    from apps.ads.services.placement_manager import declared_zones
 
     try:
         discovery = ScanDiscovery.objects.select_related("scan_result").get(
@@ -477,6 +500,12 @@ def approve_discovery(discovery_id: int, user: Any) -> dict[str, Any]:
     slug = slugify(discovery.placement_code)
     scan = discovery.scan_result
     zone = zone_for_suggestion(discovery.placement_code)
+    if not zone:
+        return {"status": "error", "reason": "unsupported_zone"}
+    if TemplateAdExclusion.objects.filter(template_path=scan.template_path).exists():
+        return {"status": "error", "reason": "template_excluded"}
+    if zone not in declared_zones(scan.template_path):
+        return {"status": "error", "reason": "zone_not_declared"}
 
     # Two suggestions of one template can map to the same layout zone; the zone is
     # filled once, so the later approval links to the placement that already exists.

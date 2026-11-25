@@ -9,6 +9,7 @@ register_reward_event(
         key="referral.verified",
         label="A friend you invited joined and contributed",
         app="referral",
+        url_name="referral:dashboard",
         default_credits=20,
         default_monthly_cap=1000,
     )
@@ -18,6 +19,7 @@ register_reward_event(
         key="referral.welcome",
         label="Welcome bonus for joining through an invitation",
         app="referral",
+        url_name="referral:dashboard",
         default_credits=5,
     )
 )

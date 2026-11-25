@@ -133,7 +133,7 @@ def firmware_release(source: Source, hook: str, brand: Brand) -> Draft:
             hold_ms=3600,
         )
     )
-    stats = []
+    stats: list[dict[str, str | int | float]] = []
     if source.android_version:
         stats.append({"label": "Android", "value": source.android_version})
     if source.build_number:

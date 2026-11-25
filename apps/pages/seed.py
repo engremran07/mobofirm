@@ -49,7 +49,7 @@ meant for your exact device before you download it.
 
 New records go through a review step. Staff check the device, the category and the file
 source, and can reject or withdraw a record at any time. If you find an error, tell us
-using the details on the [contact page](/pages/contact/) and we will correct it.
+using the details on the [contact page](/help/contact/) and we will correct it.
 
 ## Who runs it
 
@@ -67,7 +67,7 @@ The quickest way to reach the {SITE_TOKEN} team is by email:
 - **A wrong or missing record.** Include the brand, the model name or code, and a link to
   the page you are reporting.
 - **A broken download link.** Include the firmware page link and what you saw.
-- **A takedown request.** Please read the [DMCA and takedown page](/pages/dmca/) first so
+- **A takedown request.** Please read the [DMCA and takedown page](/help/dmca/) first so
   your message contains everything we need.
 - **Your account.** For sign-in, verification or two-factor problems, use the account
   pages first. Write to us if you are still locked out.
@@ -105,7 +105,7 @@ fulfil orders. We do not sell personal data.
 
 ## Cookies
 
-See the [cookies and consent page](/pages/consent/) for the cookies the site sets.
+See the [cookies and consent page](/help/consent/) for the cookies the site sets.
 
 ## Your choices
 
@@ -132,7 +132,7 @@ the service.
 
 {SITE_TOKEN} publishes information about devices and links to firmware files. Staff review
 records, but the library is provided as it is. Read the
-[firmware disclaimer](/pages/firmware-disclaimer/) before flashing any device.
+[firmware disclaimer](/help/firmware-disclaimer/) before flashing any device.
 
 ## Accounts
 
@@ -167,7 +167,7 @@ until the link expires or you revoke it.
 ## Intellectual property
 
 Brand and product names belong to their owners and are used only to identify devices.
-Report suspected infringement through the [DMCA and takedown page](/pages/dmca/).
+Report suspected infringement through the [DMCA and takedown page](/help/dmca/).
 
 ## No warranty and limits of liability
 
@@ -286,7 +286,7 @@ defects or malware.
 
 Confirm the exact model code, region and variant, compare the checksum shown on the
 record when one is available, back up your data, and follow the maker's guidance. See
-[how to flash](/pages/how-to-flash/) for a general checklist.
+[how to flash](/help/how-to-flash/) for a general checklist.
 
 ## No affiliation
 
@@ -309,7 +309,7 @@ the guide for your exact model.
 4. **Check the account locks.** Remove or know the credentials for factory-reset
    protection and any screen or cloud lock.
 5. **Read the firmware page.** Note the category, region, version and checksum, and read
-   the [disclaimer](/pages/firmware-disclaimer/).
+   the [disclaimer](/help/firmware-disclaimer/).
 
 ## Choose the right tool
 
@@ -348,7 +348,7 @@ and the single-use download link are all enforced by the server, not just shown 
 ## Who approves the firmware listed here?
 
 Staff review each record before it appears publicly and can withdraw it later. See the
-[firmware disclaimer](/pages/firmware-disclaimer/) for what review does and does not cover.
+[firmware disclaimer](/help/firmware-disclaimer/) for what review does and does not cover.
 
 ## What do the categories mean?
 
@@ -357,7 +357,7 @@ disclaimer page explains each one.
 
 ## My device is missing. What can I do?
 
-Write to us using the [contact page](/pages/contact/) with the brand, model name and model
+Write to us using the [contact page](/help/contact/) with the brand, model name and model
 code, and we will look at adding it.
 
 ## Can I buy a larger download allowance?
@@ -378,8 +378,8 @@ page for the current allowance.
 
 ## How do I report an error or a copyright problem?
 
-For errors, use the [contact page](/pages/contact/). For copyright, follow the
-[takedown instructions](/pages/dmca/).
+For errors, use the [contact page](/help/contact/). For copyright, follow the
+[takedown instructions](/help/dmca/).
 """
 
 ADVERTISE = f"""

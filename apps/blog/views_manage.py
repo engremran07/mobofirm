@@ -26,7 +26,7 @@ from apps.blog.access import (
     can_manage_post,
 )
 from apps.blog.forms import CategoryForm, PostForm
-from apps.blog.models import GuideRequest, Post, PostRevision, PostStatus
+from apps.blog.models import GuideRequest, Post, PostRevision, PostSource, PostStatus
 from apps.blog.services import workflow
 from apps.blog.services.history import PostHistoryService
 from apps.core.utils.logging import log_event
@@ -87,10 +87,8 @@ def manage_posts(request: HttpRequest) -> HttpResponse:
         status_filter = ""
 
     source_filter = request.GET.get("source", "").strip()
-    if source_filter == "automated":
-        posts = posts.filter(is_ai_generated=True)
-    elif source_filter == "manual":
-        posts = posts.filter(is_ai_generated=False)
+    if source_filter in PostSource.values:
+        posts = posts.filter(content_source=source_filter)
     else:
         source_filter = ""
 

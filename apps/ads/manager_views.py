@@ -209,6 +209,12 @@ def approve_discovery(request: HttpRequest, pk: int) -> HttpResponse:
     result = scanner.approve_discovery(pk, request.user)
     if result["status"] == "success":
         messages.success(request, "Suggestion approved; the placement is ready.")
+    elif result.get("reason") == "template_excluded":
+        messages.error(request, "This template has been excluded from ads.")
+    elif result.get("reason") == "zone_not_declared":
+        messages.error(
+            request, "This template no longer declares the suggested ad zone."
+        )
     else:
         messages.error(request, "That suggestion is no longer pending.")
     return redirect("ads:discoveries")

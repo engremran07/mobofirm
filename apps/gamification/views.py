@@ -6,6 +6,7 @@ from django.http import HttpRequest, HttpResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_GET
 
+from apps.core.decorators import require_app_enabled
 from apps.gamification import services
 from apps.gamification.models import Badge, UserBadge, XPTransaction
 from apps.users.request_user import current_user
@@ -13,6 +14,7 @@ from apps.users.request_user import current_user
 PERIOD_LABELS = (("week", "This week"), ("month", "This month"), ("all", "All time"))
 
 
+@require_app_enabled("gamification")
 @require_GET
 def badges(request: HttpRequest) -> HttpResponse:
     catalogue = Badge.objects.filter(is_active=True).annotate(holders=Count("awards"))
@@ -30,6 +32,7 @@ def badges(request: HttpRequest) -> HttpResponse:
     )
 
 
+@require_app_enabled("gamification")
 @require_GET
 def leaderboard(request: HttpRequest) -> HttpResponse:
     period = request.GET.get("period", "all")
@@ -46,6 +49,7 @@ def leaderboard(request: HttpRequest) -> HttpResponse:
     )
 
 
+@require_app_enabled("gamification")
 @login_required
 @require_GET
 def progress(request: HttpRequest) -> HttpResponse:

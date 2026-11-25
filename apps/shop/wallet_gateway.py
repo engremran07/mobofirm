@@ -25,6 +25,7 @@ CONTRACT = (
     "balance",
     "to_credits",
     "earn_url",
+    "cancel_topup_for_shop_order",
     "InsufficientCredits",
     "WalletError",
 )
@@ -109,8 +110,28 @@ def refund(key: str, *, reason: str) -> None:
     _require().refund(key, reason=reason)
 
 
+def cancel_topup_for_shop_order(
+    order_id: int, *, topup_id: int, staff_user: Any
+) -> bool:
+    """Cancel the wallet request associated with a staff-cancelled shop order."""
+    wallet = _require()
+    try:
+        return bool(
+            wallet.cancel_topup_for_shop_order(
+                order_id, topup_id=topup_id, staff_user=staff_user
+            )
+        )
+    except wallet.WalletError as error:
+        raise CreditsUnavailable(str(error)) from error
+
+
 def register_sink(
-    key: str, label: str, default_credits: int = 0, *, derived: bool = False
+    key: str,
+    label: str,
+    default_credits: int = 0,
+    *,
+    derived: bool = False,
+    url_name: str = "",
 ) -> bool:
     """Declare a spend sink; returns False when the wallet is unavailable."""
     wallet = _api()
@@ -123,6 +144,7 @@ def register_sink(
             app="shop",
             default_credits=default_credits,
             derived=derived,
+            url_name=url_name,
         )
     )
     return True

@@ -200,10 +200,15 @@ class Command(BaseCommand):
             self.stdout.write(line)
 
         slugs = [article.slug for article in ARTICLES]
-        live = Post.objects.live().filter(slug__in=slugs, is_ai_generated=False)
+        live = Post.objects.live().filter(
+            slug__in=slugs,
+            content_source__in=("editorial", "community_contribution"),
+        )
         check(live.count() == len(slugs), "An editorial article is not public.")
         check(
-            not Post.objects.filter(is_ai_generated=False)
+            not Post.objects.filter(
+                content_source__in=("editorial", "community_contribution")
+            )
             .exclude(status=PostStatus.PUBLISHED)
             .exists(),
             "A seeded guide or article is still unpublished.",

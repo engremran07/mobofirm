@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import io
 import subprocess
 from datetime import timedelta
@@ -41,6 +42,31 @@ def read_image(asset):
         return Image.open(io.BytesIO(handle.read()))
 
 
+class MemoryStorage:
+    """Minimal storage for replacement failure tests."""
+
+    def __init__(self, *, missing_first=False):
+        """Start with no files."""
+        self.files = {}
+        self.missing_first = missing_first
+
+    def exists(self, name):
+        """Report whether a path is present."""
+        if self.missing_first:
+            self.missing_first = False
+            return False
+        return name in self.files
+
+    def save(self, name, content):
+        """Store the uploaded bytes under their requested path."""
+        self.files[name] = content.read()
+        return name
+
+    def delete(self, name):
+        """Remove a stored path if present."""
+        self.files.pop(name, None)
+
+
 def fake_ffmpeg(monkeypatch, *, returncode=0, stderr=b""):
     monkeypatch.setattr(media, "ffmpeg_path", lambda: "ffmpeg")
     calls = []
@@ -53,6 +79,91 @@ def fake_ffmpeg(monkeypatch, *, returncode=0, stderr=b""):
 
     monkeypatch.setattr(media.subprocess, "run", run)
     return calls
+
+
+def test_failed_asset_replacement_preserves_the_previous_file_and_row(monkeypatch):
+    """A failed new write must leave the current asset and file untouched."""
+    item = spec()
+    digest = hashlib.sha256(f"{item.kind}:{item.ref}".encode()).hexdigest()[:20]
+    old_name = f"distribution/card/{digest}.png"
+    storage = MemoryStorage(missing_first=True)
+    storage.files[old_name] = b"previous image"
+    asset = MediaAsset.objects.create(
+        content_kind=item.kind,
+        object_ref=item.ref,
+        asset_kind=MediaAsset.AssetKind.CARD,
+        storage_name=old_name,
+    )
+
+    def fail_save(_name, _content):
+        raise OSError("storage unavailable")
+
+    monkeypatch.setattr(media, "render_card", lambda *_args: b"replacement image")
+    monkeypatch.setattr(storage, "save", fail_save)
+    monkeypatch.setattr(media, "default_storage", storage)
+
+    with pytest.raises(OSError, match="storage unavailable"):
+        media.ensure_card(item)
+
+    asset.refresh_from_db()
+    assert asset.storage_name == old_name
+    assert storage.files[old_name] == b"previous image"
+
+
+def test_successful_asset_replacement_deletes_old_file_after_commit(
+    monkeypatch, django_capture_on_commit_callbacks
+):
+    """Retire the old media path only after the database replacement commits."""
+    item = spec()
+    digest = hashlib.sha256(f"{item.kind}:{item.ref}".encode()).hexdigest()[:20]
+    old_name = f"distribution/card/{digest}.png"
+    storage = MemoryStorage(missing_first=True)
+    storage.files[old_name] = b"previous image"
+    MediaAsset.objects.create(
+        content_kind=item.kind,
+        object_ref=item.ref,
+        asset_kind=MediaAsset.AssetKind.CARD,
+        storage_name=old_name,
+    )
+    monkeypatch.setattr(media, "default_storage", storage)
+    monkeypatch.setattr(media, "render_card", lambda *_args: b"replacement image")
+
+    with django_capture_on_commit_callbacks(execute=True):
+        result = media.ensure_card(item)
+
+    assert result.asset is not None
+    assert result.asset.storage_name != old_name
+    assert old_name not in storage.files
+    assert storage.files[result.asset.storage_name] == b"replacement image"
+
+
+def test_recreated_asset_starts_a_fresh_retention_window(
+    monkeypatch, django_capture_on_commit_callbacks
+):
+    item = spec()
+    now = timezone.now()
+    old_created_at = now - timedelta(days=45)
+    old_name = f"distribution/card/{hashlib.sha256(f'{item.kind}:{item.ref}'.encode()).hexdigest()[:20]}.png"
+    storage = MemoryStorage(missing_first=True)
+    storage.files[old_name] = b"previous image"
+    asset = MediaAsset.objects.create(
+        content_kind=item.kind,
+        object_ref=item.ref,
+        asset_kind=MediaAsset.AssetKind.CARD,
+        storage_name=old_name,
+    )
+    MediaAsset.objects.filter(pk=asset.pk).update(created_at=old_created_at)
+    monkeypatch.setattr(media, "default_storage", storage)
+    monkeypatch.setattr(media, "render_card", lambda *_args: b"replacement image")
+
+    with django_capture_on_commit_callbacks(execute=True):
+        result = media.ensure_card(item)
+
+    assert result.asset is not None
+    result.asset.refresh_from_db()
+    assert result.asset.created_at > old_created_at
+    assert media.purge_expired(30, now=now) == 0
+    assert storage.exists(result.asset.storage_name)
 
 
 def test_cards_are_drawn_in_both_sizes_and_stored_once():

@@ -405,8 +405,42 @@ class EnterpriseLoginView(LoginView):
 class EnterpriseSignupView(SignupView):
     """Tenant-aware signup with optional reCAPTCHA verification."""
 
-    form_class = SignupForm
     template_name = "account/signup.html"
+
+    def get_form_class(self):
+        base: Any = SignupForm
+
+        class ReferralSignupForm(base):
+            referral_code = forms.CharField(
+                max_length=20,
+                required=False,
+                label="Referral code",
+                help_text="Optional. Enter a friend's Mobofirm referral code.",
+            )
+
+            def clean_referral_code(self):
+                code = (self.cleaned_data.get("referral_code") or "").strip()
+                if not code:
+                    return ""
+                from apps.referral import services
+
+                found = services.find_code(code)
+                if found is None:
+                    raise forms.ValidationError(
+                        "That referral code is invalid or inactive."
+                    )
+                return found.code
+
+            def clean(self):
+                cleaned = super().clean()
+                code = cleaned.get("referral_code") or ""
+                if code:
+                    from apps.referral import services
+
+                    services.capture_code(self.request, code)
+                return cleaned
+
+        return ReferralSignupForm
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -1080,6 +1114,12 @@ def tell_us_about_you(request: HttpRequest) -> HttpResponse:
                 user=user,
                 defaults=profile_defaults,
             )
+
+            referral_code = form.cleaned_data.get("referral_code") or ""
+            if referral_code:
+                from apps.referral import services
+
+                services.capture_code(request, referral_code)
 
             if profile_ready:
                 reward_profile_completion(user)

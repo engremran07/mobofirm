@@ -62,6 +62,7 @@ def test_the_contract_never_returns_the_file_host_address(firmware, monkeypatch)
         shortener, "absolute_url", lambda path, request=None: f"https://site.test{path}"
     )
     export = AppService.export("firmwares", "shorten_download_url")
+    assert callable(export)
     for mode in ShortenerMode:
         row = ShortenerSettings.get_solo()
         row.mode = ShortenerMode.FIRST_PARTY if mode != ShortenerMode.OFF else mode

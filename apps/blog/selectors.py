@@ -21,7 +21,7 @@ from django.db.models import (
 )
 from django.utils import timezone
 
-from apps.blog.models import Category, Post, PostAccess
+from apps.blog.models import Category, Post, PostAccess, PostSource
 from apps.blog.paywall import public_excerpt
 from apps.core.search import ListSearch, search_queryset
 from apps.tags.models import Tag
@@ -29,7 +29,7 @@ from apps.tags.selectors import public_tags
 
 SORT_OPTIONS = (
     ("recent", "Newest"),
-    ("popular", "Most read"),
+    ("popular", "Most popular"),
     ("oldest", "Oldest"),
     ("title", "Title A–Z"),
 )
@@ -58,8 +58,10 @@ class PostCard:
 
 def is_editorial(post: Post) -> bool:
     """Automated and system-authored posts carry the editorial byline."""
-    return post.is_ai_generated or post.author.username == getattr(
-        settings, "FIRMWARE_BLOG_AUTOMATION_USERNAME", ""
+    return (
+        post.content_source == PostSource.AUTOMATED
+        or post.author.username
+        == getattr(settings, "FIRMWARE_BLOG_AUTOMATION_USERNAME", "")
     )
 
 
@@ -138,22 +140,32 @@ class ListingFilters:
     category: str = ""
     tag: str = ""
     author: str = ""
+    access: str = ""
     sort: str = ""
 
     @classmethod
     def from_request(cls, params) -> ListingFilters:
         sort = (params.get("sort") or "").strip().lower()
+        access = (params.get("access") or "").strip().lower()
         return cls(
             q=(params.get("q") or "").strip()[:200],
             category=(params.get("category") or "").strip()[:120],
             tag=(params.get("tag") or "").strip()[:80],
             author=(params.get("author") or "").strip()[:150],
+            access=access if access in PostAccess.values else "",
             sort=sort if sort in dict(SORT_OPTIONS) else "",
         )
 
     @property
     def is_filtered(self) -> bool:
-        return bool(self.q or self.category or self.tag or self.author or self.sort)
+        return bool(
+            self.q
+            or self.category
+            or self.tag
+            or self.author
+            or self.access
+            or self.sort
+        )
 
     def query_string(self, **overrides: str) -> str:
         values = {
@@ -161,6 +173,7 @@ class ListingFilters:
             "category": self.category,
             "tag": self.tag,
             "author": self.author,
+            "access": self.access,
             "sort": self.sort,
         } | overrides
         return urlencode({key: value for key, value in values.items() if value})
@@ -221,6 +234,8 @@ def listing(filters: ListingFilters) -> tuple[QuerySet[Post], ListSearch]:
         posts = posts.filter(tags__slug=filters.tag, tags__in=public_tags())
     if filters.author:
         posts = posts.filter(author__username=filters.author)
+    if filters.access:
+        posts = posts.filter(access=filters.access)
     sort = filters.sort or ("relevance" if filters.q else "recent")
     if sort == "relevance":
         return posts.order_by(F("rank").desc(), "-published_at"), result

@@ -185,7 +185,7 @@ def get_compatible_tools_from_db(
     # Filter by chipset vendor if known
     vendor = vendor_for(chipset)
     if vendor:
-        qs = qs.filter(chipsets__vendor=vendor).distinct()
+        qs = qs.filter(chipsets__vendor__name=vendor).distinct()
 
     tools = list(qs.order_by("-is_featured", "name")[:20])
 
@@ -217,7 +217,7 @@ def filter_tools_for_brand(
             continue
         # If the chipset vendor is known, the tool must support it when it lists any
         if vendor:
-            tool_vendors = {c.vendor for c in tool.chipsets.all()}
+            tool_vendors = {c.vendor.name for c in tool.chipsets.all()}
             if tool_vendors and vendor not in tool_vendors:
                 continue
         result.append(tool)

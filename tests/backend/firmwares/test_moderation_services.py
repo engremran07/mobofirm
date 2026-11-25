@@ -74,6 +74,49 @@ class ModerationTestCase(TestCase):
 
 
 class ApprovalTests(ModerationTestCase):
+    def test_variant_code_is_copied_from_pending_upload_to_approved_firmware(self):
+        self.variant.model_code = " mod-100 "
+        self.variant.save()
+
+        pending = self.upload()
+        self.assertEqual(pending.variant_code, "MOD-100")
+
+        record = approve_pending_firmware(pending, self.reviewer, category="official")
+
+        self.assertEqual(record.variant_code, "MOD-100")
+
+    def test_variant_code_stays_synced_when_variant_relation_is_saved(self):
+        pending = self.upload()
+        variant = Variant.objects.create(
+            model=self.model,
+            name="US",
+            slug="us",
+            model_code=" mod-200 ",
+        )
+
+        pending.uploaded_variant = variant
+        pending.save(update_fields=["uploaded_variant"])
+
+        self.assertEqual(pending.variant_code, "MOD-200")
+        self.assertEqual(
+            PendingFirmware.objects.get(pk=pending.pk).variant_code,
+            "MOD-200",
+        )
+
+    def test_variant_code_changes_are_propagated_to_linked_firmware(self):
+        self.variant.model_code = "mod-100"
+        self.variant.save()
+        pending = self.upload()
+        record = approve_pending_firmware(pending, self.reviewer, category="official")
+
+        self.variant.model_code = "mod-200"
+        self.variant.save()
+
+        pending.refresh_from_db()
+        record.refresh_from_db()
+        self.assertEqual(pending.variant_code, "MOD-200")
+        self.assertEqual(record.variant_code, "MOD-200")
+
     def test_approval_routes_the_file_and_publishes_a_verified_record(self):
         pending = self.upload(package_format=FirmwarePackageFormat.FASTBOOT_ROM)
         staged = Path(pending.stored_file_path)
@@ -121,7 +164,9 @@ class ApprovalTests(ModerationTestCase):
 
     def test_missing_category_routes_to_unclassified_not_the_ai_guess(self):
         pending = self.upload()
-        PendingFirmware.objects.filter(pk=pending.pk).update(ai_category="official")
+        PendingFirmware.objects.filter(pk=pending.pk).update(
+            suggested_category="official"
+        )
         pending.refresh_from_db()
 
         record = approve_pending_firmware(pending, self.reviewer)

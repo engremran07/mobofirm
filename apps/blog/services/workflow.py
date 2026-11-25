@@ -208,7 +208,7 @@ def lower_access(
         raise ValidationError("Only a post that is not live yet can change access.")
     if access not in {PostAccess.FREE, PostAccess.FEATURED}:
         raise ValidationError("Choose Free or Featured as the new access type.")
-    if ACCESS_RANK[access] >= ACCESS_RANK[post.access]:
+    if ACCESS_RANK[PostAccess(access)] >= ACCESS_RANK[PostAccess(post.access)]:
         raise ValidationError("The new access type must be lower than the current one.")
     previous = post.access
     post.access = access

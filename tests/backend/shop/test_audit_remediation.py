@@ -79,7 +79,7 @@ class TestPackageRules:
         values = {
             "name": "Rule",
             "slug": "rule",
-            "price": Decimal("5"),
+            "price": Decimal(5),
             "limit_files": 10,
             **fields,
         }
@@ -104,7 +104,10 @@ class TestPackageRules:
                 },
                 "unlock_by_ads_free",
             ),
-            ({"unlock_by_ads_featured": True, "ad_free": True}, "unlock_by_ads_featured"),
+            (
+                {"unlock_by_ads_featured": True, "ad_free": True},
+                "unlock_by_ads_featured",
+            ),
             (
                 {"unlock_by_ads_featured": True, "applies_to_featured": True},
                 "unlock_by_ads_featured",
@@ -147,7 +150,7 @@ class TestPackageBuilder:
         package = PackageTier.objects.create(
             name="Wide",
             slug="wide",
-            price=Decimal("9"),
+            price=Decimal(9),
             limit_files=30,
             fair_daily_files=20,
             fair_monthly_files=300,
@@ -179,7 +182,7 @@ class TestPackageBuilder:
         package = PackageTier.objects.create(
             name="Wide",
             slug="wide",
-            price=Decimal("9"),
+            price=Decimal(9),
             limit_files=30,
             fair_daily_files=20,
             fair_monthly_files=300,
@@ -293,11 +296,11 @@ class TestPackageLifecycle:
         services.refund_order(gold_order.pk, staff_user=staff)
         services.refund_order(gold_order.pk, staff_user=staff)
 
-        assert UserPackage.objects.filter(status="active", is_baseline=False).count() == 1
+        assert (
+            UserPackage.objects.filter(status="active", is_baseline=False).count() == 1
+        )
 
-    def test_the_expiry_task_also_ends_stale_unlock_tickets(
-        self, user, make_firmware
-    ):
+    def test_the_expiry_task_also_ends_stale_unlock_tickets(self, user, make_firmware):
         firmware = make_firmware("free")
         content_type, object_id = entitlements.file_ref(firmware)
         stale = AdUnlockTicket.objects.create(
@@ -381,7 +384,7 @@ class TestWindows:
         package = PackageTier.objects.create(
             name="Total",
             slug="total",
-            price=Decimal("5"),
+            price=Decimal(5),
             duration_days=30,
             window=WindowKind.PACKAGE,
             limit_files=1,
@@ -399,7 +402,9 @@ class TestWindows:
 class TestResolverCost:
     @staticmethod
     def shop_default_reads(queries: CaptureQueriesContext) -> int:
-        return sum(' FROM "shop_packagetier"' in q["sql"] for q in queries.captured_queries)
+        return sum(
+            ' FROM "shop_packagetier"' in q["sql"] for q in queries.captured_queries
+        )
 
     def test_a_package_holder_never_reads_the_default_package(
         self, user, staff, pro_tier, default_tier
@@ -411,7 +416,9 @@ class TestResolverCost:
 
         # package (+tier join), package override, account override; the rest are
         # the registered modifiers of other apps and the seller check.
-        shop_queries = [q for q in queries.captured_queries if ' FROM "shop_' in q["sql"]]
+        shop_queries = [
+            q for q in queries.captured_queries if ' FROM "shop_' in q["sql"]
+        ]
         assert len(shop_queries) == 3
         assert self.shop_default_reads(queries) == 0
 
@@ -423,9 +430,7 @@ class TestResolverCost:
 
         assert self.shop_default_reads(queries) == 1
 
-    def test_the_usage_meters_cost_one_query_per_window_pair(
-        self, user, default_tier
-    ):
+    def test_the_usage_meters_cost_one_query_per_window_pair(self, user, default_tier):
         PackageTier.objects.filter(pk=default_tier.pk).update(
             limit_files=5, limit_size=2, fair_daily_files=3, fair_monthly_files=9
         )
@@ -437,7 +442,9 @@ class TestResolverCost:
         finally:
             request_cache.end(token)
 
-        usage = [q for q in queries.captured_queries if "shop_quotaconsumption" in q["sql"]]
+        usage = [
+            q for q in queries.captured_queries if "shop_quotaconsumption" in q["sql"]
+        ]
         assert len(queries) == len(usage) == 2
 
     def test_the_pricing_page_reads_the_packages_in_one_query(self, client):
@@ -477,8 +484,12 @@ class TestFileReferences:
         keep = make_firmware("free")
         content_type, object_id = entitlements.file_ref(firmware)
         ticket = AdUnlockTicket.objects.create(
-            user=user, content_type=content_type, object_id=object_id,
-            kind="free", required=3, progress=1,
+            user=user,
+            content_type=content_type,
+            object_id=object_id,
+            kind="free",
+            required=3,
+            progress=1,
         )
         AdUnlockProgress.objects.create(ticket=ticket, view_id=991, number=1)
         QuotaConsumption.objects.create(
@@ -490,8 +501,12 @@ class TestFileReferences:
         )
         order = Order.objects.create(user=user, total=Decimal("4.00"), status="paid")
         OrderItem.objects.create(
-            order=order, content_type=content_type, object_id=object_id,
-            description="fw.zip", unit_price=Decimal("4.00"), line_total=Decimal("4.00"),
+            order=order,
+            content_type=content_type,
+            object_id=object_id,
+            description="fw.zip",
+            unit_price=Decimal("4.00"),
+            line_total=Decimal("4.00"),
         )
 
         firmware.delete()
@@ -523,10 +538,16 @@ class TestFileReferences:
             user=user, total=Decimal("4.00"), status="paid", paid_at=timezone.now()
         )
         OrderItem.objects.create(
-            order=order, content_type=content_type, object_id=object_id,
-            description="fw.zip", unit_price=Decimal("4.00"), line_total=Decimal("4.00"),
+            order=order,
+            content_type=content_type,
+            object_id=object_id,
+            description="fw.zip",
+            unit_price=Decimal("4.00"),
+            line_total=Decimal("4.00"),
         )
-        assert [file.label for file in entitlements.purchased_unserved(user)] == ["fw.zip"]
+        assert [file.label for file in entitlements.purchased_unserved(user)] == [
+            "fw.zip"
+        ]
 
         OrderItem.objects.filter(order=order).update(object_id=uuid.uuid4())
 
@@ -603,7 +624,9 @@ class TestOverrideAudit:
 
         assert not UserQuotaOverride.objects.exists()
         assert list(
-            QuotaOverrideAudit.objects.filter(user=user).values_list("action", flat=True)
+            QuotaOverrideAudit.objects.filter(user=user).values_list(
+                "action", flat=True
+            )
         ) == ["deleted"]
 
     def test_the_account_of_an_existing_override_is_read_only(

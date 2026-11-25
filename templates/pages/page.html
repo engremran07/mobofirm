@@ -2,7 +2,7 @@
 {% block content %}
 {% url 'pages:index' as pages_index_url %}
 <div class="site-container py-4 py-lg-5 page-doc">
-  {% include "components/breadcrumbs.html" with current=page.title parent_label="Pages" parent_url=pages_index_url %}
+  {% include "components/breadcrumbs.html" with current=page.title parent_label="Help" parent_url=pages_index_url %}
   {% include "components/page_header.html" with title=page.title eyebrow="Information" title_id="page-title" %}
   <p class="page-doc__meta">
     <span class="chip-ui"><i class="icon" data-lucide="clock" aria-hidden="true"></i> Last updated <time datetime="{{ page.updated_at|date:'c' }}">{{ page.updated_at|date:"j F Y" }}</time></span>

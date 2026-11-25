@@ -85,7 +85,9 @@ def test_change_form_renders_for_a_created_row(model, client, superuser):
     model_admin = admin.site.get_model_admin(model)
     visible = model_admin.get_queryset(_request_for(superuser)).filter(pk=instance.pk)
     assert visible.exists(), f"{label}: the admin queryset hides a freshly built row"
-    response = client.get(reverse(_url_name(model, "change"), args=[admin_pk(instance)]))
+    response = client.get(
+        reverse(_url_name(model, "change"), args=[admin_pk(instance)])
+    )
     assert response.status_code == 200, label
     assert not mentions_removed_theme(response.content), label
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from django import forms
 from django.contrib import admin, messages
@@ -62,8 +62,12 @@ from .models import (
     TemplateAdExclusion,
 )
 
+if TYPE_CHECKING:
+    from django.contrib.admin.options import _FieldOpts
+    from django_stubs_ext import StrOrPromise
+
 SOFT_DELETE_FIELDS = ("is_deleted", "deleted_at", "deleted_by")
-AUDIT_FIELDSET = (
+AUDIT_FIELDSET: tuple[StrOrPromise, _FieldOpts] = (
     _("Audit"),
     {"classes": ("tab",), "fields": ("created_by", "updated_by")},
 )
@@ -97,7 +101,10 @@ class AuditedModelAdmin(ModelAdmin):
     """Soft-deletable, audited ad records: hidden delete bookkeeping, stamped authors."""
 
     exclude = SOFT_DELETE_FIELDS
-    readonly_fields: Sequence[str] = ("created_by", "updated_by")
+    readonly_fields: ClassVar[list[str] | tuple[str, ...]] = (
+        "created_by",
+        "updated_by",
+    )
 
     def save_model(
         self, request: HttpRequest, obj: Any, form: ModelForm, change: bool
@@ -186,7 +193,7 @@ class AdPlacementAdmin(AuditedModelAdmin):
     )
     inlines = (PlacementAssignmentInline,)
     raw_id_fields = ("fallback_creative",)
-    prepopulated_fields: ClassVar[dict[str, tuple[str, ...]]] = {"slug": ("name",)}
+    prepopulated_fields: ClassVar[dict[str, Sequence[str]]] = {"slug": ("name",)}
     actions = ("switch_on", "switch_off")
     fieldsets = (
         (
@@ -544,8 +551,6 @@ class AdEventAdmin(ReadOnlyModelAdmin):
         "request_meta",
         "page_url",
         "referrer_url",
-        "user_agent",
-        "session_id",
         "created_at",
     )
     date_hierarchy = "created_at"
@@ -835,8 +840,6 @@ class RewardedAdViewAdmin(ReadOnlyModelAdmin):
         "reward_note",
         "flags",
         "is_flagged",
-        "ip_address",
-        "user_agent",
         "page_url",
         "created_at",
     )
@@ -872,12 +875,12 @@ class AutoAdsScanResultAdmin(NoAddModelAdmin):
         ("applied", BooleanRadioFilter),
         ("created_at", RangeDateTimeFilter),
     )
-    search_fields = ("template_path", "ai_recommendation")
+    search_fields = ("template_path", "recommendation")
     readonly_fields = (
         "template_path",
         "suggested_placements",
         "content_analysis",
-        "ai_recommendation",
+        "recommendation",
         "score",
         "review_status",
         "reviewed_by",
@@ -1090,7 +1093,7 @@ class AffiliateProductCategoryAdmin(ModelAdmin):
         ("parent", RelatedDropdownFilter),
     )
     search_fields = ("name", "slug", "device_keywords")
-    prepopulated_fields: ClassVar[dict[str, tuple[str, ...]]] = {"slug": ("name",)}
+    prepopulated_fields: ClassVar[dict[str, Sequence[str]]] = {"slug": ("name",)}
     raw_id_fields = ("parent",)
     list_select_related = ("parent",)
     fieldsets = (
@@ -1150,7 +1153,7 @@ class AffiliateProductAdmin(AuditedModelAdmin):
     list_select_related = ("provider",)
     inlines = (AffiliateProductMatchInline,)
     filter_horizontal = ("target_brands", "target_models")
-    prepopulated_fields: ClassVar[dict[str, tuple[str, ...]]] = {"slug": ("name",)}
+    prepopulated_fields: ClassVar[dict[str, Sequence[str]]] = {"slug": ("name",)}
     fieldsets = (
         (
             None,
@@ -1216,7 +1219,7 @@ class AffiliateProductAdmin(AuditedModelAdmin):
                     "clicks",
                     "conversions",
                     "revenue",
-                    "ai_relevance_score",
+                    "relevance_score",
                     "api_data",
                 ),
             },
@@ -1274,9 +1277,6 @@ class AffiliateClickAdmin(ReadOnlyModelAdmin):
         "product",
         "provider",
         "user",
-        "session_id",
-        "ip_address",
-        "user_agent",
         "page_url",
         "referrer",
         "brand_slug",
@@ -1294,8 +1294,111 @@ class AffiliateClickAdmin(ReadOnlyModelAdmin):
 # --------------------------------------------------------------------------
 # Settings
 # --------------------------------------------------------------------------
+class AdsSettingsForm(forms.ModelForm):
+    """Keep the stored Amazon PA-API secret encrypted and write-only."""
+
+    new_amazon_paapi_secret_key = forms.CharField(
+        label=_("Amazon PA-API secret key"),
+        required=False,
+        strip=False,
+        widget=forms.PasswordInput(
+            render_value=False, attrs={"autocomplete": "new-password"}
+        ),
+    )
+
+    class Meta:
+        model = AdsSettings
+        fields = (
+            "ads_enabled",
+            "affiliate_enabled",
+            "ad_networks_enabled",
+            "ad_aggressiveness_level",
+            "auto_ads_enabled",
+            "auto_ads_scan_interval",
+            "auto_ads_in_article",
+            "auto_ads_in_feed",
+            "auto_ads_anchor",
+            "auto_ads_vignette",
+            "auto_ads_sidebar",
+            "rewarded_ads_enabled",
+            "adsense_enabled",
+            "adsense_publisher_id",
+            "adsense_auto_ads",
+            "medianet_enabled",
+            "medianet_customer_id",
+            "ezoic_enabled",
+            "ezoic_site_id",
+            "adthrive_enabled",
+            "adthrive_site_id",
+            "mediavine_enabled",
+            "mediavine_site_id",
+            "propellerads_enabled",
+            "propellerads_zone_id",
+            "amazon_ads_enabled",
+            "amazon_ads_publisher_id",
+            "infolinks_enabled",
+            "infolinks_pid",
+            "carbon_enabled",
+            "carbon_serve_id",
+            "buysellads_enabled",
+            "buysellads_zone_id",
+            "header_bidding_enabled",
+            "prebid_timeout_ms",
+            "prebid_bidders",
+            "native_ads_enabled",
+            "native_ads_style",
+            "max_ads_per_page",
+            "min_content_between_ads",
+            "refresh_interval_seconds",
+            "lazy_load_ads",
+            "excluded_pages",
+            "excluded_categories",
+            "excluded_user_roles",
+            "affiliate_products_enabled",
+            "affiliate_products_max_per_page",
+            "affiliate_products_cache_hours",
+            "affiliate_products_auto_fetch",
+            "affiliate_products_show_on_firmware",
+            "affiliate_products_show_on_model",
+            "affiliate_products_show_on_brand",
+            "affiliate_products_show_on_blog",
+            "affiliate_products_fallback_keywords",
+            "amazon_paapi_enabled",
+            "amazon_paapi_access_key",
+            "amazon_paapi_partner_tag",
+            "amazon_paapi_region",
+            "amazon_paapi_marketplace",
+            "custom_config",
+            "new_amazon_paapi_secret_key",
+        )
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        if self.instance.amazon_paapi_secret_key:
+            self.fields["new_amazon_paapi_secret_key"].help_text = _(
+                "A value is stored (encrypted). Leave blank to keep it."
+            )
+
+    def clean(self) -> dict[str, Any]:
+        cleaned: dict[str, Any] = super().clean() or {}
+        secret = cleaned.get("new_amazon_paapi_secret_key")
+        if secret:
+            try:
+                self.instance.set_amazon_paapi_secret_key(secret)
+            except ImproperlyConfigured:
+                self.add_error(
+                    "new_amazon_paapi_secret_key",
+                    _(
+                        "The secret cannot be encrypted because FERNET_KEY is not "
+                        "configured. Nothing was saved."
+                    ),
+                )
+        return cleaned
+
+
 @admin.register(AdsSettings)
 class AdsSettingsAdmin(SingletonModelAdmin):
+    form = AdsSettingsForm
     list_display = (
         "ads_enabled",
         "auto_ads_enabled",
@@ -1358,7 +1461,7 @@ class AdsSettingsAdmin(SingletonModelAdmin):
                     "affiliate_products_fallback_keywords",
                     "amazon_paapi_enabled",
                     "amazon_paapi_access_key",
-                    "amazon_paapi_secret_key",
+                    "new_amazon_paapi_secret_key",
                     "amazon_paapi_partner_tag",
                     "amazon_paapi_region",
                     "amazon_paapi_marketplace",
@@ -1404,11 +1507,6 @@ class AdsSettingsAdmin(SingletonModelAdmin):
                     "prebid_bidders",
                     "native_ads_enabled",
                     "native_ads_style",
-                    "ai_optimization_enabled",
-                    "ai_model_provider",
-                    "ai_optimize_placements",
-                    "ai_optimize_creatives",
-                    "ai_optimize_bidding",
                 ),
             },
         ),

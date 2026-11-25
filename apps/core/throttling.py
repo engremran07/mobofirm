@@ -53,13 +53,3 @@ class SearchRateThrottle(UserRateThrottle):
 
     rate = "200/hour"
     scope = "search"
-
-
-class AIRateThrottle(UserRateThrottle):
-    """
-    Rate limit for AI-powered endpoints.
-    More restrictive due to computational cost.
-    """
-
-    rate = "20/hour"
-    scope = "ai"

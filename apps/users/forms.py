@@ -75,6 +75,20 @@ class CustomSignupForm(forms.Form):
     # Compatibility with newer allauth flows that check this flag
     by_passkey: bool = False
 
+    referral_code = forms.CharField(
+        max_length=20,
+        required=False,
+        label=_("Referral code"),
+        help_text=_("Optional. Enter a friend's Mobofirm referral code."),
+        widget=forms.TextInput(
+            attrs={
+                "autocomplete": "off",
+                "placeholder": _("Referral code (optional)"),
+                "class": "form-control",
+            }
+        ),
+    )
+
     email = forms.EmailField(
         max_length=255,
         label=_("Email address"),
@@ -196,6 +210,20 @@ class CustomSignupForm(forms.Form):
             raise ValidationError(_("Invalid country code."))
         return country
 
+    def clean_referral_code(self) -> str:
+        """Validate an optional referral code and prepare it for signup capture."""
+        code = (self.cleaned_data.get("referral_code") or "").strip()
+        if not code:
+            return ""
+        from apps.referral import services
+
+        if not services.get_settings().enabled:
+            return ""
+        found = services.find_code(code)
+        if found is None:
+            raise ValidationError(_("That referral code is invalid or inactive."))
+        return found.code
+
     def clean_phone(self) -> str:
         """Validate phone number - digits only, 6-15 characters."""
         phone = (self.cleaned_data.get("phone") or "").strip()
@@ -221,6 +249,11 @@ class CustomSignupForm(forms.Form):
         pwd1, pwd2 = cleaned.get("password1"), cleaned.get("password2")
         if pwd1 and pwd2 and pwd1 != pwd2:
             raise ValidationError(_("Passwords do not match."))
+        referral_code = cleaned.get("referral_code") or ""
+        if referral_code and self.request is not None:
+            from apps.referral import services
+
+            services.capture_code(self.request, referral_code)
         return cleaned
 
     def signup(self, request: HttpRequest, user: Any) -> Any:
@@ -297,6 +330,20 @@ class TellUsAboutYouForm(forms.Form):
             attrs={
                 "autocomplete": "name",
                 "placeholder": _("Your full name"),
+                "class": "form-control",
+            }
+        ),
+    )
+
+    referral_code = forms.CharField(
+        max_length=20,
+        required=False,
+        label=_("Referral code"),
+        help_text=_("Optional. Enter a friend's Mobofirm referral code."),
+        widget=forms.TextInput(
+            attrs={
+                "autocomplete": "off",
+                "placeholder": _("Referral code (optional)"),
                 "class": "form-control",
             }
         ),
@@ -483,10 +530,30 @@ class TellUsAboutYouForm(forms.Form):
             raise ValidationError(_("Invalid country code."))
         return country
 
+    def clean_referral_code(self) -> str:
+        """Validate an optional referral code during social onboarding."""
+        code = (self.cleaned_data.get("referral_code") or "").strip()
+        if not code:
+            return ""
+        from apps.referral import services
+
+        if not services.get_settings().enabled:
+            return ""
+        found = services.find_code(code)
+        if found is None:
+            raise ValidationError(_("That referral code is invalid or inactive."))
+        return found.code
+
     def clean(self) -> dict[str, Any]:
         cleaned = super().clean() or {}
         p1 = cleaned.get("password1") or ""
         p2 = cleaned.get("password2") or ""
+
+        referral_code = cleaned.get("referral_code") or ""
+        if referral_code and self.request is not None:
+            from apps.referral import services
+
+            services.capture_code(self.request, referral_code)
 
         if self.require_password:
             # Field-level errors so each message lands next to the input it concerns.

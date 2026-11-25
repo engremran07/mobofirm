@@ -6,7 +6,7 @@ import shutil
 import tempfile
 from datetime import UTC, timedelta
 from pathlib import Path
-from typing import ClassVar
+from typing import ClassVar, cast
 from unittest import mock
 from xml.etree import ElementTree
 
@@ -146,19 +146,28 @@ class SitemapStructureTests(TestCase):
         )
 
     def test_hreflang_alternates_only_when_a_section_declares_them(self):
-        class Localised(Sitemap):
-            def items(self):
-                return ["/a/", "/b/"]
+        # Django types ``Sitemap.alternates`` as a bool; this project's per-item hook
+        # shares the name, so the class is assembled dynamically.
+        def items(self: Sitemap) -> list[str]:
+            return ["/a/", "/b/"]
 
-            def location(self, item):
-                return item
+        def location(self: Sitemap, item: str) -> str:
+            return item
 
-            def alternates(self, item):
-                if item == "/a/":
-                    return {"en": f"{SITE}/a/", "fr": f"{SITE}/fr/a/"}
-                return {"en": f"{SITE}/b/"}
+        def alternates(self: Sitemap, item: str) -> dict[str, str]:
+            if item == "/a/":
+                return {"en": f"{SITE}/a/", "fr": f"{SITE}/fr/a/"}
+            return {"en": f"{SITE}/b/"}
 
-        sitemap_registry.register_sitemap("local", Localised)
+        localised = cast(
+            "type[Sitemap]",
+            type(
+                "Localised",
+                (Sitemap,),
+                {"items": items, "location": location, "alternates": alternates},
+            ),
+        )
+        sitemap_registry.register_sitemap("local", localised)
         self.addCleanup(sitemap_registry.unregister_sitemap, "local")
 
         document = parse(self.client.get("/sitemap-local-1.xml"))
@@ -246,7 +255,7 @@ class SitemapHttpTests(TestCase):
 
 @override_settings(SITE_URL=SITE)
 class SitemapImageTests(TestCase):
-    data: ClassVar[Catalog]
+    data: Catalog
 
     def setUp(self):
         self.data = make_catalog()
@@ -317,7 +326,7 @@ class SitemapImageTests(TestCase):
 
 @override_settings(SITE_URL=SITE)
 class NewsSitemapTests(TestCase):
-    data: ClassVar[Catalog]
+    data: Catalog
 
     def setUp(self):
         self.data = make_catalog()

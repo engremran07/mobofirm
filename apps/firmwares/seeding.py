@@ -21,7 +21,7 @@ from django.utils.text import slugify
 
 from apps.core.seeding import SeedReport
 
-from .chipsets import normalize_chipset, resolve_chipset
+from .chipsets import normalize_chipset, resolve_chipset, resolve_chipset_vendor
 from .guide_service import generate_guide_for_brand_model
 from .models import (
     Brand,
@@ -185,7 +185,7 @@ def seed_chipsets(
             raise CommandError(f"Chipset {seed.display_name!r} cannot be normalised.")
         existed = Chipset.objects.filter(slug=normalized.slug).exists()
         chipset = resolve_chipset(seed.display_name)
-        if chipset is None or (chipset.vendor, chipset.name) != (
+        if chipset is None or (chipset.vendor.name, chipset.name) != (
             seed.vendor,
             seed.name,
         ):
@@ -235,7 +235,7 @@ def seed_reference_chipsets(
         if current is None:
             missing.append(
                 Chipset(
-                    vendor=seed.vendor,
+                    vendor=resolve_chipset_vendor(seed.vendor),
                     family=seed.family or normalized.family,
                     name=seed.name,
                     slug=normalized.slug,
@@ -318,17 +318,21 @@ def _seed_model(
             "is_active": True,
         },
     )
+    model.full_clean()
     report.record("models", created=created)
     for variant_seed in variants:
+        variant_slug = slugify(variant_seed.name)
+        variant_defaults = {
+            "name": variant_seed.name,
+            "region": variant_seed.region,
+            "model_code": variant_seed.model_code,
+            "chipset": chipset_text(variant_seed.chipset or seed.chipset),
+        }
+        Variant(model=model, slug=variant_slug, **variant_defaults).clean()
         _, variant_created = Variant.objects.get_or_create(
             model=model,
-            slug=slugify(variant_seed.name),
-            defaults={
-                "name": variant_seed.name,
-                "region": variant_seed.region,
-                "model_code": variant_seed.model_code,
-                "chipset": chipset_text(variant_seed.chipset or seed.chipset),
-            },
+            slug=variant_slug,
+            defaults=variant_defaults,
         )
         report.record("variants", created=variant_created)
 

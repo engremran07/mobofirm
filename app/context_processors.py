@@ -1,3 +1,5 @@
+"""Template context values for shared public-site chrome."""
+
 from django.db import DatabaseError
 from django.http import HttpRequest
 from django.urls import reverse
@@ -5,6 +7,7 @@ from django.utils.functional import SimpleLazyObject
 
 from app.version import BuildInfo, build_info
 from apps.core.models import AppRegistry
+from apps.pages.widgets import published_page_slugs
 from apps.site_settings.services import get_site_settings
 
 
@@ -35,6 +38,8 @@ INFO_PAGES = (
 
 _NAV_NAMESPACES = {
     "blog": "blog",
+    "bounty": "bounty",
+    "gamification": "gamification",
     "pages": "pages",
     "shop": "shop",
     "marketplace": "marketplace",
@@ -69,7 +74,17 @@ def _nav_section(request: HttpRequest) -> str:
 
 def _ecosystem_flags() -> dict[str, bool]:
     """Which optional ecosystem apps are switched on in the AppRegistry."""
-    names = ("pages", "shop", "marketplace")
+    names = (
+        "blog",
+        "pages",
+        "shop",
+        "marketplace",
+        "wallet",
+        "referral",
+        "consent",
+        "bounty",
+        "gamification",
+    )
     try:
         registry = AppRegistry.get_solo()
     except DatabaseError:
@@ -82,8 +97,6 @@ def _page_links(
 ) -> list[tuple[str, str]]:
     if not pages_enabled:
         return []
-    from apps.pages.widgets import published_page_slugs
-
     try:
         live = published_page_slugs()
     except DatabaseError:
@@ -102,10 +115,21 @@ def site_chrome(request: HttpRequest) -> dict[str, object]:
     them (partials, errors) do not touch the database.
     """
     ecosystem = SimpleLazyObject(_ecosystem_flags)
+
+    def public_sitemap() -> bool:
+        from apps.core.app_service import AppService
+
+        contract = AppService.get("seo")
+        if contract is None:
+            return False
+        values = contract.get_settings()
+        return bool(values.get("seo_enabled") and values.get("sitemap_enabled"))
+
     return {
         "site_name": get_site_settings().site_name,
         "nav_current": _nav_section(request),
         "ecosystem": ecosystem,
+        "public_sitemap_enabled": SimpleLazyObject(public_sitemap),
         "info_links": SimpleLazyObject(
             lambda: _page_links(ecosystem["pages"], INFO_PAGES)
         ),

@@ -1044,8 +1044,38 @@ def _create_shop_order(user: AbstractBaseUser, request: TopUpRequest) -> str:
     return str(order)
 
 
+def _sync_shop_topup_order(request: TopUpRequest, action: str, **kwargs: Any) -> None:
+    """Apply a wallet top-up transition to its linked shop order in this transaction."""
+    if not request.order_reference:
+        return
+    try:
+        order_id = int(request.order_reference)
+    except ValueError as error:
+        raise TopUpError("The linked shop order reference is invalid.") from error
+
+    from apps.core.app_service import AppService
+
+    handler = AppService.export("shop", action)
+    if not callable(handler):
+        raise TopUpError("The linked shop order service is unavailable.")
+    try:
+        handler(
+            order_id,
+            topup_id=request.pk,
+            user_id=request.user_id,
+            credit_amount=request.credits,
+            **kwargs,
+        )
+    except ValueError as error:
+        raise TopUpError(str(error)) from error
+
+
 def confirm_topup(
-    request_id: int, *, staff_user: AbstractBaseUser | None, reference: str = ""
+    request_id: int,
+    *,
+    staff_user: AbstractBaseUser | None,
+    reference: str = "",
+    sync_shop_order: bool = True,
 ) -> TopUpRequest:
     """Staff (or the shop's paid-order event) confirm payment; credits granted once."""
     if staff_user is not None:
@@ -1055,9 +1085,23 @@ def confirm_topup(
             pk=request_id
         )
         if request.status == TopUpRequest.Status.PAID:
+            if sync_shop_order:
+                _sync_shop_topup_order(
+                    request,
+                    "confirm_credit_topup_order",
+                    staff_user=staff_user,
+                    reference=reference,
+                )
             return request
         if request.status != TopUpRequest.Status.PENDING:
             raise TopUpError("Only a pending top-up can be confirmed.")
+        if sync_shop_order:
+            _sync_shop_topup_order(
+                request,
+                "confirm_credit_topup_order",
+                staff_user=staff_user,
+                reference=reference,
+            )
         user = request.user
         wallet = _locked(user)
         _post(
@@ -1117,9 +1161,19 @@ def cancel_topup(
         if staff_user is None and (user is None or request.user_id != user.pk):
             raise PermissionDenied("This is not your top-up request.")
         if request.status == TopUpRequest.Status.CANCELLED:
+            _sync_shop_topup_order(
+                request,
+                "cancel_credit_topup_order",
+                processed_by=staff_user,
+            )
             return request
         if request.status != TopUpRequest.Status.PENDING:
             raise TopUpError("Only a pending top-up can be cancelled.")
+        _sync_shop_topup_order(
+            request,
+            "cancel_credit_topup_order",
+            processed_by=staff_user,
+        )
         request.status = TopUpRequest.Status.CANCELLED
         request.resolved_by_id = staff_user.pk if staff_user is not None else None
         request.resolved_at = timezone.now()
@@ -1136,8 +1190,45 @@ def handle_shop_order_paid(data: Any) -> None:
     ).first()
     if pending is not None:
         confirm_topup(
-            pending.pk, staff_user=None, reference=f"shop order {data['order_id']}"
+            pending.pk,
+            staff_user=None,
+            reference=f"shop order {data['order_id']}",
+            sync_shop_order=False,
         )
+
+
+def cancel_topup_for_shop_order(
+    order_id: int, *, topup_id: int, staff_user: AbstractBaseUser
+) -> bool:
+    """Cancel the matching wallet request when staff cancel its shop order."""
+    require_perm(staff_user, "wallet.change_topuprequest")
+    with transaction.atomic():
+        request = (
+            TopUpRequest.objects.select_for_update(of=("self",))
+            .filter(pk=topup_id, order_reference=str(order_id))
+            .first()
+        )
+        if request is None:
+            raise TopUpError("The shop order has no matching wallet top-up.")
+        if request.status == TopUpRequest.Status.CANCELLED:
+            _sync_shop_topup_order(
+                request,
+                "cancel_credit_topup_order",
+                processed_by=staff_user,
+            )
+            return False
+        if request.status != TopUpRequest.Status.PENDING:
+            raise TopUpError("Only a pending top-up can be cancelled.")
+        _sync_shop_topup_order(
+            request,
+            "cancel_credit_topup_order",
+            processed_by=staff_user,
+        )
+        request.status = TopUpRequest.Status.CANCELLED
+        request.resolved_by_id = staff_user.pk
+        request.resolved_at = timezone.now()
+        request.save(update_fields=["status", "resolved_by", "resolved_at"])
+    return True
 
 
 # -------------------------------------------------------------------------- payouts

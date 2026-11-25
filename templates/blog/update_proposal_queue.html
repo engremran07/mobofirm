@@ -1,0 +1,25 @@
+{% extends "admin/staff_page.html" %}
+{% load i18n staff_ui %}
+{% block page_body %}
+{% staff_section title=_("Waiting for review") ident="update-proposals-title" intro=_("Published articles remain unchanged until a reviewer approves a proposal.") %}
+  {% if proposals %}
+    {% staff_table label=_("Post update proposals") %}
+      <thead><tr><th scope="col">{% translate "Article" %}</th><th scope="col">{% translate "Submitted by" %}</th><th scope="col">{% translate "Fields" %}</th><th scope="col">{% translate "Submitted" %}</th><th scope="col"><span class="visually-hidden">{% translate "Review" %}</span></th></tr></thead>
+      <tbody>
+        {% for proposal in proposals %}
+          <tr>
+            <th scope="row"><a href="{% url 'blog:review_update_proposal' proposal_id=proposal.pk %}">{{ proposal.post.title }}</a></th>
+            <td>{{ proposal.submitted_by.public_display_name }}</td>
+            <td>{% for field, value in proposal.proposed_changes.items %}<span class="badge text-bg-secondary me-1">{{ field }}</span>{% endfor %}</td>
+            <td><time datetime="{{ proposal.created_at|date:'c' }}">{{ proposal.created_at|date:"M j, Y H:i" }}</time></td>
+            <td><a class="btn btn-sm btn-outline-secondary" href="{% url 'blog:review_update_proposal' proposal_id=proposal.pk %}">{% translate "Review" %}</a></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    {% endstaff_table %}
+    {% include "components/pagination.html" with page_obj=page_obj label="Proposal queue pages" %}
+  {% else %}
+    {% staff_empty title=_("The queue is clear") %}{% translate "No member update proposals are waiting." %}{% endstaff_empty %}
+  {% endif %}
+{% endstaff_section %}
+{% endblock %}

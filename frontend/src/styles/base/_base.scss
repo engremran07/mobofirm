@@ -3,7 +3,7 @@
 // Base element styles. Bootstrap's reboot runs first; this layer re-skins it with tokens.
 html {
   scroll-behavior: smooth;
-  scroll-padding-top: calc(var(--mf-header-height) + 1rem);
+  scroll-padding-top: var(--mf-sticky-top);
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
 }

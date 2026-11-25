@@ -44,7 +44,7 @@ PAGE = """{% extends "base.html" %}
   <form id="confirm-form" method="post" action="/test-dialogs/echo/">{% csrf_token %}
     <button id="confirm-submit" class="btn btn-outline-danger" type="submit" data-confirm-dialog="Really send it?" data-confirm-title="Send it?" data-confirm-danger>Send</button>
   </form>
-  <button id="htmx-confirm" class="btn btn-outline-secondary" hx-get="/test-dialogs/fragment/" hx-target="#htmx-result" data-confirm-dialog="Load the fragment?" data-confirm-title="Load it?">Load</button>
+  <button id="htmx-confirm" class="btn btn-outline-secondary" hx-get="/test-dialogs/fragment/" hx-target="#htmx-result" hx-confirm="Load the fragment?" data-confirm-dialog="Load the fragment?" data-confirm-title="Load it?">Load</button>
   <div id="htmx-result" aria-live="polite"></div>
   <form id="guarded" data-unsaved-guard method="post" action="/test-dialogs/echo/">{% csrf_token %}
     <label class="form-label" for="draft">Draft</label>

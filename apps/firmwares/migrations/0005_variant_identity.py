@@ -6,7 +6,7 @@ from django.db import migrations, models
 from apps.firmwares.variant_rules import normalize_variant_code
 
 
-def normalise_existing_codes(apps, schema_editor):
+def normalise_existing_codes(apps, _schema_editor):
     """Normalise stored codes and make them unique per model before the constraint.
 
     The first variant (lowest id) keeps a code; a later duplicate keeps its data and

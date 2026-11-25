@@ -30,7 +30,7 @@ INLINE_SCRIPT = re.compile(
 )
 INLINE_HANDLER = re.compile(r"<[a-z][^>]*\son[a-z]+\s*=", re.IGNORECASE)
 STYLE_ATTRIBUTE = re.compile(r"<[a-z][^>]*\sstyle\s*=", re.IGNORECASE)
-HTMX = {"HTTP_HX_REQUEST": "true"}
+HTMX = {"HX-Request": "true"}
 
 
 @pytest.fixture(name="superuser")
@@ -90,14 +90,38 @@ def test_shell_has_landmarks_hooks_and_no_inline_code(superuser):
 
 
 @pytest.mark.django_db
+def test_account_menu_links_to_personal_pages_and_confirms_logout(superuser):
+    html = _client(superuser).get(reverse("admin:index")).content.decode()
+
+    for route_name in (
+        "users:dashboard",
+        "users:profile",
+        "wallet:dashboard",
+        "contributions:hub",
+        "users:notifications",
+    ):
+        assert f'href="{reverse(route_name)}"' in html
+    assert 'data-console-confirm="Sign out of your account?"' in html
+    assert 'name="csrfmiddlewaretoken"' in html
+
+
+@pytest.mark.django_db
 def test_sidebar_marks_exactly_one_current_page_and_groups_work_without_js(superuser):
     html = _client(superuser).get(reverse("admin:index")).content.decode()
     sidebar = html[html.index("<aside") : html.index("</aside>")]
 
     assert sidebar.count('aria-current="page"') == 1
-    assert "<details" not in sidebar  # groups are disclosure buttons, driven by js/components/sidebar.js
-    assert re.search(r'<button type="button" class="nav-link c-nav-toggle[^"]*" id="nav-toggle-([\w-]+)" aria-expanded="(?:true|false)" aria-controls="nav-panel-\1"', sidebar)
-    assert re.search(r'class="c-nav-panel" id="nav-panel-[\w-]+" role="group" aria-labelledby="nav-toggle-', sidebar)
+    assert (
+        "<details" not in sidebar
+    )  # groups are disclosure buttons, driven by js/components/sidebar.js
+    assert re.search(
+        r'<button type="button" class="nav-link c-nav-toggle[^"]*" id="nav-toggle-([\w-]+)" aria-expanded="(?:true|false)" aria-controls="nav-panel-\1"',
+        sidebar,
+    )
+    assert re.search(
+        r'class="c-nav-panel" id="nav-panel-[\w-]+" role="group" aria-labelledby="nav-toggle-',
+        sidebar,
+    )
     assert 'data-console-nav-group="' in sidebar
     assert re.search(r'<a class="nav-link active" href="/admin/"', sidebar)
 
@@ -107,12 +131,15 @@ def test_htmx_requests_get_the_content_only_fragment(superuser):
     client = _client(superuser)
     url = reverse("admin:index")
 
-    fragment = client.get(url, **HTMX).content.decode()
+    fragment = client.get(url, headers=HTMX).content.decode()
     assert "<title>" in fragment and "c-dashboard" in fragment
     assert "<aside" not in fragment and "<html" not in fragment
 
-    for header in ({"HTTP_HX_BOOSTED": "true"}, {"HTTP_HX_HISTORY_RESTORE_REQUEST": "true"}):
-        full = client.get(url, **HTMX, **header).content.decode()
+    for header in (
+        {"HX-Boosted": "true"},
+        {"HX-History-Restore-Request": "true"},
+    ):
+        full = client.get(url, headers={**HTMX, **header}).content.decode()
         assert "<aside" in full and "<html" in full, header
 
 
@@ -156,7 +183,7 @@ def test_each_widget_is_a_fragment_over_htmx_and_a_page_otherwise(superuser, slu
     client = _client(superuser)
     url = reverse("admin:console_dashboard_widget", args=[slug])
 
-    fragment = client.get(url, **HTMX)
+    fragment = client.get(url, headers=HTMX)
     page = client.get(url)
 
     assert fragment.status_code == page.status_code == 200
@@ -170,16 +197,12 @@ def test_each_widget_is_a_fragment_over_htmx_and_a_page_otherwise(superuser, slu
 def test_widgets_follow_permissions_and_unknown_slugs_are_404(superuser, plain_staff):
     activity = reverse("admin:console_dashboard_widget", args=["activity"])
 
-    assert _client(superuser).get(activity, **HTMX).status_code == 200
-    assert _client(plain_staff).get(activity, **HTMX).status_code == 404
-    assert (
-        _client(plain_staff)
-        .get(reverse("admin:console_dashboard_widget", args=["attention"]), **HTMX)
-        .status_code
-        == 200
-    )
+    assert _client(superuser).get(activity, headers=HTMX).status_code == 200
+    assert _client(plain_staff).get(activity, headers=HTMX).status_code == 404
+    attention = reverse("admin:console_dashboard_widget", args=["attention"])
+    assert _client(plain_staff).get(attention, headers=HTMX).status_code == 200
     missing = reverse("admin:console_dashboard_widget", args=["nope"])
-    assert _client(superuser).get(missing, **HTMX).status_code == 404
+    assert _client(superuser).get(missing, headers=HTMX).status_code == 404
 
 
 @pytest.mark.django_db
@@ -189,7 +212,7 @@ def test_widgets_and_search_require_staff():
         reverse("admin:console_dashboard_widget", args=["overview"]),
         reverse("admin:console_search"),
     ):
-        response = anonymous.get(url, **HTMX, follow=True)
+        response = anonymous.get(url, headers=HTMX, follow=True)
         assert response.redirect_chain[0][1] == 302
         assert response.redirect_chain[-1][0].startswith(reverse("users:account_login"))
 
@@ -200,11 +223,11 @@ def test_search_filters_destinations_for_the_palette_and_has_a_page(superuser):
     client = _client(superuser)
     url = reverse("admin:console_search")
 
-    palette = client.get(url, {"q": "blog"}, **HTMX).content.decode()
+    palette = client.get(url, {"q": "blog"}, headers=HTMX).content.decode()
     assert "c-palette__item" in palette and "Blog" in palette
     assert "<html" not in palette
 
-    short = client.get(url, {"q": "b"}, **HTMX).content.decode()
+    short = client.get(url, {"q": "b"}, headers=HTMX).content.decode()
     assert "two letters" in short and "c-palette__group" in short
 
     page = client.get(url, {"q": "blog"})
@@ -214,7 +237,9 @@ def test_search_filters_destinations_for_the_palette_and_has_a_page(superuser):
 @pytest.mark.django_db
 def test_search_escapes_what_was_typed(superuser):
     response = _client(superuser).get(
-        reverse("admin:console_search"), {"q": '<script>alert("x")</script>'}, **HTMX
+        reverse("admin:console_search"),
+        {"q": '<script>alert("x")</script>'},
+        headers=HTMX,
     )
 
     assert b"<script>" not in response.content
@@ -342,7 +367,9 @@ def test_pagination_keeps_filters_and_supports_htmx(rf):
 
     plain = _render('{% ui "pagination" page_obj=page %}', page=page, request=request)
     htmx = _render(
-        '{% ui "pagination" page_obj=page hx_target="#results" %}', page=page, request=request
+        '{% ui "pagination" page_obj=page hx_target="#results" %}',
+        page=page,
+        request=request,
     )
     single = _render(
         '{% ui "pagination" page_obj=page %}',
@@ -392,11 +419,17 @@ def test_form_field_wires_label_help_and_errors():
     assert 'for="id_title"' in title and "c-field--invalid" in title
     assert 'aria-invalid="true"' in title and "This field is required." in title
     assert 'id="id_title_helptext"' in title and 'role="alert"' in title
-    assert "c-field--inline" in live and "c-field--wide" in live and "form-check-label" in live
+    assert (
+        "c-field--inline" in live
+        and "c-field--wide" in live
+        and "form-check-label" in live
+    )
 
 
 def test_filter_chip_is_a_removable_link_or_a_toggle():
-    removable = _render('{% ui "filter_chip" label="Status" value="Pending" remove_url="?" %}')
+    removable = _render(
+        '{% ui "filter_chip" label="Status" value="Pending" remove_url="?" %}'
+    )
     toggle = _render('{% ui "filter_chip" label="Mine" url="?m=1" active=True %}')
 
     assert 'href="?"' in removable and "<strong>Pending</strong>" in removable
@@ -413,7 +446,8 @@ def test_theme_toggle_offers_light_dark_and_system():
 
 def test_attributes_cannot_inject_handlers_or_markup():
     escaped = _render(
-        '{% ui "button" label="Go" attrs=attrs %}', attrs={"hx-get": '"><script>x</script>'}
+        '{% ui "button" label="Go" attrs=attrs %}',
+        attrs={"hx-get": '"><script>x</script>'},
     )
 
     assert "<script>" not in escaped

@@ -178,7 +178,12 @@ def _scenarios() -> list[dict[str, Any]]:
             "config": {"features": ["colors"], "upload": UPLOADS},
             "html": '<p style="color:#c62f2f;font-family:Calibri">Styled</p>',
         },
-        {"name": "plain_text", "config": IMAGES_ON, "html": "<p>Just text</p>", "text": "Just text"},
+        {
+            "name": "plain_text",
+            "config": IMAGES_ON,
+            "html": "<p>Just text</p>",
+            "text": "Just text",
+        },
     ]
 
 
@@ -260,7 +265,9 @@ def test_paste_logic_normalises_images_to_responsive_figures(live_server) -> Non
         out = page.evaluate(NORMALIZE)
 
     lone = out["lone"]
-    assert lone.startswith("<figure><img ") and lone.endswith("<figcaption></figcaption></figure>")
+    assert lone.startswith("<figure><img ") and lone.endswith(
+        "<figcaption></figcaption></figure>"
+    )
     assert 'src="/media/editor/a.png"' in lone
     assert 'width="1200"' in lone and 'height="800"' in lone and 'alt=""' in lone
     for attribute in ("style", "class", "title", "srcset"):
@@ -342,7 +349,9 @@ def test_pasted_images_are_uploaded_sanitised_and_render_responsively(
             lambda route: route.fulfill(
                 status=200,
                 content_type="image/png",
-                body=next(tmp_path.rglob(route.request.url.rsplit("/", 1)[-1])).read_bytes(),
+                body=next(
+                    tmp_path.rglob(route.request.url.rsplit("/", 1)[-1])
+                ).read_bytes(),
             ),
         )
         page = context.new_page()
@@ -354,10 +363,14 @@ def test_pasted_images_are_uploaded_sanitised_and_render_responsively(
         # 1. An image copied from a screenshot tool: a file on the clipboard.
         _write_clipboard(page, {"image/png": ("base64", big)})
         page.keyboard.press("Control+V")
-        expect(area.locator("figure img[src^='/media/editor/']")).to_have_count(1, timeout=20_000)
+        expect(area.locator("figure img[src^='/media/editor/']")).to_have_count(
+            1, timeout=20_000
+        )
         expect(message).to_contain_text("Image added")
         image = area.locator("figure img").first
-        assert image.get_attribute("width") == "2000"  # re-encoded within the size limit
+        assert (
+            image.get_attribute("width") == "2000"
+        )  # re-encoded within the size limit
         assert image.get_attribute("alt") == ""
         assert image.get_attribute("style") in (None, "")
         assert area.locator("figure figcaption").count() == 1
@@ -373,7 +386,9 @@ def test_pasted_images_are_uploaded_sanitised_and_render_responsively(
         area.click()
         page.keyboard.press("Control+End")
         page.keyboard.press("Control+V")
-        expect(area.locator("figure img[src^='/media/editor/']")).to_have_count(2, timeout=20_000)
+        expect(area.locator("figure img[src^='/media/editor/']")).to_have_count(
+            2, timeout=20_000
+        )
         assert "data:" not in area.inner_html()
         assert "4000" not in area.inner_html()
 

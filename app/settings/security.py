@@ -1,3 +1,5 @@
+"""Shared security policy values for configured Django environments."""
+
 import os
 import re
 

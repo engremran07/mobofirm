@@ -28,6 +28,7 @@ class PlatformAuthenticator:
 
     def __init__(self, *, algorithm: int = ALG_ES256) -> None:
         self.algorithm = algorithm
+        self._key: rsa.RSAPrivateKey | ec.EllipticCurvePrivateKey
         if algorithm == ALG_RS256:
             self._key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
         else:
@@ -57,7 +58,7 @@ class PlatformAuthenticator:
         ).encode()
 
     def _sign(self, data: bytes) -> bytes:
-        if self.algorithm == ALG_RS256:
+        if isinstance(self._key, rsa.RSAPrivateKey):
             return self._key.sign(data, padding.PKCS1v15(), hashes.SHA256())
         return self._key.sign(data, ec.ECDSA(hashes.SHA256()))
 

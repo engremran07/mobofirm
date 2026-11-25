@@ -7,6 +7,7 @@ staff (see :mod:`apps.blog.services.contributions`).
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from functools import wraps
 from typing import Any
@@ -14,17 +15,24 @@ from typing import Any
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
+from django.db import DatabaseError
 from django.http import Http404, HttpRequest, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import NoReverseMatch, reverse
-from django.views.decorators.http import require_http_methods, require_POST
+from django.views.decorators.cache import never_cache
+from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
+from apps.blog import bounty_gateway
 from apps.blog.access import blog_enabled_for
 from apps.blog.forms import ContributionForm
 from apps.blog.models import Post, PostAccess
-from apps.blog.services import contributions
+from apps.blog.services import contribution_title_matches, contributions
 from apps.blog.services.contributions import ContributionData, ContributionError
 from apps.core.app_service import app_enabled
+from apps.core.search.text import clean_query
+from apps.users.services.rate_limit import allow_action
+
+logger = logging.getLogger(__name__)
 
 View = Callable[..., HttpResponse]
 
@@ -91,7 +99,9 @@ def contribute(request: HttpRequest) -> HttpResponse:
     if not contributions.is_open_to(request.user):
         return _closed(request)
     if request.method == "POST":
-        form = ContributionForm(request.POST, user=request.user)
+        form = ContributionForm(
+            request.POST, user=request.user, check_title_matches=True
+        )
         if form.is_valid():
             try:
                 result = contributions.submit(request.user, _data(form))
@@ -111,7 +121,7 @@ def contribute(request: HttpRequest) -> HttpResponse:
                     )
                 return redirect(_hub_url(result.post))
     else:
-        form = ContributionForm(user=request.user)
+        form = ContributionForm(user=request.user, check_title_matches=True)
     return render(
         request,
         "blog/contribute_form.html",
@@ -120,9 +130,57 @@ def contribute(request: HttpRequest) -> HttpResponse:
             "editing_post": None,
             "remaining_today": contributions.remaining_today(request.user),
             "hub_url": _hub_url(),
+            "open_bounties": bounty_gateway.open_guide_bounties(),
             "seller": form.seller,
             "become_seller_url": "" if form.seller else _become_seller_url(),
         },
+    )
+
+
+@verified_member_required
+@require_GET
+@never_cache
+def contribute_title_matches(request: HttpRequest) -> HttpResponse:
+    """Return bounded public title suggestions without blocking a submission."""
+    if not contributions.is_open_to(request.user):
+        return render(
+            request,
+            "blog/partials/contribution_title_matches.html",
+            {"matches": [], "error": "Title matching is unavailable for this account."},
+            status=403,
+        )
+    title = clean_query(request.GET.get("title", "")[:200])
+    if len(title) < contribution_title_matches.MIN_QUERY_LENGTH:
+        return HttpResponse("")
+    if not allow_action(
+        f"blog:contribution-title-check:{request.user.pk}", 30, window_seconds=60
+    ):
+        return render(
+            request,
+            "blog/partials/contribution_title_matches.html",
+            {
+                "matches": [],
+                "error": "Please wait a moment before checking another title.",
+            },
+            status=429,
+        )
+    try:
+        matches = contribution_title_matches.find_matches(title, user=request.user)
+    except DatabaseError:
+        logger.exception("Contribution title-match search failed")
+        return render(
+            request,
+            "blog/partials/contribution_title_matches.html",
+            {
+                "matches": [],
+                "error": "Title suggestions are temporarily unavailable. You can still submit for review.",
+            },
+            status=503,
+        )
+    return render(
+        request,
+        "blog/partials/contribution_title_matches.html",
+        {"matches": matches, "error": ""},
     )
 
 

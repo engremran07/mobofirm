@@ -1,9 +1,10 @@
 {# Guide cards. Swapped into #guide-results by HTMX. Context: guides (page), search_* (list_search_context). #}
+{% load ad_tags %}
 {% include "components/search_feedback.html" with noun="guide" %}
 {% if guides %}
   <h2 class="visually-hidden">Guides</h2>
   <div class="card-grid">
-    {% for guide in guides %}{% include "firmwares/includes/guide_card.html" with guide=guide %}{% endfor %}
+    {% for guide in guides %}{% include "firmwares/includes/guide_card.html" with guide=guide %}{% ad_tile forloop.counter guides|length layout="card" tile="card-ui--article" page="firmwares/flashing_guides.html" %}{% endfor %}
   </div>
   {% include "components/pagination.html" with page_obj=guides label="Guide pages" hx_target="#guide-results" %}
 {% else %}

@@ -35,6 +35,7 @@ class FakeSink:
     app: str
     default_credits: int = 0
     derived: bool = False
+    url_name: str = ""
 
 
 class FakeWallet:

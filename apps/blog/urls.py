@@ -10,6 +10,7 @@ from . import (
     views_contribute,
     views_manage,
     views_requests,
+    views_update_proposals,
 )
 
 app_name = "blog"
@@ -26,6 +27,31 @@ urlpatterns = [
         "contribute/<slug:slug>/withdraw/",
         views_contribute.contribute_withdraw,
         name="contribute_withdraw",
+    ),
+    path(
+        "contribute/title-matches/",
+        views_contribute.contribute_title_matches,
+        name="contribute_title_matches",
+    ),
+    path(
+        "contribute/updates/",
+        views_update_proposals.my_update_proposals,
+        name="my_update_proposals",
+    ),
+    path(
+        "manage/update-proposals/",
+        views_update_proposals.update_proposal_queue,
+        name="update_proposal_queue",
+    ),
+    path(
+        "manage/update-proposals/<int:proposal_id>/",
+        views_update_proposals.review_update_proposal,
+        name="review_update_proposal",
+    ),
+    path(
+        "<slug:slug>/suggest-update/",
+        views_update_proposals.propose_update,
+        name="propose_update",
     ),
     path("manage/", views_manage.manage_posts, name="manage_posts"),
     path("manage/bulk_publish/", views_manage.bulk_publish, name="bulk_publish"),
@@ -60,7 +86,6 @@ urlpatterns = [
     path("feed/rss/", feeds.LatestRssFeed(), name="feed_rss"),
     path("feed/atom/", feeds.LatestAtomFeed(), name="feed_atom"),
     path("feed/json/", feeds.json_feed, name="feed_json"),
-    path("api/ai/assist/", views_api.api_ai_assist, name="api_ai_assist"),
     path("api/similar/", views_api.api_similar_posts, name="api_similar_posts"),
     path("api/workflow/<slug:slug>/", views_api.api_workflow, name="api_workflow"),
     path("api/posts/", views_api.api_posts, name="api_posts"),

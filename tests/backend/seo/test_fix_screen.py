@@ -13,9 +13,11 @@ from apps.blog.models import Post
 from apps.firmwares.models import Model
 from apps.seo import editable, jobs, ledger, scan
 from apps.seo.fetcher import FetchError
+from apps.seo.fixscreen import parse_submission
 from apps.seo.models import ChangeLedger, Issue, Metadata, SEOJob, SEOSettings
 from apps.seo.policy import route_ref
 from apps.seo.rules import ALL_RULES
+from apps.users.models import CustomUser
 from tests.backend.seo.seo_helpers import (
     SITE,
     Catalog,
@@ -80,6 +82,11 @@ class FixTestCase(TestCase):
             form[f"altsrc_{image.position}"] = image.src
         form.update(values)
         return form
+
+    def test_non_string_alt_text_is_ignored(self):
+        changes = parse_submission({"alt_0": None}, "blog.post")
+
+        self.assertEqual(changes.alts, {})
 
     def save(self, path: str, action: str = "save", **values: Any):
         with self.captureOnCommitCallbacks(execute=True):
@@ -185,13 +192,14 @@ class ObjectFieldFixTests(FixTestCase):
             with self.subTest(label=label):
                 screen = self.screen(path)
                 obj = editable.load(label, screen.pk)
-                new_slug = f"{obj.slug}-renamed"
+                assert obj is not None
+                new_slug = f"{editable.read(obj, 'slug')}-renamed"
 
                 response = self.save(path, f_slug=new_slug)
 
                 self.assertEqual(response.status_code, 302, label)
                 obj.refresh_from_db()
-                self.assertEqual(obj.slug, new_slug)
+                self.assertEqual(editable.read(obj, "slug"), new_slug)
                 entry = ChangeLedger.objects.filter(
                     target_model=label, kind="object_fix"
                 ).latest("pk")
@@ -583,13 +591,20 @@ class FindingsInContextTests(FixTestCase):
 
 @override_settings(SITE_URL=SITE, ALLOWED_HOSTS=HOSTS)
 class PermissionMatrixTests(TestCase):
+    data: ClassVar[Catalog]
+    moderator: ClassVar[CustomUser]
+    editor: ClassVar[CustomUser]
+    plain: ClassVar[CustomUser]
+    root: ClassVar[CustomUser]
+    path: ClassVar[str]
+
     @classmethod
     def setUpTestData(cls):
         cls.data = make_catalog()
         call_command("bootstrap_site", verbosity=0)
         user_model = get_user_model()
 
-        def member(name: str, group: str | None):
+        def member(name: str, group: str | None) -> CustomUser:
             user = user_model.objects.create_user(
                 username=name, email=f"{name}@example.com", password="pass-12345-x"
             )

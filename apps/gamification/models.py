@@ -8,6 +8,7 @@ from django.db import models
 from django.utils.translation import gettext_lazy as _
 
 from apps.gamification.constants import (
+    METRIC_EVENT_COUNTS,
     METRIC_STREAK,
     METRIC_XP_TOTAL,
 )
@@ -26,14 +27,23 @@ BADGE_ICONS = [
     ("thumbs-up", "Thumbs up"),
     ("shield-check", "Shield"),
 ]
+_EVENT_METRIC_LABELS = {
+    "firmware_approved": "Approved firmware uploads",
+    "requests_fulfilled": "Fulfilled firmware requests",
+    "comments_approved": "Approved comments",
+    "referrals_rewarded": "Verified referrals",
+    "bounties_fulfilled": "Fulfilled bounties",
+}
 METRIC_CHOICES = [
     (METRIC_XP_TOTAL, "Total XP"),
     (METRIC_STREAK, "Daily streak (days)"),
-    ("firmware_approved", "Approved firmware uploads"),
-    ("requests_fulfilled", "Fulfilled firmware requests"),
-    ("comments_approved", "Approved comments"),
-    ("referrals_rewarded", "Verified referrals"),
-    ("bounties_fulfilled", "Fulfilled bounties"),
+    *[
+        (
+            metric,
+            _EVENT_METRIC_LABELS.get(metric, metric.replace("_", " ").capitalize()),
+        )
+        for metric in METRIC_EVENT_COUNTS
+    ],
 ]
 
 

@@ -386,6 +386,44 @@ def test_public_pages_and_the_posting_flow(poster, uploader, catalogue):
     assert Bounty.objects.count() == 1
 
 
+def test_invalid_claim_note_is_rejected_before_claiming(poster, uploader, catalogue):
+    bounty = post(poster, "request", catalogue.request.pk, 100)
+    client = Client()
+    client.force_login(uploader)
+
+    response = client.post(
+        reverse("bounty:claim", kwargs={"pk": bounty.pk}),
+        {"note": "x" * 301},
+        follow=True,
+    )
+
+    assert response.status_code == 200
+    assert "Please check the claim note and try again." in response.content.decode()
+    assert not BountyClaim.objects.filter(bounty=bounty, user=uploader).exists()
+
+
+def test_disabled_bounty_app_returns_404_for_all_public_routes(poster, catalogue):
+    bounty = post(poster, "request", catalogue.request.pk, 100)
+    registry = AppRegistry.get_solo()
+    registry.bounty_enabled = False
+    registry.save(update_fields=["bounty_enabled"])
+    client = Client()
+    client.force_login(poster)
+    routes = (
+        reverse("bounty:list"),
+        reverse("bounty:create"),
+        reverse("bounty:mine"),
+        reverse("bounty:detail", kwargs={"pk": bounty.pk}),
+        reverse("bounty:claim", kwargs={"pk": bounty.pk}),
+        reverse("bounty:report", kwargs={"pk": bounty.pk}),
+        reverse("bounty:cancel_dialog", kwargs={"pk": bounty.pk}),
+    )
+
+    for route in routes:
+        assert client.get(route).status_code == 404, route
+        assert client.post(route, {}).status_code == 404, route
+
+
 def test_detail_actions_claim_report_and_cancel_dialog(poster, uploader, catalogue):
     bounty = post(poster, "request", catalogue.request.pk, 100)
     other = Client()

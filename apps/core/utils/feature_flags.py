@@ -29,6 +29,10 @@ def seo_enabled() -> bool:
     return _seo_setting("seo_enabled")
 
 
+def sitemap_enabled() -> bool:
+    return seo_enabled() and _seo_setting("sitemap_enabled")
+
+
 def ads_enabled() -> bool:
     ads_api = AppService.get("ads")
     if ads_api and hasattr(ads_api, "get_settings"):

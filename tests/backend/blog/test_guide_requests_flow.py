@@ -174,7 +174,9 @@ def test_the_continue_link_appears_only_after_a_search(asker, article, client):
         if part.startswith(reverse("blog:request_form"))
     ).replace("&amp;", "&")
     token = parse_qs(urlparse(link).query)["ctx"][0]
-    assert search.read_token(token, asker.pk).query.model_code == "X6836"
+    proof = search.read_token(token, asker.pk)
+    assert proof is not None
+    assert proof.query.model_code == "X6836"
 
 
 def test_search_with_no_matches_still_allows_a_request(asker, client):

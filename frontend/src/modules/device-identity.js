@@ -4,8 +4,7 @@
 // every browser on the OS user profile and is destroyed by an OS reinstall, so it
 // identifies the computer, not the browser. The server issues the challenge, verifies
 // the response and owns every decision; this module only drives the browser APIs.
-// Without a platform authenticator, a secure context or JavaScript, the section stays
-// hidden and the per-browser fallback form remains the only path.
+// Device registration is deliberately limited to a platform WebAuthn credential.
 
 const SECTION = "[data-device-os]";
 
@@ -51,19 +50,6 @@ function showActions(root, mode) {
   }
 }
 
-// When the computer credential is usable it is the recommended choice: the
-// browser-only submit of the surrounding dialog becomes the secondary action.
-function prioritiseComputerAction(root) {
-  const dialog = root.closest("dialog");
-  const browserOnly = dialog?.querySelector('button[name="decision"][value="approve"]');
-  if (browserOnly) {
-    browserOnly.classList.remove("btn-primary");
-    browserOnly.classList.add("btn-outline-primary");
-  }
-  const primary = root.querySelector(".btn-primary:not([hidden])");
-  if (primary instanceof HTMLElement && dialog?.open) primary.focus({ preventScroll: true });
-}
-
 function csrfToken(root) {
   return root.querySelector("[name=csrfmiddlewaretoken]")?.value || "";
 }
@@ -95,12 +81,13 @@ function explain(error, purpose) {
         ? "No registered credential for your account was found on this computer, or the request was cancelled. If this is a different computer, register it."
         : "The request was cancelled or timed out. Try again when you are ready.";
     case "InvalidStateError":
-      return "This computer already has a registered credential for your account. Choose “Verify this computer”.";
+      return "This device already has a registered credential for your account. Choose “Verify this device”.";
     case "NotSupportedError":
+      return "This browser or device cannot create a platform credential. Device registration requires a supported platform authenticator; browser-only registration is disabled.";
     case "SecurityError":
-      return "This browser cannot use the computer credential on this address. Use “Register this browser only” instead.";
+      return "This site address cannot use the device credential. Use the same hostname you registered with (localhost and 127.0.0.1 are different), and HTTPS outside localhost. Browser-only registration is disabled.";
     default:
-      return "The computer credential could not be used. Use “Register this browser only” instead.";
+      return "The device credential could not be used. Device registration requires a supported platform authenticator; browser-only registration is disabled.";
   }
 }
 
@@ -179,25 +166,35 @@ async function run(root, purpose) {
 export async function initializeDeviceIdentity() {
   const sections = document.querySelectorAll(SECTION);
   if (!sections.length) return;
-  if (
-    !window.isSecureContext ||
-    !window.PublicKeyCredential ||
-    typeof PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable !== "function" ||
-    !navigator.credentials
-  ) {
-    return;
-  }
-  let available = false;
-  try {
-    available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
-  } catch {
-    available = false;
-  }
-  if (!available) return;
   for (const root of sections) {
-    root.hidden = false;
+    if (root.dataset.deviceOsEnabled !== "true") {
+      setStatus(root, "Device credential registration is currently unavailable. Browser-only registration is disabled.");
+      continue;
+    }
+    if (!window.isSecureContext) {
+      setStatus(root, "Device registration requires a secure site address: HTTPS, or localhost for local development.");
+      continue;
+    }
+    if (
+      !window.PublicKeyCredential ||
+      typeof PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable !== "function" ||
+      !navigator.credentials
+    ) {
+      setStatus(root, "This browser does not support platform device credentials. Use a supported browser and device; browser-only registration is disabled.");
+      continue;
+    }
+    let available = false;
+    try {
+      available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+    } catch (error) {
+      setStatus(root, explain(error, root.dataset.mode === "verify" ? "verify" : "register"));
+      continue;
+    }
+    if (!available) {
+      setStatus(root, "No platform authenticator is available on this device. Device registration requires a supported platform credential; browser-only registration is disabled.");
+      continue;
+    }
     showActions(root, root.dataset.mode === "verify" ? "verify" : "register");
-    prioritiseComputerAction(root);
     root.addEventListener("click", (event) => {
       const button = event.target instanceof Element ? event.target.closest("[data-device-os-action]") : null;
       if (button instanceof HTMLButtonElement && root.contains(button)) {

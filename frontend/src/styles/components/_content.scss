@@ -35,7 +35,7 @@
   letter-spacing: -0.02em;
 }
 
-// ---------- Journal masthead, sticky filters and chips ----------
+// ---------- Journal masthead, filters and chips ----------
 .journal-masthead {
   display: grid;
   gap: var(--mf-space-5);
@@ -111,12 +111,7 @@
   align-items: stretch;
   gap: var(--mf-space-3);
 
-  // A tall sticky bar would eat a phone screen; it only sticks from tablet up.
   position: static;
-
-  @include up("md") {
-    position: sticky;
-  }
 }
 
 .journal-filters__row {
@@ -126,7 +121,7 @@
   gap: var(--mf-space-3);
 
   @include up("sm") {
-    grid-template-columns: minmax(0, 1fr) 11rem auto;
+    grid-template-columns: minmax(0, 1fr) 11rem 11rem auto;
   }
 
   .htmx-indicator {
@@ -146,7 +141,7 @@
 
 .chip-bar {
   display: flex;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: var(--mf-space-2);
   min-width: 0;
   margin: 0;
@@ -1064,7 +1059,7 @@
   @include up("lg") {
     &--sticky {
       position: sticky;
-      top: calc(var(--mf-header-height) + 1rem);
+      top: var(--mf-sticky-top);
       max-height: calc(100vh - var(--mf-header-height) - 2rem);
       overflow-y: auto;
     }
@@ -1136,7 +1131,7 @@
     font-weight: 760;
     letter-spacing: -0.025em;
     line-height: 1.2;
-    scroll-margin-top: calc(var(--mf-header-height) + 1rem);
+    scroll-margin-top: var(--mf-sticky-top);
   }
 
   h2 {
@@ -1338,7 +1333,7 @@
   background: var(--mf-surface);
 
   table {
-    min-width: 36rem;
+    min-width: 56rem;
     margin: 0;
     font-size: var(--mf-text-sm);
   }
@@ -1354,6 +1349,37 @@
 
   td {
     overflow-wrap: anywhere;
+  }
+}
+
+.article-table--facts table {
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.article-table--facts th {
+  width: 23%;
+}
+
+.article-table--firmware {
+  table {
+    min-width: 60rem;
+  }
+
+  th:first-child,
+  td:first-child {
+    min-width: 17rem;
+  }
+
+  th:nth-child(2),
+  th:nth-child(4),
+  th:nth-child(5),
+  th:nth-child(6) {
+    white-space: nowrap;
+  }
+
+  td:last-child {
+    white-space: nowrap;
   }
 }
 
@@ -1673,7 +1699,7 @@
   display: flex;
   gap: var(--mf-space-3);
   min-width: 0;
-  scroll-margin-top: calc(var(--mf-header-height) + 1rem);
+  scroll-margin-top: var(--mf-sticky-top);
 
   &:target > .comment__main > .comment__card {
     border-color: var(--mf-accent);
@@ -2122,10 +2148,6 @@
 .guide-filters {
   position: static;
 
-  @include up("md") {
-    position: sticky;
-  }
-
   .form-control {
     flex: 1 1 14rem;
     width: auto;
@@ -2242,10 +2264,6 @@
 // ---------- Bounties ----------
 .bounty-filters {
   position: static;
-
-  @include up("md") {
-    position: sticky;
-  }
 }
 
 .bounty-filters__field {
@@ -2885,7 +2903,7 @@
 }
 
 .article-paywall {
-  scroll-margin-top: calc(var(--mf-header-height) + 1rem);
+  scroll-margin-top: var(--mf-sticky-top);
 }
 
 .paywall__body {
@@ -2911,6 +2929,34 @@
 .firmware-inventory {
   max-width: 100%;
   margin-top: var(--mf-space-6);
+}
+
+.sitemap-grid {
+  align-items: start;
+}
+
+.sitemap-card {
+  min-width: 0;
+  padding: var(--mf-space-5);
+}
+
+.sitemap-card__title {
+  margin: 0 0 var(--mf-space-3);
+  font-size: var(--mf-text-lg);
+}
+
+.sitemap-card__list {
+  display: grid;
+  gap: var(--mf-space-2);
+  margin: 0;
+  padding-inline-start: 1.15rem;
+  overflow-wrap: anywhere;
+}
+
+.sitemap-note {
+  margin-top: var(--mf-space-5);
+  color: var(--mf-text-muted);
+  font-size: var(--mf-text-sm);
 }
 
 .buy-article {

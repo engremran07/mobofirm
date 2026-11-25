@@ -21,7 +21,7 @@ from tests.backend.seo.seo_helpers import SITE, make_catalog, make_staff
 
 
 def _entries(count: int) -> list[tuple[str, str]]:
-    return [(f"/pages/inv-{index:05d}/", "sitemap:pages") for index in range(count)]
+    return [(f"/help/inv-{index:05d}/", "sitemap:pages") for index in range(count)]
 
 
 @override_settings(SITE_URL=SITE)
@@ -95,11 +95,11 @@ class InventoryIsBoundedTests(TestCase):
 
     def test_the_search_box_narrows_the_routes_before_they_are_resolved(self):
         response, describe, _queries = self._get(
-            [*_entries(500), ("/pages/needle/", "sitemap:pages")], q="needle"
+            [*_entries(500), ("/help/needle/", "sitemap:pages")], q="needle"
         )
 
         self.assertEqual(describe.call_count, 1)
         self.assertEqual(
-            [item.path for item in response.context["items"]], ["/pages/needle/"]
+            [item.path for item in response.context["items"]], ["/help/needle/"]
         )
         self.assertEqual(response.context["discovered_total"], 501)

@@ -10,7 +10,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.blog import api as blog_api
-from apps.blog.models import BlogSettings, Category, Post, PostStatus
+from apps.blog.models import BlogSettings, Category, Post, PostSource, PostStatus
 from apps.blog.reward_events import POST_PUBLISHED
 from apps.core.models import AppRegistry
 from apps.wallet import api as wallet_api
@@ -53,7 +53,7 @@ class TestBlogContract:
         self, member: Any, other: Any
     ) -> None:
         mine = post_for(member, "Mine in review", status=PostStatus.IN_REVIEW)
-        post_for(member, "Automated", is_ai_generated=True)
+        post_for(member, "Automated", content_source=PostSource.AUTOMATED)
         post_for(other, "Someone else")
 
         rows = blog_api.contributions_of(member)
@@ -83,7 +83,7 @@ class TestBlogContract:
             member,
             "Pending contribution",
             status=PostStatus.IN_REVIEW,
-            is_community_contribution=True,
+            content_source=PostSource.COMMUNITY_CONTRIBUTION,
         )
 
         rows = {row.title: row for row in blog_api.contributions_of(member)}

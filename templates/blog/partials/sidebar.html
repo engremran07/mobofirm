@@ -1,6 +1,22 @@
 {# Journal sidebar: popular articles, devices and firmware, latest, topics and catalogue shortcuts. Context: trending, latest, cloud. #}
 {% load search_tags %}
 <aside class="journal-aside" aria-label="Journal sidebar">
+  {% if open_bounties %}
+    <section class="side-widget" aria-labelledby="open-guide-bounties-title">
+      <h2 class="side-widget__title" id="open-guide-bounties-title">Open guide bounties</h2>
+      <ul class="side-links">
+        {% for bounty in open_bounties %}
+          <li>
+            <a href="{{ bounty.url }}">
+              <span>{{ bounty.title }}</span>
+              {% if bounty.label %}<small>{{ bounty.label }}</small>{% endif %}
+              <small>{{ bounty.credits }} credits{% if bounty.bounty_count > 1 %} across {{ bounty.bounty_count }} bounties{% endif %}</small>
+            </a>
+          </li>
+        {% endfor %}
+      </ul>
+    </section>
+  {% endif %}
   {% include "blog/partials/mini_list.html" with title="Popular articles" cards=trending heading_id="trending-title" icon="flame" %}
   {% popular_blocks "model,firmware" layout="stack" %}
   {% include "blog/partials/tag_cloud.html" %}

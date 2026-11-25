@@ -6,10 +6,12 @@ import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from typing import TypedDict
 
 import pytest
 from playwright.sync_api import Browser, Page
 
+from apps.firmwares.chipsets import create_chipset_record
 from apps.firmwares.models import Brand, Chipset, Model, Variant
 from tests.frontend.browser_support import chromium, ready
 
@@ -37,7 +39,17 @@ def locked_chromium() -> Iterator[Browser]:
         BROWSER_LOCK.rmdir()
 
 
-def seed_catalog() -> dict[str, object]:
+class Catalog(TypedDict):
+    """The rows ``seed_catalog`` creates, by role."""
+
+    acme: Brand
+    zenith: Brand
+    model: Model
+    variant: Variant
+    chipset: Chipset
+
+
+def seed_catalog() -> Catalog:
     """Two brands, models for each, one variant and a chipset."""
     acme = Brand.objects.create(name="Acme Mobile", slug="acme-mobile")
     zenith = Brand.objects.create(name="Zenith Phones", slug="zenith-phones")
@@ -45,7 +57,7 @@ def seed_catalog() -> dict[str, object]:
     Model.objects.create(brand=acme, name="Acme Two", slug="acme-two")
     Model.objects.create(brand=zenith, name="Zenith Prime", slug="zenith-prime")
     variant = Variant.objects.create(model=phone, name="Global", slug="global")
-    chipset = Chipset.objects.create(
+    chipset = create_chipset_record(
         vendor="MediaTek", name="Helio G99", slug="mediatek-helio-g99"
     )
     return {

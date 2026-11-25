@@ -15,6 +15,7 @@ for the decision record.
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
@@ -61,6 +62,15 @@ def normalize_variant_code(value: str | None) -> str:
     """``" ai2401 a "`` -> ``"AI2401_A"``; empty input stays empty."""
     text = "_".join((value or "").split())
     return text.upper()[:CODE_MAX]
+
+
+def normalize_variant_codes(values: Iterable[str | None]) -> list[str]:
+    """Normalize and deduplicate model codes while preserving their first order."""
+    return list(
+        dict.fromkeys(
+            code for value in values if (code := normalize_variant_code(value))
+        )
+    )
 
 
 def clean_text(value: str | None, limit: int) -> str:

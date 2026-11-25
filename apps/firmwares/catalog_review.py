@@ -30,6 +30,7 @@ from .catalog_lookup import (
     model_query,
     variant_query,
 )
+from .chipsets import resolve_chipset_vendor
 from .constants import RESERVED_BRAND_SLUGS
 from .models import (
     Brand,
@@ -240,20 +241,25 @@ def approve_model_request(
     with transaction.atomic():
         locked = _lock_pending(ModelCreationRequest, request.pk)
         name = _final_name(fixes.name, locked.name, "Model name")
-        wanted = _final_slug(fixes.slug, name, 160)
         code = locked.model_code if fixes.model_code is None else fixes.model_code
-        model = Model.objects.filter(
+        wanted = _final_slug(fixes.slug, clean_text(code, 64) or name, 160)
+        existing_models = Model.objects.filter(
             model_query(name) | Q(slug=wanted), brand=locked.brand
-        ).first()
+        )
+        if locked.chipset_id:
+            existing_models = existing_models.filter(chipset_ref_id=locked.chipset_id)
+        model = existing_models.first()
         created = model is None
         if model is None:
-            model = Model.objects.create(
+            model = Model(
                 brand=locked.brand,
                 name=name,
                 slug=free_slug(Model.objects.filter(brand=locked.brand), wanted),
-                model_code=clean_text(code, 64),
+                model_code=normalize_variant_code(code),
                 chipset_ref=locked.chipset,
             )
+            model.full_clean()
+            model.save()
         subject = f"the model “{model.name}” ({locked.brand.name})"
         _decide(locked, reviewer, Verdict("approved", note, subject, model, created))
     logger.info("Model request %s approved as model %s", request.pk, model.pk)
@@ -266,7 +272,7 @@ def _create_variant(
 ) -> Variant:
     """The variant a request describes, with RAM/storage read from its memory."""
     ram, storage = parse_memory(locked.memory)
-    return Variant.objects.create(
+    variant = Variant(
         model=locked.model,
         name=name,
         slug=free_slug(Variant.objects.filter(model=locked.model), slug),
@@ -276,6 +282,9 @@ def _create_variant(
         ram_options=ram,
         storage_options=storage,
     )
+    variant.full_clean()
+    variant.save()
+    return variant
 
 
 def approve_variant_request(
@@ -326,13 +335,16 @@ def approve_chipset_request(
         vendor = _final_name(fixes.vendor, locked.vendor, "Vendor")[:64]
         name = _final_name(fixes.name, locked.name, "Chipset name")
         wanted = _final_slug(fixes.slug, f"{vendor} {name}", 160)
+        from .chipsets import canonical_vendor
+
+        canonical = canonical_vendor(vendor) or vendor
         chipset = Chipset.objects.filter(
-            (Q(vendor__iexact=vendor) & Q(name__iexact=name)) | Q(slug=wanted)
+            (Q(vendor__name__iexact=canonical) & Q(name__iexact=name)) | Q(slug=wanted)
         ).first()
         created = chipset is None
         if chipset is None:
             chipset = Chipset.objects.create(
-                vendor=vendor,
+                vendor=resolve_chipset_vendor(vendor),
                 name=name,
                 family=locked.family,
                 aliases=list(locked.aliases),

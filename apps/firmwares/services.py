@@ -11,9 +11,7 @@ import hashlib
 import logging
 import re
 import shutil
-import stat
 import uuid
-import zipfile
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
@@ -30,7 +28,7 @@ from . import conf
 from .access import is_seller
 from .catalog_requests import fulfil_matching_requests
 from .constants import MAIN_CATEGORIES, MAX_PRICE
-from .crypto import decrypt_password, encrypt_password
+from .crypto import encrypt_password
 from .events import announce_approval
 from .models import (
     AccessTier,
@@ -385,93 +383,6 @@ def submit_external_firmware(
             access_tier=tier,
             proposed_price=price,
         )
-
-
-def _archive_limits() -> tuple[int, int]:
-    return (
-        int(getattr(settings, "FIRMWARE_ZIP_MAX_MEMBERS", 200)),
-        int(getattr(settings, "FIRMWARE_ZIP_MAX_TOTAL_BYTES", 500 * 1024 * 1024)),
-    )
-
-
-def _inspect_archive(archive: zipfile.ZipFile, dest_dir: Path) -> list[zipfile.ZipInfo]:
-    """Reject traversal, symlink and oversized archives before any data is read."""
-    max_members, max_total = _archive_limits()
-    members: list[zipfile.ZipInfo] = []
-    total = 0
-    for member in archive.infolist():
-        if member.is_dir():
-            continue
-        if len(members) + 1 > max_members:
-            raise ValueError("Archive has too many entries")
-        total += member.file_size
-        if total > max_total or member.file_size > max_total:
-            raise ValueError("Archive exceeds allowed uncompressed size")
-        if (
-            not (dest_dir / member.filename)
-            .resolve()
-            .is_relative_to(dest_dir.resolve())
-        ):
-            raise ValueError("Archive entry escapes the extraction directory")
-        if stat.S_ISLNK(member.external_attr >> 16):
-            raise ValueError("Symlink detected in archive")
-        members.append(member)
-    return members
-
-
-def attempt_extraction(pf: PendingFirmware) -> None:
-    """Validate a password-protected archive in place without extracting it."""
-    if pf.source_type != FirmwareSourceType.STORED or not pf.is_password_protected:
-        pf.extraction_status = (
-            "success" if pf.source_type == FirmwareSourceType.STORED else "pending"
-        )
-        pf.save(update_fields=["extraction_status"])
-        return
-    try:
-        password = (
-            decrypt_password(pf.encrypted_password) if pf.encrypted_password else ""
-        )
-    except (ValueError, TypeError, RuntimeError) as exc:
-        logger.warning("Stored archive password for %s is unreadable: %s", pf.pk, exc)
-        pf.password_validation_status = "invalid"
-        pf.extraction_status = "failed"
-        pf.save(update_fields=["password_validation_status", "extraction_status"])
-        return
-    path = Path(pf.stored_file_path)
-    try:
-        if not zipfile.is_zipfile(path):
-            pf.password_validation_status = "unknown"
-            pf.extraction_status = "pending"
-        else:
-            with zipfile.ZipFile(path) as archive:
-                members = _inspect_archive(archive, path.parent)
-                pwd = password.encode() if password else None
-                for member in members:
-                    with archive.open(member, pwd=pwd) as handle:
-                        while handle.read(CHUNK_SIZE):
-                            pass
-            pf.password_validation_status = "valid"
-            pf.extraction_status = "success"
-    except (zipfile.BadZipFile, RuntimeError, ValueError, OSError, NotImplementedError):
-        logger.warning("Archive validation failed for %s", pf.pk, exc_info=True)
-        pf.password_validation_status = "invalid"
-        pf.extraction_status = "failed"
-    pf.save(update_fields=["password_validation_status", "extraction_status"])
-
-
-def run_ai_analysis(pf: PendingFirmware) -> None:
-    """Record content-derived metadata suggestions; never decides the category."""
-    from .ai_analysis import FirmwareAIAnalyzer
-
-    if pf.source_type != FirmwareSourceType.STORED:
-        return
-    result = FirmwareAIAnalyzer.analyze_firmware(pf.stored_file_path)
-    if result.get("error"):
-        pf.metadata = {**pf.metadata, "ai_error": "analysis_failed"}
-        pf.save(update_fields=["metadata"])
-        return
-    FirmwareAIAnalyzer.apply_to_pending(pf, result)
-    pf.save()
 
 
 def _require_reviewer(user) -> None:

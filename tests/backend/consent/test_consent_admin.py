@@ -107,7 +107,7 @@ def test_new_policy_version_is_numbered_automatically_and_published_by_action(
             "title": "Updated policy",
             "banner_text": "We changed our trackers.",
             "details_text": "Details",
-            "privacy_url": "/pages/privacy/",
+            "privacy_url": "/help/privacy/",
         },
     )
     assert response.status_code == 302

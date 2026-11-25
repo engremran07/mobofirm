@@ -8,7 +8,7 @@ from django.db import DatabaseError
 from django.urls import reverse
 
 from apps.blog import freshness
-from apps.blog.models import BlogSettings, Post, PostAccess, PostStatus
+from apps.blog.models import BlogSettings, Post, PostAccess, PostSource, PostStatus
 
 MAX_CONTRIBUTION_ROWS = 200
 
@@ -95,7 +95,8 @@ def contributions_of(user: Any) -> list[ContributionSummary]:
     if not getattr(user, "is_authenticated", False):
         return []
     posts = (
-        Post.objects.filter(author=user, is_ai_generated=False)
+        Post.objects.exclude(content_source=PostSource.AUTOMATED)
+        .filter(author=user)
         .select_related("category")
         .order_by("-created_at", "-pk")[:MAX_CONTRIBUTION_ROWS]
     )

@@ -364,7 +364,12 @@ def parse_submission(post: Any, label: str) -> editing.ChangeSet:
         if value is not None:
             changes.object_fields[name] = value
     for key, value in post.items():
-        if key.startswith("alt_") and key[4:].isdigit() and value.strip():
+        if (
+            key.startswith("alt_")
+            and key[4:].isdigit()
+            and isinstance(value, str)
+            and value.strip()
+        ):
             position = int(key[4:])
             changes.alts[position] = value
             source = post.get(f"altsrc_{position}")

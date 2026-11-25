@@ -165,8 +165,9 @@ def _check_post(post: Any) -> Check:
             )
     if not (post.published_at or post.publish_at):
         check.problems.append("No publication date.")
-    if getattr(post, "author", None) is None and not getattr(
-        post, "is_ai_generated", False
+    if (
+        getattr(post, "author", None) is None
+        and getattr(post, "content_source", "") != "automated"
     ):
         check.problems.append("No author byline.")
     canonical = str(getattr(post, "canonical_url", "") or "")

@@ -8,12 +8,12 @@ from pathlib import Path
 
 import pytest
 from django.urls import reverse
-from playwright.sync_api import Browser
+from playwright.sync_api import Browser, expect
 
+from apps.firmwares.chipsets import create_chipset_record
 from apps.firmwares.models import (
     AccessTier,
     Brand,
-    Chipset,
     Model,
     OfficialFirmware,
     PendingFirmware,
@@ -187,6 +187,81 @@ def test_browse_search_filters_the_grid_in_place_and_states_the_payment_status(
 
 
 @pytest.mark.django_db(transaction=True)
+def test_open_seller_tools_uses_a_consistent_soft_color_on_hover(live_server):
+    """Keep the seller-tools CTA soft-colored on hover at phone and desktop sizes."""
+    user = complete_user("browser_seller_tools_cta")
+    cookie = login_cookie(user)
+    failures: list[str] = []
+    with locked_chromium() as browser:
+        context = session_context(browser, live_server, cookie)
+        page = context.new_page()
+        page.set_viewport_size({"width": 390, "height": 844})
+        watch(page, failures)
+        page.goto(f"{live_server.url}{reverse('marketplace:listing_browse')}")
+        ready(page)
+        link = page.get_by_role("link", name="Open seller tools")
+        link.wait_for(state="visible")
+        page.locator("html").evaluate(
+            "element => element.setAttribute('data-bs-theme', 'dark')"
+        )
+        page.wait_for_function(
+            """() => {
+              const element = document.querySelector('.surface-card a.btn-soft');
+              const probe = document.createElement('span');
+              probe.style.color = getComputedStyle(document.documentElement)
+                .getPropertyValue('--mf-accent').trim();
+              document.body.append(probe);
+              const accent = getComputedStyle(probe).color;
+              probe.remove();
+              return getComputedStyle(element).color === accent;
+            }"""
+        )
+
+        def color_state() -> dict[str, str]:
+            return link.evaluate(
+                """element => {
+                  const accent = getComputedStyle(document.documentElement)
+                    .getPropertyValue('--mf-accent').trim();
+                  const probe = document.createElement('span');
+                  probe.style.backgroundColor = accent;
+                  document.body.append(probe);
+                  const accentColor = getComputedStyle(probe).backgroundColor;
+                  probe.remove();
+                  const style = getComputedStyle(element);
+                  return {
+                    foreground: style.color,
+                    background: style.backgroundColor,
+                    accent: accentColor,
+                  };
+                }"""
+            )
+
+        normal = color_state()
+        link.hover()
+        expect(link).to_have_css("color", normal["foreground"])
+        hovered = color_state()
+
+        link_classes = link.get_attribute("class")
+        assert link_classes is not None
+        assert "btn-soft" in link_classes.split()
+        assert normal["foreground"] == hovered["foreground"]
+        assert normal["background"] != normal["accent"]
+        assert hovered["background"] != hovered["accent"]
+        assert normal["background"] != hovered["background"]
+        assert page.evaluate(
+            "document.documentElement.scrollWidth <= document.documentElement.clientWidth"
+        )
+
+        page.set_viewport_size({"width": 1365, "height": 900})
+        assert page.evaluate(
+            "document.documentElement.scrollWidth <= document.documentElement.clientWidth"
+        )
+        context.close()
+
+    assert not failures, "\n".join(failures)
+
+
+@pytest.mark.django_db(transaction=True)
 def test_incomplete_profile_is_sent_to_profile_completion_and_back(live_server):
     user = make_user("browser_incomplete")
     cookie = login_cookie(user)
@@ -208,7 +283,7 @@ def test_incomplete_profile_is_sent_to_profile_completion_and_back(live_server):
 def test_member_applies_with_pickers_links_and_terms_then_sees_the_status(live_server):
     tecno = Brand.objects.create(name="Tecno", slug="tecno")
     Brand.objects.create(name="Infinix", slug="infinix")
-    Chipset.objects.create(vendor="MediaTek", name="Helio G99", slug="helio-g99")
+    create_chipset_record(vendor="MediaTek", name="Helio G99", slug="helio-g99")
     user = complete_user("browser_applicant")
     cookie = login_cookie(user)
     failures: list[str] = []

@@ -353,7 +353,7 @@ class DiscordAdapter(SimpleAdapter):
             url=f"{secret.split('?', 1)[0]}?wait=true",
             headers=dict(JSON_HEADERS),
             body=json_body(payload),
-            allowed_hosts=None,
+            allowed_hosts=DISCORD_HOSTS,
         )
 
     def parse_id(self, body: bytes) -> str:
@@ -368,7 +368,7 @@ class DiscordAdapter(SimpleAdapter):
         if not _discord_ok(url):
             return Outcome(False, False, "config", "Enter a discord.com webhook URL.")
         try:
-            ctx.http.json(url.split("?", 1)[0], method="GET")
+            ctx.http.json(url.split("?", 1)[0], method="GET", hosts=DISCORD_HOSTS)
         except StepError as error:
             return error.outcome
         return Outcome(True, False, "200", "Webhook is valid")

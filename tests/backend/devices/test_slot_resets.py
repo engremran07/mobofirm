@@ -482,12 +482,14 @@ class TestPages:
         client.force_login(funded)
         below = client.get(reverse("devices:my_devices"))
         assert below.status_code == 200
-        assert b"Free a browser slot" not in below.content
+        assert b"Free a device slot" not in below.content
+        assert b"Reset choices appear here once all" in below.content
 
         approve_browsers(funded, 1, prefix="third")
         full = client.get(reverse("devices:my_devices"))
 
-        assert b"Free a browser slot" in full.content
+        assert b"Free a device slot" in full.content
+        assert b'href="#slot-options"' in full.content
         assert b"Pay 10 credits" in full.content
         assert b"Ask staff to reset" in full.content
         assert b"Rewarded ads are not available right now." in full.content
@@ -509,7 +511,7 @@ class TestPages:
 
         assert b'href="/ads/rewarded/reset-ad/"' in page.content
 
-    def test_a_pending_browser_gets_an_approve_button_when_a_slot_is_free(
+    def test_a_pending_browser_profile_requires_a_platform_credential(
         self, client, user, approve_browsers
     ):
         from apps.devices.services import hash_browser_key
@@ -522,7 +524,9 @@ class TestPages:
 
         page = client.get(reverse("devices:my_devices"))
 
-        assert b"Approve this browser" in page.content
+        assert b"Register this device" in page.content
+        assert b"Approve this browser" not in page.content
+        assert b"Register this browser only" not in page.content
 
     def test_dialogs_need_a_signed_in_user(self, client):
         for name in ("slot_ask_staff", "slot_pay_credits", "slot_use_rewarded"):

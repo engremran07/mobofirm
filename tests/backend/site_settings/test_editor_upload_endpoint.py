@@ -69,7 +69,9 @@ def test_upload_stores_an_owned_random_named_image_under_the_prefix() -> None:
     assert response.status_code == 201, response.content
     body = response.json()
     image = EditorImage.objects.get(pk=body["id"])
+    assert image.owner is not None
     assert image.owner.username == "writer"
+    assert image.file.name is not None
     assert image.file.name.startswith("editor/")
     assert re.fullmatch(r"editor/\d{4}/\d{2}/[0-9a-f]{32}\.png", image.file.name)
     assert body["url"].endswith(image.file.name)

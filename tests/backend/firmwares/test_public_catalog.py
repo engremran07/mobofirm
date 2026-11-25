@@ -11,9 +11,9 @@ from django.urls import resolve, reverse
 from django.utils import timezone
 
 from apps.blog.models import Post, PostStatus
+from apps.firmwares.chipsets import create_chipset_record
 from apps.firmwares.models import (
     Brand,
-    Chipset,
     EngineeringFirmware,
     FirmwarePackageFormat,
     FlashingGuideTemplate,
@@ -31,7 +31,7 @@ from apps.firmwares.sitemaps import FirmwareFileSitemap
 class CatalogTestCase(TestCase):
     def setUp(self):
         self.brand = Brand.objects.create(name="Catalog Brand", slug="catalog-brand")
-        self.chipset = Chipset.objects.create(
+        self.chipset = create_chipset_record(
             vendor="MediaTek",
             family="Helio",
             name="Helio G99",
@@ -347,8 +347,27 @@ class ChipsetPageTests(CatalogTestCase):
             {"catalog-brand", "other-chip"},
         )
 
+    def test_unisoc_detail_explains_historical_names_and_lists_aliases(self):
+        chipset = create_chipset_record(
+            vendor="Unisoc",
+            name="SC9863A",
+            slug="unisoc-sc9863a",
+            aliases=["Spreadtrum SC9863A", "RDA Microelectronics SC9863A"],
+        )
+
+        response = self.client.get(
+            reverse("firmwares:chipset_detail", kwargs={"slug": chipset.slug})
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "RDA Microelectronics")
+        self.assertContains(response, "Spreadtrum Communications")
+        self.assertContains(response, "Known source names")
+        self.assertContains(response, "Spreadtrum SC9863A")
+        self.assertContains(response, "RDA Microelectronics SC9863A")
+
     def test_unknown_chipset_is_a_404_and_search_filters_the_list(self):
-        Chipset.objects.create(
+        create_chipset_record(
             vendor="Qualcomm", name="Snapdragon 680", slug="qualcomm-snapdragon-680"
         )
 

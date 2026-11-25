@@ -25,10 +25,10 @@ approvals:
       - final_visual_identity_remains_reviewable
     approved_decisions:
       - id: public_frontend_foundation
-        stack: django_templates_bootstrap_htmx_2.0.11_alpine_csp_lucide_vite
-        note: htmx 2.0.11 is installed as the htmx2 npm alias for the public build
+        stack: django_templates_bootstrap_5.3.9_htmx_4.0.2_alpine_csp_lucide_1.77.0_vite
+        note: Both public and staff shells use the shared htmx 4.0.2 runtime with explicit inheritance and strict-CSP expression blocking
       - id: staff_console_stack
-        stack: adminlte_4.10.2_bootstrap_5.3.8_htmx_4.0.2_alpinejs_csp_3.17.5_lucide_vite
+        stack: adminlte_4.10.2_bootstrap_5.3.9_htmx_4.0.2_alpinejs_csp_3.17.5_lucide_1.77.0_vite
         note: django.contrib.admin stays the engine; django-unfold removed; Bootstrap 6 upgrade is confined to _bootstrap.scss, vendor-bootstrap.js and console components
         doc: docs/05-frontend/admin-console.md
       - id: legacy_rich_text_editor

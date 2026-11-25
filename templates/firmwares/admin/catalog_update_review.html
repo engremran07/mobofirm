@@ -1,0 +1,33 @@
+{% extends "admin/staff_page.html" %}
+{% load staff_ui %}
+{% block page_body %}
+  {% staff_card title="Contributor proposal" %}
+    <p class="mb-1"><strong>Catalog item:</strong> {{ target }}</p>
+    <p class="mb-1"><strong>Submitted by:</strong> {{ proposal.submitted_by }}</p>
+    <p class="small text-body-secondary mb-0">{{ proposal.created_at|date:"Y-m-d H:i" }}</p>
+  {% endstaff_card %}
+  {% if proposal.status == "pending" %}
+    {% staff_card title="Review proposed values" %}
+      <form method="post" class="d-flex flex-column gap-3">
+        {% csrf_token %}
+        {{ form.non_field_errors }}
+        {% for field in form %}
+          <div class="field-row">
+            {{ field.label_tag }}
+            {{ field }}
+            {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+            {{ field.errors }}
+          </div>
+        {% endfor %}
+        {% staff_row %}
+          {% staff_button "Save review" tone="primary" %}
+          <a class="btn btn-ghost" href="{% url 'admin:firmwares_catalogupdateproposal_changelist' %}">Cancel</a>
+        {% endstaff_row %}
+      </form>
+    {% endstaff_card %}
+  {% else %}
+    {% staff_card title="Already reviewed" %}
+      <p class="mb-0">{{ proposal.get_status_display }}{% if proposal.review_reason %}: {{ proposal.review_reason }}{% endif %}</p>
+    {% endstaff_card %}
+  {% endif %}
+{% endblock %}

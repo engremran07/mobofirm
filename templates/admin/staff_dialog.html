@@ -20,7 +20,7 @@
   <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable{% if dialog_size == 'lg' %} modal-lg{% elif dialog_size == 'xl' %} modal-xl{% endif %}">
 {% endif %}
     <form class="{% if dialog_inline %}card-body d-flex flex-column gap-3{% else %}modal-content{% endif %}" method="post" action="{{ dialog_action }}" novalidate data-console-dialog-form
-      {% if dialog_hx %}hx-post="{{ dialog_action }}" hx-target="this" hx-swap="outerHTML" hx-select="[data-console-dialog-form]" hx-disabled-elt="find button[type=submit]"{% endif %}
+      {% if dialog_hx %}hx-post="{{ dialog_action }}" hx-target="this" hx-swap="outerHTML" hx-select="[data-console-dialog-form]" hx-disable="find button[type=submit]"{% endif %}
       {% if unsaved_guard %}data-console-unsaved-guard{% endif %}>
       {% csrf_token %}
       <div class="{% if dialog_inline %}d-flex align-items-start justify-content-between gap-3{% else %}modal-header{% endif %}">

@@ -133,6 +133,14 @@ def test_all_named_views_load_without_browser_errors(live_server):
                             f"{reverse(route_name, kwargs=kwargs or None)}"
                         )
                         try:
+                            if route_name == "seo_public:sitemap_gz":
+                                sitemap_response = page.request.get(url, timeout=15_000)
+                                if sitemap_response.status >= 400:
+                                    report_failure(
+                                        f"HTTP {sitemap_response.status} for "
+                                        f"{sitemap_response.url}"
+                                    )
+                                continue
                             response = page.goto(url, wait_until="load", timeout=15_000)
                             if not is_html(response):
                                 continue

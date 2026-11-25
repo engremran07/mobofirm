@@ -81,13 +81,13 @@ class TagAdmin(ModelAdmin):
         "state",
         "usage_count",
         "is_active",
-        "ai_suggested",
+        "is_suggested",
         "merge_into",
     )
     list_filter = (
         ("is_active", BooleanRadioFilter),
         ("is_curated", BooleanRadioFilter),
-        ("ai_suggested", BooleanRadioFilter),
+        ("is_suggested", BooleanRadioFilter),
         ("created_at", RangeDateTimeFilter),
     )
     search_fields = ("name", "slug", "normalized_name", "synonyms_text")
@@ -106,7 +106,7 @@ class TagAdmin(ModelAdmin):
             _("Classification"),
             {
                 "classes": ("tab",),
-                "fields": ("is_active", "is_curated", "ai_suggested", "importance"),
+                "fields": ("is_active", "is_curated", "is_suggested", "importance"),
             },
         ),
         (
@@ -127,11 +127,11 @@ class TagAdmin(ModelAdmin):
             },
         ),
         (
-            _("AI meta"),
+            _("Suggestion metadata"),
             {
                 "classes": ("tab",),
                 "fields": (
-                    "ai_score",
+                    "suggestion_score",
                     "content_hash",
                     "last_suggested_at",
                     "suggestions",
@@ -174,7 +174,7 @@ class TagAdmin(ModelAdmin):
         updated = queryset.filter(pk__in=approved).update(
             is_curated=True,
             is_active=True,
-            ai_suggested=False,
+            is_suggested=False,
             updated_at=timezone.now(),
         )
         for tag_id in approved:
@@ -309,13 +309,13 @@ class KeywordSuggestionAdmin(ModelAdmin):
 class TagsSettingsAdmin(SingletonModelAdmin):
     list_display = (
         "allow_public_suggestions",
-        "enable_ai_suggestions",
+        "automatic_suggestions_enabled",
         "show_tag_usage",
     )
     fieldsets = (
         (
             _("Tag suggestions"),
-            {"fields": ("allow_public_suggestions", "enable_ai_suggestions")},
+            {"fields": ("allow_public_suggestions", "automatic_suggestions_enabled")},
         ),
         (_("Display"), {"fields": ("show_tag_usage",)}),
     )

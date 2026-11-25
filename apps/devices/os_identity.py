@@ -4,8 +4,8 @@ A website cannot read an OS install id. A *platform* authenticator credential
 (Windows Hello/TPM, macOS or Android keystore) is the closest web-only equivalent:
 it is shared by every browser on that OS user profile and is destroyed when the OS
 is reinstalled. A ``Device`` row that carries such a credential therefore stands for
-one operating system, whichever browser is used; the random browser cookie remains
-only a fallback for browsers/contexts without a platform authenticator.
+one operating system, whichever browser is used. A browser cookie may identify the
+current session, but cannot approve a device without its platform credential.
 
 Transaction boundary: each public function validates the payload and the
 single-use challenge first, then does all writes inside one ``transaction.atomic``
@@ -41,6 +41,7 @@ from apps.devices.services import (
     ensure_browser_key,
     get_effective_policy,
     hash_browser_key,
+    hash_client_ip,
     log_device_event,
     notify_device_registered,
     trust_pending_device,
@@ -406,8 +407,7 @@ def _register(
                 event_type="registration",
                 success=True,
                 reason="os_credential_registered",
-                ip=get_client_ip(request) or "",
-                user_agent=ua[:512],
+                ip_hash=hash_client_ip(get_client_ip(request)),
             )
         _link_browser(user, device, key_hash, now)
         if not device.is_trusted:
@@ -431,7 +431,7 @@ def _register(
 def verify_os_credential(
     request: HttpRequest, user, payload: Mapping[str, Any]
 ) -> Device:
-    """Verify a WebAuthn assertion and recognise this browser on the registered OS."""
+    """Verify a WebAuthn assertion and recognise the registered device."""
     try:
         device = _verify(request, user, payload)
     except (webauthn.WebAuthnError, DevicePolicyError) as exc:
@@ -501,6 +501,12 @@ def _verify(request: HttpRequest, user, payload: Mapping[str, Any]) -> Device:
         device.os_credential_sign_count = auth.sign_count
         device.last_seen_at = now
         device.save(update_fields=["os_credential_sign_count", "last_seen_at"])
+        if not device.is_trusted:
+            try:
+                trust_pending_device(user, device, reason="os_credential_verified")
+            except DevicePolicyError as exc:
+                if exc.reason != "limit_reached":
+                    raise
         _link_browser(user, device, key_hash, now)
         DeviceEvent.objects.create(
             device=device,
@@ -508,7 +514,6 @@ def _verify(request: HttpRequest, user, payload: Mapping[str, Any]) -> Device:
             event_type="login",
             success=True,
             reason="os_identity_verified",
-            ip=get_client_ip(request) or "",
-            user_agent=(request.META.get("HTTP_USER_AGENT") or "")[:512],
+            ip_hash=hash_client_ip(get_client_ip(request)),
         )
     return device

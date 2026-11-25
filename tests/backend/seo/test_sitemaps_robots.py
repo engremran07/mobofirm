@@ -175,8 +175,8 @@ class SitemapReconciliationTests(TestCase):
         self.assertNotIn("/tags/lonely/", listed)
         self.assertNotIn("/blog/syndicated-copy/", listed)
         self.assertNotIn("/blog/hidden-post/", listed)
-        self.assertNotIn("/pages/moved/", listed)
-        self.assertNotIn("/pages/draft-page/", listed)
+        self.assertNotIn("/help/moved/", listed)
+        self.assertNotIn("/help/draft-page/", listed)
         self.assertNotIn("/firmwares/nova/atlas-one/", listed)
         self.assertNotIn(
             reverse(

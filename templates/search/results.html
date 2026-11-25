@@ -6,7 +6,7 @@
   {% include "components/breadcrumbs.html" with current="Search" %}
   {% include "components/page_header.html" with eyebrow="Search" title="Search Mobofirm" lead="Devices, brands, chipsets, tools, firmware builds, articles, tags and pages." %}
   <form class="search-bar" role="search" method="get" action="{% url 'search:results' %}"
-        hx-get="{% url 'search:results' %}" hx-trigger="submit, input changed delay:300ms from:find #results-query"
+        hx-get="{% url 'search:results' %}" hx-trigger="submit, input changed delay:300ms from:find '#results-query'"
         hx-target="#search-results" hx-swap="innerHTML" hx-push-url="true" hx-indicator="#results-query-indicator">
     {% for kind in selected %}<input type="hidden" name="kinds" value="{{ kind }}">{% endfor %}
     <label class="visually-hidden" for="results-query">Search</label>

@@ -7,8 +7,8 @@
      {% if depends_on %}data-depends-on="{{ depends_on }}" data-depends-param="{{ depends_param }}"{% endif %}
      {% if detected == "true" %}data-detected="true"{% endif %}
      {% if recent == "off" %}data-recent="false"{% endif %}
-     @htmx:before-request="onBeforeRequest" @htmx:config-request="onConfigRequest"
-     @htmx:after-request="onAfterRequest" @htmx:after-swap="onResults"
+     @htmx:before:request="onBeforeRequest" @htmx:config:request="onConfigRequest"
+     @htmx:after:request="onAfterRequest" @htmx:after:swap="onResults"
      @combobox:set="onExternalSet" @combobox:select.window="onSiblingChange" @combobox:clear.window="onSiblingChange"
      @focusout="onFocusOut">
   {% if label %}<label class="visually-hidden" for="{{ input_id }}">{{ label }}</label>{% endif %}

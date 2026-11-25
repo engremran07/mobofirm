@@ -64,7 +64,7 @@ from .tracking_models import (
     FirmwareRequest,
     FirmwareRequestSupport,
 )
-from .variant_rules import VariantIdentity
+from .variant_rules import VariantIdentity, normalize_variant_code
 
 __all__ = [
     "CatalogRequestError",
@@ -149,9 +149,11 @@ def submit_model_request(
     ensure_can_request(user)
     value = clean_name(name, "Model name")
     text = clean_details(details)
-    code = " ".join((model_code or "").split())[:64]
+    code = normalize_variant_code(model_code)
     check_rate(user)
-    _refuse_existing(check_existing("model", value, brand=brand), "Model")
+    _refuse_existing(
+        check_existing("model", value, brand=brand, chipset=chipset), "Model"
+    )
     try:
         with transaction.atomic():
             return ModelCreationRequest.objects.create(

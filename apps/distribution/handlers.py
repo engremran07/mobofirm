@@ -45,14 +45,14 @@ def on_firmware_approved(data: dict[str, Any]) -> None:
 
 
 def on_blog_post_published(post: Any, **kwargs: Any) -> None:
-    """Share a post once, when it first becomes public (human-authored only)."""
+    """Share a human post once when it first becomes public."""
     _announce_later(content_module.post_content(post))
-    if getattr(post, "is_ai_generated", False):
+    if getattr(post, "content_source", "") == "automated":
         return
     if apps.is_installed("apps.firmwares"):
         link_model = apps.get_model("firmwares", "AutomatedBlogLink")
         if link_model.objects.filter(post=post).exists():
-            return  # its firmware is shared on its own
+            return
     item = content_module.post_content(post)
     if item is not None:
         services.enqueue(item)

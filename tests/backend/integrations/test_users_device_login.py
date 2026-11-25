@@ -8,6 +8,7 @@ from django.core.cache import cache
 from django.test import RequestFactory, TestCase
 from django.urls import reverse
 
+from apps.core.app_service import AppService
 from apps.devices.models import Device, DeviceConfig
 from apps.devices.services import DevicePolicyError, enforce_device_policy_for_login
 from apps.users.mfa import TOTPService
@@ -23,6 +24,18 @@ def device_contract(enforcement):
         DevicePolicyError=DevicePolicyError,
         enforce_device_policy_for_login=enforcement,
     )
+
+
+def patch_device_contract(enforcement):
+    """Replace only the devices API while preserving unrelated app contracts."""
+    get_app_service = AppService.get
+
+    def get_contract(app_label):
+        if app_label == "devices":
+            return device_contract(enforcement)
+        return get_app_service(app_label)
+
+    return patch(GATE_CONTRACT, side_effect=get_contract)
 
 
 class UserDeviceLoginContractTests(TestCase):
@@ -43,10 +56,7 @@ class UserDeviceLoginContractTests(TestCase):
 
     def test_device_policy_denial_does_not_create_an_authenticated_session(self):
         enforcement = Mock(side_effect=DevicePolicyError("blocked_device"))
-        with patch(
-            GATE_CONTRACT,
-            return_value=device_contract(enforcement),
-        ):
+        with patch_device_contract(enforcement):
             response = self.client.post(
                 reverse("users:account_login"),
                 {"login": self.user.email, "password": "test-password"},
@@ -58,10 +68,7 @@ class UserDeviceLoginContractTests(TestCase):
 
     def test_false_device_policy_result_does_not_create_an_authenticated_session(self):
         enforcement = Mock(return_value=(False, {}))
-        with patch(
-            GATE_CONTRACT,
-            return_value=device_contract(enforcement),
-        ):
+        with patch_device_contract(enforcement):
             response = self.client.post(
                 reverse("users:account_login"),
                 {"login": self.user.email, "password": "test-password"},
@@ -73,10 +80,7 @@ class UserDeviceLoginContractTests(TestCase):
 
     def test_successful_logins_do_not_consume_the_failed_attempt_budget(self):
         enforcement = Mock(return_value=(True, {}))
-        with patch(
-            GATE_CONTRACT,
-            return_value=device_contract(enforcement),
-        ):
+        with patch_device_contract(enforcement):
             for _ in range(6):
                 response = self.client.post(
                     reverse("users:account_login"),
@@ -113,10 +117,7 @@ class UserDeviceLoginContractTests(TestCase):
         )
         self.assertEqual(get_attempt_count("login:127.0.0.1"), 1)
 
-        with patch(
-            GATE_CONTRACT,
-            return_value=device_contract(Mock(return_value=(True, {}))),
-        ):
+        with patch_device_contract(Mock(return_value=(True, {}))):
             response = self.client.post(
                 login_url,
                 {"login": self.user.email, "password": "test-password"},
@@ -138,7 +139,7 @@ class UserDeviceLoginContractTests(TestCase):
         device.save(update_fields=["secret_encrypted"])
         enforcement = Mock(side_effect=DevicePolicyError("mfa_required"))
 
-        with patch(GATE_CONTRACT, return_value=device_contract(enforcement)):
+        with patch_device_contract(enforcement):
             login_response = self.client.post(
                 reverse("users:account_login"),
                 {"login": self.user.email, "password": "test-password"},
@@ -194,7 +195,7 @@ class UserDeviceLoginContractTests(TestCase):
         device.save(update_fields=["secret_encrypted"])
         enforcement = Mock(return_value=(True, {}))
 
-        with patch(GATE_CONTRACT, return_value=device_contract(enforcement)):
+        with patch_device_contract(enforcement):
             login_response = self.client.post(
                 reverse("users:account_login"),
                 {"login": self.user.email, "password": "test-password"},

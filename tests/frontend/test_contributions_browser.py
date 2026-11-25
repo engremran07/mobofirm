@@ -40,7 +40,9 @@ def test_my_contributions_tabs_redirect_and_contribute_pages(live_server) -> Non
 
         page.goto(f"{live_server.url}/files/")
         page.wait_for_url("**/contributions/")
-        expect(page.get_by_role("heading", level=1)).to_have_text("What you have shared")
+        expect(page.get_by_role("heading", level=1)).to_have_text(
+            "What you have shared"
+        )
         nav = page.get_by_role("navigation", name="My contributions sections")
         for label in (
             "Overview",
@@ -54,14 +56,14 @@ def test_my_contributions_tabs_redirect_and_contribute_pages(live_server) -> Non
 
         nav.get_by_role("link", name="Blog contributions").click()
         page.wait_for_url("**/contributions/blog/")
-        expect(
-            page.get_by_text("You have not contributed a blog post")
-        ).to_be_visible()
+        expect(page.get_by_text("You have not contributed a blog post")).to_be_visible()
 
         page.get_by_role("link", name="Contribute a blog post").first.click()
         page.wait_for_url("**/blog/contribute/")
         expect(page.locator("select[name=access] option[value=free]")).to_have_count(1)
-        expect(page.locator("select[name=access] option[value=featured]")).to_have_count(1)
+        expect(
+            page.locator("select[name=access] option[value=featured]")
+        ).to_have_count(1)
         expect(page.locator("select[name=access] option[value=paid]")).to_have_count(0)
         for width in WIDTHS:
             page.set_viewport_size({"width": width, "height": 900})

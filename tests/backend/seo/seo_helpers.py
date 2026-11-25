@@ -7,6 +7,7 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 
 from apps.blog.models import Category, Post, PostStatus
+from apps.firmwares.chipsets import create_chipset_record
 from apps.firmwares.models import (
     Brand,
     Chipset,
@@ -44,7 +45,7 @@ def make_catalog() -> Catalog:
     brand = Brand.objects.create(
         name="Nova", slug="nova", description="Nova makes phones."
     )
-    chipset = Chipset.objects.create(
+    chipset = create_chipset_record(
         vendor="MediaTek", name="Helio G100", slug="mediatek-helio-g100"
     )
     model = Model.objects.create(

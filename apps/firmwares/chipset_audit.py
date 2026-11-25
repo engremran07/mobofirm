@@ -75,8 +75,10 @@ def unsupported_chipsets() -> list[ChipsetUsage]:
     """Chipset rows whose vendor is outside the allow-list, with their references."""
     return [
         ChipsetUsage(chipset, _references(chipset))
-        for chipset in Chipset.objects.order_by("vendor", "name")
-        if not is_supported_vendor(chipset.vendor)
+        for chipset in Chipset.objects.select_related("vendor").order_by(
+            "vendor__name", "name"
+        )
+        if not is_supported_vendor(chipset.vendor.name)
     ]
 
 

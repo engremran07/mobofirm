@@ -21,6 +21,12 @@ from apps.ads.models import (
     PlacementAssignment,
     ScanDiscovery,
 )
+from apps.firmwares.models import (
+    Brand,
+    FirmwareSourceType,
+    Model,
+    OfficialFirmware,
+)
 from tests.frontend.browser_support import (
     WIDTHS,
     chromium,
@@ -215,6 +221,24 @@ def test_test_profile_marks_zones_for_staff_only_without_layout_overflow(live_se
     user = ads_manager("ads_profile")
     seed_scans()
     seed_serving_ad()
+    brand = Brand.objects.create(name="Rail Brand", slug="rail-brand")
+    model = Model.objects.create(brand=brand, name="R1", slug="r1")
+    firmware = OfficialFirmware.objects.create(
+        original_file_name="rail-test-firmware.zip",
+        source_type=FirmwareSourceType.EXTERNAL,
+        external_url="https://downloads.example.invalid/rail-test.zip",
+        stored_file_path="",
+        brand=brand,
+        model=model,
+        is_verified=True,
+    )
+    download_path = reverse(
+        "firmwares:firmware_download",
+        kwargs={
+            "firmware_type": "official",
+            "firmware_id": str(firmware.pk),
+        },
+    )
     cookie = login_cookie(user)
     failures: list[str] = []
     with chromium() as browser:
@@ -240,6 +264,45 @@ def test_test_profile_marks_zones_for_staff_only_without_layout_overflow(live_se
             )
             dimensions = overflow(page)
             assert dimensions["document"] <= dimensions["viewport"] + 1, width
+
+        model_path = reverse("firmwares:model_detail", args=[brand.slug, model.slug])
+        page.set_viewport_size({"width": 1719, "height": 900})
+        page.goto(f"{live_server.url}{model_path}")
+        ready(page)
+        left_rail = page.locator("[data-ad-zone='left_rail']")
+        right_rail = page.locator("[data-ad-zone='right_rail']")
+        assert left_rail.count() == right_rail.count() == 1
+        expect(left_rail).to_be_hidden()
+        expect(right_rail).to_be_hidden()
+
+        page.set_viewport_size({"width": 1720, "height": 900})
+        page.goto(f"{live_server.url}{model_path}")
+        ready(page)
+        expect(left_rail).to_be_visible()
+        expect(right_rail).to_be_visible()
+        expect(left_rail).to_contain_text("EMPTY ZONE")
+        expect(right_rail).to_contain_text("EMPTY ZONE")
+        dimensions = overflow(page)
+        assert dimensions["document"] <= dimensions["viewport"] + 1
+
+        page.set_viewport_size({"width": 1719, "height": 900})
+        page.goto(f"{live_server.url}{download_path}")
+        ready(page)
+        download_left = page.locator("[data-ad-zone='left_rail']")
+        download_right = page.locator("[data-ad-zone='right_rail']")
+        assert download_left.count() == download_right.count() == 1
+        expect(download_left).to_be_hidden()
+        expect(download_right).to_be_hidden()
+
+        page.set_viewport_size({"width": 1720, "height": 900})
+        page.goto(f"{live_server.url}{download_path}")
+        ready(page)
+        expect(download_left).to_be_visible()
+        expect(download_right).to_be_visible()
+        expect(download_left).to_contain_text("EMPTY ZONE")
+        expect(download_right).to_contain_text("EMPTY ZONE")
+        dimensions = overflow(page)
+        assert dimensions["document"] <= dimensions["viewport"] + 1
 
         anonymous = browser.new_context(viewport={"width": 1365, "height": 900})
         visitor = anonymous.new_page()

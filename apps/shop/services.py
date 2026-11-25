@@ -249,6 +249,27 @@ def mark_order_paid(order_id: int, *, staff_user: Any, reference: str = "") -> O
 
 @transaction.atomic
 def cancel_order(order_id: int, *, staff_user: Any) -> Order:
+    preflight = Order.objects.only("payment_reference", "status").get(pk=order_id)
+    has_topup_line = OrderItem.objects.filter(
+        order_id=order_id, topup_credits__gt=0
+    ).exists()
+    topup_marker = preflight.payment_reference.partition("wallet:topup:")
+    if preflight.status in {Order.Status.PENDING, Order.Status.CANCELLED} and (
+        topup_marker[1] or has_topup_line
+    ):
+        if not topup_marker[1] or not topup_marker[2].isdecimal():
+            raise OrderError("The wallet top-up order reference is invalid.")
+        try:
+            wallet_gateway.cancel_topup_for_shop_order(
+                order_id,
+                topup_id=int(topup_marker[2]),
+                staff_user=staff_user,
+            )
+        except wallet_gateway.CreditsUnavailable as error:
+            raise OrderError(str(error)) from error
+    elif preflight.status == Order.Status.PENDING and has_topup_line:
+        raise OrderError("The wallet top-up order reference is invalid.")
+
     order = Order.objects.select_for_update().get(pk=order_id)
     if order.status == Order.Status.CANCELLED:
         return order
@@ -258,6 +279,87 @@ def cancel_order(order_id: int, *, staff_user: Any) -> Order:
     order.processed_by = staff_user
     order.save(update_fields=["status", "processed_by", "updated_at"])
     return order
+
+
+def _lock_credit_topup_order(
+    order_id: int,
+    *,
+    topup_id: int,
+    user_id: int,
+    credit_amount: int,
+) -> Order:
+    try:
+        order = Order.objects.select_for_update().get(pk=order_id)
+    except Order.DoesNotExist as error:
+        raise OrderError("The linked shop order does not exist.") from error
+    topup_items = list(
+        order.items.order_by("pk").values_list("topup_credits", flat=True)
+    )
+    expected_reference = f"wallet:topup:{topup_id}"
+    reference_matches = order.payment_reference == expected_reference
+    paid_reference = (
+        order.status == Order.Status.PAID
+        and not order.payment_reference.startswith("wallet:topup:")
+    )
+    if (
+        not (reference_matches or paid_reference)
+        or order.user_id != user_id
+        or topup_items != [credit_amount]
+    ):
+        raise OrderError("The linked shop order does not match this top-up.")
+    return order
+
+
+@transaction.atomic
+def cancel_credit_topup_order(
+    order_id: int,
+    *,
+    topup_id: int,
+    user_id: int,
+    credit_amount: int,
+    processed_by: Any | None = None,
+) -> Order:
+    """Cancel the exact pending order linked to a wallet top-up."""
+    order = _lock_credit_topup_order(
+        order_id,
+        topup_id=topup_id,
+        user_id=user_id,
+        credit_amount=credit_amount,
+    )
+    if order.status == Order.Status.CANCELLED:
+        return order
+    if order.status != Order.Status.PENDING:
+        raise OrderError("Only a pending top-up order can be cancelled.")
+    order.status = Order.Status.CANCELLED
+    order.processed_by = processed_by
+    order.save(update_fields=["status", "processed_by", "updated_at"])
+    return order
+
+
+@transaction.atomic
+def confirm_credit_topup_order(
+    order_id: int,
+    *,
+    topup_id: int,
+    user_id: int,
+    credit_amount: int,
+    staff_user: Any | None,
+    reference: str = "",
+) -> Order:
+    """Mark the exact wallet top-up order paid through staff's wallet review."""
+    order = _lock_credit_topup_order(
+        order_id,
+        topup_id=topup_id,
+        user_id=user_id,
+        credit_amount=credit_amount,
+    )
+    if order.status == Order.Status.PAID:
+        return order
+    if order.status != Order.Status.PENDING:
+        raise OrderError("Only a pending top-up order can be paid.")
+    if staff_user is None:
+        raise OrderError("A staff member must confirm a pending top-up order.")
+    return mark_order_paid(order.pk, staff_user=staff_user, reference=reference)
 
 
 @transaction.atomic

@@ -14,7 +14,10 @@
         <p class="cat-head__text">{{ tool.description }}</p>
       </div>
     </div>
-    {% if tool.official_url %}<div class="cat-head__actions"><a class="btn btn-primary" href="{{ tool.official_url }}" rel="noopener noreferrer"><i data-lucide="external-link" aria-hidden="true"></i><span class="ms-1">Visit official tool source</span></a></div>{% endif %}
+    <div class="cat-head__actions">
+      {% if tool.official_url %}<a class="btn btn-primary" href="{{ tool.official_url }}" rel="noopener noreferrer"><i data-lucide="external-link" aria-hidden="true"></i><span class="ms-1">Visit official tool source</span></a>{% endif %}
+      <a class="btn btn-ghost" href="{% url 'firmwares:propose_catalog_update' target_kind='flashing_tool' target_id=tool.pk %}">Suggest a correction</a>
+    </div>
   </header>
   {% if tool.instructions %}
     <section class="cat-section" aria-labelledby="tool-howto-title">

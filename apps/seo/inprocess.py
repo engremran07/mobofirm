@@ -56,6 +56,7 @@ class InProcessFetcher(SafeFetcher):
         if method not in {"GET", "HEAD"}:
             raise FetchError(f"Method {method} is not supported in-process.")
         client = Client(raise_request_exception=False)
+        client.defaults.update(internal_crawl_environ())
         started = time.monotonic()
         current = url
         chain: list[tuple[int, str, str]] = []
@@ -76,7 +77,6 @@ class InProcessFetcher(SafeFetcher):
                 secure=parts.scheme == "https",
                 HTTP_HOST=serving_host(),
                 HTTP_USER_AGENT=self.policy.user_agent,
-                **internal_crawl_environ(),
             )
             reply = {key.lower(): value for key, value in response.items()}
             location = reply.get("location", "")

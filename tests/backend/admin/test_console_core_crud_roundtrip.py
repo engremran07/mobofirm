@@ -10,7 +10,6 @@ import json
 from html.parser import HTMLParser
 
 import pytest
-from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.db import models
 from django.test import Client, RequestFactory
@@ -18,11 +17,18 @@ from django.urls import reverse
 from django.utils import timezone
 
 from apps.ads.models import AdNetwork, AdUnit
+from apps.core.admin_base import ModelAdmin
 from apps.tags.models import Tag
-from tests.backend.admin.admin_model_factory import admin_pk, build_row
+from apps.wallet.admin import WorkflowOnlyAdmin
+from tests.backend.admin.admin_model_factory import (
+    admin_pk,
+    build_row,
+    registered_admins,
+)
 
+REGISTERED_ADMINS = registered_admins()
 REGISTERED: list[type[models.Model]] = sorted(
-    admin.site._registry, key=lambda model: model._meta.label_lower
+    REGISTERED_ADMINS, key=lambda model: model._meta.label_lower
 )
 DIALOG = {"HTTP_HX_REQUEST": "true", "HTTP_HX_TARGET": "console-dialog"}
 
@@ -143,7 +149,12 @@ def test_saving_an_untouched_change_form_never_breaks(model, client, superuser):
     response = client.post(change, data)
     request = RequestFactory().get(change)
     request.user = superuser
-    if not admin.site._registry[model].has_change_permission(request, instance):
+    model_admin = REGISTERED_ADMINS[model]
+    assert isinstance(model_admin, ModelAdmin)
+    if isinstance(model_admin, WorkflowOnlyAdmin):
+        assert response.status_code == 403, model._meta.label_lower
+        return
+    if not model_admin.has_change_permission(request, instance):
         assert response.status_code == 403, model._meta.label_lower
         return
     assert response.status_code in (200, 302), model._meta.label_lower
@@ -251,7 +262,7 @@ def test_related_widget_offers_add_and_autocomplete_returns_json(client):
 def test_inline_formset_rows_are_created_and_updated(client):
     network = AdNetwork.objects.create(
         name="Network one",
-        network_type=AdNetwork._meta.get_field("network_type").choices[0][0],
+        network_type=AdNetwork.NETWORK_TYPES[0][0],
     )
     change = _url(AdNetwork, "change", network.pk)
     page = client.get(change)

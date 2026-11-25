@@ -3,16 +3,17 @@
 {% block content %}
 <div class="site-container py-4 py-lg-5">
   {% include "components/breadcrumbs.html" with current="Site map" %}
-  {% include "components/page_header.html" with eyebrow="Navigation" title="Site map" lead="Every main section of the site in one place." %}
+  {% include "components/page_header.html" with eyebrow="Navigation" title="Site map" lead="Browse public pages, device and firmware records, guides, articles, and help in one live directory." %}
   <div class="card-grid sitemap-grid">
     {% for section in sections %}
       <section class="surface-card sitemap-card" aria-labelledby="sitemap-{{ forloop.counter }}">
         <h2 id="sitemap-{{ forloop.counter }}" class="sitemap-card__title">{{ section.title }}</h2>
         <ul class="sitemap-card__list">
-          {% for link in section.links %}{% if link.url %}<li><a href="{{ link.url }}">{{ link.label }}</a></li>{% endif %}{% endfor %}
+          {% for link in section.links %}<li><a href="{{ link.url }}">{{ link.label }}</a></li>{% endfor %}
         </ul>
       </section>
     {% endfor %}
   </div>
+  <p class="sitemap-note">This directory is generated from currently public, indexable routes and catalog records. The <a href="{% url 'seo_public:sitemap' %}">XML sitemap</a> is provided for search engines.</p>
 </div>
 {% endblock %}

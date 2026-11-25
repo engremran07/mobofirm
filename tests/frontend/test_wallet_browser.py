@@ -13,6 +13,7 @@ from django.conf import settings
 from django.urls import reverse
 
 from apps.referral import services as referral_services
+from apps.wallet import registry as wallet_registry
 from apps.wallet import services
 from apps.wallet.models import LedgerReason
 from tests.frontend.browser_support import (
@@ -56,6 +57,7 @@ def test_wallet_and_referral_pages_have_no_console_csp_or_overflow_problems(
     services.credit(user, 120, reason=LedgerReason.TOPUP, key="browser:seed")
     services.credit(user, 600, reason=LedgerReason.EARNING, key="browser:sale")
     services.request_topup(user, 100)
+    services.sync_registry()
     referral_services.get_or_create_code(user)
     cookie = login_cookie(user)
     paths = [
@@ -73,6 +75,21 @@ def test_wallet_and_referral_pages_have_no_console_csp_or_overflow_problems(
         page = context.new_page()
         watch(page, failures)
         visit_all(page, live_server, paths, failures)
+        page.goto(f"{live_server.url}{reverse('wallet:earn')}", wait_until="load")
+        ready(page)
+        contribute = page.get_by_role("link", name="Free firmware approved")
+        assert contribute.get_attribute("href") == reverse("firmwares:contribute")
+        contribute.click()
+        assert page.url.endswith(reverse("firmwares:contribute"))
+        for sink in wallet_registry.spend_sinks().values():
+            destination = reverse(sink.url_name)
+            page.goto(f"{live_server.url}{reverse('wallet:spend')}", wait_until="load")
+            ready(page)
+            link = page.get_by_role("link", name=sink.label, exact=True)
+            assert link.get_attribute("href") == destination
+            link.click()
+            ready(page)
+            assert page.url.endswith(destination)
 
     assert not failures, "\n".join(failures)
 

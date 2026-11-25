@@ -15,13 +15,22 @@ export function showFeedback(message, level = "danger") {
 }
 
 export function initializeFeedback() {
-  document.addEventListener("htmx:responseError", (event) => {
-    showFeedback(messageFor(event.detail.xhr.status));
+  document.addEventListener("htmx:response:error", (event) => {
+    const ctx = event.detail.ctx;
+    const status = ctx.response?.status ?? 0;
+    const hasMarkup = /</.test(ctx.text ?? "");
+    const noSwap = ctx.swap === "none";
+    if (!noSwap && hasMarkup) return;
+    showFeedback(messageFor(status));
   });
-  document.addEventListener("htmx:sendError", () => {
-    showFeedback("The network is unavailable. Check your connection and try again.");
-  });
-  document.addEventListener("htmx:timeout", () => {
-    showFeedback("The request timed out. Please try again.");
+  document.addEventListener("htmx:error", (event) => {
+    const { ctx, error } = event.detail;
+    if (ctx?.request?.signal?.reason === "timeout") {
+      showFeedback("The request timed out. Please try again.", "warning");
+    } else if (error instanceof TypeError) {
+      showFeedback("The network is unavailable. Check your connection and try again.");
+    } else {
+      showFeedback("The request could not be completed. Please try again.");
+    }
   });
 }

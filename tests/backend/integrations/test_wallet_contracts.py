@@ -13,15 +13,23 @@ from decimal import Decimal
 from typing import Any, get_type_hints
 
 import pytest
+from django.core.exceptions import PermissionDenied
 from django.utils import timezone
 
 from apps.ads.rewarded import EVENT_KEY as ADS_REWARD_EVENT
 from apps.core.events.bus import event_bus
+from apps.shop import services as shop_services
 from apps.shop import wallet_gateway
+from apps.shop.models import Order
 from apps.shop.spend_sinks import FILE_PURCHASE, PACKAGE_PURCHASE
 from apps.wallet import api
 from apps.wallet.models import LedgerEntry, LedgerReason, TopUpRequest
-from apps.wallet.services import SHOP_ORDER_PAID_EVENT, sync_registry
+from apps.wallet.services import (
+    SHOP_ORDER_PAID_EVENT,
+    cancel_topup,
+    confirm_topup,
+    sync_registry,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -37,6 +45,14 @@ def verified_member(django_user_model: Any) -> Any:
         email="contract_wallet@example.com",
         password="Pass-12345!",
         email_verified_at=timezone.now(),
+    )
+
+
+@pytest.fixture(name="operator")
+def _operator_user(django_user_model: Any) -> Any:
+    return django_user_model.objects.create_superuser(
+        username="contract_wallet_operator",
+        email="contract_wallet_operator@example.test",
     )
 
 
@@ -158,6 +174,79 @@ def test_a_paid_top_up_order_published_twice_credits_once(member: Any) -> None:
     assert api.balance(member) == 100
     assert LedgerEntry.objects.filter(key=f"topup:{topup.pk}").count() == 1
     assert TopUpRequest.objects.get(pk=topup.pk).status == TopUpRequest.Status.PAID
+
+
+def test_cancelling_a_topup_cancels_its_shop_order(member: Any) -> None:
+    topup = api.request_topup(member, 100)
+    order = Order.objects.get(pk=int(topup.order_reference))
+
+    cancel_topup(topup.pk, user=member)
+    cancel_topup(topup.pk, user=member)
+
+    topup.refresh_from_db()
+    order.refresh_from_db()
+    assert topup.status == TopUpRequest.Status.CANCELLED
+    assert order.status == Order.Status.CANCELLED
+
+
+def test_cancelling_a_shop_topup_order_cancels_its_wallet_request(
+    member: Any, operator: Any
+) -> None:
+    topup = api.request_topup(member, 100)
+    order = Order.objects.get(pk=int(topup.order_reference))
+
+    shop_services.cancel_order(order.pk, staff_user=operator)
+    shop_services.cancel_order(order.pk, staff_user=operator)
+
+    topup.refresh_from_db()
+    order.refresh_from_db()
+    assert topup.status == TopUpRequest.Status.CANCELLED
+    assert topup.resolved_by_id == operator.pk
+    assert order.status == Order.Status.CANCELLED
+
+
+def test_shop_topup_cancellation_requires_wallet_permission(member: Any) -> None:
+    topup = api.request_topup(member, 100)
+    order = Order.objects.get(pk=int(topup.order_reference))
+
+    with pytest.raises(PermissionDenied):
+        shop_services.cancel_order(order.pk, staff_user=member)
+
+    topup.refresh_from_db()
+    order.refresh_from_db()
+    assert topup.status == TopUpRequest.Status.PENDING
+    assert order.status == Order.Status.PENDING
+
+
+def test_wallet_confirmation_marks_its_shop_order_paid(
+    member: Any, operator: Any
+) -> None:
+    topup = api.request_topup(member, 100)
+    order = Order.objects.get(pk=int(topup.order_reference))
+
+    confirm_topup(topup.pk, staff_user=operator, reference="offline receipt")
+
+    topup.refresh_from_db()
+    order.refresh_from_db()
+    assert topup.status == TopUpRequest.Status.PAID
+    assert order.status == Order.Status.PAID
+
+
+def test_topup_cancellation_rolls_back_if_its_shop_order_is_paid(
+    member: Any,
+) -> None:
+    topup = api.request_topup(member, 100)
+    order = Order.objects.get(pk=int(topup.order_reference))
+    Order.objects.filter(pk=order.pk).update(status=Order.Status.PAID)
+
+    with pytest.raises(api.TopUpError):
+        cancel_topup(topup.pk, user=member)
+
+    topup.refresh_from_db()
+    order.refresh_from_db()
+    assert topup.status == TopUpRequest.Status.PENDING
+    assert order.status == Order.Status.PAID
+    assert api.balance(member) == 0
 
 
 def test_reward_rules_are_exposed_as_read_only_copies(member: Any) -> None:

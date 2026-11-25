@@ -105,7 +105,7 @@ class DevicePolicyIntegrationTests(TestCase):
     def test_device_defaults_to_untrusted(self):
         device = Device.objects.create(
             user=self.user,
-            os_fingerprint="default-untrusted-device",
+            display_name="default-untrusted-device",
         )
 
         self.assertFalse(device.is_trusted)
@@ -178,7 +178,7 @@ class DevicePolicyIntegrationTests(TestCase):
     def test_trusting_a_blocked_device_does_not_unblock_it(self):
         device = Device.objects.create(
             user=self.user,
-            os_fingerprint="blocked-device",
+            display_name="blocked-device",
             is_trusted=False,
             is_blocked=True,
         )
@@ -192,7 +192,7 @@ class DevicePolicyIntegrationTests(TestCase):
     def test_owner_cannot_revoke_or_approve_devices_from_the_list_page(self):
         device = Device.objects.create(
             user=self.user,
-            os_fingerprint="pending-device",
+            display_name="pending-device",
             is_trusted=False,
         )
         self.client.force_login(self.user)
@@ -212,8 +212,18 @@ class DevicePolicyIntegrationTests(TestCase):
         response = self.client.get(reverse("devices:my_devices"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Registered browsers")
-        self.assertContains(response, "Approved browsers")
+        self.assertContains(response, "Registered devices")
+        self.assertContains(response, "Approved devices")
+        self.assertContains(response, "Browser-only registration is not allowed")
+
+    def test_fingerprint_collection_and_insight_routes_are_not_exposed(self):
+        for path in (
+            "/devices/payload/",
+            "/devices/fingerprints/",
+            "/devices/behavior/",
+        ):
+            with self.subTest(path=path):
+                self.assertEqual(self.client.get(path).status_code, 404)
 
     def test_approval_is_bound_to_the_current_browser_key_and_respects_capacity(self):
         Device.objects.create(
@@ -255,7 +265,7 @@ class DevicePolicyIntegrationTests(TestCase):
         )
         device = Device.objects.create(
             user=other_user,
-            os_fingerprint="another-users-device",
+            display_name="another-users-device",
             is_trusted=False,
         )
         self.client.force_login(self.user)

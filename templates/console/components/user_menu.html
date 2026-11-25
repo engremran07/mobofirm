@@ -14,6 +14,6 @@
 <li class="px-3 pb-1">{% ui "theme_toggle" %}</li>
 <li><button type="button" class="dropdown-item" data-console-contrast-toggle aria-pressed="false">{% console_icon "contrast" "c-icon--sm c-menu__icon" %}<span>{% translate "High contrast" %}</span></button></li>
 <li><hr class="dropdown-divider"></li>
-<li><form method="post" action="{{ logout_url }}">{% csrf_token %}<button type="submit" class="dropdown-item">{% console_icon "log-out" "c-icon--sm c-menu__icon" %}<span>{% translate "Sign out" %}</span></button></form></li>
+<li><form method="post" action="{{ logout_url }}">{% csrf_token %}<button type="submit" class="dropdown-item" data-console-confirm="{% translate 'Sign out of your account?' %}" data-console-confirm-title="{% translate 'Sign out?' %}" data-console-confirm-label="{% translate 'Sign out' %}">{% console_icon "log-out" "c-icon--sm c-menu__icon" %}<span>{% translate "Sign out" %}</span></button></form></li>
 </ul>
 </div>{% endwith %}

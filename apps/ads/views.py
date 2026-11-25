@@ -12,6 +12,7 @@ from django.http import (
     HttpRequest,
     HttpResponse,
     HttpResponseBadRequest,
+    HttpResponseForbidden,
     HttpResponseRedirect,
     JsonResponse,
 )
@@ -23,7 +24,7 @@ from apps.ads import rewarded
 from apps.ads.permissions import can_manage_ads as _can_manage_ads
 from apps.ads.services import overview
 from apps.ads.services.analytics.tracker import record_event as tracker_record_event
-from apps.ads.services.markup import safe_click_url
+from apps.ads.services.markup import render_creative, safe_click_url
 from apps.ads.services.rotation.engine import choose_creative
 from apps.ads.services.schemas import AdRequest, AdResponse, CreativeSelection
 from apps.ads.services.targeting.engine import campaign_allowed
@@ -43,6 +44,7 @@ from .models import (
     Campaign,
     PlacementAssignment,
     RewardedAdConfig,
+    TemplateAdExclusion,
 )
 
 logger = logging.getLogger(__name__)
@@ -183,7 +185,8 @@ def fill_ad(request: HttpRequest) -> JsonResponse:
     """
     Returns a creative for a placement slug using rotation engine.
     """
-    if not _ads_enabled():
+    settings_row = AdsSettings.get_solo()
+    if not settings_row.ads_enabled:
         return JsonResponse({"ok": False, "error": "ads_disabled"}, status=403)
     if not _has_ads_consent(request):
         return JsonResponse({"ok": True, "skipped": "no_consent"})
@@ -200,6 +203,15 @@ def fill_ad(request: HttpRequest) -> JsonResponse:
     ).first()
     if not placement:
         return JsonResponse({"ok": False, "error": "placement_not_found"}, status=404)
+    if not settings_row.should_show_ads(user=request.user, page_url=request.path):
+        return JsonResponse({"ok": True, "skipped": "ads_not_eligible"})
+    if (
+        placement.template_reference
+        and TemplateAdExclusion.objects.filter(
+            template_path=placement.template_reference
+        ).exists()
+    ):
+        return JsonResponse({"ok": True, "skipped": "template_excluded"})
     ad_request = AdRequest(
         placement_code=placement.code,
         page_url=page_url,
@@ -225,6 +237,9 @@ def fill_ad(request: HttpRequest) -> JsonResponse:
     creative: AdCreative | None = choose_creative(placement, context)
     if not creative:
         return JsonResponse({"ok": False, "error": "no_creative"}, status=404)
+    rendered_markup = render_creative(creative)
+    if not rendered_markup:
+        return JsonResponse({"ok": False, "error": "creative_rejected"}, status=422)
     ad_response = AdResponse(
         placement_code=placement.code,
         creatives=[
@@ -249,7 +264,7 @@ def fill_ad(request: HttpRequest) -> JsonResponse:
     )
     payload = {
         "type": creative.creative_type,
-        "html": creative.html,
+        "html": rendered_markup,
         "image_url": creative.image_url,
         "click_url": creative.click_url,
         "campaign": creative.campaign_id,
@@ -526,6 +541,9 @@ def dashboard(request: HttpRequest) -> HttpResponse:
             "ad_aggressiveness_level": ss.get("ad_aggressiveness_level", "balanced"),
             "affiliate_sources": affiliate_sources,
             "can_place": request.user.has_perm("ads.change_adplacement"),
+            "can_change_ads_settings": request.user.has_perm("ads.change_adssettings"),
+            "can_change_campaigns": request.user.has_perm("ads.change_campaign"),
+            "can_add_campaign": request.user.has_perm("ads.add_campaign"),
         },
     )
 
@@ -546,21 +564,29 @@ def toggle_settings(request: HttpRequest) -> HttpResponse:
     campaign_id = request.POST.get("campaign")
 
     if action in ("disable_placement", "enable_placement") and placement_id:
+        if not request.user.has_perm("ads.change_adplacement"):
+            return HttpResponseForbidden("You may not change ad placements.")
         placement = AdPlacement.objects.filter(pk=placement_id).first()
         if placement:
             placement.is_enabled = action == "enable_placement"
             placement.save(update_fields=["is_enabled"])
     elif action == "toggle_lock" and placement_id:
+        if not request.user.has_perm("ads.change_adplacement"):
+            return HttpResponseForbidden("You may not change ad placements.")
         placement = AdPlacement.objects.filter(pk=placement_id).first()
         if placement:
             placement.locked = not placement.locked
             placement.save(update_fields=["locked"])
     elif action in ("disable_campaign", "enable_campaign") and campaign_id:
+        if not request.user.has_perm("ads.change_campaign"):
+            return HttpResponseForbidden("You may not change ad campaigns.")
         campaign = Campaign.objects.filter(pk=campaign_id).first()
         if campaign:
             campaign.is_active = action == "enable_campaign"
             campaign.save(update_fields=["is_active"])
     elif action == "toggle_campaign_lock" and campaign_id:
+        if not request.user.has_perm("ads.change_campaign"):
+            return HttpResponseForbidden("You may not change ad campaigns.")
         campaign = Campaign.objects.filter(pk=campaign_id).first()
         if campaign:
             campaign.locked = not campaign.locked
@@ -570,6 +596,8 @@ def toggle_settings(request: HttpRequest) -> HttpResponse:
         # an unknown action or a missing target id must never switch ads off.
         if action not in ("", "update_settings") or "ads_enabled" not in request.POST:
             return HttpResponseBadRequest("Unknown or incomplete ads action.")
+        if not request.user.has_perm("ads.change_adssettings"):
+            return HttpResponseForbidden("You may not change Ads settings.")
         ss.ads_enabled = request.POST.get("ads_enabled") == "1"
         ss.ad_networks_enabled = request.POST.get("ad_networks_enabled") == "1"
         ss.affiliate_enabled = request.POST.get("affiliate_enabled") == "1"
@@ -639,9 +667,6 @@ def track_affiliate_click(request: HttpRequest) -> JsonResponse:
             product_id=product_id,
             user_id=request.user.pk if request.user.is_authenticated else None,
             page_url=page_url[:500],
-            ip_address=get_client_ip(request) or "",
-            user_agent=request.META.get("HTTP_USER_AGENT", "")[:500],
-            session_id=request.session.session_key or "",
         )
 
         if result.get("status") == "success":
