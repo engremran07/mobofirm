@@ -2,7 +2,15 @@
 
 ## Status
 
-HTMX and Alpine are part of the user-approved frontend foundation. This document describes the **public site** (htmx 2.0.11, installed as the `htmx2` npm alias): the build imports HTMX as an ES module, exposes its instance to `window.htmx`, and disables eval- and script-tag processing. The staff console runs htmx 4.0.2 with different event names and explicit attribute inheritance; its conventions are in `admin-console.md`. Alpine uses `@alpinejs/csp`; expressions must remain compatible with that CSP-safe runtime.
+The public site and staff console use the shared htmx 4.0.2 runtime from `htmx.org`.
+Their presentation shells remain distinct; console-only boost behavior stays in
+`frontend/src/admin/`. Alpine uses `@alpinejs/csp`; expressions must remain compatible
+with that CSP-safe runtime.
+
+The shared runtime disables implicit attribute inheritance, generated indicator CSS,
+and htmx expression execution. It rejects `hx-on*` binding and strips executable scripts
+and inline event-handler attributes from every swap. The public and admin bundles import
+the same runtime configuration rather than carrying separate htmx copies.
 
 ## Interaction contracts
 
@@ -13,17 +21,18 @@ HTMX and Alpine are part of the user-approved frontend foundation. This document
 - Alpine is limited to local ephemeral UI state such as the mobile menu. It must not duplicate server-owned records or policies.
 - Keep fragments idempotent and avoid event-handler accumulation. Reinitialize only behaviors that require it after a swap.
 - Provide loading/error feedback, accessible live regions, keyboard operation, and sensible focus behavior.
-- Loading: the body carries `hx-indicator="#global-progress"` so every request shows a progress bar; use `components/spinner.html` or a local `hx-indicator` for inline feedback. HTMX failures (`responseError`, `sendError`, `timeout`) render a visible, dismissible alert in `#global-feedback` (`modules/feedback.js`).
-- Triggers: put `hx-trigger="input changed delay:…"` on the input itself or use `from:find input` inside a form; never `from:input`, which binds to the first input in the document (the header search).
+- Loading: the public body carries inherited `hx-indicator` and `hx-headers` values; use local indicators for inline feedback. The console has its own progress treatment. HTMX failures use htmx 4 lifecycle events and render visible, dismissible feedback.
+- Triggers: use the htmx 4 trigger syntax, e.g. `input changed delay:250ms` and `from:#search-query`; do not rely on htmx 2 selector extensions or camelCase event names.
 - Global search: the header combobox calls `firmwares:api_search_autocomplete` through HTMX; `modules/search.js` turns the JSON into DOM nodes (no server HTML is inserted) and the plain GET form falls back to `firmwares:universal_search`.
 
 ## Security and operations
 
-- CSP disallows inline scripts, inline styles, and eval in the frontend. The only approved style hash is for the fixed DRF browsable-API syntax-highlighting stylesheet. Do not use inline event handlers, `x-show`, inline CSS, `hx-on`, or `x-html` with untrusted content.
+- CSP disallows inline scripts, inline styles, and eval in the frontend. The shared htmx configuration blocks expression evaluation; do not use `hx-on`, `js:` values, or bracket trigger filters. Do not use `x-show`, inline CSS, or `x-html` with untrusted content.
+- Executable scripts and inline event handlers are removed from htmx swap fragments. Do not depend on scripts embedded in fragments for initialization.
 - CORS remains disabled for same-origin application flows. Do not add a wildcard or broad origin to make HTMX work.
 - Production HTTPS and `upgrade-insecure-requests` protect transport; use HTTPS-only external links and assets.
 - Third-party ad/provider code is not implicitly trusted by enabling HTMX or loosening CSP. Provider origins and consent behavior require an explicit narrow policy.
 
 ## Verification
 
-Test a normal request and its HTMX fragment contract, server-side authorization, CSRF, invalid input, and empty states. Run the Vite build and inspect the actual browser console/CSP report when browser access is available.
+Test a normal request and its HTMX fragment contract, server-side authorization, CSRF, invalid input, and empty states. Run the Vite builds and inspect the actual browser console/CSP report when browser access is available.

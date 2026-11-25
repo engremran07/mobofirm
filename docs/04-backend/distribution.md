@@ -221,7 +221,8 @@ Migrations: `0004_whatsapp_assisted_optin`, `0005_feeds_syndication`.
 
 Videos for TikTok, YouTube Shorts and Reels are rendered locally and approved by staff before
 anything posts. Full decision record, template packs, limits and installation:
-[`distribution-video.md`](distribution-video.md). Staff screen: **Distribution > Videos**.
+[`distribution-video.md`](distribution-video.md). Staff screens: **Distribution > Videos** and
+**Distribution > Media library**.
 Migration `0006_motion_video_jobs` (`VideoJob`, four `DistributionSettings` fields).
 
 ## Tests

@@ -31,6 +31,10 @@ jobs:
         run: .venv/bin/python -m pip install -e ".[dev]"
       - name: Check Python formatting
         run: .venv/bin/ruff format --check .
+      - name: Check Python lint
+        run: .venv/bin/ruff check app apps tests scripts manage.py
+      - name: Check Python types
+        run: .venv/bin/python -m mypy app apps tests scripts manage.py
       - name: Check Python diagnostics
         run: .venv/bin/python -m pylint --enable=all --fail-on=E,F,W,R,C,I app apps tests scripts manage.py
       - name: Validate release metadata
@@ -45,8 +49,8 @@ jobs:
           retention-days: 7
       - name: Install frontend dependencies
         run: npm ci
-      - name: Build frontend assets
-        run: npm run build
+      - name: Build and verify frontend assets
+        run: npm run check
       - name: Install Chromium for browser checks
         run: .venv/bin/python -m playwright install --with-deps chromium
       - name: Run test suite

@@ -60,11 +60,15 @@ watching ads").
 
 - `start` creates a `RewardedAdView` and returns a signed single-use token. Only the
   token's digest is stored. One active view per user.
+- Rewarded-ad and affiliate-click analytics do not retain IP addresses, User-Agent
+  strings, or session keys.
 - `heartbeat` accrues watch time from server timestamps. The client's claimed duration
   is never trusted; a gap longer than `HEARTBEAT_MAX_GAP_SECONDS` stops accrual.
 - `complete` succeeds only once, and only after the server-measured watch time reaches
   the minimum (`effective_min_watch`). A client claiming more time than the server saw
   beyond a small tolerance is flagged. Completing twice is a no-op.
+- Account erasure expires active views, invalidates their tokens, and detaches the
+  account from retained reward and analytics history.
 
 Abuse flags recorded on the view: `completed_too_early`, `impossible_duration`,
 `replayed_token`, `too_frequent`, `abandoned_restart`. Repeated early completions and

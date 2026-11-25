@@ -107,7 +107,9 @@ cookies, and sends `Authorization` only to an explicitly allow-listed first host
 
 - `inventory.build_inventory()` walks the real URL conf and every sitemap section,
   classifies each URL through the resolver and flags conflicts (`noindex_in_sitemap`,
-  `canonical_mismatch`, `private_in_sitemap`).
+  `canonical_mismatch`, `private_in_sitemap`). The inventory audit also warns when a
+  canonical, indexable, public static route is missing from the registered sitemap;
+  noindex routes, private routes, aliases and redirects are excluded.
 - One sitemap engine (`sitemap_build.py`, fed by the registry in `sitemap_registry.py`).
   `/sitemap.xml` is the index; files are path-based and predictably named
   `/sitemap-<section>[-<partition>]-<n>.xml` (and `.xml.gz`, a plain gzip body with
@@ -143,10 +145,12 @@ cookies, and sends `Authorization` only to an explicitly allow-listed first host
   newest real `lastmod`), conditional GET (304), `Cache-Control: public, max-age=300,
   stale-while-revalidate=3600`, `X-Robots-Tag: noindex` on sitemap responses. XML is
   styled by a same-origin stylesheet (`static/seo/sitemap.css`, linked with an
-  `xml-stylesheet` PI) that lays the file out as a table: no inline style or script, so
-  the strict CSP stays intact. XSLT is deliberately not used: browsers have deprecated
-  it and Chromium injects a warning banner (inline style, CSP errors) into any
-  XSLT-transformed page.
+  `xml-stylesheet` PI) using the shared design tokens, responsive index cards, and
+  compact URL rows; it has no inline style or script, so the strict CSP stays intact.
+  XSLT is deliberately not used: browsers have deprecated it and Chromium injects a
+  warning banner (inline style, CSP errors) into any XSLT-transformed page. Visitors
+  should use the categorized, data-backed HTML directory at `/site-map/`;
+  `/sitemap.xml` remains the machine-readable crawler index.
 - `robots.txt` (`robots.py`, RFC 9309): one group for `*`, `Googlebot`,
   `Googlebot-Image` and `bingbot` with the private Disallow list, duplicate-URL traps
   with wildcards (`/*?sort=`, `/*&sort=`, `order`, session ids, `utm_*`, `gclid`,

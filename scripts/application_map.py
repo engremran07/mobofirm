@@ -225,7 +225,11 @@ def _frontend_sources(root: Path) -> dict[str, list[str]]:
         "javascript": {".js", ".mjs"},
         "stylesheets": {".css", ".scss"},
     }
-    roots = [root / "static", *sorted((root / "apps").glob("*/static"))]
+    roots = [
+        root / "static",
+        root / "frontend" / "src",
+        *sorted((root / "apps").glob("*/static")),
+    ]
     result: dict[str, list[str]] = {}
     for label, suffixes in extensions.items():
         found = {
@@ -289,6 +293,10 @@ def build_application_map(root: Path = ROOT) -> dict[str, Any]:
     )
     admin_routes = _admin_routes(route_inventory)
     templates = [_scan_template(path, root) for path in template_files]
+    frontend_sources = _frontend_sources(root)
+    all_frontend_sources = (
+        frontend_sources["javascript"] + frontend_sources["stylesheets"]
+    )
     return {
         "schema_version": 1,
         "interpretation": (
@@ -309,12 +317,11 @@ def build_application_map(root: Path = ROOT) -> dict[str, Any]:
             for template in templates
             if template["asset_references"]
         ],
-        "frontend_sources": _frontend_sources(root),
+        "frontend_sources": frontend_sources,
         "frontend_asset_inventory": {
             "public": [
                 asset
-                for asset in _frontend_sources(root)["javascript"]
-                + _frontend_sources(root)["stylesheets"]
+                for asset in all_frontend_sources
                 if (
                     "/admin/" not in asset.lower()
                     and not asset.lower().endswith("admin.js")
@@ -324,16 +331,14 @@ def build_application_map(root: Path = ROOT) -> dict[str, Any]:
             ],
             "admin": [
                 asset
-                for asset in _frontend_sources(root)["javascript"]
-                + _frontend_sources(root)["stylesheets"]
+                for asset in all_frontend_sources
                 if "/admin/" in asset.lower()
                 or asset.lower().endswith("admin.js")
                 or asset.lower().endswith("admin.css")
             ],
             "shared": [
                 asset
-                for asset in _frontend_sources(root)["javascript"]
-                + _frontend_sources(root)["stylesheets"]
+                for asset in all_frontend_sources
                 if asset.lower().endswith("tokens.css")
             ],
         },

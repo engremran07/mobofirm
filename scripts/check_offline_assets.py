@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail when the built staff console is not fully offline and manifest-consistent."""
+"""Fail when the built public site or staff console has remote local assets."""
 
 from __future__ import annotations
 
@@ -9,8 +9,9 @@ import sys
 from pathlib import Path
 from urllib.parse import urlsplit
 
-BUILD_DIR = Path(__file__).resolve().parent.parent / "static" / "build" / "admin"
-MANIFEST = BUILD_DIR / ".vite" / "manifest.json"
+PUBLIC_BUILD_DIR = Path(__file__).resolve().parent.parent / "static" / "build"
+ADMIN_BUILD_DIR = PUBLIC_BUILD_DIR / "admin"
+BUILD_DIR = ADMIN_BUILD_DIR
 SCANNED_SUFFIXES = {".css", ".js", ".mjs", ".html", ".svg"}
 
 URL_PATTERN = re.compile(
@@ -70,35 +71,67 @@ def scan_file(path: Path) -> list[str]:
     return findings
 
 
-def check_manifest() -> list[str]:
-    if not MANIFEST.is_file():
-        return [f"{MANIFEST}: missing; run `npm run build:admin` first"]
+def check_manifest(build_dir: Path = BUILD_DIR) -> list[str]:
+    """Validate the staff-console Vite manifest and every referenced output."""
+    manifest_path = build_dir / ".vite" / "manifest.json"
+    if not manifest_path.is_file():
+        return [f"{manifest_path}: missing; run `npm run build:admin` first"]
     try:
-        manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError as error:
-        return [f"{MANIFEST}: invalid JSON ({error})"]
+        return [f"{manifest_path}: invalid JSON ({error})"]
     problems: list[str] = []
     entries = [entry for entry in manifest.values() if entry.get("isEntry")]
     if not entries:
-        problems.append(f"{MANIFEST}: no entry chunks")
+        problems.append(f"{manifest_path}: no entry chunks")
     for key, entry in manifest.items():
         for name in [entry.get("file"), *entry.get("css", [])]:
-            if name and not (BUILD_DIR / name).is_file():
-                problems.append(f"{MANIFEST}: {key} references missing file {name}")
+            if name and not (build_dir / name).is_file():
+                problems.append(
+                    f"{manifest_path}: {key} references missing file {name}"
+                )
+    return problems
+
+
+def check_build(
+    build_dir: Path,
+    *,
+    manifest_required: bool,
+    build_command: str,
+    excluded_dir: Path | None = None,
+) -> list[str]:
+    """Check built assets for one shell, optionally excluding a nested bundle."""
+    if not build_dir.is_dir():
+        return [f"{build_dir}: missing; run `{build_command}` first"]
+    problems = check_manifest(build_dir) if manifest_required else []
+    for path in sorted(build_dir.rglob("*")):
+        if excluded_dir is not None and path.is_relative_to(excluded_dir):
+            continue
+        if path.is_file() and path.suffix.lower() in SCANNED_SUFFIXES:
+            problems.extend(scan_file(path))
     return problems
 
 
 def main() -> int:
-    problems = check_manifest()
-    for path in sorted(BUILD_DIR.rglob("*")):
-        if path.is_file() and path.suffix.lower() in SCANNED_SUFFIXES:
-            problems.extend(scan_file(path))
+    problems = check_build(
+        PUBLIC_BUILD_DIR,
+        manifest_required=False,
+        build_command="npm run build:public",
+        excluded_dir=ADMIN_BUILD_DIR,
+    )
+    problems.extend(
+        check_build(
+            ADMIN_BUILD_DIR,
+            manifest_required=True,
+            build_command="npm run build:admin",
+        )
+    )
     if problems:
         print("Offline asset check FAILED:", file=sys.stderr)
         for problem in problems:
             print(f"  - {problem}", file=sys.stderr)
         return 1
-    print(f"Offline asset check passed for {BUILD_DIR}")
+    print(f"Offline asset check passed for {PUBLIC_BUILD_DIR} and {ADMIN_BUILD_DIR}")
     return 0
 
 

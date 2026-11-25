@@ -8,8 +8,16 @@ from pathlib import Path
 
 
 def workspace_summary(root: Path) -> str:
-    app_names = ("blog", "comments", "firmwares", "tags")
-    present_apps = [name for name in app_names if (root / name).is_dir()]
+    apps_dir = root / "apps"
+    present_apps = (
+        sorted(
+            app_dir.name
+            for app_dir in apps_dir.iterdir()
+            if app_dir.is_dir() and (app_dir / "apps.py").is_file()
+        )
+        if apps_dir.is_dir()
+        else []
+    )
     project_files = {
         "Django entry point": (root / "manage.py").is_file(),
         "Python project manifest": any(
@@ -27,7 +35,8 @@ def workspace_summary(root: Path) -> str:
         for label, exists in project_files.items()
     )
     return (
-        f"Workspace inventory: app packages present: {found}. {status}. "
+        f"Workspace inventory: local app packages present under apps/: {found}. "
+        f"{status}. "
         "Base implementation and validation claims on files and tools actually present."
     )
 
@@ -35,7 +44,7 @@ def workspace_summary(root: Path) -> str:
 def main() -> None:
     root = Path(__file__).resolve().parents[2]
     sys.stdin.read()
-    print(json.dumps({"systemMessage": workspace_summary(root)}))
+    print(json.dumps({"additionalContext": workspace_summary(root)}))
 
 
 if __name__ == "__main__":

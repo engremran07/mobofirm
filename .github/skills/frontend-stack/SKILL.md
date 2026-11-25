@@ -4,7 +4,7 @@ description: "Build and verify Django-rendered frontend work involving HTML, HTM
 ---
 # Frontend Stack
 
-Use for frontend changes in this repository. The user-approved stack is Django templates, Bootstrap, HTMX, Alpine's CSP-safe runtime, Lucide, and Vite. The public site uses htmx 2.0.11 (the `htmx2` alias); the staff console uses AdminLTE 4.10.2, Bootstrap 5.3.8, htmx 4.0.2 and `@alpinejs/csp` 3.17.5 (owner-approved; see `docs/05-frontend/admin-console.md` for conventions, components, and how to add pages, filters and actions). Verify `package.json`, the build entries, and the actual templates before changing the stack; do not introduce a second framework or styling system.
+Use for frontend changes in this repository. The user-approved stack is Django templates, Bootstrap 5.3.9, htmx 4.0.2, Alpine's CSP-safe runtime, Lucide 1.77.0, and Vite. The public site and the AdminLTE 4.10.2 staff console share one htmx 4.0.2 runtime; the console uses `@alpinejs/csp` 3.17.5 (see `docs/05-frontend/admin-console.md` for console conventions, components, and how to add pages, filters and actions). Verify `package.json`, the build entries, and actual templates before changing the stack; do not introduce a second framework or styling system.
 
 1. Inventory templates/static files and actual package/build manifests. Select only the requested, already configured stack; ask before adding a framework, compiler, or dependency.
 2. Keep Django as the authorization and persistence authority. Escape output, retain CSRF protection, validate server-side, and make HTMX responses and errors explicit. A static gallery is supplementary only; when the user asks for live ad placement or flow testing, exercise the actual renderer and state transitions with safe, isolated demo data.

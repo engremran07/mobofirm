@@ -21,10 +21,10 @@ IGNORED_PREFIXES = ("js-", "lucide", "x-", "hx-")
 IGNORED = {"icon", "visually-hidden"}
 
 
-def defined_classes() -> set[str]:
-    """Every class that appears in a selector of any built stylesheet."""
+def defined_classes(build_dir: Path = BUILD) -> set[str]:
+    """Every class in a public or nested console stylesheet."""
     found: set[str] = set()
-    for sheet in BUILD.glob("*.css"):
+    for sheet in build_dir.rglob("*.css"):
         text = sheet.read_text(encoding="utf-8", errors="ignore")
         for match in SELECTOR_CLASS.finditer(text):
             found.add(match.group(1).replace("\\", ""))
@@ -65,9 +65,7 @@ def missing_dynamic(token: str, defined: set[str]) -> list[str]:
     problems: list[str] = []
     if VAR_MARK in token:
         suffix = parts[-1]
-        if not any(
-            name.startswith(base) and name.endswith(suffix) for name in defined
-        ):
+        if not any(name.startswith(base) and name.endswith(suffix) for name in defined):
             problems.append(f"{base}*{suffix}")
         return problems
     if base and not base.endswith(("-", "_")) and base not in defined:

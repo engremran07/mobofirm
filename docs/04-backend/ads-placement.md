@@ -1,18 +1,19 @@
-# Ad placement: zones, the placement manager and the test profile
+# Ad placement: zones, placement manager, test profile
 
-Owner: `apps.ads`. Public pages never name individual ad placements. They declare **zones**;
-placements are data that decide which zone shows what on which template. Template source is
-never rewritten at runtime.
+Owner: `apps.ads`. Public pages declare **zones**; placements decide what
+appears in each zone on each template. Template source is never rewritten at
+runtime.
 
 ## Zone vocabulary (`apps/ads/zones.py`)
 
 | Zone | Where it sits | Default size |
 | --- | --- | --- |
-| `header` | under the site navigation, above the page content | 728x90 |
-| `sidebar` | in a sidebar / beside the main column | 300x250 |
+| `header` | under navigation, above page content | 728x90 |
+| `sidebar` | beside the main column | 300x250 |
 | `in_content` | inside an article or detail page | 300x250 |
-| `after_content` | after the main content, before the footer | 728x90 |
-| `between_items` | between / after the items of a list or grid | 300x250 |
+| `after_content` | after main content, before the footer | 728x90 |
+| `between_items` | between items in a list or grid | 300x250 |
+| `left_rail`, `right_rail` | desktop side rails on model and firmware download pages | 160x600 |
 | `footer` | directly above the site footer | 728x90 |
 
 A page declares a zone with one generic tag:
@@ -22,149 +23,186 @@ A page declares a zone with one generic tag:
 {% ad_zone "after_content" %}
 ```
 
-`templates/base.html` declares `header`, `after_content` and `footer` for every page. Detail
-and list templates add `sidebar`, `in_content` and `between_items` (firmware detail, blog
-detail and list, brand and model pages, firmware browse, search results, shop pricing).
-Account, allauth, error, admin and consent templates never show ads.
+`templates/base.html` declares `header`, `after_content` and `footer` for every
+page. Detail and list templates add `sidebar`, `in_content` and `between_items`
+(firmware detail, blog detail and list, brand and model pages, firmware browse,
+search results, shop pricing). Account, allauth, error, admin and consent
+templates never show ads.
 
 ## What a zone renders
 
-`{% ad_zone %}` calls `apps.ads.services.zones.resolve_zone`, which says no (renders **nothing**
-and takes no space) unless every condition holds, in this order:
+`{% ad_zone %}` calls `apps.ads.services.zones.resolve_zone`. It renders nothing
+and takes no space unless every condition holds, in this order:
 
-1. the template is not on the never-list or the staff exclusion list (`TemplateAdExclusion`);
-2. a placement exists for that template and zone (a template-specific placement beats a
-   site-wide one; site-wide placements never fill `users/`, `wallet/`, `referral/`,
-   `devices/` or `shop/` templates);
-3. the placement is switched on and active;
-4. ads are enabled for this user and URL (`AdsSettings.should_show_ads`) and the visitor
-   allowed the **advertising** consent category;
-5. the device matches the placement (`all`, `desktop` or `mobile`);
-6. a creative is eligible: assigned and enabled, campaign live (schedule, linked promotion),
-   within the campaign's daily and lifetime caps, creative type allowed by the placement;
-   weighted rotation picks one; otherwise the placement's fallback creative is tried;
-7. the creative markup passes the allowlist validator (`services/markup.py`).
+1. The template is not on the never-list or staff exclusion list
+   (`TemplateAdExclusion`).
+2. A placement exists for that template and zone. A template-specific placement
+   beats a site-wide one; site-wide placements never fill `users/`, `wallet/`,
+   `referral/`, `devices/` or `shop/` templates.
+3. The placement is switched on and active.
+4. Ads are enabled for the user and URL (`AdsSettings.should_show_ads`), and the
+   visitor allowed the **advertising** consent category.
+5. The device matches the placement (`all`, `desktop` or `mobile`).
+6. A creative is eligible: assigned and enabled, campaign live (schedule and
+   linked promotion), within daily and lifetime caps, and of a type allowed by
+   the placement. Weighted rotation picks one; otherwise the fallback creative
+   is tried.
+7. The creative markup passes the allowlist validator
+   (`services/markup.py`).
 
-The output is an `<aside aria-label="Advertisement">` with a visible "Advertisement" label and
-a reserved-size class (`ad-zone--s728x90`, ...; `frontend/src/styles/ads.css`) so loading an ad
-never shifts the layout. Banner links go through `/ads/go/<placement>/<creative>/`, which
-records the click (consent permitting) and redirects to the stored advertiser URL only. An
-impression is recorded at render time, only with consent.
+The output is an `<aside aria-label="Advertisement">` with a visible label and a
+reserved-size class (`ad-zone--s728x90`, etc.; `frontend/src/styles/ads.css`)
+so loading an ad never shifts the layout. Banner links go through
+`/ads/go/<placement>/<creative>/`, which records the click (consent permitting)
+and redirects only to the stored advertiser URL. An impression is recorded at
+render time, only with consent.
+
+Ads analytics retain keyed IP and User-Agent digests only. Raw IP addresses,
+User-Agent strings and session keys are not stored.
 
 ## Placement manager (staff)
 
-`/ads/manage/placements/` (permission `ads.change_adplacement`, staff console shell). It lists
-every scanned template with type, traffic estimate, score, the scanner's rationale, the zones
-the template (and the layouts it extends) really declares, its current placements and the best
-scan candidate.
+`/ads/manage/placements/` requires `ads.change_adplacement` and uses the staff
+console shell. It lists each scanned template with its type, traffic estimate,
+score, scanner rationale, declared zones, placements and best scan candidate.
 
-- **Scan templates** (POST + redirect) runs the scanner; paths are stored with forward slashes
-  so they match Django template names.
-- **Place ad here** opens an app-owned dialog: zone (only declared zones), sizes, devices,
-  optional fallback creative, optionally link an existing code-addressed placement, switch on
-  now. New placements start **switched off** and serve nothing until a creative is assigned
-  (placement admin inline) and the placement is on.
-- **Site-wide zones** place an ad on a zone of the shared layout for every page.
-- Switch a placement on/off, or remove it (confirmation dialog, soft delete).
-- `/ads/manage/suggestions/` is the discovery queue: approve/reject one or many (dialogs).
-  Approving creates the placement with its zone; two suggestions mapping to the same zone of
-  a template share one placement.
+- **Scan templates** (POST + redirect) runs the scanner. Paths use forward
+  slashes so they match Django template names. It counts explicit `{% ad_zone %}`,
+  `{% ad_article_body %}` and `{% ad_tile %}` slots and reports declared left/right
+  rails separately from content-based recommendations.
+- **Place ad here** opens an app-owned dialog for zone, sizes, devices and an
+  optional fallback creative. It can link an existing code-addressed placement
+  and switch it on. New placements start **switched off** and serve nothing
+  until a creative is assigned and the placement is enabled.
+- **Site-wide zones** place an ad on a shared-layout zone for every page.
+-   Firmware model and download pages declare desktop-only left and right rails;
+  staff can place inventory on those zones without changing the page flow.
+- A placement can be switched on or off, or removed with a confirmation dialog.
+  Removal is a soft delete.
+- `/ads/manage/suggestions/` is the discovery queue. Suggestions can be
+  approved or rejected individually or in bulk. Approval rechecks that the
+  template still declares the zone and is not excluded. Suggestions mapping to
+  the same template zone share one placement.
 
 ## Test profile
 
-Staff holding `ads.change_adplacement` get a preview that forces every declared zone to render
-a marked box ("TEST AD - 728x90 - zone header - placement #12", "PAUSED ZONE" for a switched-off
-placement, "EMPTY ZONE" where nothing is placed). It ignores the master switch and consent, never
-records an impression or click, and is invisible to everyone else (permission checked first).
+Staff holding `ads.change_adplacement` can preview every declared zone as a
+marked box ("TEST AD - 728x90 - zone header - placement #12", "PAUSED ZONE"
+for a switched-off placement, or "EMPTY ZONE" when nothing is placed). It
+ignores the master switch and consent, never records impressions or clicks, and
+is invisible to everyone else.
 
-- Session toggle: POST `/ads/manage/test-profile/` (dashboard or placement manager), valid for one hour.
-- Per-template **Preview with test ads**: opens the real public route with `?ad_preview=<signed token>`;
-  the token is signed, bound to the staff user and valid for 10 minutes. A plain `?ad_preview=1`
-  or a token issued to someone else does nothing. Templates that need an object (a detail page)
-  have no static route: switch the session toggle on and open any page that uses them.
+- Session toggle: POST `/ads/manage/test-profile/` from the dashboard or
+  placement manager. It is valid for one hour.
+- Per-template **Preview with test ads** opens the real public route with
+  `?ad_preview=<signed token>`. The token is signed, bound to the staff user and
+  valid for 10 minutes. A plain `?ad_preview=1` or a token issued to someone
+  else does nothing. Templates needing an object have no static route; switch
+  on the session toggle and open a page that uses them.
 
-`manage.py seed_ad_test_profile` (idempotent) creates a paused house campaign, two HTML house
-creatives and switched-off placements for the main zones. It never touches the master switch.
-To see it: turn the test profile on, or deliberately activate the campaign and the placements.
+`manage.py seed_ad_test_profile` (idempotent) creates a paused house campaign,
+HTML house creatives and switched-off placements for the main zones, including
+the model and download side rails. It never touches the master switch. Turn on
+the test profile, or deliberately activate the campaign and placements, to see
+it.
 
 ## Serving checklist (`/ads/dashboard/`)
 
-The dashboard shows why nothing renders: ads switched on, templates scanned, zones placed,
-creatives assigned; plus performance, serving controls, the test profile, rewarded ads status,
-placements, campaigns and creatives. Visitors must also allow advertising cookies.
+The dashboard shows why nothing renders: ads switched on, templates scanned,
+zones placed, creatives assigned, performance, serving controls, test profile,
+rewarded ads status, placements, campaigns and creatives. Visitors must also
+allow advertising cookies.
 
-Rewarded ads also power the file unlocks of the pricing ladder (reward type
-`download_unlock`, see `rewarded-ads.md`): an over-allowance account watches N rewarded
-ads, counted by a shop ticket, to unlock one free or featured file. Packages with
-`ad_free` never see download-gate ads or unlock offers, and `direct_links` (not `ad_free`)
-is what removes the URL shortener.
+Dashboard changes require the matching Django model permission:
+`ads.change_adssettings`, `ads.change_adplacement` or `ads.change_campaign`.
+Staff status alone does not authorize changes. The public JSON fill endpoint
+also checks user ad eligibility and template exclusions, and returns validated
+creative markup only.
+
+Rewarded ads also power file unlocks in the pricing ladder (reward type
+`download_unlock`; see `rewarded-ads.md`). An over-allowance account watches
+rewarded ads, counted by a shop ticket, to unlock one free or featured file.
+Packages with `ad_free` never see download-gate ads or unlock offers.
+`direct_links` (not `ad_free`) removes the URL shortener.
 
 ## Automatic slots: in-article paragraphs and in-feed tiles
 
-Two zones are *detected from the content* instead of hand-placed. They are ordinary zones with
-ordinary placements (same switch, consent, device, caps, rotation, fallback, deny lists, test
-profile, impression and click tracking); only the **position** is automatic.
+Two zones are detected from content instead of hand-placed. They are ordinary
+zones with the same switch, consent, device, caps, rotation, fallback, deny
+lists, test profile and impression/click tracking. Only their position is
+automatic.
 
-| Zone | Declared by | Where it goes |
-| --- | --- | --- |
-| `in_article` | `{% ad_article_body article.html %}` (blog post body) | between two text paragraphs |
-| `between_items` | `{% ad_tile forloop.counter items\|length ... %}` (brand, model, chipset, tag and firmware grids) | a sponsored tile after tile K, N, ... |
+- **`in_article`**: `{% ad_article_body article.html %}` places an ad between
+  text paragraphs in a blog post.
+- **`between_items`**: `{% ad_tile ... %}` places a sponsored tile after the
+  configured tile interval on brand, model, chipset, tag, firmware, guide and
+  blog grids.
 
-The placement manager detects both tags like `{% ad_zone %}` (`placement_manager.AUTO_TAGS`), so
-**Place ad here** offers the zone on `blog/post_detail.html`, `firmwares/brand_list.html`,
-`chipset_list.html`, `brand_detail.html` (also the chipset page's model grid), `browse.html`,
-`library_hub.html` and `tags/list.html`. The tile tag takes the canonical page template
-(`page="firmwares/brand_list.html"`), so a full page and its HTMX fragment resolve to the same
-placement. Switching that placement off (or removing it) turns the automatic ads off for that
-listing kind; a site-wide placement on `between_items` fills every listing that declares it.
+The placement manager detects both tags through
+`placement_manager.AUTO_TAGS`, so **Place ad here** offers the zone on
+`blog/post_detail.html`, journal and article hubs, firmware brand and chipset
+lists, brand and model details, guide listings, browse, library and tag pages.
+The tile tag takes the canonical page template
+(`page="firmwares/brand_list.html"`), so full pages and HTMX fragments resolve
+to the same placement. Switching that placement off (or removing it) turns
+automatic ads off for that listing kind. A site-wide `between_items` placement
+fills every listing that declares the zone.
 
-**Spacing** (`AdPlacement.auto_first_after`, `auto_every`, `auto_max`, `auto_min_items`, edited on
-the placement's *Automatic spacing* tab; `0` = default, see `services/auto_slots.py`):
+**Spacing** (`AdPlacement.auto_first_after`, `auto_every`, `auto_max` and
+`auto_min_items`) is edited on the placement's *Automatic spacing* tab. A value
+of `0` uses the default (see `services/auto_slots.py`):
 
-| | first after | every | at most | needs at least |
+| Content | First after | Every | At most | Minimum |
 | --- | --- | --- | --- | --- |
-| article (paragraphs) | 3 | 4 | 3 | 5 paragraphs |
-| grid (tiles) | 8 | 8 | 2 | 9 tiles |
+| Article paragraphs | 3 | 4 | 3 | 5 paragraphs |
+| Grid tiles | 8 | 8 | 2 | 9 tiles |
 
-Hard rules no setting can lower: first slot after paragraph 2 at the earliest, slots at least 2
-apart, never the last tile (a real tile always follows the ad), and for articles at least
-`AdsSettings.min_content_between_ads` words between two ads. Page-wide, automatic slots also stop
-at `AdsSettings.max_ads_per_page`, and one creative is never shown twice on one page
-(`resolve_zone(..., unique=True)` excludes already shown creatives; no impression is double
-counted). Counts are per rendered page: on paginated lists each page is counted on its own.
+Hard rules no setting can lower: the first slot is after paragraph 2 at the
+earliest, slots are at least 2 apart, and an ad is never the last tile (a real
+tile always follows it). Articles require at least
+`AdsSettings.min_content_between_ads` words between ads. Page-wide automatic
+slots also stop at `AdsSettings.max_ads_per_page`; one creative is never shown
+twice on a page (`resolve_zone(..., unique=True)` excludes creatives already
+shown). Counts are per rendered page, so each paginated list page is counted
+separately.
 
-**Articles.** The sanitised article HTML (`blog.rendering.render_article`, which is never cached
-with ads) is scanned with `html.parser` for top-level blocks and the slot is spliced in at an exact
-source offset after a text paragraph whose next block is another text paragraph. So never inside
-a list, table, figure, quote or code block, never next to a heading, never between a paragraph
-and the list it introduces, never in the first paragraph; text outside any block, empty or
-image-only paragraphs and scripts are not paragraphs. Markup that does not parse cleanly
-(unbalanced tags) gets no ads and is returned untouched. Locked (paywalled) teasers carry none.
-Markup: the usual `<aside aria-label="Advertisement">` with a visible label, a reserved size class
-(no layout shift), `rel="noopener sponsored nofollow"` and lazy images.
+**Articles.** Sanitised article HTML (`blog.rendering.render_article`, never
+cached with ads) is scanned with `html.parser` for top-level blocks. The slot is
+spliced at an exact source offset after a text paragraph whose next block is
+another text paragraph. Ads are never inserted inside lists, tables, figures,
+quotes or code blocks; next to a heading; between a paragraph and its
+introductory list; or in the first paragraph. Text outside a block, empty or
+image-only paragraphs and scripts are not paragraphs. Unbalanced markup gets
+no ads and is returned untouched. Locked (paywalled) teasers carry none.
+Markup uses the usual labelled `<aside>`, a reserved size class, safe link
+relations and lazy images.
 
-**Tiles.** `templates/ads/includes/tile_ad.html` renders the sponsored item with the sibling's own
-classes (`tile="card-ui--tile card-ui--brand-tile"`, `layout` = `tile`, `card` or `tag`), so size,
-padding, radius and elevation come from the same CSS and the grid (`align-items: stretch`) gives it
-the row height; `.card-ui--sponsored` only changes the border colour and adds the "Sponsored"
-label (`tests/backend/ads/test_auto_slots_render.py` fails if a sponsored selector sets any box
-property). Banner creatives show their image, `AdCreative.headline` and `tagline` (no internal
-name is ever shown; without a headline: "Visit <host>"); native, HTML and script creatives are
-shown inside the tile, clipped to its size.
+**Tiles.** `templates/ads/includes/tile_ad.html` renders the sponsored item
+with its sibling's classes (`tile="card-ui--tile card-ui--brand-tile"`,
+`layout` = `tile`, `card` or `tag`). Size, padding, radius and elevation come
+from the same CSS; the grid (`align-items: stretch`) gives it the row height.
+`.card-ui--sponsored` only changes the border colour and adds the "Sponsored"
+label (`tests/backend/ads/test_auto_slots_render.py` fails if a sponsored
+selector sets a box property). Banner creatives show their image, headline and
+tagline (never the internal name; without a headline, `Visit <host>`). Native,
+HTML and script creatives are shown inside the tile, clipped to its size.
 
-Nothing is inserted on error, sign-in, consent or account/checkout pages, for ad-free (package or
-rewarded) users, excluded roles, without advertising consent, or when the listing is empty.
+Nothing is inserted on error, sign-in, consent, account or checkout pages; for
+ad-free users (package or rewarded); for excluded roles; without advertising
+consent; or when the listing is empty.
 
-Migration: `ads/0010_auto_slots_and_tile_text` (additive: the four spacing columns, creative
-headline/tagline, the zone choice).
+Migration: `ads/0010_auto_slots_and_tile_text` (additive: four spacing columns,
+creative headline/tagline and the zone choice).
 
 ## Tests
 
-`tests/backend/ads/test_zones.py` (each hop: switch, consent, placement, exclusion, device,
-assignment, caps, rotation, fallback, click redirect, test profile isolation),
-`test_placement_manager.py`, `test_seed_ad_test_profile.py`, `test_auto_slots.py` (spacing rules and
-the HTML scanner on tricky markup), `test_auto_slots_render.py` (tags, suppression, dedupe, tiles on
-real listing pages, CSS contract), and the Playwright checks
-`tests/frontend/test_ads_manager_browser.py` and `tests/frontend/test_ads_inline_browser.py`
-(sponsored tile box equals its siblings and in-article slots sit between paragraphs at 360/768/1280
-with no console errors, overflow or layout shift).
+`tests/backend/ads/test_zones.py` covers switch, consent, placement, exclusion,
+device, assignment, caps, rotation, fallback, click redirect and test-profile
+isolation. `test_placement_manager.py` covers manager workflows;
+`test_seed_ad_test_profile.py` covers seeding; `test_auto_slots.py` covers
+spacing and HTML parsing; `test_auto_slots_render.py` covers tags, suppression,
+dedupe, real listing pages and CSS contracts. Playwright checks in
+`tests/frontend/test_ads_manager_browser.py` and
+`tests/frontend/test_ads_inline_browser.py` verify tile sizing and in-article
+placement at 360/768/1280 widths, with no console errors, overflow or layout
+shift.

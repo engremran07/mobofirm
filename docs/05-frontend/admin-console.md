@@ -5,11 +5,11 @@ The staff console is the operator-facing part of Mobofirm. `django.contrib.admin
 everything the operator sees is a project-owned **presentation layer**. `django-unfold` was
 removed; `tests/backend/admin/test_no_unfold.py` fails if it, `app/settings/unfold.py` or
 `templates/unfold` return. The public site has its own shell (`design-system.md`); the two
-share design tokens and the theme preference, nothing else.
+share design tokens, the theme preference and the htmx runtime, nothing else.
 
 The stack is approved by the product owner (see `docs/01-product/` and
 `.agents/policies/source-of-truth.yaml`): **AdminLTE 4.10.2** (layout, sidebar, treeview, card
-widgets) on **Bootstrap 5.3.8**, **htmx 4.0.2**, **`@alpinejs/csp` 3.17.5** and **Lucide 1.66.0**,
+widgets) on **Bootstrap 5.3.9**, the shared **htmx 4.0.2** runtime, **`@alpinejs/csp` 3.17.5** and **Lucide 1.77.0**,
 all vendored offline by Vite. The rich-text editor (Summernote 0.9.1 + jQuery 3.7.1, see
 `editor.md`) is the approved legacy exception: it is a lazy chunk of the *public* build, never a
 global, and the console does not otherwise use jQuery.
@@ -52,8 +52,8 @@ global, and the console does not otherwise use jQuery.
 
 ```text
 npm install                 # once; Node >=22.12
-npm run build:public        # vite build                 -> static/build/*        (stable names, htmx 2)
-npm run build:admin         # vite build --mode admin    -> static/build/admin/   (hashed names + manifest, htmx 4)
+npm run build:public        # vite build                 -> static/build/*        (stable names, shared htmx 4)
+npm run build:admin         # vite build --mode admin    -> static/build/admin/   (hashed names + manifest, shared htmx 4)
 npm run build               # both
 npm run check:offline       # scripts/check_offline_assets.py via .venv: no remote URLs, manifest consistent
 npm run check               # build + check:offline
@@ -63,8 +63,9 @@ npm run check               # build + check:offline
   (it cleans its own files only). The admin build uses `emptyOutDir`, `manifest: true` and
   `assets/[name]-[hash].js|css` naming; inputs are `console-main` (`frontend/src/admin/main.js`) and
   `console-styles` (`frontend/src/admin/admin.scss`).
-- The public bundle aliases `htmx.org` to the `htmx2` package (`npm:htmx.org@2.0.11`) because it is
-  written against htmx 2 events; the console imports `htmx.org` 4.0.2. Never mix the two.
+- Both bundles import the single `htmx.org` 4.0.2 dependency and shared CSP/configuration module
+  (`frontend/src/shared/htmx.js`). Keep public interactions and console-only boost behavior in their
+  respective shells; do not add a second htmx copy or use htmx 2 event/attribute conventions.
 - Rarely used widgets (editor, charts) must be lazy chunks via dynamic `import()`, never added to
   `main.js` statically.
 - Fonts: system stack or self-hosted woff2; never a remote font. Icons: tree-shaken Lucide.
@@ -98,13 +99,13 @@ must follow it. The ones people trip over:
 - **Events** use `htmx:phase:action`: `htmx:config:request`, `htmx:before:request`,
   `htmx:after:request`, `htmx:before:swap`, `htmx:after:swap`, `htmx:after:settle`,
   `htmx:response:error`, `htmx:finally:request`. The htmx 2 camelCase names (`htmx:afterSwap`, ...)
-  do not exist in the console.
+  do not exist in either shell.
 - **Attribute inheritance is explicit** (`implicitInheritance` stays off): put
   `hx-target:inherited`, `hx-swap:inherited`, `hx-boost:inherited` on the parent. A bare `hx-target`
   on a container is not inherited by its children.
-- **No string evaluation** (CSP): no `hx-on*`, no `js:` values, no bracket trigger filters, no
-  `<script>` in fragments (scripts and inline handlers are stripped from every swap). Use trigger
-  modifiers such as `hx-trigger="input changed delay:250ms"`.
+- **No string evaluation** (CSP): the shared runtime rejects expression evaluation and inline event
+  binding; use no `hx-on*`, `js:` values, or bracket trigger filters. Scripts and inline handlers are
+  stripped from every swap. Use trigger modifiers such as `hx-trigger="input changed delay:250ms"`.
 - **Status handling**: htmx 4 swaps everything except 204/304. The console additionally refuses to swap
   401/403/404/405/408/410/413/429/5xx and shows an accessible toast instead. 400/409/422 swap, so
   return the re-rendered form with errors. Per-element override: `hx-status:422="target:#errors"`.
@@ -161,6 +162,11 @@ self-closing and `{% component "card" title="Queue" %}...{% slot "actions" %}...
 for block components. A component never sees the page's own context. Each file's header comment is the
 argument reference.
 
+Fixed dropdown and listbox panels are temporarily portalled to `body` while open, then returned
+to their component root on close. This keeps viewport positioning aligned with the trigger even
+inside filtered, transformed, or scrolling ancestors; the popover controller preserves ownership
+and focus behavior across the move.
+
 | Component | Purpose |
 | --- | --- |
 | `alert`, `toast` | Inline message / transient notification (`#console-toasts`). |
@@ -174,6 +180,8 @@ argument reference.
 | `icon` (`{% console_icon %}`) | Registered Lucide icon. |
 | `command_palette`, `palette_list` | "Search or jump to" dialog and its result list. |
 | `theme_toggle`, `user_menu` | Light/dark/system switch, account menu (sign-out is a POST form). |
+
+The authenticated account menu links to the user's dashboard, profile, wallet (when enabled), contributions and notifications. Sign-out is a CSRF-protected POST guarded by the console's app-owned confirmation dialog.
 
 Related template sets: `console/crud/` (changelist, form, inline, delete and action-dialog building blocks),
 `console/filters/` (one template per filter class), `console/widgets/` (form widgets),
@@ -210,10 +218,14 @@ from django.contrib import admin
 from apps.core.admin_base import ModelAdmin, display, BADGE_APPROVAL
 from apps.core.admin_filters import ChoicesDropdownFilter, RangeDateTimeFilter
 
+
 @admin.register(Thing)
 class ThingAdmin(ModelAdmin):
     list_display = ("name", "status_badge", "created_at")
-    list_filter = (("status", ChoicesDropdownFilter), ("created_at", RangeDateTimeFilter))
+    list_filter = (
+        ("status", ChoicesDropdownFilter),
+        ("created_at", RangeDateTimeFilter),
+    )
     search_fields = ("name",)
 
     @display(description="Status", label=BADGE_APPROVAL, ordering="status")
@@ -240,6 +252,7 @@ from apps.core.admin_base import (
     confirm_dialog,
     htmx_redirect,
 )
+
 
 @action(
     description="Reject",
@@ -305,7 +318,7 @@ look in `styles/components/_filter-bar.scss` and `_controls.scss`). All share th
 
 | Primitive | Markup contract | Notes |
 | --- | --- | --- |
-| Menu / kebab / user / widget menus | `dropdown.html`, `kebab_menu.html`, `user_menu.html`, `crud/_action.html`, row actions in `crud/results_table.html` | `role=menu`, items get `role=menuitem`; panels use `data-ui-fixed` (viewport positioning, never clipped by table wrappers) |
+| Menu / kebab / user / widget menus | `dropdown.html`, `kebab_menu.html`, `user_menu.html`, `crud/_action.html`, row actions in `crud/results_table.html` | `role=menu`, items get `role=menuitem`; panels use `data-ui-fixed`, clamp to the viewport, flip above when needed and scroll when taller than the available space |
 | Listbox / select | `{% include "console/components/listbox.html" with field=form.field %}` | the native `<select>` stays the submitted value and the no-JS fallback; used for the bulk-action selector |
 | Popover (filters) | `console/filters/*.html` | listbox popovers and form popovers |
 | Switch | `switch.html` (`input[role=switch][data-ui-switch]`) | native checkbox is the value; Space toggles |
@@ -368,11 +381,12 @@ from `apps/core/admin_nav_catalog.py` / `admin_navigation.py` (`key`, `title`, `
 - Each collapsible group is a disclosure: `li[data-console-nav-group] > button.c-nav-toggle[aria-expanded][aria-controls]`
   + `div.c-nav-panel[data-open]` (animated with `grid-template-rows`; closed panels are `visibility:hidden`, so their links
   leave the tab order). Enter/Space toggle; arrow keys, Home and End walk the visible entries; Escape clears the filter.
-- State is per user in `localStorage` (`mobofirm-console-nav-groups:<user pk>`, `mobofirm-console-nav-accordion:<user pk>`,
-  and the rail choice `mobofirm-console-sidebar`) and is re-applied after every boosted swap and history restore. The group
+- State is per user in `localStorage` (`mobofirm-console-nav-groups:<user pk>` and the rail choice
+  `mobofirm-console-sidebar`) and is re-applied after every boosted swap and history restore. Only one group can stay
+  open at a time; older stored multi-open preferences are reduced to the active group (or the first remembered group). The group
   holding the current page (the link with `aria-current="page"`, longest matching path) is always opened.
-- Tools: filter box (`[data-console-nav-filter]`, narrows entries and opens matching groups), collapse all / expand all
-  (`[data-console-nav-all]`), accordion switch (`[data-console-nav-accordion]`, one group open at a time).
+- Tools: filter box (`[data-console-nav-filter]`, narrows entries and opens matching groups) and collapse all
+  (`[data-console-nav-all="collapse"]`).
 - Desktop icon rail (`html[data-console-sidebar="mini"]`, body `sidebar-collapse`): labels stay in the accessibility tree
   (visually hidden), `data-nav-label` feeds the tooltip (`.c-nav-tip`), and a click on a group icon reopens the sidebar on that
   group. Mobile (< 992 px): off-canvas drawer (`data-console-sidebar="open|closed"`), closed by Escape, the scrim, or following a link.

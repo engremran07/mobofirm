@@ -111,6 +111,14 @@ slots, all audited as a `DeviceSlotReset` row plus device events:
 A user who cannot or will not use these can ask staff (`request_staff_reset`), which
 notifies staff and records a `DeviceSlotRequest`.
 
+Device security events retain a keyed IP digest only for the existing IP-change risk
+signal; raw IP addresses and User-Agent strings are not stored. Device events remain
+subject to the configured retention window, and the digest is cleared when an account
+is erased. The Devices erasure contract also removes registered credentials, detaches
+event history, closes open slot requests, and preserves slot-reset ledger audit records.
+Hardware/browser fingerprint and behavior-insight telemetry models and collection
+endpoints have been removed; no fingerprint analytics are maintained.
+
 Rules:
 
 - Every reset is idempotent per caller-supplied key; a replayed key returns the

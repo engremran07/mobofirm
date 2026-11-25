@@ -53,6 +53,27 @@ variants produced near-duplicate codes (`ai2401_a`, `AI2401 A`).
   Approval reads it (first figure RAM, second storage, GB; TB converted) into
   `Variant.ram_options` and `storage_options`; unreadable text stays only in the request.
 - **Carrier.** New `Variant.carrier` for operator-locked builds.
+- **Transitioning model-level codes.** `Model.variant_codes` is currently an additive,
+  normalized projection of the legacy model code fields and related `Variant.model_code`
+  values. Catalogue display and automated model-post content read this list. The `Variant`
+  relation remains in place and continues to own regional, memory, carrier, and board
+  identity until its dependent records and workflows are migrated; this field alone does
+  not merge or split model rows.
+- **Code ownership across active models.** `Model.clean()` rejects a normalized code
+  already claimed by another active model of the same brand, checking both the stored
+  model-code projection and legacy variant rows. Inactive models and models from other
+  brands do not block reuse. Model request approval, catalogue imports, and seeding call
+  model validation before writing. The transitional `Variant` table remains until its
+  callers are migrated.
+- **Model slugs.** When a model is saved without a slug, its first normalized model code
+  supplies the slug; if it has no code, the model name does. A same-brand collision gets
+  the first available numeric suffix, so same-name models can coexist without discarding
+  their chipset or code identity.
+- **Chipset-scoped model requests.** A model request for a known chipset is compared with
+  existing and pending records for that same chipset, allowing a same-name model on another
+  chipset. Requests without a chipset retain the prior conservative duplicate behavior.
+  Approval links only to a same-chipset model when one was specified; a new primary code
+  supplies the model slug when available.
 
 ## Migration
 
@@ -60,6 +81,15 @@ variants produced near-duplicate codes (`ai2401_a`, `AI2401 A`).
 columns, then a data step that normalises stored codes and, for duplicates, keeps the oldest
 and suffixes later ones `_DUP<n>` (nothing is deleted; staff fix them), then the
 constraints. The seed catalogue contains no duplicate codes.
+
+`0015_model_variant_codes` adds a normalized model-level projection and backfills it in
+batches from `Model.model_code`, `Model.model_codes`, and related variant codes. It does not
+remove or rewrite any of those source values; reversing the migration drops only the
+derived projection.
+
+`0016_remove_modelcreationrequest_model_request_pending_name_unique_and_more` scopes pending
+model-request uniqueness to `(brand, chipset, case-insensitive name)`, with a separate
+constraint for requests where chipset is unknown. Existing records are not rewritten.
 
 ## Verification
 

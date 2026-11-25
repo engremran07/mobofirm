@@ -2,49 +2,63 @@
 
 ## Post access
 
-`blog.Post.access` is `free`, `featured` or `paid`. `price` is the **staff-approved USD
-price** (credits are derived only through `apps.wallet.api.to_credits`, the single
-rate); `proposed_price` is the author's suggestion. Publishing or scheduling a gated post
-as staff approves the proposed price (`price_approved_by/at`); a paid post cannot go live
-without one, and a price set by staff in the admin is never overwritten. Setting a post
-back to `free` clears every price field.
+`blog.Post.access` is `free`, `featured` or `paid`. `price` is the
+**staff-approved USD price** (credits are derived only through
+`apps.wallet.api.to_credits`, the single rate); `proposed_price` is the author's
+suggestion. Publishing or scheduling a gated post as staff approves the proposed
+price (`price_approved_by/at`); a paid post cannot go live without one, and a
+price set by staff in the admin is never overwritten. Setting a post back to
+`free` clears every price field.
 
 Who may *choose* featured or paid when writing in the editorial workspace
-(`apps.blog.access.can_set_premium_access`): staff, editors, users with the author role
-and approved marketplace sellers (reached only through
-`AppService.get("marketplace").is_active_seller`). Everyone else submits free there.
+(`apps.blog.access.can_set_premium_access`): staff, editors, users with the
+author role and approved marketplace sellers (reached only through
+`AppService.get("marketplace").is_active_seller`). Everyone else submits free
+there.
 
 ## Contribute a blog post (`/blog/contribute/`)
 
 Verified members can contribute a post for review when the blog is on and
 `BlogSettings.allow_user_blog_posts` is set (staff always can). Code:
-`apps/blog/services/contributions.py`, `views_contribute.py`, `forms.ContributionForm`,
-templates `blog/contribute_form.html`.
+`apps/blog/services/contributions.py`, `views_contribute.py`,
+`forms.ContributionForm`, templates `blog/contribute_form.html`.
 
-* **Flow.** `submit` creates a `Post` (`is_community_contribution=True`), records its first
-  revision and moves it to `PostStatus.IN_REVIEW` in one transaction; reviewers holding
-  `blog.change_post` are notified (and `blog.contribution_submitted` is published) after
-  commit. A member can never publish: only `workflow.publish` by a moderator does. The
-  author may edit or withdraw (`workflow.withdraw`) while it waits; a post sent back
-  returns to `DRAFT` with `review_note`, and saving it resubmits it.
-* **Idempotency and limits.** An identical title and body still in review returns the
-  existing post (no second post, notification or quota charge); a member can contribute
-  `BlogSettings.contributions_per_day` posts per rolling day.
-* **Editor.** Body uses the `blog_contribution` profile (no images, video or raw styles)
-  and is sanitised by the existing pipeline.
-* **Access type.** Free and Featured are open to every contributor; **Paid** is offered
-  only to approved marketplace sellers, who must propose a price above zero. A non-seller
-  never sees Paid (a "Become a seller" link is shown) and a forged value is rejected by the
-  form and again by `contributions.resolve_access`. Reviewers confirm the price on
-  publication (`workflow.publish`) and can lower Featured/Paid with a mandatory reason
-  through the console action **Lower access type** (`workflow.lower_access`, clears prices,
-  notifies the author). Rejecting a post (`workflow.reject`) also needs a reason.
-* **Rewards.** Publication rewards already exist (`rewards.grant_publication_rewards`,
-  events `blog.post_published*`) and are paid once per post after commit, never to the
-  publisher; contributions reuse them. The member sees the total on My contributions via
+* **Flow.** `submit` creates a `Post`
+  (`content_source=PostSource.COMMUNITY_CONTRIBUTION`),
+  records its first revision and moves it to `PostStatus.IN_REVIEW` in one
+  transaction; reviewers holding `blog.change_post` are notified (and
+  `blog.contribution_submitted` is published) after commit. A member can never
+  publish: only `workflow.publish` by a moderator does. The author may edit or
+  withdraw (`workflow.withdraw`) while it waits; a post sent back returns to
+  `DRAFT` with `review_note`, and saving it resubmits it.
+* **Title suggestions.** The new-post form checks titles through a debounced,
+  rate-limited HTMX request against published blog content, public guide
+  requests and the public brand/model/chipset/tool/approved-firmware catalog.
+  Suggestions are advisory and never block submission; pending editorial posts
+  and private guide requests are not exposed, and staff retain all review and
+  update decisions.
+* **Idempotency and limits.** An identical title and body still in review
+  returns the existing post (no second post, notification or quota charge); a
+  member can contribute `BlogSettings.contributions_per_day` posts per rolling
+  day.
+* **Editor.** Body uses the `blog_contribution` profile (no images, video or raw
+  styles) and is sanitised by the existing pipeline.
+* **Access type.** Free and Featured are open to every contributor; **Paid** is
+  offered only to approved marketplace sellers, who must propose a price above
+  zero. A non-seller never sees Paid (a "Become a seller" link is shown) and a
+  forged value is rejected by the form and again by
+  `contributions.resolve_access`. Reviewers confirm the price on publication
+  (`workflow.publish`) and can lower Featured/Paid with a mandatory reason
+  through the console action **Lower access type** (`workflow.lower_access`,
+  clears prices, notifies the author). Rejecting a post (`workflow.reject`) also
+  needs a reason.
+* **Rewards.** Publication rewards already exist
+  (`rewards.grant_publication_rewards`, events `blog.post_published*`) and are
+  paid once per post after commit, never to the publisher; contributions reuse
+  them. The member sees the total on My contributions via
   `wallet.api.rewards_earned`.
-* **Contract.** `apps.blog.api.contributions_of(user)` feeds **My contributions › Blog
-  contributions** (status, access, price note, edit and withdraw links).
+* **Contract.** `apps.blog.api.contributions_of(user)` feeds **My contributions
+  › Blog contributions** (status, access, price note, edit and withdraw links).
 
 ## Who reads the full body
 
@@ -53,107 +67,146 @@ templates `blog/contribute_form.html`.
 1. free post: everyone;
 2. staff, editors and the author: always;
 3. everyone else: the shop decides through `apps.blog.shop_gateway`
-   (`AppService.get("shop")`): `featured_blog_access(user, post_id, price_usd)` is allowed
-   for lifetime buyers and holders of a package with the `featured_blog` item type (the
-   package consumes its quota; they are never charged again);
-4. otherwise (denied, shop absent, switched off or contract missing) the **teaser**.
+   (`AppService.get("shop")`): `featured_blog_access(user, post_id, price_usd)`
+   is allowed for lifetime buyers and holders of a package with the
+   `featured_blog` item type (the package consumes its quota; they are never
+   charged again);
+4. otherwise (denied, shop absent, switched off or contract missing) the
+   **teaser**.
 
-The teaser is the first `BlogSettings.teaser_words` words (never more than 40 % of a short
-article), the paywall box (`.article-paywall`) and a *Buy with credits* dialog
-(`blog:purchase_dialog`, idempotent key `blog-featured:<user>:<post>`; the shop spends
-through the derived wallet sink `blog.featured_purchase` and refunds on failure) or a
-*See packages* link. Gated pages are `Cache-Control: private`.
+The teaser is the first `BlogSettings.teaser_words` words (never more than 40 %
+of a short article), the paywall box (`.article-paywall`) and a *Buy with
+credits* dialog (`blog:purchase_dialog`, idempotent key
+`blog-featured:<user>:<post>`; the shop spends through the derived wallet sink
+`blog.featured_purchase` and refunds on failure) or a *See packages* link. Gated
+pages are `Cache-Control: private`.
 
-No leakage: cards, RSS/Atom/JSON feeds, global search snippets, meta/OG descriptions and
-structured data use `paywall.public_excerpt` / `teaser_text` only; blog search does not
-match a gated body; the sitemap lists URLs only. `BlogPosting` carries
-`isAccessibleForFree: false` and a `hasPart` with `cssSelector: .article-paywall`.
+No leakage: cards, RSS/Atom/JSON feeds, global search snippets, meta/OG
+descriptions and structured data use `paywall.public_excerpt` / `teaser_text`
+only; blog search does not match a gated body; the sitemap lists URLs only.
+`BlogPosting` carries `isAccessibleForFree: false` and a `hasPart` with
+`cssSelector: .article-paywall`.
 
 ## Guide requests
 
-`blog.GuideRequest` (requester, title, kind = flashing method | unlock pattern | trick |
-guide, optional brand/model/variant/chipset, typed `model_code`/`variant_code`,
-**`tried`**, expected outcome, optional bounty offer, `related_post`, search keywords).
-State machine, all atomic, row-locked and idempotent (`apps.blog.guide_requests`):
+`blog.GuideRequest` (requester, title, kind = flashing method | unlock pattern |
+trick | guide, optional brand/model/variant/chipset, typed
+`model_code`/`variant_code`, **`tried`**, expected outcome, optional bounty
+offer, `related_post`, search keywords). State machine, all atomic, row-locked
+and idempotent (`apps.blog.guide_requests`):
 
-```
+```text
 pending -> approved | rejected (reason) | cancelled
 approved -> fulfilled | cancelled        rejected / fulfilled / cancelled are final
 ```
 
 ### Search first, then ask (two steps)
 
-1. **Search** (`/blog/requests/new/`, `apps.blog.guide_requests_search`): the member enters
-   the **model code and/or variant code** (required) plus optional brand, chipset and topic
-   keywords. HTMX (`/blog/requests/new/search/`, debounced) lists *all* related published
-   articles: same variant code, same model, same chipset, same brand, matching tag or fuzzy
-   text (typos tolerated; matching goes through `apps.core.search.listing.search_queryset`,
-   the shared engine). Each row shows title, device, why it matched, an access badge
-   (Free / Featured / Paid) and **This solved it**. Results carry **no body and no snippet**
-   and the body is never searched, so gated text cannot leak.
-2. Only after the list is shown does the member get *None of these solve it - request a new
-   method*: a link with a signed, user-bound, 6 hour token (`ctx`). `/blog/requests/new/form/`
-   and its POST require that token, so the search cannot be skipped.
+1. **Search** (`/blog/requests/new/`, `apps.blog.guide_requests_search`): the
+   member enters the **model code and/or variant code** (required) plus optional
+   brand, chipset and topic keywords. HTMX (`/blog/requests/new/search/`,
+   debounced) lists *all* related published articles: same variant code, same
+   model, same chipset, same brand, matching tag or fuzzy text (typos tolerated;
+   matching goes through `apps.core.search.listing.search_queryset`, the shared
+   engine). Each row shows title, device, why it matched, an access badge (Free
+   / Featured / Paid) and **This solved it**. Results carry **no body and no
+   snippet** and the body is never searched, so gated text cannot leak.
+2. Only after the list is shown does the member get *None of these solve it -
+   request a new method*: a link with a signed, user-bound, 6 hour token
+   (`ctx`). `/blog/requests/new/form/` and its POST require that token, so the
+   search cannot be skipped.
 
-**Article button.** Every article page renders *Didn't resolve your issue? Request a new
-method* (`{% request_method_cta post %}`, hidden while requests are off). It goes through
-`/blog/requests/from/<slug>/`, which mints a token for the article and opens the form
-pre-filled with the article (`related_post`), its model/brand/chipset and code, focused on
-**What have you tried?**.
+**Article button.** Every article page renders *Didn't resolve your issue?
+Request a new method* (`{% request_method_cta post %}`, hidden while requests
+are off). It goes through `/blog/requests/from/<slug>/`, which mints a token for
+the article and opens the form pre-filled with the article (`related_post`), its
+model/brand/chipset and code, focused on **What have you tried?**.
 
-**Request form** (every field has an example placeholder and help text): title, kind,
-brand/model/chipset pickers, model code, variant code (a model **or** variant code is
-required; typed codes link to the catalogue when they match exactly), **What have you tried?**
-(required, at least 20 characters: tools, steps, error messages, firmware version), expected
-outcome, optional bounty offer in credits (an intent; the bounty is still escrowed from the
-request page after approval), optional extra details.
+**Request form** (every field has an example placeholder and help text): title,
+kind, brand/model/chipset pickers, model code, variant code (a model **or**
+variant code is required; typed codes link to the catalogue when they match
+exactly), **What have you tried?** (required, at least 20 characters: tools,
+steps, error messages, firmware version), expected outcome, optional bounty
+offer in credits (an intent; the bounty is still escrowed from the request page
+after approval), optional extra details.
 
-**Duplicates.** A live post or public request with a near-identical title blocks the request
-(the article the member says did not help is excluded). Open public requests for the same
-model/variant and the same topic (same kind or alike title) are listed with *Follow this
-request*; the member can follow instead (`GuideRequestFollower`, "me too", milestone notices to
-the requester, followers notified on fulfilment) or confirm *My request is different*.
-Pending requests of other members stay private and block only a same-device lookalike.
+**Duplicates.** A live post or public request with a near-identical title blocks
+the request (the article the member says did not help is excluded). Open public
+requests for the same model/variant and the same topic (same kind or alike
+title) are listed with *Follow this request*; the member can follow instead
+(`GuideRequestFollower`, "me too", milestone notices to the requester, followers
+notified on fulfilment) or confirm *My request is different*. Pending requests
+of other members stay private and block only a same-device lookalike.
 
-**Who sees the context.** `tried`, the expected outcome and the related article are shown to
-the requester, staff reviewers (request page and the console review queue) and, once the
-request is approved, to verified members acting as bounty hunters, so they can write their own
-solution. Anonymous visitors only see the public summary.
+**Who sees the context.** `tried`, the expected outcome and the related article
+are shown to the requester, staff reviewers (request page and the console review
+queue) and, once the request is approved, to verified members acting as bounty
+hunters, so they can write their own solution. Anonymous visitors only see the
+public summary.
 
-* Create: login + verified email, `BlogSettings.allow_guide_requests`, throttled by
-  `guide_requests_per_day` and `guide_requests_open_limit`, duplicate detection as above.
-* **Private until staff approve** (review-only console queue *Content > Guide requests*,
-  permission `blog.change_guiderequest`, showing the tried text, device codes, related
-  article and followers); the requester is notified of every decision.
-* Approved requests are public (`/blog/requests/`, typo-tolerant search) and the only ones
-  that can carry a bounty (`apps.bounty` kind `guide`; blog reaches bounty only through
-  `AppService.get("bounty")`).
-* Hunters submit through `/blog/create/?solves=<id>`: they **must** choose free, featured
-  or paid (paid needs a proposed price); non-trusted members can only choose free. The
-  submission goes straight to *In review* and is shown on the request page with its access.
-* Staff publish the submission: after commit `blog.signals._after_publish` fulfils the
-  request, publishes `blog.guide_fulfilled` (bounty releases the escrow to the author through
-  the wallet and settles every open bounty on it), `blog.post_published` (gamification) and
-  grants the wallet rewards. Cancelling or rejecting publishes `blog.guide_request_closed`
-  and bounty refunds the escrows. `blog.tasks.reconcile_guide_fulfilments` re-runs a
-  fulfilment that crashed between publishing and settling (idempotent).
+* Create: login + verified email, `BlogSettings.allow_guide_requests`, throttled
+  by `guide_requests_per_day` and `guide_requests_open_limit`, duplicate
+  detection as above.
+* **Private until staff approve** (review-only console queue *Content > Guide
+  requests*, permission `blog.change_guiderequest`, showing the tried text,
+  device codes, related article and followers); the requester is notified of
+  every decision.
+* Approved requests are public (`/blog/requests/`, typo-tolerant search) and the
+  only ones that can carry a bounty (`apps.bounty` kind `guide`; blog reaches
+  bounty only through `AppService.get("bounty")`).
+* The journal and its public brand/model/chipset article hubs show a bounded
+  sidebar list of open, unexpired guide bounties. The bounty API includes only
+  approved guide requests; pending-review request titles are never exposed
+  through this listing.
+* Hunters submit through `/blog/create/?solves=<id>`: they **must** choose free,
+  featured or paid (paid needs a proposed price); non-trusted members can only
+  choose free. The submission goes straight to *In review* and is shown on the
+  request page with its access.
+* Staff publish the submission: after commit `blog.signals._after_publish`
+  fulfils the request, publishes `blog.guide_fulfilled` (bounty releases the
+  escrow to the author through the wallet and settles every open bounty on it),
+  `blog.post_published` (gamification) and grants the wallet rewards. Cancelling
+  or rejecting publishes `blog.guide_request_closed` and bounty refunds the
+  escrows. `blog.tasks.reconcile_guide_fulfilments` re-runs a fulfilment that
+  crashed between publishing and settling (idempotent).
+
+## Member update proposals
+
+Verified members with read access can suggest field-level changes to live,
+human-authored posts from the article page. Proposals are private to the submitter
+and staff holding `blog.change_post`; they never change public content on submit.
+Only title, summary, sanitized body, category and curated tags can be proposed.
+Automated posts are excluded.
+
+The blog-owned `PostUpdateProposal` captures the post version at submission,
+proposed values, submitter and any reviewer decision/reason. One pending proposal
+per member and post is enforced by a partial unique constraint; an identical retry
+returns the existing proposal, while a different concurrent proposal is refused.
+Staff approve the proposed or corrected values through the dedicated console
+queue, or reject with a reason. Approval updates the post through
+`PostHistoryService` so the previous published revision remains recoverable.
+If the post version or eligible status changed before review, the proposal is
+marked stale and cannot overwrite newer editorial work. Members can track their
+own decision status at `/blog/contribute/updates/`.
 
 ## Rewards and spend
 
-| Key | Kind | Default | Trigger |
-|-----|------|---------|---------|
-| `blog.post_published` | reward | 10 | member post published by another staff member |
-| `blog.post_published.featured` | reward | 25 | extra for a featured or paid post |
-| `blog.guide_published` | reward | 15 | replaces the base reward for a guide solution |
-| `bounty.fulfilled` | reward | escrow | settlement of the bounty (amount is the escrow) |
-| `blog.featured_purchase` | spend (derived) | post price x rate | the shop's `purchase_featured_blog` |
+* `blog.post_published` — reward, default 10: member post published by another
+  staff member.
+* `blog.post_published.featured` — reward, default 25: extra for a featured or
+  paid post.
+* `blog.guide_published` — reward, default 15: replaces the base reward for a
+  guide solution.
+* `bounty.fulfilled` — reward, amount is the escrow: settlement of the bounty.
+* `blog.featured_purchase` — derived spend, post price x rate: the shop's
+  `purchase_featured_blog`.
 
-Rewards are admin-editable in *Credits economy > Reward rules*. Own posts, automated
-posts and posts a member published themselves earn nothing.
+Rewards are admin-editable in *Credits economy > Reward rules*. Own posts,
+automated posts and posts a member published themselves earn nothing.
 
 ## Optional shop extras
 
-`featured_blog_buyers(post_id)` fills the read-only *Buyers* field of the Post admin and
-`purchased_featured_blog_ids(user)` feeds `/blog/purchased/`. Without them both show an
-honest empty state; access itself needs only `featured_blog_access` and
-`purchase_featured_blog`.
+`featured_blog_buyers(post_id)` fills the read-only *Buyers* field of the Post
+admin and `purchased_featured_blog_ids(user)` feeds `/blog/purchased/`. Without
+them both show an honest empty state; access itself needs only
+`featured_blog_access` and `purchase_featured_blog`.

@@ -30,3 +30,9 @@ docs
 *.sqlite3
 Dockerfile
 docker-compose*.yml
+/.shots_tmp/
+/mypy_*.txt
+/pylint_now.txt
+/ruff_base.txt
+/.w11b_build.log
+/debug.log

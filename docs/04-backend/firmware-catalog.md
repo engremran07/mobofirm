@@ -12,6 +12,8 @@ Owner: `apps.firmwares` (code, templates under `templates/firmwares/`, tests und
 | Variant | Staff (Add variant) or **variant request** | **brand and model** (the model must belong to the brand); a request also needs one identifying field (code, region/market, RAM / storage or carrier) | chipset text, region, carrier, model code |
 | Chipset | Staff or **chipset request** | none | family, aliases |
 
+- A Brand with Models cannot be deleted: `Model.brand` protects the catalog rows from
+  cascading deletion. Reassign or explicitly remove its Models before deleting the Brand.
 - End-user pages: `/firmwares/requests/` (hub), `/requests/brand|model|variant|chipset|firmware/`
   and `/requests/mine/`. Signed-in, email-verified users only; CSRF; redirect after POST.
   Each form shows live "does it already exist?" hints (`/requests/check/`) and refuses an
@@ -50,6 +52,32 @@ Owner: `apps.firmwares` (code, templates under `templates/firmwares/`, tests und
 - There is no external catalogue sync, scraper or auto-fill: the admin fields are entered by
   hand or come from approved requests and uploads.
 
+## Existing catalog correction proposals
+
+- Verified members can suggest descriptive corrections from the brand, chipset, model and
+  flashing-tool detail pages. The proposal form is at
+  `/firmwares/catalog-updates/<target-kind>/<id>/`; members can track outcomes at
+  `/firmwares/catalog-updates/mine/`.
+- Proposals are owned by `firmwares.CatalogUpdateProposal`. A pending proposal snapshots
+  only the fields it changes and the corresponding current values. One member can have one
+  pending proposal per catalog item; identical retries return the existing proposal, while
+  a different pending submission is rejected. New submissions are limited to ten per
+  member per hour.
+- Only descriptive fields are allowed: brand descriptions, chipset-vendor aliases, chipset
+  family/description, non-identity model specifications, tool description/version, and
+  guide-template title/summary. Names, slugs, manufacturer codes, relationships, URLs,
+  active/featured state, safety level, tool instructions, generated posts, and firmware
+  records are not editable by these proposals. Published flashing-guide article corrections
+  use the blog-owned update-proposal flow instead.
+- Staff review uses the existing `change_<model>` permission for the specific target.
+  Approval may correct the proposed values, writes through the target model's normal save
+  method, and records the reviewer, time, reason, and admin history entry. Rejection needs a
+  reason. If any proposed source field changed while waiting, review marks the proposal
+  stale and never overwrites that newer catalog data. Outcome notifications are dispatched
+  after commit.
+- `firmwares.0017_catalogupdateproposal` creates only the proposal table and its target and
+  pending-duplicate constraints; it does not rewrite existing catalog rows.
+
 ## Upload page
 
 `/firmwares/contribute/` (formerly `/firmwares/upload/`, which redirects with 301; a POST to the
@@ -81,6 +109,13 @@ Apple (A-series for iPhone and iPad, M-series for iPad; not Mac). Chipset text o
 vendor (for example Intel) resolves to no `Chipset` row. Old rows of other vendors are
 reported by `manage.py prune_unsupported_chipsets` (dry run by default; `--apply` deletes only
 rows no model, variant, firmware, tool, request or automated post references).
+
+Each `Chipset` points to one `ChipsetVendor` record; vendor names and aliases are therefore
+canonical rather than repeated free text. `Spreadtrum`, `SPRD`, and RDA labels resolve to
+Unisoc, while the original chipset spellings remain searchable aliases. The vendor
+normalization migration refuses to proceed if canonicalization would merge two chipset rows
+with the same name; those collisions require an explicit data decision first. Reversing the
+migration restores canonical vendor names, not the pre-migration spelling of each row.
 
 `apps/firmwares/package_formats.py` is the single source of truth for `package_format`: the
 format depends on the chipset vendor of the selected model (the variant's chipset first, then

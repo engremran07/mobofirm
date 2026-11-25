@@ -1,0 +1,71 @@
+{
+    "mcpServers": {
+        "serena": {
+            "type": "stdio",
+            "command": "uvx",
+            "args": [
+                "--from",
+                "git+https://github.com/oraios/serena@v2.1.0",
+                "serena",
+                "start-mcp-server",
+                "--context",
+                "ide-assistant",
+                "--project",
+                "."
+            ],
+            "tools": [
+                "find_symbol",
+                "find_referencing_symbols",
+                "get_symbols_overview",
+                "find_file",
+                "search_for_pattern",
+                "list_dir"
+            ]
+        },
+        "postgres": {
+            "type": "stdio",
+            "command": "uvx",
+            "args": [
+                "postgres-mcp",
+                "--access-mode=restricted"
+            ],
+            "env": {
+                "DATABASE_URI": "${MOBOFIRM_PG_RO_URI}"
+            },
+            "tools": [
+                "list_schemas",
+                "list_objects",
+                "get_object_details",
+                "execute_sql",
+                "explain_query",
+                "get_top_queries",
+                "analyze_workload_indexes",
+                "analyze_query_indexes",
+                "analyze_db_health"
+            ]
+        },
+        "redis": {
+            "type": "stdio",
+            "command": "uvx",
+            "args": [
+                "--python",
+                "3.14",
+                "--from",
+                "redis-mcp-server@latest",
+                "redis-mcp-server",
+                "--url",
+                "${MOBOFIRM_REDIS_RO_URL}"
+            ],
+            "tools": [
+                "get",
+                "type",
+                "scan_keys",
+                "hget",
+                "hgetall",
+                "xrange",
+                "dbsize",
+                "info"
+            ]
+        }
+    }
+}

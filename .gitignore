@@ -25,3 +25,11 @@ deploy/certs/
 .idea/
 .vscode/*
 !.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/tasks.json
+# Local visual captures and generated diagnostics are not source assets.
+/.shots_tmp/
+*.log
+/mypy_*.txt
+/pylint_now.txt
+/ruff_base.txt

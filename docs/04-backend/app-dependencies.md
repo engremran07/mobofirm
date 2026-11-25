@@ -24,6 +24,7 @@ decision. `scripts/app_imports.py` prints the current graph as JSON.
 
 | Contract | Owner | Used by |
 |----------|-------|---------|
+| `TimestampedModel`, `SoftDeleteModel`, `AuditFieldsModel` (abstract model bases) | `core.models` | ads, comments, firmwares, seo, tags |
 | `effective_entitlements(user)`, `register_entitlement_modifier` | `shop.entitlements` | firmwares, devices, users, ads, promotions |
 | `grant_reward`, `spend`, `refund`, escrow, `register_reward_event`, `register_spend_sink` | `wallet.api` | shop, firmwares, bounty, gamification, referral, marketplace, ads, users |
 | `has_consent(request, category)` | `consent.services` | ads, site_settings |
@@ -58,6 +59,8 @@ These existed before the rule and are listed so they stay visible:
 - `blog` dispatches `ads.tasks` and `tags.tasks` directly instead of by task name.
 - `core` imports `models` of `ads`, `blog`, `comments`, `devices`, `firmwares` and
   `users` for the cleanup command, the admin dashboard and the seed orchestrator.
+- `firmwares` imports `core.models.TimestampedModel` for its timestamped catalog and
+  automation records; the abstract base owns no firmware-domain state.
 - `users->devices`, `users->firmwares`, `users->wallet` for the account pages and the
   Device and My contributions views. `users->firmwares` includes `access` (the Downloads
   tab reads `served_statuses`, the one place that applies the download

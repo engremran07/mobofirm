@@ -9,7 +9,7 @@ The system is not a finished visual identity. Do not claim final design approval
 ## Ownership
 
 - Shared build entries, tokens, components, and behavior live in `frontend/`; built assets live under Django's configured static build directory.
-- The public site and the staff console are separate shells. The public shell uses the Vite entries in `frontend/` (`npm run build:public`, htmx 2.0.11 through the `htmx2` alias); the console has its own Vite entry, `frontend/src/admin/`, built by `npm run build:admin` (AdminLTE 4.10.2, Bootstrap 5.3.8, htmx 4.0.2, `@alpinejs/csp`, Lucide; see `admin-console.md`). Django admin remains the permission and persistence authority.
+- The public site and the staff console are separate shells. They use the shared htmx 4.0.2 runtime from the public Vite entries (`npm run build:public`) and the console entry (`frontend/src/admin/`, `npm run build:admin`). The console uses AdminLTE 4.10.2, Bootstrap 5.3.9, `@alpinejs/csp`, and Lucide; see `admin-console.md`. Django admin remains the permission and persistence authority.
 - Public app templates extend the shared public base; admin-hosted staff pages extend `admin/staff_page.html` (which extends `admin/base_site.html`, the console shell). App-specific styles are namespaced extensions, never copies of shared assets.
 - Do not add a competing CSS framework, a second icon library, per-app static duplicates, or an app-local build pipeline.
 - Split large design files by responsibility when they exceed the repository's configured size budgets; splitting must preserve one canonical implementation.
@@ -59,7 +59,7 @@ Layer order is tokens → base → legacy → layout → components → utilitie
 
 | Group | Tokens |
 | --- | --- |
-| Colour (`shared/tokens/_palette.scss`) | `--mf-page/surface/surface-raised/surface-soft/border/border-strong/text/text-muted/accent/accent-strong/accent-ink/accent-warm/accent-cool/link-hover/success/warning/danger/info/focus` (+ `-soft` status tints), `--mf-glass-bg(-strong)/glass-border`, `--mf-overlay`, `--mf-skeleton-base/shine`, `--mf-shadow-rgb`, `--mf-white/black`, medal and content-colour palettes |
+| Colour (`shared/tokens/_palette.scss`) | `--mf-page/surface/surface-raised/surface-soft/border/border-strong/text/text-muted/accent/accent-strong/accent-ink/accent-warm/accent-cool/link-hover/success/warning/danger/info/focus` (+ `-soft` status tints), `--mf-share-x/facebook/whatsapp/telegram/linkedin`, `--mf-glass-bg(-strong)/glass-border`, `--mf-overlay`, `--mf-skeleton-base/shine`, `--mf-shadow-rgb`, `--mf-white/black`, medal and content-colour palettes |
 | Type (`_emit.scss`) | fluid `--mf-text-2xs … --mf-text-5xl` (public) and `--mf-fs-xs … --mf-fs-3xl` (console), `--mf-leading-*`, `--mf-tracking-*`, `--mf-font-sans/display/mono` |
 | Space / radius | `--mf-space-1…9` (4 px scale), `--mf-section-gap`, `--mf-radius-xs…xl/pill` |
 | Elevation | `--mf-elev-1…4`, `--mf-glow`, `--mf-inset-highlight` (colour-aware via `--mf-shadow-rgb`) |
@@ -69,6 +69,8 @@ Layer order is tokens → base → legacy → layout → components → utilitie
 
 Accent colours come from one source: `site_settings` emits `--mf-accent`, `--mf-accent-strong`, `--mf-accent-cool` overrides and every gradient, glow and tint is derived with `color-mix()`. Add a new foreground/background pair to the contrast test in `tests/backend/test_frontend_contract.py` when you introduce one.
 
+Social sharing uses the platform-specific `--mf-share-*` palette for decorative icons; the visible link labels retain the normal text token and remain the accessible names.
+
 ### Themes, contrast and motion
 
 `<html>` carries `data-bs-theme="light|dark"` (resolved), `data-theme-mode="auto|light|dark"` (the visitor's choice), `data-contrast="high"` (high-contrast tokens) and optionally `data-motion="reduce"`. `theme-init.js` applies them before first paint (stored choice → `prefers-color-scheme`; `prefers-contrast: more` turns contrast on unless the visitor chose otherwise). Controls: `[data-theme-toggle]` flips light/dark, `[data-theme-set="auto|light|dark"]` and `[data-contrast-toggle]` (footer "Appearance", command palette). Keys: `mobofirm-theme` (absent = auto) and `mobofirm-contrast` (`high|normal`); all storage access is guarded and other tabs stay in sync. Motion is wrapped in the `motion` mixin (`prefers-reduced-motion: no-preference` and not `data-motion="reduce"`), so reduced-motion visitors never get transitions or animations.
@@ -77,7 +79,7 @@ Accent colours come from one source: `site_settings` emits `--mf-accent`, `--mf-
 
 Every snippet works under the strict CSP (no inline styles or scripts).
 
-- **Header + mega menu**: `includes/site_header.html`, `includes/nav_mega.html`. Top-level links stay plain `<a class="site-nav-link">`; Firmware, Brands, Chipsets and Tools & Guides add a panel opened by hover or by the toggle button (`[data-mega-toggle]`; Esc closes and returns focus). The mobile navigation (`includes/nav_links.html`) has no panels. Set `nav_current` to mark the section.
+- **Header + mega menu**: `includes/site_header.html`, `includes/nav_mega.html`. Top-level links stay plain `<a class="site-nav-link">`; Firmware, Brands, Chipsets, Tools & Guides and the enabled Community section add a panel opened by hover or by the toggle button (`[data-mega-toggle]`; Esc closes and returns focus). Community links follow the bounty and gamification AppRegistry flags; signed-in members also get their own bounties and progress. The mobile navigation (`includes/nav_links.html`) has no panels. Set `nav_current` to mark the section.
 - **Command palette** (Ctrl/Cmd+K, or `[data-command-palette-open]`): `components/command_palette.html`. Its search is the shared combobox (`input_id="palette-search"`, navigate mode, central search engine), so ranking, suggestions and typo tolerance come from `apps/core/search`; the palette only adds quick links and preference actions. Esc closes suggestions, then clears the query, then closes the palette. It does not open over another modal dialog.
 - **Buttons**: `.btn` (+ `btn-primary`, `btn-outline-secondary`, `btn-soft`, `btn-ghost`, `btn-sm`, `btn-lg`, `btn-icon`). Loading: `.is-loading`, `aria-busy="true"`, or automatically `[data-loading]` while the button (or its form) issues an HTMX request.
 - **Forms**: `.form-control`, `.form-select`, floating labels (`<div class="form-floating"><input … placeholder=" "><label>`), `.form-layout` grid, `.form-section`, sticky `.form-actions`, `.field-error`, switches (`.form-switch`). Use `components/form_field.html` so labels, errors and descriptions are wired.
@@ -93,7 +95,7 @@ Every snippet works under the strict CSP (no inline styles or scripts).
 - **Tabs**: `<div class="tabs-ui" role="tablist" data-tabs>` with `role="tab"` buttons (`aria-controls`) and `role="tabpanel"`; `modules/ui.js` adds roving focus (arrows, Home, End).
 - **Accordion**: `.accordion-ui > details > summary + .accordion-ui__body` (native, keyboard and no-JS safe).
 - **Tooltip / popover**: `data-tooltip="…"` on a focusable element (CSS only); popovers use the native API: `<button popovertarget="p1">` + `<div id="p1" popover class="popover-ui">`.
-- **Toasts**: `modules/toasts.js`. Django messages (`includes/messages.html`, `data-flash`) become toasts; HTMX failures (`htmx:responseError`, `sendError`, `timeout`) raise a danger toast; a server response can send `HX-Trigger: {"toast": {"message": "Saved", "level": "success"}}` (levels `success|info|warning|danger`); JavaScript calls `showToast({message, level})` or dispatches `mf:toast`. `DialogView` successes that stay on the page use this automatically. Region: `#toast-region` (live region); toasts pause on hover/focus and repeated identical toasts replace each other.
+- **Toasts**: `modules/toasts.js`. Django messages (`includes/messages.html`, `data-flash`) become toasts; HTMX 4 failures (`htmx:response:error`, `htmx:error`, timeout) raise visible feedback; a server response can send `HX-Trigger: {"toast": {"message": "Saved", "level": "success"}}` (levels `success|info|warning|danger`); JavaScript calls `showToast({message, level})` or dispatches `mf:toast`. `DialogView` successes that stay on the page use this automatically. Region: `#toast-region` (live region); toasts pause on hover/focus and repeated identical toasts replace each other.
 - **Loading**: the top bar (`#global-progress`) shows for every HTMX request; `[data-loading]` marks the requesting element; `.skeleton-host` dims and shimmers while a request targeting it runs; `.skeleton`, `.skeleton--text/title/media/avatar/pill`, `.skeleton-card` and `components/skeleton_cards.html` are placeholders.
   ```html
   <div id="results" class="skeleton-host" hx-get="…" hx-trigger="input changed delay:200ms from:#q" hx-target="this">…</div>
@@ -105,6 +107,7 @@ Every snippet works under the strict CSP (no inline styles or scripts).
 - **Sheets and dialogs**: `<dialog class="sheet-ui">` is a modal on desktop and a bottom sheet on phones; app dialogs use the shared shell (`dialogs.md`).
 - **Stepper / breadcrumbs / hero**: `.stepper-ui` (`.is-done`, `.is-current`), `.breadcrumbs` (existing partial), `.hero-ui` / `.hero-panel` with `.hero-ui__title`, `.text-gradient`, `.hero-ui__actions/stats`.
 - **Scroll reveal**: `data-reveal` (staggered, once). **Copy to clipboard**: `data-copy="text"`, `data-copy-target="#id"` or `data-copy-url`. **Optimistic UI**: `data-optimistic` (+ `data-optimistic-toggle="aria-pressed"`) flips immediately and reverts on failure. **View transitions**: opt in per swap with `hx-swap="innerHTML transition:true"` (plain swap where unsupported; disabled under reduced motion).
+- **Account menu**: authenticated headers use the same accessible disclosure on desktop and mobile for account overview, profile, wallet, contributions, notifications and authorized staff access. It includes system/light/dark and high-contrast controls; sign-out remains a CSRF-protected POST behind the app-owned confirmation dialog.
 - **Footer**: three-column grid, version stamp, appearance controls.
 
 ### Verification

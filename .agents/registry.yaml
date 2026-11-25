@@ -26,14 +26,19 @@ copilot_customizations:
     - .github/agents/verification-engineer.agent.md
   skill_directory: .github/skills/
   skills:
+    - .github/skills/distribution-adapter/SKILL.md
     - .github/skills/deep-verification/SKILL.md
     - .github/skills/django-feature-loop/SKILL.md
+    - .github/skills/django-migration-audit/SKILL.md
     - .github/skills/frontend-stack/SKILL.md
     - .github/skills/frontend-security/SKILL.md
     - .github/skills/inter-app-automation/SKILL.md
     - .github/skills/observability-retention/SKILL.md
+    - .github/skills/payment-rail-integration/SKILL.md
     - .github/skills/release-management/SKILL.md
+    - .github/skills/security-boundary-audit/SKILL.md
     - .github/skills/secure-form-workflow/SKILL.md
+    - .github/skills/zero-diagnostics/SKILL.md
 
 source_of_truth: .agents/policies/source-of-truth.yaml
 approval_matrix: .agents/policies/approval-matrix.yaml

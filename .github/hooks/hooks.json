@@ -1,10 +1,27 @@
 {
   "hooks": {
-    "SessionStart": [
+    "sessionStart": [
       {
         "type": "command",
-        "command": "python .github/hooks/workspace_context.py",
+        "bash": "./.venv/bin/python .github/hooks/workspace_context.py",
+        "powershell": ".\\.venv\\Scripts\\python.exe .github\\hooks\\workspace_context.py",
         "timeout": 10
+      }
+    ],
+    "preToolUse": [
+      {
+        "type": "command",
+        "bash": "./.venv/bin/python .github/hooks/pre_tool_guard.py",
+        "powershell": ".\\.venv\\Scripts\\python.exe .github\\hooks\\pre_tool_guard.py",
+        "timeoutSec": 10
+      }
+    ],
+    "postToolUse": [
+      {
+        "type": "command",
+        "bash": "./.venv/bin/python .github/hooks/post_edit_lint.py",
+        "powershell": ".\\.venv\\Scripts\\python.exe .github\\hooks\\post_edit_lint.py",
+        "timeoutSec": 20
       }
     ]
   }

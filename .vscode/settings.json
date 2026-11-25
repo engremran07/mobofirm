@@ -1,7 +1,38 @@
 {
     "python.defaultInterpreterPath": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+    "pylint.enabled": true,
+    "pylint.args": [
+        "--enable=all"
+    ],
+    "pylint.cwd": "${workspaceFolder}",
+    "pylint.path": [
+        "${interpreter}",
+        "-m",
+        "pylint"
+    ],
+    "pylint.importStrategy": "fromEnvironment",
+    "pylint.showNotification": "onError",
     "python.terminal.useEnvFile": true,
     "python.analysis.enableDjangoSupport": true,
     "python.analysis.typeCheckingMode": "standard",
-    "python.analysis.diagnosticMode": "workspace"
+    "python.analysis.diagnosticMode": "workspace",
+    "[python]": {
+        "editor.defaultFormatter": "charliermarsh.ruff",
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            "source.fixAll.ruff": "explicit",
+            "source.organizeImports.ruff": "explicit"
+        }
+    },
+    "files.associations": {
+        "**/templates/**/*.html": "django-html",
+        "**/templates/**/*.txt": "django-txt"
+    },
+    "[django-html]": {
+        "editor.defaultFormatter": "monosans.djlint",
+        "editor.formatOnSave": true
+    },
+    "emmet.includeLanguages": {
+        "django-html": "html"
+    }
 }
